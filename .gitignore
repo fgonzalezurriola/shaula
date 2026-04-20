@@ -1,0 +1,9 @@
+.zig-cache/
+zig-out/
+node_modules/
+
+.sisyphus/evidence/*.txt
+.sisyphus/evidence/*.log
+.sisyphus/evidence/*.tmp
+
+.DS_Store

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${ROOT_DIR}"
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERR_QA_TOOL_MISSING tool=jq" >&2
+  exit 1
+fi
+
+zig build >/dev/null
+
+assert_exit() {
+  local expected="$1"
+  shift
+
+  set +e
+  "$@" >/tmp/shaula-qa-exit.out 2>/tmp/shaula-qa-exit.err
+  local rc=$?
+  set -e
+
+  if [[ "${rc}" -ne "${expected}" ]]; then
+    echo "ERR_EXIT_CODE_MAPPING_MISMATCH expected=${expected} got=${rc} command=$*" >&2
+    cat /tmp/shaula-qa-exit.out >&2 || true
+    cat /tmp/shaula-qa-exit.err >&2 || true
+    exit 1
+  fi
+}
+
+assert_exit 2 ./zig-out/bin/shaula
+assert_exit 10 env SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json
+assert_exit 11 env -u WAYLAND_DISPLAY SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./zig-out/bin/shaula preflight --json
+assert_exit 34 env SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture window --json
+assert_exit 51 env SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output /tmp/::invalid::/path.png
+assert_exit 99 env SHAULA_INJECT_UNKNOWN_FAILURE=1 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json
+
+errors_json="$(./zig-out/bin/shaula errors list --json)"
+printf '%s\n' "${errors_json}" | jq -e '
+  .ok == true and
+  .command == "errors list" and
+  (.result.errors | length > 0) and
+  (all(.result.errors[]; (.code | startswith("ERR_")) and (.exit_code | type == "number")))
+' >/dev/null || {
+  echo "ERR_EXIT_CODE_MAPPING_MISMATCH reason=errors_list_contract" >&2
+  exit 1
+}
+
+echo "ok exit_code_mapping deterministic"

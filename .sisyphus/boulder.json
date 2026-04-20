@@ -1,0 +1,127 @@
+{
+  "active_plan": "/home/fgonz/dev/shaula/.sisyphus/plans/shaula-capture-integrity-noctalia-overlay.md",
+  "started_at": "2026-04-19T17:10:53.156Z",
+  "session_ids": [
+    "ses_259679962ffenT59BQEMAmnZDc",
+    "ses_259453522ffelY9c8fUwGUbLLY",
+    "ses_259453505ffeK7eX6zD3CmSiqK",
+    "ses_2594534ccffeKjXvNsVpRzZxl6"
+  ],
+  "session_origins": {
+    "ses_259679962ffenT59BQEMAmnZDc": "direct",
+    "ses_259453522ffelY9c8fUwGUbLLY": "appended",
+    "ses_259453505ffeK7eX6zD3CmSiqK": "appended",
+    "ses_2594534ccffeKjXvNsVpRzZxl6": "appended"
+  },
+  "plan_name": "shaula-capture-integrity-noctalia-overlay",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Sustituir backend stub por captura real de runtime",
+      "session_id": "ses_2593bc8aaffeV5UE0yivZWw80u",
+      "agent": "Sisyphus-Junior",
+      "category": "ultrabrain",
+      "updated_at": "2026-04-19T17:47:25.013Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Unificar capacidades y ejecución con contrato estricto",
+      "session_id": "ses_258bc0d7fffePRmrIASqJzr2DW",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T20:10:35.609Z"
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "Añadir QA de integridad visual (decode PNG + rechazo stub + fixture contenido)",
+      "session_id": "ses_2589a29beffeVWznLkYzQnoywY",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T20:32:56.608Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Cambiar output default a `~/Pictures/Shaula` con fallback explícito de error",
+      "session_id": "ses_258794be8ffegVD40csxq8JvOi",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T21:00:32.464Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "Migrar historial a Top-N=20 y exponerlo por `history list/show`",
+      "session_id": "ses_2587116dcffeVhN4v4PDENn6k8",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T21:17:26.167Z"
+    },
+    "todo:7": {
+      "task_key": "todo:7",
+      "task_label": "7",
+      "task_title": "Implementar overlay v1 base (gris + selección + confirmar/cancelar)",
+      "session_id": "ses_2585f4136ffeE5erxSdGF19X4d",
+      "agent": "Sisyphus-Junior",
+      "category": "visual-engineering",
+      "updated_at": "2026-04-19T21:31:36.318Z"
+    },
+    "todo:8": {
+      "task_key": "todo:8",
+      "task_label": "8",
+      "task_title": "Implementar guard anti-artefactos de shell antes de capturar",
+      "session_id": "ses_25851dbb5ffeHorbe5SwF5Jfif",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-19T22:08:21.440Z"
+    },
+    "todo:9": {
+      "task_key": "todo:9",
+      "task_label": "9",
+      "task_title": "Integrar plugin Noctalia MVP con menú de acciones mínimas",
+      "session_id": "ses_25823dd9bfferd1DhqLkzyXN0S",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-19T22:47:05.596Z"
+    },
+    "todo:10": {
+      "task_key": "todo:10",
+      "task_label": "10",
+      "task_title": "Reforzar E2E y matriz QA consolidada post-cambios",
+      "session_id": "ses_2580c4415ffe13p5kCj5tz7edW",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T23:05:51.805Z"
+    },
+    "todo:11": {
+      "task_key": "todo:11",
+      "task_label": "11",
+      "task_title": "Actualizar contratos/especificaciones y documentación operativa",
+      "session_id": "ses_257fb8ac7ffegQYjBp5ZEYSZrB",
+      "agent": "Sisyphus-Junior",
+      "category": "writing",
+      "updated_at": "2026-04-19T23:17:43.547Z"
+    },
+    "todo:12": {
+      "task_key": "todo:12",
+      "task_label": "12",
+      "task_title": "Cierre de remediación con checklist de release interno",
+      "session_id": "ses_257f083deffeveyMDW6JY40Uc5",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-19T23:38:54.506Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "Plan Compliance Audit — oracle",
+      "session_id": "ses_257dbd1b3ffeaQlsnRuu5k07Us",
+      "agent": "oracle",
+      "updated_at": "2026-04-20T00:04:26.395Z"
+    }
+  }
+}

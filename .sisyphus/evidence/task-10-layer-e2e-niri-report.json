@@ -1,0 +1,52 @@
+{
+  "suite": "task-10-layer-e2e-niri",
+  "timestamp": "2026-04-20T03:29:27Z",
+  "pass": true,
+  "script": "scripts/qa/run-e2e-niri.sh",
+  "subchecks": [
+    {
+      "id": "e2e.preflight.wayland_niri",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.area",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.fullscreen",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.window",
+      "pass": true
+    },
+    {
+      "id": "e2e.clipboard.path",
+      "pass": true
+    },
+    {
+      "id": "e2e.failure.unsupported_compositor",
+      "pass": true
+    },
+    {
+      "id": "e2e.failure.permission_clipboard",
+      "pass": true
+    },
+    {
+      "id": "e2e.backend.daemon_states",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.capabilities.strict_contract",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.shell_artifact_guard.panel_hide",
+      "pass": true
+    },
+    {
+      "id": "e2e.noctalia.optional_integration",
+      "pass": true
+    }
+  ]
+}

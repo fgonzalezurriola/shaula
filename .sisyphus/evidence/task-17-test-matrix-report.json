@@ -1,0 +1,77 @@
+{
+  "suite": "task-17-test-matrix",
+  "timestamp": "2026-04-19T22:49:37Z",
+  "pass": true,
+  "layers": {
+    "unit": {
+      "pass": true,
+      "script": "scripts/qa/run-unit-tests.sh"
+    },
+    "integration": {
+      "pass": true,
+      "script": "scripts/qa/run-integration-tests.sh"
+    },
+    "e2e_niri": {
+      "pass": true,
+      "script": "scripts/qa/run-e2e-niri.sh"
+    }
+  },
+  "matrix": [
+    {
+      "id": "unit.preflight.schema",
+      "pass": true
+    },
+    {
+      "id": "unit.errors.matrix",
+      "pass": true
+    },
+    {
+      "id": "integration.capture.area",
+      "pass": true
+    },
+    {
+      "id": "integration.capture.fullscreen",
+      "pass": true
+    },
+    {
+      "id": "integration.capture.content_validity",
+      "pass": true
+    },
+    {
+      "id": "integration.pipeline.clipboard",
+      "pass": true
+    },
+    {
+      "id": "integration.daemon.states",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.area",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.fullscreen",
+      "pass": true
+    },
+    {
+      "id": "e2e.capture.window",
+      "pass": true
+    },
+    {
+      "id": "e2e.clipboard.path",
+      "pass": true
+    },
+    {
+      "id": "e2e.failure.unsupported_compositor",
+      "pass": true
+    },
+    {
+      "id": "e2e.failure.permission_clipboard",
+      "pass": true
+    },
+    {
+      "id": "e2e.backend.daemon_states",
+      "pass": true
+    }
+  ]
+}

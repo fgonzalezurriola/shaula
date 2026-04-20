@@ -1,0 +1,130 @@
+{
+  "suite": "task-12-release-readiness",
+  "timestamp": "2026-04-20T03:29:27Z",
+  "ready": true,
+  "blocking_issues": 0,
+  "error_code": null,
+  "blockers": [],
+  "checks": [
+    {
+      "id": "evidence.matrix.consolidated",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.unit.errors.matrix",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.unit.exit_code.mapping",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.capture.integrity.runtime_non_stub",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.capture.integrity.content_validity",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.capture.capabilities.strict_contract",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.capture.output.default_path",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.history.topn_20",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.overlay.base_selection",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.capture.shell_artifact_guard",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.integration.noctalia.optional_core_without_plugin",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.e2e.capture.capabilities.strict_contract",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.e2e.failure.unsupported_compositor",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "matrix.subcheck.e2e.failure.permission_clipboard",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "evidence.task3.capture_content_validity",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "evidence.task8.shell_artifact_guard",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "evidence.task9.noctalia_actions",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "evidence.task7.overlay_base",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "evidence.task6.history_topn",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "guard.force_block",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "command_family.capabilities",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "command_family.history",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "command_family.capture",
+      "pass": true,
+      "detail": "pass"
+    },
+    {
+      "id": "command_family.daemon",
+      "pass": true,
+      "detail": "pass"
+    }
+  ]
+}

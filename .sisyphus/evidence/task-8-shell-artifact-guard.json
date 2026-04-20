@@ -1,0 +1,20 @@
+{
+  "suite": "task-8-shell-artifact-guard",
+  "timestamp": "2026-04-20T03:29:18Z",
+  "pass": true,
+  "capture": {
+    "mode": "area",
+    "path": "/tmp/shaula/task8-shell-artifact-guard.png",
+    "warnings": [
+      "capture_precondition_panel_hidden_handshake"
+    ]
+  },
+  "checks": {
+    "handshake_warning_present": {
+      "pass": true
+    },
+    "panel_marker_absent": {
+      "pass": true
+    }
+  }
+}

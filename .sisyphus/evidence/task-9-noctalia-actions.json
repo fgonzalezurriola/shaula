@@ -1,0 +1,92 @@
+{
+  "suite": "task-9-noctalia-actions",
+  "timestamp": "2026-04-20T03:29:20Z",
+  "pass": true,
+  "plugin_optional": true,
+  "adapter_deterministic": true,
+  "menu": {
+    "minimal": true,
+    "actions": [
+      {
+        "id": "capture-area",
+        "label": "Capture Area",
+        "shaula_argv": [
+          "capture",
+          "area",
+          "--json"
+        ]
+      },
+      {
+        "id": "capture-fullscreen",
+        "label": "Capture Fullscreen",
+        "shaula_argv": [
+          "capture",
+          "fullscreen",
+          "--json"
+        ]
+      },
+      {
+        "id": "capture-window",
+        "label": "Capture Window",
+        "shaula_argv": [
+          "capture",
+          "window",
+          "--json"
+        ]
+      },
+      {
+        "id": "open-last",
+        "label": "Open Last",
+        "shaula_argv": [
+          "history",
+          "show",
+          "--json",
+          "--id",
+          "latest"
+        ]
+      },
+      {
+        "id": "history",
+        "label": "History",
+        "shaula_argv": [
+          "history",
+          "list",
+          "--json"
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "menu_contract": {
+      "pass": true
+    },
+    "dry_run_mapping": {
+      "pass": true
+    },
+    "execute_capture_area": {
+      "pass": true,
+      "exit_code": 0,
+      "action": "capture-area"
+    },
+    "execute_capture_fullscreen": {
+      "pass": true,
+      "exit_code": 0,
+      "action": "capture-fullscreen"
+    },
+    "execute_capture_window_expected_unsupported": {
+      "pass": true,
+      "exit_code": 34,
+      "action": "capture-window"
+    },
+    "execute_open_last": {
+      "pass": true,
+      "exit_code": 0,
+      "action": "open-last"
+    },
+    "execute_history": {
+      "pass": true,
+      "exit_code": 0,
+      "action": "history"
+    }
+  }
+}
