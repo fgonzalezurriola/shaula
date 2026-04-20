@@ -28,18 +28,29 @@ pub const BackendKind = enum {
     stub,
 };
 
+/// Runtime-executable capture modes for the selected backend/compositor pair.
+///
+/// This is a strict execution contract, not a UI hint. `capture/*` commands must
+/// enforce these flags before invoking backend execution.
 pub const CaptureModes = struct {
     area: bool,
     fullscreen: bool,
     window: bool,
 };
 
+/// Aggregate runtime decision consumed by command handlers.
+///
+/// Important attributes:
+/// - `compositor_supported`: whether current compositor is within supported scope.
+/// - `backend`: concrete backend selected after env overrides and compositor probe.
+/// - `capture`: strict mode matrix used by `enforceModeSupported`.
 pub const RuntimeDecision = struct {
     compositor_supported: bool,
     backend: BackendKind,
     capture: CaptureModes,
 };
 
+/// Resolve runtime decision from environment and compositor probe.
 pub fn resolve(environ: std.process.Environ) RuntimeDecision {
     const compositor_supported = std.mem.eql(u8, preflight.detectCompositor(environ), "niri");
     const backend = resolveBackend(environ);
@@ -51,6 +62,13 @@ pub fn resolve(environ: std.process.Environ) RuntimeDecision {
     };
 }
 
+/// Backend selector with deterministic precedence.
+///
+/// Precedence:
+/// 1. `SHAULA_CAPTURE_BACKEND=__stub__`
+/// 2. `SHAULA_CAPTURE_FORCE_PORTAL=true|1`
+/// 3. Niri probe -> `niri_wayland_direct`
+/// 4. default -> `portal_screenshot`
 pub fn resolveBackend(environ: std.process.Environ) BackendKind {
     if (environ.getPosix("SHAULA_CAPTURE_BACKEND")) |value| {
         const token = std.mem.sliceTo(value, 0);
@@ -73,6 +91,7 @@ pub fn resolveBackend(environ: std.process.Environ) BackendKind {
     return .portal_screenshot;
 }
 
+/// Stable backend label used in JSON responses and QA assertions.
 pub fn backendLabel(kind: BackendKind) []const u8 {
     return switch (kind) {
         .niri_wayland_direct => "niri-wayland-direct",
@@ -81,6 +100,7 @@ pub fn backendLabel(kind: BackendKind) []const u8 {
     };
 }
 
+/// Query if a mode token (`area|fullscreen|window`) is executable.
 pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
     if (std.mem.eql(u8, mode, "area")) return capture.area;
     if (std.mem.eql(u8, mode, "fullscreen")) return capture.fullscreen;
@@ -88,6 +108,7 @@ pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
     return false;
 }
 
+/// Ordered fallback backend labels for observability and future orchestration.
 pub fn fallbacksFor(backend: BackendKind) []const []const u8 {
     return switch (backend) {
         .niri_wayland_direct => &.{"portal-screenshot"},
@@ -96,6 +117,9 @@ pub fn fallbacksFor(backend: BackendKind) []const []const u8 {
     };
 }
 
+/// Compute strict mode matrix for the resolved backend.
+///
+/// Note: window mode remains disabled in current scope by design.
 fn captureModesFor(backend: BackendKind, compositor_supported: bool) CaptureModes {
     if (!compositor_supported) {
         return .{ .area = false, .fullscreen = false, .window = false };

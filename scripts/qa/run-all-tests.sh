@@ -23,6 +23,33 @@ if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-
   export SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}"
 fi
 
+export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
+QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
+KEEP_ARTIFACTS="${QA_KEEP_ARTIFACTS:-0}"
+RUN_TS="$(date -u +"%Y%m%dT%H%M%SZ")"
+RUN_DIR="/tmp/shaula/runs/${RUN_TS}-all-${QA_PROFILE}"
+mkdir -p "${RUN_DIR}"
+ln -sfn "${RUN_DIR}" /tmp/shaula/runs/latest
+
+cleanup_qa_artifacts() {
+  if [[ "${KEEP_ARTIFACTS}" == "1" ]]; then
+    return
+  fi
+
+  rm -f /tmp/shaula/task10-*.png \
+        /tmp/shaula/task17-e2e-*.png \
+        /tmp/shaula/task9-*.png \
+        /tmp/shaula/task8-*.png \
+        /tmp/shaula/task8-*.token \
+        /tmp/shaula/task6-history-topn/capture-*.png \
+        /tmp/shaula/task2-capability-*.png \
+        /tmp/shaula/task3-capture-content-fullscreen.png \
+        /tmp/shaula/task3-stub-signature-1x1.png \
+        /tmp/shaula/qa-runtime-capture.png 2>/dev/null || true
+  rmdir /tmp/shaula/task6-history-topn 2>/dev/null || true
+}
+trap cleanup_qa_artifacts EXIT
+
 set +e
 negative_preflight_output="$(env -u WAYLAND_DISPLAY -u NIRI_SOCKET bash ./scripts/qa/preflight-wayland-niri.sh 2>&1)"
 negative_preflight_rc=$?
@@ -39,8 +66,8 @@ else
 fi
 
 bash ./scripts/qa/run-unit-tests.sh
-bash ./scripts/qa/run-integration-tests.sh
-bash ./scripts/qa/run-e2e-niri.sh
+SHAULA_QA_PROFILE="${QA_PROFILE}" QA_KEEP_ARTIFACTS="${KEEP_ARTIFACTS}" bash ./scripts/qa/run-integration-tests.sh
+SHAULA_QA_PROFILE="${QA_PROFILE}" QA_KEEP_ARTIFACTS="${KEEP_ARTIFACTS}" bash ./scripts/qa/run-e2e-niri.sh
 
 integration_layer_report="${EVIDENCE_DIR}/task-10-layer-integration-report.json"
 e2e_layer_report="${EVIDENCE_DIR}/task-10-layer-e2e-niri-report.json"
@@ -59,6 +86,9 @@ integration_layer_pass="$(jq -r '.pass' "${integration_layer_report}")"
 e2e_layer_pass="$(jq -r '.pass' "${e2e_layer_report}")"
 
 if [[ "${integration_layer_pass}" != "true" || "${e2e_layer_pass}" != "true" ]]; then
+  echo "QA failure summary (layer): integration_pass=${integration_layer_pass} e2e_pass=${e2e_layer_pass}" >&2
+  echo "- integration log: ${EVIDENCE_DIR}/task-10-layer-integration-report-error.txt" >&2
+  echo "- matrix error file: ${ERROR_TXT}" >&2
   echo "ERR_QA_MATRIX_INVALID reason=layer_report_failures integration_pass=${integration_layer_pass} e2e_pass=${e2e_layer_pass}" >&2
   exit 1
 fi
@@ -113,4 +143,4 @@ if [[ "${overall_pass}" != "true" ]]; then
   exit 1
 fi
 
-echo "ok qa_all_tests report=${REPORT_JSON}"
+echo "ok qa_all_tests profile=${QA_PROFILE} keep_artifacts=${KEEP_ARTIFACTS} run_dir=${RUN_DIR} report=${REPORT_JSON}"

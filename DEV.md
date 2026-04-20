@@ -29,6 +29,29 @@ bash scripts/qa/run-all-tests.sh
 
 This executes all QA checks in sequence. See individual scripts below.
 
+### QA Profiles and Artifact Policy
+
+The QA runners support profile-based execution and artifact retention.
+
+```bash
+# Full suite (default)
+SHAULA_QA_PROFILE=full bash scripts/qa/run-all-tests.sh
+
+# Fast profile (reduced expensive checks)
+SHAULA_QA_PROFILE=fast bash scripts/qa/run-all-tests.sh
+
+# Debug profile (same checks as full, for troubleshooting)
+SHAULA_QA_PROFILE=debug bash scripts/qa/run-all-tests.sh
+
+# Keep generated artifacts instead of auto-cleanup
+QA_KEEP_ARTIFACTS=1 SHAULA_QA_PROFILE=debug bash scripts/qa/run-all-tests.sh
+```
+
+Runtime notes:
+- QA forces non-interactive selection via `SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1` to avoid visual overlay disruptions.
+- By default, temporary screenshots under `/tmp/shaula` are cleaned automatically at script exit.
+- Per-run metadata directory is published in script output as `run_dir`, and `/tmp/shaula/runs/latest` points to the latest run.
+
 ### Individual QA Scripts
 
 | Script | Purpose |

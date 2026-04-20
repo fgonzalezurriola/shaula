@@ -22,6 +22,31 @@ if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-
   export SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}"
 fi
 
+export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
+QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
+KEEP_ARTIFACTS="${QA_KEEP_ARTIFACTS:-0}"
+RUN_TS="$(date -u +"%Y%m%dT%H%M%SZ")"
+RUN_DIR="/tmp/shaula/runs/${RUN_TS}-e2e-${QA_PROFILE}"
+mkdir -p "${RUN_DIR}"
+ln -sfn "${RUN_DIR}" /tmp/shaula/runs/latest
+
+cleanup_qa_artifacts() {
+  if [[ "${KEEP_ARTIFACTS}" == "1" ]]; then
+    return
+  fi
+
+  rm -f /tmp/shaula/task17-e2e-*.png \
+        /tmp/shaula/task8-*.png \
+        /tmp/shaula/task8-*.token \
+        /tmp/shaula/task9-*.png \
+        /tmp/shaula/task2-capability-*.png \
+        /tmp/shaula/task3-capture-content-fullscreen.png \
+        /tmp/shaula/task3-stub-signature-1x1.png \
+        /tmp/shaula/qa-runtime-capture.png 2>/dev/null || true
+  rmdir /tmp/shaula/task6-history-topn 2>/dev/null || true
+}
+trap cleanup_qa_artifacts EXIT
+
 bash ./scripts/qa/preflight-wayland-niri.sh
 
 zig build >/dev/null
@@ -116,8 +141,10 @@ printf '%s\n' "${capabilities_json}" | jq -e '.ok==true and has("backend") and h
 }
 
 bash ./scripts/qa/assert-capabilities-consistency.sh
-bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh
-bash ./scripts/qa/test-noctalia-plugin-optional.sh --without-plugin
+if [[ "${QA_PROFILE}" == "full" || "${QA_PROFILE}" == "debug" ]]; then
+  bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh
+  bash ./scripts/qa/test-noctalia-plugin-optional.sh --without-plugin
+fi
 
 timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
@@ -143,4 +170,4 @@ jq -n \
     ]
   }' > "${REPORT_JSON}"
 
-echo "ok qa_e2e_niri"
+echo "ok qa_e2e_niri profile=${QA_PROFILE} keep_artifacts=${KEEP_ARTIFACTS} run_dir=${RUN_DIR}"

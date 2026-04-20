@@ -1,6 +1,10 @@
 const std = @import("std");
 const root = @import("root");
 
+const runtime_exec = @import("capture_backend_runtime_exec.zig");
+const output_path = @import("capture_backend_output_path.zig");
+const png_meta = @import("capture_backend_png_meta.zig");
+
 const standalone_capture_types = struct {
     pub const CaptureMode = enum {
         area,
@@ -134,37 +138,11 @@ else
 
 pub const BackendKind = runtime_capabilities.BackendKind;
 
-const grim_candidate_paths = [_][]const u8{
-    "/usr/bin/grim",
-    "/bin/grim",
-    "/usr/local/bin/grim",
-};
-
-const stub_signature_png_bytes = [_]u8{
-    0x89, 0x50, 0x4E, 0x47,
-    0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D,
-    0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01,
-    0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00,
-    0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00,
-    0x0D, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x63,
-    0x60, 0x00, 0x00, 0x00,
-    0x02, 0x00, 0x01, 0xE5,
-    0x27, 0xD4, 0xA2, 0x00,
-    0x00, 0x00, 0x00, 0x49,
-    0x45, 0x4E, 0x44, 0xAE,
-    0x42, 0x60, 0x82,
-};
-
-const fake_capture_helper_fail_script =
-    "#!/usr/bin/env python3\n" ++
-    "import sys\n" ++
-    "sys.exit(7)\n";
-
+/// Execute a single backend capture request and return deterministic outcome.
+///
+/// This function is a core runtime boundary. It must preserve taxonomy stability
+/// (`ERR_*`) and JSON contract expectations used by QA, history persistence, and
+/// release-readiness checks.
 pub fn execute(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -228,7 +206,14 @@ pub fn execute(
         };
     }
 
-    const output_path = resolveOutputPath(allocator, io, environ, request) catch |err| switch (err) {
+    const mode_string = capture_types.modeString(request.mode);
+    const resolved_output_path = output_path.resolveOutputPath(
+        allocator,
+        io,
+        mode_string,
+        environ,
+        request.output_path,
+    ) catch |err| switch (err) {
         error.OutputPathInvalid => {
             return .{
                 .failure = .{
@@ -254,11 +239,25 @@ pub fn execute(
             };
         },
     };
-    errdefer allocator.free(output_path);
+    errdefer allocator.free(resolved_output_path);
 
-    writeRuntimeCapture(io, environ, backend, request, output_path) catch |err| switch (err) {
+    var geometry_storage: [64]u8 = undefined;
+    const area_geometry = if (request.mode == .area)
+        formatAreaGeometry(request.area_geometry, &geometry_storage)
+    else
+        null;
+
+    runtime_exec.writeRuntimeCapture(
+        io,
+        environ,
+        backend_used,
+        mode_string,
+        request.mode == .area,
+        area_geometry,
+        resolved_output_path,
+    ) catch |err| switch (err) {
         error.BackendUnavailable => {
-            allocator.free(output_path);
+            allocator.free(resolved_output_path);
             return .{
                 .failure = .{
                     .mode = request.mode,
@@ -271,7 +270,7 @@ pub fn execute(
             };
         },
         else => {
-            allocator.free(output_path);
+            allocator.free(resolved_output_path);
             return .{
                 .failure = .{
                     .mode = request.mode,
@@ -285,8 +284,8 @@ pub fn execute(
         },
     };
 
-    const dimensions = resolveCaptureDimensions(allocator, io, output_path) catch {
-        allocator.free(output_path);
+    const dimensions_meta = png_meta.resolveCaptureDimensions(allocator, io, resolved_output_path) catch {
+        allocator.free(resolved_output_path);
         return .{
             .failure = .{
                 .mode = request.mode,
@@ -303,9 +302,9 @@ pub fn execute(
     return .{
         .success = .{
             .mode = request.mode,
-            .path = output_path,
+            .path = resolved_output_path,
             .mime = "image/png",
-            .dimensions = dimensions,
+            .dimensions = .{ .width = dimensions_meta.width, .height = dimensions_meta.height },
             .backend_used = backend_used,
             .latency_ms = latency_ms,
             .degraded = degraded_backend,
@@ -348,237 +347,11 @@ fn resolveWindowTarget(request: capture_types.CaptureRequest, environ: std.proce
     return null;
 }
 
-fn resolveOutputPath(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    environ: std.process.Environ,
-    request: capture_types.CaptureRequest,
-) ![]u8 {
-    if (request.output_path) |custom_path| {
-        if (std.mem.indexOf(u8, custom_path, "::invalid::") != null) {
-            return error.OutputPathInvalid;
-        }
-        return allocator.dupe(u8, custom_path);
-    }
-
-    const home = blk: {
-        const home_z = environ.getPosix("HOME") orelse return error.OutputPathInvalid;
-        const value = std.mem.sliceTo(home_z, 0);
-        if (value.len == 0) return error.OutputPathInvalid;
-        break :blk value;
-    };
-
-    const output_dir = try std.fmt.allocPrint(allocator, "{s}/Pictures/Shaula", .{home});
-    defer allocator.free(output_dir);
-    try ensureDirectoryWritable(allocator, io, output_dir);
-
-    const ts = std.Io.Timestamp.now(io, .real);
-    const millis = ts.toMilliseconds();
-    return std.fmt.allocPrint(
-        allocator,
-        "{s}/capture-{s}-{d}.png",
-        .{ output_dir, capture_types.modeString(request.mode), millis },
-    );
-}
-
-fn ensureDirectoryWritable(allocator: std.mem.Allocator, io: std.Io, dir_path: []const u8) !void {
-    std.Io.Dir.cwd().createDirPath(io, dir_path) catch return error.OutputPathInvalid;
-
-    const probe_path = try std.fmt.allocPrint(
-        allocator,
-        "{s}/.shaula-write-probe-{d}.tmp",
-        .{ dir_path, std.Io.Timestamp.now(io, .real).toMilliseconds() },
-    );
-    defer allocator.free(probe_path);
-
-    var probe = std.Io.Dir.createFileAbsolute(io, probe_path, .{ .truncate = true }) catch {
-        return error.OutputPathInvalid;
-    };
-    probe.close(io);
-    std.Io.Dir.deleteFileAbsolute(io, probe_path) catch {};
-}
-
-fn writeRuntimeCapture(
-    io: std.Io,
-    environ: std.process.Environ,
-    backend: BackendKind,
-    request: capture_types.CaptureRequest,
-    output_path: []const u8,
-) !void {
-    if (configuredRuntimeCaptureHelper(environ)) |helper_path| {
-        return writeRuntimeCaptureWithHelper(io, backend, request, helper_path, output_path);
-    }
-
-    return writeRuntimeCaptureWithGrim(io, request, output_path);
-}
-
-fn configuredRuntimeCaptureHelper(environ: std.process.Environ) ?[]const u8 {
-    if (environ.getPosix("SHAULA_RUNTIME_CAPTURE_HELPER")) |helper_path_z| {
-        const configured = std.mem.sliceTo(helper_path_z, 0);
-        if (configured.len > 0) return configured;
-    }
-
-    return null;
-}
-
-fn writeRuntimeCaptureWithHelper(
-    io: std.Io,
-    backend: BackendKind,
-    request: capture_types.CaptureRequest,
-    helper_path: []const u8,
-    output_path: []const u8,
-) !void {
-    if (std.fs.path.dirname(output_path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
-
-    var geometry_storage: [64]u8 = undefined;
-    const geometry = if (request.mode == .area) formatAreaGeometry(request.area_geometry, &geometry_storage) else null;
-
-    const result = if (geometry) |region| std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{
-            "python3",
-            helper_path,
-            "--backend",
-            backendString(backend),
-            "--mode",
-            capture_types.modeString(request.mode),
-            "--geometry",
-            region,
-            "--output",
-            output_path,
-        },
-        .stdout_limit = .limited(0),
-        .stderr_limit = .limited(8192),
-    }) catch |err| switch (err) {
-        error.FileNotFound => return error.BackendUnavailable,
-        else => return err,
-    } else std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{
-            "python3",
-            helper_path,
-            "--backend",
-            backendString(backend),
-            "--mode",
-            capture_types.modeString(request.mode),
-            "--output",
-            output_path,
-        },
-        .stdout_limit = .limited(0),
-        .stderr_limit = .limited(8192),
-    }) catch |err| switch (err) {
-        error.FileNotFound => return error.BackendUnavailable,
-        else => return err,
-    };
-    defer std.heap.smp_allocator.free(result.stdout);
-    defer std.heap.smp_allocator.free(result.stderr);
-
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 0) return;
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-        else => {
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-    }
-}
-
-fn writeRuntimeCaptureWithGrim(
-    io: std.Io,
-    request: capture_types.CaptureRequest,
-    output_path: []const u8,
-) !void {
-    const grim_path = findGrimBinary(io) orelse return error.BackendUnavailable;
-
-    var geometry_storage: [64]u8 = undefined;
-    const geometry = if (request.mode == .area)
-        formatAreaGeometry(request.area_geometry, &geometry_storage) orelse return error.BackendUnavailable
-    else
-        null;
-
-    if (std.fs.path.dirname(output_path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
-
-    const result = switch (request.mode) {
-        .area => std.process.run(std.heap.smp_allocator, io, .{
-            .argv = &.{ grim_path, "-g", geometry.?, output_path },
-            .stdout_limit = .limited(0),
-            .stderr_limit = .limited(8192),
-        }) catch |err| switch (err) {
-            error.FileNotFound => return error.BackendUnavailable,
-            else => return err,
-        },
-        .fullscreen => std.process.run(std.heap.smp_allocator, io, .{
-            .argv = &.{ grim_path, output_path },
-            .stdout_limit = .limited(0),
-            .stderr_limit = .limited(8192),
-        }) catch |err| switch (err) {
-            error.FileNotFound => return error.BackendUnavailable,
-            else => return err,
-        },
-        .window => return error.BackendUnavailable,
-    };
-    defer std.heap.smp_allocator.free(result.stdout);
-    defer std.heap.smp_allocator.free(result.stderr);
-
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 0) return;
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-        else => {
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-    }
-}
-
-fn hasStubSignaturePng(png_bytes: []const u8) bool {
-    if (png_bytes.len < stub_signature_png_bytes.len) return false;
-    return std.mem.eql(u8, png_bytes[0..stub_signature_png_bytes.len], &stub_signature_png_bytes);
-}
-
-fn findGrimBinary(io: std.Io) ?[]const u8 {
-    for (grim_candidate_paths) |candidate| {
-        std.Io.Dir.accessAbsolute(io, candidate, .{}) catch continue;
-        return candidate;
-    }
-    return null;
-}
-
 fn formatAreaGeometry(area_geometry: ?capture_types.AreaGeometry, buffer: []u8) ?[]const u8 {
     const geometry = area_geometry orelse return null;
     if (geometry.width == 0 or geometry.height == 0) return null;
 
     return std.fmt.bufPrint(buffer, "{d},{d} {d}x{d}", .{ geometry.x, geometry.y, geometry.width, geometry.height }) catch null;
-}
-
-fn resolveCaptureDimensions(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    output_path: []const u8,
-) !capture_types.Dimensions {
-    const header = try std.Io.Dir.cwd().readFileAlloc(io, output_path, allocator, .unlimited);
-    defer allocator.free(header);
-
-    if (header.len < 24) return error.BackendUnavailable;
-    if (!std.mem.eql(u8, header[0..8], "\x89PNG\r\n\x1a\n")) return error.BackendUnavailable;
-    if (!std.mem.eql(u8, header[12..16], "IHDR")) return error.BackendUnavailable;
-
-    const width = readBigEndianU32(header[16], header[17], header[18], header[19]);
-    const height = readBigEndianU32(header[20], header[21], header[22], header[23]);
-    if (width == 0 or height == 0) return error.BackendUnavailable;
-
-    return .{ .width = width, .height = height };
-}
-
-fn readBigEndianU32(a: u8, b: u8, c: u8, d: u8) u32 {
-    return (@as(u32, a) << 24) | (@as(u32, b) << 16) | (@as(u32, c) << 8) | @as(u32, d);
 }
 
 fn defaultLatencyMs(mode: capture_types.CaptureMode, degraded_backend: bool) u32 {
@@ -590,332 +363,4 @@ fn defaultLatencyMs(mode: capture_types.CaptureMode, degraded_backend: bool) u32
 
     if (degraded_backend) return base + 6;
     return base;
-}
-
-const EnvPair = struct {
-    key: []const u8,
-    value: []const u8,
-};
-
-const TestEnviron = struct {
-    environ: std.process.Environ,
-    block: std.process.Environ.Block,
-
-    fn deinit(self: *TestEnviron, allocator: std.mem.Allocator) void {
-        self.block.deinit(allocator);
-    }
-};
-
-fn initTestEnviron(allocator: std.mem.Allocator, pairs: []const EnvPair) !TestEnviron {
-    var map = std.process.Environ.Map.init(allocator);
-    defer map.deinit();
-
-    for (pairs) |pair| {
-        try map.put(pair.key, pair.value);
-    }
-
-    const block = try map.createPosixBlock(allocator, .{});
-    return .{
-        .environ = .{ .block = block },
-        .block = block,
-    };
-}
-
-fn createExecutableHelper(io: std.Io, path: []const u8, script: []const u8) !void {
-    if (std.fs.path.dirname(path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
-
-    var file = try std.Io.Dir.createFileAbsolute(io, path, .{ .truncate = true });
-    defer file.close(io);
-    try file.writeStreamingAll(io, script);
-
-    try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o755), .{});
-}
-
-test "window mode unresolved target returns deterministic failure" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .window });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_WINDOW_TARGET_UNRESOLVED", failure.code);
-            try std.testing.expect(failure.degraded);
-        },
-        else => return error.TestExpectedFailure,
-    }
-}
-
-test "runtime capture helper missing maps to backend unavailable" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "/tmp/shaula/missing-helper.py" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    const output_path = "/tmp/shaula/test-runtime-helper-missing.png";
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .area, .output_path = output_path });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_CAPTURE_BACKEND_UNAVAILABLE", failure.code);
-            try std.testing.expectEqualStrings("capture backend unavailable", failure.message);
-            try std.testing.expect(failure.retryable);
-        },
-        else => return error.TestExpectedFailure,
-    }
-}
-
-test "default output path resolves under HOME Pictures Shaula" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "HOME", .value = "/tmp/shaula-test-home" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    const path = try resolveOutputPath(allocator, io, test_environ.environ, .{ .mode = .area });
-    defer allocator.free(path);
-
-    try std.testing.expect(std.mem.startsWith(u8, path, "/tmp/shaula-test-home/Pictures/Shaula/capture-area-"));
-}
-
-test "default output path without HOME returns OutputPathInvalid" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{});
-    defer test_environ.deinit(std.testing.allocator);
-
-    const io = std.testing.io;
-    try std.testing.expectError(
-        error.OutputPathInvalid,
-        resolveOutputPath(std.testing.allocator, io, test_environ.environ, .{ .mode = .area }),
-    );
-}
-
-test "injected unknown failure maps deterministically" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_INJECT_UNKNOWN_FAILURE", .value = "1" },
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .area });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_UNKNOWN_UNMAPPED", failure.code);
-        },
-        else => return error.TestExpectedFailure,
-    }
-}
-
-test "non-niri compositor rejects capture without fallback success" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "sway" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .area });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_UNSUPPORTED_COMPOSITOR", failure.code);
-            try std.testing.expect(!failure.degraded);
-            try std.testing.expect(failure.backend_used == null);
-        },
-        else => return error.TestExpectedFailure,
-    }
-}
-
-test "forcing stub backend fails deterministically and writes no file" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_CAPTURE_BACKEND", .value = "__stub__" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    const output_path = "/tmp/shaula/test-forced-stub-backend.png";
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .area, .output_path = output_path });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_CAPTURE_BACKEND_UNAVAILABLE", failure.code);
-            try std.testing.expectEqualStrings("capture backend unavailable", failure.message);
-            try std.testing.expect(failure.retryable);
-            try std.testing.expect(failure.backend_used != null);
-            try std.testing.expectEqualStrings("__stub__", failure.backend_used.?);
-        },
-        else => return error.TestExpectedFailure,
-    }
-
-    const output_file_exists = blk: {
-        std.Io.Dir.deleteFileAbsolute(io, output_path) catch |err| switch (err) {
-            error.FileNotFound => break :blk false,
-            else => return err,
-        };
-        break :blk true;
-    };
-
-    try std.testing.expect(!output_file_exists);
-}
-
-test "runtime capture output does not match stub signature" {
-    const io = std.testing.io;
-    const helper_path = "/tmp/shaula/test-runtime-capture-helper.py";
-    const helper_source = "scripts/qa/fake_runtime_capture_helper.py";
-    const helper_bytes = try std.Io.Dir.cwd().readFileAlloc(io, helper_source, std.testing.allocator, .unlimited);
-    defer std.testing.allocator.free(helper_bytes);
-    try createExecutableHelper(io, helper_path, helper_bytes);
-    defer std.Io.Dir.deleteFileAbsolute(io, helper_path) catch {};
-
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = helper_path },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const output_path = "/tmp/shaula/test-runtime-backend-output.png";
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .success => |success| {
-            try std.testing.expectEqualStrings(output_path, success.path);
-            try std.testing.expectEqualStrings("image/png", success.mime);
-        },
-        else => return error.TestExpectedSuccess,
-    }
-
-    const png_bytes = try std.Io.Dir.cwd().readFileAlloc(io, output_path, allocator, .unlimited);
-    defer allocator.free(png_bytes);
-
-    try std.testing.expect(!hasStubSignaturePng(png_bytes));
-
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-}
-
-test "runtime helper nonzero exit maps to backend unavailable and no output" {
-    const io = std.testing.io;
-    const helper_path = "/tmp/shaula/test-runtime-capture-helper-fail.py";
-    try createExecutableHelper(io, helper_path, fake_capture_helper_fail_script);
-    defer std.Io.Dir.deleteFileAbsolute(io, helper_path) catch {};
-
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = helper_path },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const output_path = "/tmp/shaula/test-runtime-backend-fail-output.png";
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
-    defer deinitOutcome(allocator, &outcome);
-
-    switch (outcome) {
-        .failure => |failure| {
-            try std.testing.expectEqualStrings("ERR_CAPTURE_BACKEND_UNAVAILABLE", failure.code);
-            try std.testing.expectEqualStrings("capture backend unavailable", failure.message);
-            try std.testing.expect(failure.retryable);
-        },
-        else => return error.TestExpectedFailure,
-    }
-
-    const output_file_exists = blk: {
-        std.Io.Dir.deleteFileAbsolute(io, output_path) catch |err| switch (err) {
-            error.FileNotFound => break :blk false,
-            else => return err,
-        };
-        break :blk true;
-    };
-    try std.testing.expect(!output_file_exists);
-}
-
-test "real backend without helper requires grim binary" {
-    var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-    });
-    defer test_environ.deinit(std.testing.allocator);
-
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const io = std.testing.io;
-    const output_path = "/tmp/shaula/test-runtime-backend-real-requires-grim.png";
-    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-
-    var outcome = try execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
-    defer deinitOutcome(allocator, &outcome);
-
-    if (findGrimBinary(io) == null) {
-        switch (outcome) {
-            .failure => |failure| {
-                try std.testing.expectEqualStrings("ERR_CAPTURE_BACKEND_UNAVAILABLE", failure.code);
-                try std.testing.expectEqualStrings("capture backend unavailable", failure.message);
-                try std.testing.expect(failure.retryable);
-            },
-            else => return error.TestExpectedFailure,
-        }
-        return;
-    }
-
-    switch (outcome) {
-        .success => |success| {
-            try std.testing.expectEqualStrings("image/png", success.mime);
-            try std.testing.expect(success.dimensions.width > 0);
-            try std.testing.expect(success.dimensions.height > 0);
-        },
-        else => return error.TestExpectedSuccess,
-    }
 }

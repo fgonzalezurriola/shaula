@@ -17,6 +17,15 @@ if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-
   export SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}"
 fi
 
+export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
+
+QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
+KEEP_ARTIFACTS="${QA_KEEP_ARTIFACTS:-0}"
+RUN_TS="$(date -u +"%Y%m%dT%H%M%SZ")"
+RUN_DIR="/tmp/shaula/runs/${RUN_TS}-integration-${QA_PROFILE}"
+mkdir -p "${RUN_DIR}"
+ln -sfn "${RUN_DIR}" /tmp/shaula/runs/latest
+
 EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-10-layer-integration-report.json"
 ERROR_LOG="${EVIDENCE_DIR}/task-10-layer-integration-report-error.txt"
@@ -24,7 +33,27 @@ ERROR_LOG="${EVIDENCE_DIR}/task-10-layer-integration-report-error.txt"
 mkdir -p "${EVIDENCE_DIR}"
 : > "${ERROR_LOG}"
 
+cleanup_qa_artifacts() {
+  if [[ "${KEEP_ARTIFACTS}" == "1" ]]; then
+    return
+  fi
+
+  rm -f /tmp/shaula/task10-*.png \
+        /tmp/shaula/task9-*.png \
+        /tmp/shaula/task8-*.png \
+        /tmp/shaula/task8-*.token \
+        /tmp/shaula/task6-history-topn/capture-*.png \
+        /tmp/shaula/qa-runtime-capture.png \
+        /tmp/shaula/task2-capability-*.png \
+        /tmp/shaula/task3-capture-content-fullscreen.png \
+        /tmp/shaula/task3-stub-signature-1x1.png \
+        /tmp/shaula/test-runtime-*.png 2>/dev/null || true
+  rmdir /tmp/shaula/task6-history-topn 2>/dev/null || true
+}
+trap cleanup_qa_artifacts EXIT
+
 subchecks_json='[]'
+failed_checks='[]'
 
 run_subcheck() {
   local id="$1"
@@ -40,6 +69,13 @@ run_subcheck() {
 
   if [[ ${rc} -eq 0 ]]; then
     pass=true
+  else
+    failed_checks="$(jq -c -n \
+      --argjson current "${failed_checks}" \
+      --arg id "${id}" \
+      --arg cmd "${cmd}" \
+      '$current + [{ id: $id, command: $cmd }]' \
+    )"
   fi
 
   printf '[%s] rc=%s cmd=%s\n%s\n\n' "${id}" "${rc}" "${cmd}" "${output}" >> "${ERROR_LOG}"
@@ -62,14 +98,20 @@ run_subcheck "integration.capture.integrity.content_validity" "bash ./scripts/qa
 run_subcheck "integration.capture.capabilities.strict_contract" "bash ./scripts/qa/assert-capabilities-consistency.sh"
 run_subcheck "integration.capture.output.default_path" "bash ./scripts/qa/assert-default-output-path.sh"
 run_subcheck "integration.history.topn_20" "bash ./scripts/qa/assert-history-topn.sh --topn 20 --shots 25"
-run_subcheck "integration.overlay.base_selection" "bash ./scripts/qa/assert-overlay-base-selection.sh"
-run_subcheck "integration.capture.shell_artifact_guard" "bash ./scripts/qa/assert-shell-artifact-guard.sh --inject-known-marker"
-run_subcheck "integration.capture.noctalia.panel_hide_handshake" "bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh"
-run_subcheck "integration.noctalia.actions_mvp" "bash ./scripts/qa/assert-noctalia-actions.sh --with-plugin"
-run_subcheck "integration.noctalia.optional_core_without_plugin" "bash ./scripts/qa/test-noctalia-plugin-optional.sh --without-plugin"
-run_subcheck "integration.capture.result_schema" "bash ./scripts/qa/assert-capture-result-schema.sh"
-run_subcheck "integration.pipeline.post_capture" "bash ./scripts/qa/test-post-capture-pipeline.sh"
-run_subcheck "integration.history.consistency" "bash ./scripts/qa/test-history-consistency.sh"
+
+if [[ "${QA_PROFILE}" == "full" || "${QA_PROFILE}" == "debug" ]]; then
+  run_subcheck "integration.overlay.base_selection" "bash ./scripts/qa/assert-overlay-base-selection.sh"
+  run_subcheck "integration.capture.shell_artifact_guard" "bash ./scripts/qa/assert-shell-artifact-guard.sh --inject-known-marker"
+  run_subcheck "integration.capture.noctalia.panel_hide_handshake" "bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh"
+  run_subcheck "integration.noctalia.actions_mvp" "bash ./scripts/qa/assert-noctalia-actions.sh --with-plugin"
+  run_subcheck "integration.noctalia.optional_core_without_plugin" "bash ./scripts/qa/test-noctalia-plugin-optional.sh --without-plugin"
+  run_subcheck "integration.capture.result_schema" "bash ./scripts/qa/assert-capture-result-schema.sh"
+  run_subcheck "integration.pipeline.post_capture" "bash ./scripts/qa/test-post-capture-pipeline.sh"
+  run_subcheck "integration.history.consistency" "bash ./scripts/qa/test-history-consistency.sh"
+else
+  run_subcheck "integration.capture.result_schema" "bash ./scripts/qa/assert-capture-result-schema.sh"
+  run_subcheck "integration.history.consistency" "bash ./scripts/qa/test-history-consistency.sh"
+fi
 
 layer_pass="$(jq -e 'all(.[]; .pass == true)' <<<"${subchecks_json}" >/dev/null && echo true || echo false)"
 timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -87,8 +129,10 @@ jq -n \
   }' > "${REPORT_JSON}"
 
 if [[ "${layer_pass}" != "true" ]]; then
+  echo "QA failure summary (integration):" >&2
+  jq -r '.[] | "- \(.id): \(.command)"' <<<"${failed_checks}" >&2
   echo "ERR_QA_INTEGRATION_FAILED report=${REPORT_JSON} log=${ERROR_LOG}" >&2
   exit 1
 fi
 
-echo "ok qa_integration_tests"
+echo "ok qa_integration_tests profile=${QA_PROFILE} keep_artifacts=${KEEP_ARTIFACTS} run_dir=${RUN_DIR}"

@@ -1,6 +1,6 @@
 {
   "suite": "task-10-postfix-test-matrix",
-  "timestamp": "2026-04-20T03:29:27Z",
+  "timestamp": "2026-04-20T13:03:53Z",
   "pass": true,
   "layers": {
     "unit": {
@@ -63,7 +63,7 @@
           "id": "integration.overlay.base_selection",
           "pass": true,
           "command": "bash ./scripts/qa/assert-overlay-base-selection.sh",
-          "output": "Testing deterministic base selection output\nPASS: Selection output deterministic, not cancelled, and geometry is valid\n{\n  \"ok\": true,\n  \"contract_version\": \"1.0.0\",\n  \"command\": \"capture area\",\n  \"timestamp\": \"2026-04-20T03:29:18Z\",\n  \"selection\": {\n    \"mode\": \"freeform\",\n    \"aspect\": null,\n    \"geometry\": {\n      \"x\": 100,\n      \"y\": 100,\n      \"width\": 400,\n      \"height\": 300\n    },\n    \"cancelled\": false\n  },\n  \"warnings\": []\n}"
+          "output": "Testing deterministic base selection output\nPASS: Selection output deterministic, not cancelled, and geometry is valid\n{\n  \"ok\": true,\n  \"contract_version\": \"1.0.0\",\n  \"command\": \"capture area\",\n  \"timestamp\": \"2026-04-20T13:03:45Z\",\n  \"selection\": {\n    \"mode\": \"freeform\",\n    \"aspect\": null,\n    \"geometry\": {\n      \"x\": 100,\n      \"y\": 100,\n      \"width\": 400,\n      \"height\": 300\n    },\n    \"cancelled\": false\n  },\n  \"warnings\": []\n}"
         },
         {
           "id": "integration.capture.shell_artifact_guard",
@@ -225,7 +225,7 @@
       "id": "integration.overlay.base_selection",
       "pass": true,
       "command": "bash ./scripts/qa/assert-overlay-base-selection.sh",
-      "output": "Testing deterministic base selection output\nPASS: Selection output deterministic, not cancelled, and geometry is valid\n{\n  \"ok\": true,\n  \"contract_version\": \"1.0.0\",\n  \"command\": \"capture area\",\n  \"timestamp\": \"2026-04-20T03:29:18Z\",\n  \"selection\": {\n    \"mode\": \"freeform\",\n    \"aspect\": null,\n    \"geometry\": {\n      \"x\": 100,\n      \"y\": 100,\n      \"width\": 400,\n      \"height\": 300\n    },\n    \"cancelled\": false\n  },\n  \"warnings\": []\n}"
+      "output": "Testing deterministic base selection output\nPASS: Selection output deterministic, not cancelled, and geometry is valid\n{\n  \"ok\": true,\n  \"contract_version\": \"1.0.0\",\n  \"command\": \"capture area\",\n  \"timestamp\": \"2026-04-20T13:03:45Z\",\n  \"selection\": {\n    \"mode\": \"freeform\",\n    \"aspect\": null,\n    \"geometry\": {\n      \"x\": 100,\n      \"y\": 100,\n      \"width\": 400,\n      \"height\": 300\n    },\n    \"cancelled\": false\n  },\n  \"warnings\": []\n}"
     },
     {
       "id": "integration.capture.shell_artifact_guard",

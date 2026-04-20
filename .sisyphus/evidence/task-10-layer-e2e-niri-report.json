@@ -1,6 +1,6 @@
 {
   "suite": "task-10-layer-e2e-niri",
-  "timestamp": "2026-04-20T03:29:27Z",
+  "timestamp": "2026-04-20T13:03:53Z",
   "pass": true,
   "script": "scripts/qa/run-e2e-niri.sh",
   "subchecks": [
