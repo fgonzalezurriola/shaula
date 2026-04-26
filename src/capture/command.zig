@@ -61,7 +61,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     }
 
     const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
-    const use_overlay_dry_run = parsed.dry_run or force_noninteractive_selection or !guards.hasInteractiveOverlayBinary(io);
+    const use_overlay_dry_run = parsed.dry_run or force_noninteractive_selection;
     const selection_result = try overlay.runSelection(
         allocator,
         io,
@@ -72,6 +72,13 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         parsed.simulate_cancel,
     );
     if (selection_result.cancelled) {
+        const overlay_code = overlay.deterministicFailureCode(environ, parsed.simulate_cancel, true);
+        if (overlay_code) |code| {
+            const spec = recovery_policy.specFor(code);
+            try json.writeErrorJson(io, "capture area", spec.code, spec.message, spec.retryable, "area", null, false, &.{});
+            return recovery_policy.exitCodeFor(spec.code);
+        }
+
         try json.writeErrorJson(io, "capture area", "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, "area", null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_SELECTION_CANCELLED");
     }
@@ -92,10 +99,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     var outcome = try capture_backend.execute(allocator, io, environ, .{
         .mode = .area,
         .output_path = parsed.output,
-        .area_geometry = if (selection_result.geometry) |g|
-            .{ .x = g.x, .y = g.y, .width = g.width, .height = g.height }
-        else
-            null,
+        .area_geometry = capture_types.areaGeometryFromSelection(selection_result.geometry),
     });
     defer capture_backend.deinitOutcome(allocator, &outcome);
     return writeCaptureOutcome(allocator, io, environ, "capture area", &outcome, .{
@@ -133,8 +137,8 @@ fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
 
 /// Execute `capture window`.
 ///
-/// Window mode is currently capability-gated off for Niri v1 scope; this path is
-/// kept explicit to preserve deterministic contracts and future extension points.
+/// Window mode remains explicit so capability gating and deterministic contracts
+/// stay stable even when runtime support is unavailable.
 fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (!parsed.json_mode) {

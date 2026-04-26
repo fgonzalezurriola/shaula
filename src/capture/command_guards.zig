@@ -49,22 +49,6 @@ pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: [
     return recovery_policy.exitCodeFor("ERR_CAPTURE_MODE_UNSUPPORTED");
 }
 
-/// Check if interactive `slurp` binary is available for overlay selection.
-pub fn hasInteractiveOverlayBinary(io: std.Io) bool {
-    const candidates = [_][]const u8{
-        "/usr/bin/slurp",
-        "/bin/slurp",
-        "/usr/local/bin/slurp",
-    };
-
-    for (candidates) |candidate| {
-        std.Io.Dir.accessAbsolute(io, candidate, .{}) catch continue;
-        return true;
-    }
-
-    return false;
-}
-
 /// Enforce pre-capture shell-artifact guard.
 ///
 /// Returns optional warning token to be surfaced in success/failure JSON.

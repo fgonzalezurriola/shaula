@@ -48,7 +48,7 @@ if [[ "${MODE}" == "action" && -z "${ACTION_ID}" ]]; then
   exit 1
 fi
 
-if [[ "${MODE}" == "action" && ${EXECUTE} -eq 1 && ! -x "${SHAULA_BIN}" ]]; then
+if [[ "${MODE}" == "action" && ${EXECUTE} -eq 1 && "${ACTION_ID}" != "open-output-folder" && "${ACTION_ID}" != "open-clipboard-image" && ! -x "${SHAULA_BIN}" ]]; then
   echo "ERR_NOCTALIA_ADAPTER_EXECUTION_UNAVAILABLE reason=shaula_binary_missing path=${SHAULA_BIN}" >&2
   exit 1
 fi
@@ -68,6 +68,8 @@ action_label() {
     capture-window) printf 'Capture Window' ;;
     open-last) printf 'Open Last' ;;
     history) printf 'History' ;;
+    open-output-folder) printf 'Open Output Folder' ;;
+    open-clipboard-image) printf 'Open Clipboard Image' ;;
     *) return 1 ;;
   esac
 }
@@ -79,8 +81,105 @@ action_command_json() {
     capture-window) printf '["capture","window","--json"]' ;;
     open-last) printf '["history","show","--json","--id","latest"]' ;;
     history) printf '["history","list","--json"]' ;;
+    open-output-folder) printf '["helper","open-output-folder"]' ;;
+    open-clipboard-image) printf '["helper","open-clipboard-image"]' ;;
     *) return 1 ;;
   esac
+}
+
+warning_array_json() {
+  local warning_token="$1"
+  if [[ -z "${warning_token}" ]]; then
+    printf '[]'
+    return
+  fi
+
+  local warning_json
+  warning_json="$(json_escape "${warning_token}")"
+  printf '[%s]' "${warning_json}"
+}
+
+OPEN_ACTION_RC=0
+OPEN_ACTION_OUTPUT=""
+
+# Executes opener command in a compositor-safe way.
+# Contract: failures are reported via exit_code/warnings in JSON and remain non-fatal.
+execute_open_target() {
+  local target="$1"
+  local opener_hint="${SHAULA_NOCTALIA_OPEN_WITH:-auto}"
+  local opener=""
+  local opener_subcommand=""
+
+  case "${opener_hint}" in
+    xdg-open)
+      opener="xdg-open"
+      ;;
+    gio)
+      opener="gio"
+      opener_subcommand="open"
+      ;;
+    none)
+      OPEN_ACTION_OUTPUT="ERR_NOCTALIA_ACTION_OPEN_TOOL_UNAVAILABLE tool=xdg-open fallback=gio"
+      OPEN_ACTION_RC=127
+      return
+      ;;
+    auto)
+      if command -v xdg-open >/dev/null 2>&1; then
+        opener="xdg-open"
+      elif command -v gio >/dev/null 2>&1; then
+        opener="gio"
+        opener_subcommand="open"
+      fi
+      ;;
+    *)
+      OPEN_ACTION_OUTPUT="ERR_NOCTALIA_ACTION_OPEN_TOOL_UNAVAILABLE reason=invalid_hint hint=${opener_hint}"
+      OPEN_ACTION_RC=127
+      return
+      ;;
+  esac
+
+  if [[ -z "${opener}" ]]; then
+    OPEN_ACTION_OUTPUT="ERR_NOCTALIA_ACTION_OPEN_TOOL_UNAVAILABLE tool=xdg-open fallback=gio"
+    OPEN_ACTION_RC=127
+    return
+  fi
+
+  set +e
+  if [[ "${opener}" == "gio" ]]; then
+    OPEN_ACTION_OUTPUT="$(${opener} ${opener_subcommand} "${target}" 2>&1)"
+  else
+    OPEN_ACTION_OUTPUT="$(${opener} "${target}" 2>&1)"
+  fi
+  OPEN_ACTION_RC=$?
+  set -e
+}
+
+resolve_clipboard_image_path() {
+  local state_file="${SHAULA_CLIPBOARD_STATE_FILE:-/tmp/shaula/clipboard/current-image.path}"
+
+  if [[ ! -f "${state_file}" ]]; then
+    return 1
+  fi
+
+  local raw_path
+  raw_path="$(python3 - "${state_file}" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    content = path.read_text(encoding="utf-8").strip()
+except Exception:
+    content = ""
+print(content)
+PY
+)"
+
+  if [[ -z "${raw_path}" ]]; then
+    return 1
+  fi
+
+  printf '%s' "${raw_path}"
 }
 
 build_action_entry() {
@@ -100,10 +199,12 @@ if [[ "${MODE}" == "menu" ]]; then
   a3="$(build_action_entry capture-window)"
   a4="$(build_action_entry open-last)"
   a5="$(build_action_entry history)"
+  a6="$(build_action_entry open-output-folder)"
+  a7="$(build_action_entry open-clipboard-image)"
 
-  printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s]},"warnings":[]}\n' \
+  printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s,%s,%s]},"warnings":[]}\n' \
     "${REQUEST_ID}" \
-    "${a1}" "${a2}" "${a3}" "${a4}" "${a5}"
+    "${a1}" "${a2}" "${a3}" "${a4}" "${a5}" "${a6}" "${a7}"
   exit 0
 fi
 
@@ -124,6 +225,51 @@ if [[ ${EXECUTE} -eq 0 ]]; then
     "${ACTION_ID}" \
     "${label_json}" \
     "${command_json}"
+  exit 0
+fi
+
+if [[ "${ACTION_ID}" == "open-output-folder" || "${ACTION_ID}" == "open-clipboard-image" ]]; then
+  warning_token=""
+
+  if [[ "${ACTION_ID}" == "open-output-folder" ]]; then
+    target_path="${SHAULA_NOCTALIA_OUTPUT_DIR:-${HOME:-/tmp}/Pictures/Shaula}"
+    mkdir -p "${target_path}" >/dev/null 2>&1 || true
+    execute_open_target "${target_path}"
+    if [[ ${OPEN_ACTION_RC} -ne 0 ]]; then
+      warning_token="noctalia_open_output_folder_tool_unavailable"
+    fi
+  else
+    clipboard_path="$(resolve_clipboard_image_path || true)"
+    if [[ -z "${clipboard_path}" || ! -f "${clipboard_path}" ]]; then
+      OPEN_ACTION_OUTPUT="ERR_NOCTALIA_ACTION_CLIPBOARD_IMAGE_MISSING path=/tmp/shaula/clipboard/current-image.path"
+      OPEN_ACTION_RC=66
+      warning_token="noctalia_open_clipboard_image_missing"
+    else
+      execute_open_target "${clipboard_path}"
+      if [[ ${OPEN_ACTION_RC} -ne 0 ]]; then
+        warning_token="noctalia_open_clipboard_image_tool_unavailable"
+      fi
+    fi
+  fi
+
+  execution_ok="false"
+  if [[ ${OPEN_ACTION_RC} -eq 0 ]]; then
+    execution_ok="true"
+  fi
+
+  label_json="$(json_escape "${label}")"
+  command_output_json="$(json_escape "${OPEN_ACTION_OUTPUT}")"
+  warnings_json="$(warning_array_json "${warning_token}")"
+
+  printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","action":{"id":"%s","label":%s,"shaula_argv":%s},"execution":{"mode":"execute","ok":%s,"exit_code":%d,"output":%s},"warnings":%s}\n' \
+    "${REQUEST_ID}" \
+    "${ACTION_ID}" \
+    "${label_json}" \
+    "${command_json}" \
+    "${execution_ok}" \
+    "${OPEN_ACTION_RC}" \
+    "${command_output_json}" \
+    "${warnings_json}"
   exit 0
 fi
 

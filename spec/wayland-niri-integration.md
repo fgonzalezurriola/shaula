@@ -30,7 +30,7 @@ Go/No-Go for consolidating MVP backend decisions:
 2. **Capture modes lock**: MVP supports deterministic `area` and `fullscreen`; `window` is allowed only with explicit degradation semantics.
 3. **Overlay feasibility lock**: layer-shell overlay path is documented with explicit input/keyboard handling constraints.
 4. **Fallback lock**: portal screenshot path is documented as fallback, not primary.
-5. **Uncertainty lock**: unsupported or unstable paths (scrolling capture, recording, OCR) are explicitly tagged as uncertain/experimental or deferred.
+5. **Scope lock**: unsupported flows are kept out of the public product contract instead of being represented as placeholders.
 
 ## MVP Capability Matrix
 
@@ -41,15 +41,13 @@ Go/No-Go for consolidating MVP backend decisions:
 | Window capture (targeted) | Niri IPC screenshot actions (`screenshot-window`, active tile/window semantics discussed in PR #3731) | **MVP feasible with degradation** | Explicit degrade to area capture when target identity/geometry is unresolved | Window/tile semantics are evolving; target ambiguity risk during compositor/runtime transitions |
 | Selection overlay | `wlr-layer-shell-unstable-v1` (`overlay` layer + explicit input region / keyboard interactivity rules) | **MVP feasible** | Abort capture with deterministic error if overlay surface cannot be mapped | Focus/input edge cases on multi-output and interactivity modes |
 | Permission mediation | Direct compositor path when available (Niri session), otherwise portal-mediated consent | **MVP feasible** | Portal request/response flow (`org.freedesktop.portal.Request`) | User prompt latency and sandbox policy variance |
-| Scrolling capture | No stable Niri/Wayland primitive in current spike scope | **Uncertain / experimental** | Defer to post-MVP contract definition | High implementation uncertainty, likely compositor-specific heuristics |
-| Screen recording | Not in this spike’s validated capture path | **Deferred** | None in MVP | Out of MVP scope; requires separate protocol/runtime decisions |
-| OCR pipeline | Post-capture processing outside hot path | **Deferred** | None in MVP | Would add CPU/memory latency pressure if not isolated |
+### Supported Product Surface
 
-### MVP vs Experimental vs Deferred (explicit)
-
-- **MVP feasible now**: area capture, fullscreen capture, selection overlay, permission mediation, window capture with explicit degradation path.
-- **Uncertain/experimental**: scrolling capture (no stable, primary-source-backed path locked for v1).
-- **Deferred**: screen recording and OCR integration (post-MVP by design to protect hot path).
+- area capture
+- fullscreen capture
+- window capture with explicit capability checks
+- selection overlay
+- permission mediation
 
 ### Runtime Contract Notes for Niri-first Capture
 
@@ -59,12 +57,34 @@ Go/No-Go for consolidating MVP backend decisions:
 - Default output behavior for capture artifacts is aligned to `~/Pictures/Shaula` when no explicit output path is provided.
 - History persistence is post-capture and bounded to Top-N 20 entries, newest-first.
 
-## Uncertainties
+### Overlay Helper STDIO Contract v1
 
-1. `wlr-screencopy-unstable-v1` is explicitly documented as deprecated in favor of `ext-image-copy-capture-v1`; this creates medium-term migration risk.
-2. Niri window vs tile screenshot semantics are still active design surface (PR #3731), so “window-like” capture behavior must be guarded by runtime capability checks and explicit degradation.
-3. Portal screenshot API is straightforward but introduces interactive/user-mediation variability; deterministic AGENT-FIRST flows should treat portal paths as fallback only.
-4. Overlay keyboard/focus behavior depends on layer-shell interactivity modes and compositor policy; failures must surface deterministic `ERR_*` outcomes rather than silent retry loops.
+The overlay parent/parser boundary uses a deterministic helper envelope on stdout:
+
+```json
+{
+  "status": "ok|cancel|error",
+  "geometry": { "x": 0, "y": 0, "width": 0, "height": 0 },
+  "action": "capture|cancel",
+  "error": { "code": "ERR_*", "message": "text" }
+}
+```
+
+Deterministic parser mapping (`src/overlay/overlay.zig`) to `SelectionResult`:
+
+- `status="ok"` requires `action="capture"` and valid non-zero `geometry`; maps to `cancelled=false` and forwards exact geometry.
+- `status="cancel"` maps to `cancelled=true`.
+- `status="error"` maps to `cancelled=true` (parent capture command then emits deterministic `ERR_SELECTION_CANCELLED` envelope).
+- Malformed/invalid helper payload maps to `cancelled=true` (same deterministic caller behavior).
+
+Contract guardrail: this parser contract does **not** change public `capture area` JSON field names or envelope structure.
+
+## Runtime Constraints
+
+1. `wlr-screencopy-unstable-v1` is documented as deprecated in favor of `ext-image-copy-capture-v1`; this is a migration constraint, not a public feature promise.
+2. Niri window vs tile screenshot semantics remain capability-gated and must fail deterministically when unresolved.
+3. Portal screenshot API is a fallback path only.
+4. Overlay keyboard/focus failures must surface deterministic `ERR_*` outcomes rather than silent retry loops.
 
 ## Optional Noctalia Plugin Integration (post-MVP)
 

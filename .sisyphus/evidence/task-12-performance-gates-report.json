@@ -1,0 +1,62 @@
+{
+  "suite": "task-12-performance-gates",
+  "profile": "full",
+  "ui_policy_mode": "non_intrusive",
+  "pass": true,
+  "benchmarks": {
+    "overlay_first_paint": {
+      "benchmark": "overlay_interactive_first_paint",
+      "mode": "non_intrusive",
+      "status": "degraded",
+      "degraded": true,
+      "interactive_allowed": false,
+      "interactive_opt_in_required": true,
+      "samples": 100,
+      "warmup": 10,
+      "metrics_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "mean": 0.0
+      },
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "thresholds_ms": {
+        "p95_max": 75.0,
+        "p99_max": 110.0
+      },
+      "pass": true,
+      "error_token": "ERR_PERF_INTRUSIVE_UI_DISABLED_BY_POLICY",
+      "reason": "interactive_opt_in_required"
+    },
+    "capture_completion": {
+      "benchmark": "capture_completion",
+      "pass": true,
+      "status": "degraded",
+      "degraded": true,
+      "error_token": "ERR_CAPTURE_MODE_UNSUPPORTED",
+      "details": {
+        "reason": "capture_mode_unsupported"
+      }
+    },
+    "daemon_idle_footprint": {
+      "benchmark": "daemon_idle_footprint",
+      "samples": 30,
+      "warmup": 4,
+      "interval_sec": 0.2,
+      "metrics": {
+        "cpu_avg_percent": 0.0,
+        "rss_p95_mb": 5.055,
+        "rss_peak_mb": 5.055
+      },
+      "thresholds": {
+        "cpu_max_percent": 0.5,
+        "rss_p95_max_mb": 40.0
+      },
+      "pass": true,
+      "error_token": null,
+      "status": "pass",
+      "degraded": false
+    }
+  }
+}

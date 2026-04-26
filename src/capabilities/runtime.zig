@@ -108,7 +108,7 @@ pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
     return false;
 }
 
-/// Ordered fallback backend labels for observability and future orchestration.
+/// Ordered fallback backend labels for observability and deterministic runtime selection.
 pub fn fallbacksFor(backend: BackendKind) []const []const u8 {
     return switch (backend) {
         .niri_wayland_direct => &.{"portal-screenshot"},

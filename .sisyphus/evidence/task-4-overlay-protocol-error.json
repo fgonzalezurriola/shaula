@@ -1,0 +1,23 @@
+{
+  "scenario": "overlay-protocol-invalid",
+  "command": "shaula capture area --json --dry-run",
+  "exit_code": 38,
+  "output": {
+    "ok": false,
+    "contract_version": "1.0.0",
+    "command": "capture area",
+    "timestamp": "2026-04-20T15:07:30Z",
+    "mode": "area",
+    "backend_used": null,
+    "degraded": false,
+    "error": {
+      "code": "ERR_OVERLAY_PROTOCOL_INVALID",
+      "message": "overlay helper produced invalid protocol payload",
+      "retryable": false,
+      "details": {
+        "mode": "area"
+      }
+    },
+    "warnings": []
+  }
+}

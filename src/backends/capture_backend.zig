@@ -55,6 +55,13 @@ const standalone_capture_types = struct {
         failure: CaptureFailure,
     };
 
+    pub fn formatAreaGeometryArg(area_geometry: ?AreaGeometry, buffer: []u8) ?[]const u8 {
+        const geometry = area_geometry orelse return null;
+        if (geometry.width == 0 or geometry.height == 0) return null;
+
+        return std.fmt.bufPrint(buffer, "{d},{d} {d}x{d}", .{ geometry.x, geometry.y, geometry.width, geometry.height }) catch null;
+    }
+
     pub fn modeString(mode: CaptureMode) []const u8 {
         return switch (mode) {
             .area => "area",
@@ -243,7 +250,7 @@ pub fn execute(
 
     var geometry_storage: [64]u8 = undefined;
     const area_geometry = if (request.mode == .area)
-        formatAreaGeometry(request.area_geometry, &geometry_storage)
+        capture_types.formatAreaGeometryArg(request.area_geometry, &geometry_storage)
     else
         null;
 
@@ -345,13 +352,6 @@ fn resolveWindowTarget(request: capture_types.CaptureRequest, environ: std.proce
     }
 
     return null;
-}
-
-fn formatAreaGeometry(area_geometry: ?capture_types.AreaGeometry, buffer: []u8) ?[]const u8 {
-    const geometry = area_geometry orelse return null;
-    if (geometry.width == 0 or geometry.height == 0) return null;
-
-    return std.fmt.bufPrint(buffer, "{d},{d} {d}x{d}", .{ geometry.x, geometry.y, geometry.width, geometry.height }) catch null;
 }
 
 fn defaultLatencyMs(mode: capture_types.CaptureMode, degraded_backend: bool) u32 {

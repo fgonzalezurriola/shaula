@@ -7,3 +7,4 @@ node_modules/
 .sisyphus/evidence/*.tmp
 
 .DS_Store
+third_party/niri/

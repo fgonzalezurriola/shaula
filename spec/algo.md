@@ -11,7 +11,7 @@ Shaula is a high-performance, machine-first instant capture tool for Niri and Wa
 | D-001 | Niri-first focus | Locked | Optimize for Niri's tile-based workflow and performance primitives. |
 | D-002 | Agent-First CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
 | D-003 | Zig 0.16.0 pin | Locked | Stable toolchain with deterministic behavior and error handling. |
-| D-004 | Hot-path isolation | Locked | Decouple capture critical path from non-essential processing (Noctalia, OCR). |
+| D-004 | Hot-path isolation | Locked | Decouple capture critical path from non-essential processing (Noctalia, history, exports). |
 | D-005 | Daemon-first architecture | Locked | Centralize state, capabilities, and cross-process orchestration. |
 | D-006 | Deterministic error taxonomy | Locked | Map every failure to specific `ERR_*` tokens and recovery actions. |
 | D-007 | Performance gates | Locked | Enforce strict p95 latency and resource budgets for hot-path operations. |
@@ -26,9 +26,6 @@ Shaula is a high-performance, machine-first instant capture tool for Niri and Wa
 | Selection Overlay | `layer-shell` | MVP | Input/focus edge cases on multi-output. |
 | History Store | SQLite / Flat-file | MVP | Storage availability and concurrent access. |
 | Clipboard Export | `wl-clipboard` | MVP | External dependency reliability. |
-| Scrolling Capture | N/A | Deferred | High implementation uncertainty for v1. |
-| OCR | Post-capture Worker | Deferred | Resource pressure, out of MVP scope. |
-
 ## AGENT-FIRST CLI
 
 Shaula provides a machine-first interface designed for consumption by LLM agents and automation scripts.
@@ -46,12 +43,11 @@ Shaula provides a machine-first interface designed for consumption by LLM agents
 - `clipboard`: Import/Export primitives for system integration.
 - `errors`: Canonical source for taxonomy and exit code mapping.
 
-## Uncertainty / Pending Verification List
+## Runtime Constraint List
 
 | Item | Status | Risk / Dependency |
 | :--- | :--- | :--- |
 | `ext-image-copy-capture-v1` | Pending | Migration from deprecated `wlr-screencopy` requires Niri protocol update. |
-| Scrolling Capture | Uncertain | No stable Wayland primitive; experimental viewport stitching needed. |
 | Niri Window vs Tile ID | Active | Evolving semantics in Niri IPC PR #3731; guarded by degradation. |
 | Permission Prompt Latency | Pending | User-mediated portal prompts may exceed latency budget by design. |
 

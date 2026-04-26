@@ -21,14 +21,19 @@ export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
 
 QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
 KEEP_ARTIFACTS="${QA_KEEP_ARTIFACTS:-0}"
+ALLOW_INTRUSIVE_UI="${SHAULA_QA_ALLOW_INTRUSIVE_UI:-0}"
+UI_POLICY_MODE="non_intrusive"
+if [[ "${ALLOW_INTRUSIVE_UI}" == "1" ]]; then
+  UI_POLICY_MODE="interactive_opt_in"
+fi
 RUN_TS="$(date -u +"%Y%m%dT%H%M%SZ")"
 RUN_DIR="/tmp/shaula/runs/${RUN_TS}-integration-${QA_PROFILE}"
 mkdir -p "${RUN_DIR}"
 ln -sfn "${RUN_DIR}" /tmp/shaula/runs/latest
 
 EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
-REPORT_JSON="${EVIDENCE_DIR}/task-10-layer-integration-report.json"
-ERROR_LOG="${EVIDENCE_DIR}/task-10-layer-integration-report-error.txt"
+REPORT_JSON="${EVIDENCE_DIR}/task-11-layer-integration-report.json"
+ERROR_LOG="${EVIDENCE_DIR}/task-11-layer-integration-report-error.txt"
 
 mkdir -p "${EVIDENCE_DIR}"
 : > "${ERROR_LOG}"
@@ -90,6 +95,27 @@ run_subcheck() {
   )"
 }
 
+record_degraded_subcheck() {
+  local id="$1"
+  local cmd="$2"
+  local token="$3"
+  local reason="$4"
+  local output="${token} reason=${reason} mode=${UI_POLICY_MODE} opt_in_env=SHAULA_QA_ALLOW_INTRUSIVE_UI"
+
+  printf '[%s] rc=0 status=degraded cmd=%s\n%s\n\n' "${id}" "${cmd}" "${output}" >> "${ERROR_LOG}"
+
+  subchecks_json="$(jq -c -n \
+    --argjson current "${subchecks_json}" \
+    --arg id "${id}" \
+    --arg cmd "${cmd}" \
+    --arg output "${output}" \
+    --arg token "${token}" \
+    --arg reason "${reason}" \
+    --arg mode "${UI_POLICY_MODE}" \
+    '$current + [{ id: $id, status: "degraded", pass: true, command: $cmd, output: $output, error_token: $token, reason: $reason, mode: $mode }]' \
+  )"
+}
+
 run_subcheck "integration.daemon.lifecycle" "bash ./scripts/qa/test-daemon-lifecycle.sh"
 run_subcheck "integration.daemon.state_machine" "bash ./scripts/qa/assert-daemon-state-machine.sh"
 run_subcheck "integration.capture.core_modes" "bash ./scripts/qa/test-capture-core-modes.sh"
@@ -101,6 +127,14 @@ run_subcheck "integration.history.topn_20" "bash ./scripts/qa/assert-history-top
 
 if [[ "${QA_PROFILE}" == "full" || "${QA_PROFILE}" == "debug" ]]; then
   run_subcheck "integration.overlay.base_selection" "bash ./scripts/qa/assert-overlay-base-selection.sh"
+  run_subcheck "integration.overlay.helper.contract_ok" "bash ./scripts/qa/test-overlay-helper-contract-ok.sh"
+  run_subcheck "integration.overlay.helper.contract_malformed" "bash ./scripts/qa/test-overlay-helper-contract-malformed.sh"
+  run_subcheck "integration.overlay.geometry.fixtures" "bash ./scripts/qa/assert-overlay-geometry-fixtures.sh"
+  if [[ "${ALLOW_INTRUSIVE_UI}" == "1" ]]; then
+    run_subcheck "integration.overlay.helper.interactive_lanes" "bash ./scripts/qa/assert-overlay-helper-interactive.sh"
+  else
+    record_degraded_subcheck "integration.overlay.helper.interactive_lanes" "bash ./scripts/qa/assert-overlay-helper-interactive.sh" "ERR_QA_INTRUSIVE_UI_DISABLED_BY_POLICY" "interactive_opt_in_required"
+  fi
   run_subcheck "integration.capture.shell_artifact_guard" "bash ./scripts/qa/assert-shell-artifact-guard.sh --inject-known-marker"
   run_subcheck "integration.capture.noctalia.panel_hide_handshake" "bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh"
   run_subcheck "integration.noctalia.actions_mvp" "bash ./scripts/qa/assert-noctalia-actions.sh --with-plugin"
@@ -119,11 +153,13 @@ timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 jq -n \
   --arg timestamp "${timestamp}" \
   --argjson pass "${layer_pass}" \
+  --arg ui_policy_mode "${UI_POLICY_MODE}" \
   --argjson subchecks "${subchecks_json}" \
   '{
-    suite: "task-10-layer-integration",
+    suite: "task-11-layer-integration",
     timestamp: $timestamp,
     pass: $pass,
+    ui_policy_mode: $ui_policy_mode,
     script: "scripts/qa/run-integration-tests.sh",
     subchecks: $subchecks
   }' > "${REPORT_JSON}"
@@ -135,4 +171,4 @@ if [[ "${layer_pass}" != "true" ]]; then
   exit 1
 fi
 
-echo "ok qa_integration_tests profile=${QA_PROFILE} keep_artifacts=${KEEP_ARTIFACTS} run_dir=${RUN_DIR}"
+echo "ok qa_integration_tests profile=${QA_PROFILE} keep_artifacts=${KEEP_ARTIFACTS} run_dir=${RUN_DIR} mode=${UI_POLICY_MODE}"

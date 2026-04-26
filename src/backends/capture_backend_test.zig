@@ -1,5 +1,6 @@
 const std = @import("std");
 const capture_backend = @import("capture_backend.zig");
+const capture_types = @import("../capture/types.zig");
 
 const EnvPair = struct {
     key: []const u8,
@@ -40,6 +41,90 @@ fn createExecutableHelper(io: std.Io, path: []const u8, script: []const u8) !voi
     try file.writeStreamingAll(io, script);
 
     try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o755), .{});
+}
+
+const GeometryFixtureCase = struct {
+    name: []const u8,
+    local: capture_types.AreaGeometry,
+    output: capture_types.OutputLayout,
+    expected: capture_types.AreaGeometry,
+    expected_runtime_arg: []const u8,
+};
+
+fn readGeometryFixtureCases(allocator: std.mem.Allocator, path: []const u8) ![]GeometryFixtureCase {
+    const io = std.testing.io;
+    const raw = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
+    defer allocator.free(raw);
+
+    const parsed = try std.json.parseFromSlice([]GeometryFixtureCase, allocator, raw, .{});
+    defer parsed.deinit();
+
+    const fixtures = try allocator.alloc(GeometryFixtureCase, parsed.value.len);
+    errdefer allocator.free(fixtures);
+    var initialized: usize = 0;
+    errdefer {
+        var i: usize = 0;
+        while (i < initialized) : (i += 1) {
+            allocator.free(fixtures[i].name);
+            allocator.free(fixtures[i].expected_runtime_arg);
+        }
+    }
+
+    for (parsed.value, 0..) |fixture, index| {
+        fixtures[index] = .{
+            .name = try allocator.dupe(u8, fixture.name),
+            .local = fixture.local,
+            .output = fixture.output,
+            .expected = fixture.expected,
+            .expected_runtime_arg = try allocator.dupe(u8, fixture.expected_runtime_arg),
+        };
+        initialized += 1;
+    }
+
+    return fixtures;
+}
+
+fn assertFixtureNormalization(case: GeometryFixtureCase) !void {
+    const normalized = capture_types.normalizeOutputLocalGeometry(case.local, case.output);
+    try std.testing.expectEqualDeep(case.expected, normalized);
+
+    var geometry_storage: [64]u8 = undefined;
+    const runtime_arg = capture_types.formatAreaGeometryArg(normalized, &geometry_storage) orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings(case.expected_runtime_arg, runtime_arg);
+}
+
+test "task13 fixture multi-output geometry normalization and formatting round-trip" {
+    const fixtures = try readGeometryFixtureCases(std.testing.allocator, "tests/fixtures/capture/task13_multioutput_geometry.json");
+    defer {
+        for (fixtures) |fixture| {
+            std.testing.allocator.free(fixture.name);
+            std.testing.allocator.free(fixture.expected_runtime_arg);
+        }
+        std.testing.allocator.free(fixtures);
+    }
+
+    for (fixtures) |fixture_case| {
+        try assertFixtureNormalization(fixture_case);
+    }
+}
+
+test "task13 fixture fractional scaling yields deterministic non-negative dimensions" {
+    const fixtures = try readGeometryFixtureCases(std.testing.allocator, "tests/fixtures/capture/task13_fractional_scaling.json");
+    defer {
+        for (fixtures) |fixture| {
+            std.testing.allocator.free(fixture.name);
+            std.testing.allocator.free(fixture.expected_runtime_arg);
+        }
+        std.testing.allocator.free(fixtures);
+    }
+
+    for (fixtures) |fixture_case| {
+        try assertFixtureNormalization(fixture_case);
+
+        const normalized = capture_types.normalizeOutputLocalGeometry(fixture_case.local, fixture_case.output);
+        try std.testing.expect(normalized.width > 0);
+        try std.testing.expect(normalized.height > 0);
+    }
 }
 
 test "window mode unresolved target returns deterministic failure" {

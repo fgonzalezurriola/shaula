@@ -1,0 +1,12 @@
+{
+  "suite": "task-13-fractional-scaling",
+  "timestamp": "2026-04-26T03:11:27Z",
+  "pass": true,
+  "fixture": "tests/fixtures/capture/task13_fractional_scaling.json",
+  "checks": {
+    "non_negative_dimensions": true,
+    "runtime_arg_format_valid": true,
+    "zig_build_test_pass": true,
+    "fixture_cases": 2
+  }
+}

@@ -155,7 +155,7 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 - **Daemon (source of truth)**: The daemon is the source of truth for runtime state, capability decisions, and command orchestration.
 - **Overlay process**: Handles selection UI/input only (pointer/keyboard, rectangle/aspect constraints) and exits after producing deterministic selection output.
 - **Capture backend process**: Performs compositor/protocol capture operations (`area`, `fullscreen`, `window`) and returns normalized capture metadata.
-- **Worker process(es)**: Execute asynchronous heavy tasks (future OCR, long encoding, exports, uploads) outside the capture critical path.
+- **Worker process(es)**: Execute asynchronous heavy tasks (long encoding, exports, uploads) outside the capture critical path.
 - **UI process**: Desktop UI shell that consumes only validated daemon/CLI contracts and never bypasses daemon control.
 
 ### Hot-Path Isolation Rule

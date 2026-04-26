@@ -1,8 +1,0 @@
-{
-  "samples": 100,
-  "p95_ms": 19.74,
-  "p99_ms": 21.32,
-  "target_p95_ms": 75,
-  "target_p99_ms": 110,
-  "pass": true
-}

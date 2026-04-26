@@ -1,0 +1,96 @@
+{
+  "suite": "task-11-layer-e2e-niri",
+  "timestamp": "2026-04-26T03:11:35Z",
+  "pass": true,
+  "ui_policy_mode": "non_intrusive",
+  "script": "scripts/qa/run-e2e-niri.sh",
+  "subchecks": [
+    {
+      "id": "e2e.preflight.wayland_niri",
+      "status": "pass",
+      "pass": true,
+      "command": "bash ./scripts/qa/preflight-wayland-niri.sh",
+      "output": "ok qa_preflight_wayland_niri"
+    },
+    {
+      "id": "e2e.build.zig",
+      "status": "pass",
+      "pass": true,
+      "command": "zig build >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.capture.area",
+      "status": "pass",
+      "pass": true,
+      "command": "AREA_PATH=/tmp/shaula/task17-e2e-area.png; rm -f \"${AREA_PATH}\"; AREA_JSON=$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" WAYLAND_DISPLAY=\"wayland-1\" ./zig-out/bin/shaula capture area --json --output \"${AREA_PATH}\"); printf '%s\\n' \"${AREA_JSON}\" | jq -e '.ok==true and .mode==\"area\" and (.path|length>0)' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.capture.fullscreen",
+      "status": "pass",
+      "pass": true,
+      "command": "FULL_PATH=/tmp/shaula/task17-e2e-fullscreen.png; rm -f \"${FULL_PATH}\"; FULL_JSON=$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" WAYLAND_DISPLAY=\"wayland-1\" ./zig-out/bin/shaula capture fullscreen --json --output \"${FULL_PATH}\"); printf '%s\\n' \"${FULL_JSON}\" | jq -e '.ok==true and .mode==\"fullscreen\" and (.path|length>0)' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.capture.window",
+      "status": "pass",
+      "pass": true,
+      "command": "WIN_PATH=/tmp/shaula/task17-e2e-window.png; rm -f \"${WIN_PATH}\"; set +e; WIN_JSON=$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" WAYLAND_DISPLAY=\"wayland-1\" ./zig-out/bin/shaula capture window --json --output \"${WIN_PATH}\" 2>&1); WIN_RC=$?; set -e; if [[ ${WIN_RC} -eq 0 ]]; then printf '%s\\n' \"${WIN_JSON}\" | jq -e '.ok==true and .mode==\"window\"' >/dev/null; else printf '%s\\n' \"${WIN_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_CAPTURE_MODE_UNSUPPORTED\"' >/dev/null; fi",
+      "output": ""
+    },
+    {
+      "id": "e2e.clipboard.path",
+      "status": "pass",
+      "pass": true,
+      "command": "AREA_PATH=/tmp/shaula/task17-e2e-area.png; CLIP_JSON=$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" WAYLAND_DISPLAY=\"wayland-1\" ./zig-out/bin/shaula capture area --json --save --copy --output \"${AREA_PATH}\"); printf '%s\\n' \"${CLIP_JSON}\" | jq -e '.ok==true and .saved.ok==true and (.clipboard.ok|type==\"boolean\")' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.failure.unsupported_compositor",
+      "status": "pass",
+      "pass": true,
+      "command": "set +e; UNSUPPORTED_JSON=$(SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json 2>&1); UNSUPPORTED_RC=$?; set -e; [[ ${UNSUPPORTED_RC} -ne 0 ]] && printf '%s\\n' \"${UNSUPPORTED_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_UNSUPPORTED_COMPOSITOR\"' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.failure.permission_clipboard",
+      "status": "pass",
+      "pass": true,
+      "command": "AREA_PATH=/tmp/shaula/task17-e2e-area.png; DEGRADED_JSON=$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" WAYLAND_DISPLAY=\"wayland-1\" ./zig-out/bin/shaula capture area --json --save --copy --output \"${AREA_PATH}\"); printf '%s\\n' \"${DEGRADED_JSON}\" | jq -e '.ok==true and .saved.ok==true and .clipboard.ok==false and .clipboard.error.code==\"ERR_CLIPBOARD_UNAVAILABLE\" and .partial==true' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.backend.daemon_states",
+      "status": "pass",
+      "pass": true,
+      "command": "SOCKET=/tmp/shaula-task17-e2e.sock; START_JSON=$(SHAULA_SOCKET=\"${SOCKET}\" ./zig-out/bin/shaula daemon start --json); printf '%s\\n' \"${START_JSON}\" | jq -e '.status==\"ready\" and .result.state==\"ready\"' >/dev/null && STATUS_JSON=$(SHAULA_SOCKET=\"${SOCKET}\" ./zig-out/bin/shaula daemon status --json); printf '%s\\n' \"${STATUS_JSON}\" | jq -e '.state|IN(\"ready\",\"degraded\")' >/dev/null && STOP_JSON=$(SHAULA_SOCKET=\"${SOCKET}\" ./zig-out/bin/shaula daemon stop --json); printf '%s\\n' \"${STOP_JSON}\" | jq -e '.stopped==true' >/dev/null",
+      "output": ""
+    },
+    {
+      "id": "e2e.capture.capabilities.strict_contract",
+      "status": "pass",
+      "pass": true,
+      "command": "CAPS_JSON=$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"/run/user/1000/niri.wayland-1.2037.sock\" ./zig-out/bin/shaula capabilities list --json); printf '%s\\n' \"${CAPS_JSON}\" | jq -e '.ok==true and has(\"backend\") and has(\"fallbacks\") and (.capture|has(\"window\"))' >/dev/null && bash ./scripts/qa/assert-capabilities-consistency.sh",
+      "output": "ok capability_execution_strict_parity"
+    },
+    {
+      "id": "e2e.capture.shell_artifact_guard.panel_hide",
+      "status": "degraded",
+      "pass": true,
+      "command": "bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh",
+      "output": "ERR_QA_INTRUSIVE_UI_DISABLED_BY_POLICY reason=interactive_opt_in_required mode=non_intrusive opt_in_env=SHAULA_QA_ALLOW_INTRUSIVE_UI",
+      "error_token": "ERR_QA_INTRUSIVE_UI_DISABLED_BY_POLICY",
+      "reason": "interactive_opt_in_required",
+      "mode": "non_intrusive"
+    },
+    {
+      "id": "e2e.noctalia.optional_integration",
+      "status": "pass",
+      "pass": true,
+      "command": "bash ./scripts/qa/test-noctalia-plugin-optional.sh --without-plugin",
+      "output": "PASS_NOCTALIA_OPTIONAL mode=without-plugin socket=/tmp/shaula-task9-noctalia.sock"
+    }
+  ]
+}

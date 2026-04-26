@@ -1,0 +1,12 @@
+{
+  "suite": "task-13-multioutput-geometry",
+  "timestamp": "2026-04-26T03:11:27Z",
+  "pass": true,
+  "fixture": "tests/fixtures/capture/task13_multioutput_geometry.json",
+  "checks": {
+    "fixture_shape_valid": true,
+    "runtime_arg_format_valid": true,
+    "zig_build_test_pass": true,
+    "fixture_cases": 3
+  }
+}

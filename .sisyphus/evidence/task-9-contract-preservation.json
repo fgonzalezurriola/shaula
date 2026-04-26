@@ -1,0 +1,22 @@
+{
+  "task": 9,
+  "name": "contract-preservation",
+  "timestamp_utc": "2026-04-20T16:25:41Z",
+  "checks": {
+    "assert_capture_result_schema": "ok capture_result_schema contract=1.0.0",
+    "test_capture_core_modes": "ok capture_core_modes area+fullscreen",
+    "test_failure_matrix": "ok failure_matrix deterministic",
+    "build": "ok",
+    "build_test": "ok"
+  },
+  "json_contract_assertions": {
+    "success_schema_unchanged": true,
+    "error_schema_unchanged": true,
+    "baseline_structure_changes": false
+  },
+  "deterministic_mapping": {
+    "malformed_helper_code": "ERR_OVERLAY_PROTOCOL_INVALID",
+    "explicit_cancel_code": "ERR_SELECTION_CANCELLED",
+    "interaction_cancel_code": "ERR_SELECTION_CANCELLED"
+  }
+}

@@ -1,40 +1,47 @@
-# Shaula Phasing and Go/No-Go Criteria
+# Shaula Delivery Focus
 
 See [spec/algo.md](algo.md) for the central technical blueprint and performance targets.
 
-## Phase 0: Foundations and Contract Lock
+This document tracks the current delivery lanes for Shaula instead of speculative future phases.
 
-Focus: lock AGENT-FIRST contract grammar, deterministic envelopes, and Niri-first capability boundaries before feature expansion.
-- **Go/No-Go**: `validate-cli-contract.sh` passes and runtime command grammar matches documented commands.
+## Track 1: Contract Stability
 
-## Phase 1: MVP Core
+Focus:
 
-Focus: Fast, deterministic, agent-first area, fullscreen, and window capture.
-- **Go/No-Go**: All core capture commands pass `scripts/qa/validate-all-modes.sh` with p95 <= 220ms.
+- keep the CLI grammar stable,
+- keep JSON envelopes deterministic,
+- preserve `ERR_*` to exit-code mapping.
 
-## Phase 2: Enhanced Interactivity
-Features: All-in-one Overlay, Pre-area Flow, Self-timer, Hide Desktop Icons, Open from Clipboard, Presets/Aspect Ratio.
-- **Go/No-Go**: Overlay interactivity must not degrade capture hot-path latency beyond the 110ms p99 overlay-to-paint budget.
+Go/No-Go:
 
-## Phase 3: Advanced Post-processing and Storage
-Features: OCR Integration, Pin-to-screen, Advanced History.
-- **Go/No-Go**: OCR background workers must not exceed 40MB additional RSS on the daemon.
+- `zig build`
+- `zig build test`
+- `bash scripts/qa/run-integration-tests.sh`
 
-## Phase 4: Multimedia and Specialized Flow
-Features: Screen Recording, Scrolling Capture (if promoted from experimental).
-- **Go/No-Go**: Recording stability must reach 100% success rate on 1080p60 for >= 60 seconds without process crashes.
+## Track 2: CleanShot-Like Capture Flow
 
-## Hardening
+Focus:
 
-Cross-phase hardening ensures deterministic `ERR_*` failures, CI-safe QA scripts, and strict machine-first output parity between docs and runtime.
+- fast area selection,
+- explicit confirm/cancel flow,
+- aspect-constrained selection,
+- helper-first overlay with honest fallback behavior.
 
-## Noctalia
+Go/No-Go:
 
-Noctalia integration stays optional, post-MVP, and non-blocking for all core capture paths.
+- `bash scripts/qa/assert-overlay-helper-interactive.sh`
+- `bash scripts/qa/run-performance-gates.sh`
 
-## Go/No-Go Detailed Criteria for Future Feature Matrix
+## Track 3: Release Hardening
 
-Each future feature listed in `spec/requirements.md` must meet its specific Go/No-Go metric before promotion to stable/implemented.
+Focus:
 
-### Failure Policy: `ERR_FUTURE_FEATURE_GATE_MISSING`
-A feature cannot be scheduled for implementation if it lacks a measurable Go/No-Go metric. The validation script `scripts/qa/validate-future-feature-matrix.sh` enforces this.
+- release-readiness evidence,
+- e2e stability on Niri,
+- non-blocking optional integrations such as Noctalia.
+
+Go/No-Go:
+
+- `bash scripts/qa/run-e2e-niri.sh`
+- `bash scripts/qa/release-readiness-capture-fix.sh`
+- `bash scripts/qa/run-all-tests.sh`

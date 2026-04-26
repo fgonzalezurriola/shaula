@@ -1,16 +1,51 @@
 # Shaula
 
-Shaula es una herramienta de captura instantánea para Niri y Wayland, diseñada con un enfoque Agent-First CLI.
+Shaula es una herramienta de captura para Niri/Wayland con salida JSON determinística. El objetivo actual es simple: ofrecer una base tipo CleanShot, centrada en capturas rápidas, overlay de selección y post-capture mínimo, sin arrastrar roadmap especulativo.
 
-## Estructura del Proyecto
+## Alcance actual
 
-- `src/`: Código fuente de la aplicación.
-- `spec/`: Documentación técnica y especificaciones.
-- `scripts/qa/`: Scripts de validación y control de calidad.
-- `tests/`: Pruebas unitarias e integrales.
-- `.sisyphus/evidence/`: Artefactos de evidencia de ejecución de tareas.
+- Captura `area`, `fullscreen` y `window`.
+- Historial local de capturas.
+- Integración de portapapeles para copiar o importar imágenes.
+- Daemon e IPC versionados.
+- Overlay tipo CleanShot como línea de trabajo activa:
+  - selección de área,
+  - confirm/cancel,
+  - constraint por aspecto vía `--aspect`,
+  - helper dedicado cuando existen dependencias UI reales,
+  - fallback a `slurp` en runtime.
+
+Fuera de alcance por ahora:
+
+- OCR
+- grabación de pantalla
+- scrolling capture
+- placeholders de features futuras en la UI pública
 
 ## Requisitos
 
-- Zig 0.16.0 (según `scripts/qa/check-zig-version.sh`)
-- Niri Compositor
+- Zig 0.16.0
+- Niri
+- `grim`
+- `slurp`
+- `wl-copy` y `wl-paste`
+- `jq` para QA y depuración
+
+## Arranque rápido
+
+```bash
+zig build
+
+export SHAULA_COMPOSITOR=niri
+export NIRI_SOCKET=/run/user/1000/niri-0.sock
+
+./zig-out/bin/shaula preflight --json
+./zig-out/bin/shaula capture area --json
+```
+
+## Archivos clave
+
+- `src/`: implementación Zig
+- `scripts/qa/`: suites y checks automatizados
+- `spec/`: contratos y decisiones de arquitectura
+- `DEV.md`: guía práctica de uso y desarrollo

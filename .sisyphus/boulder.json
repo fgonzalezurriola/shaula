@@ -1,127 +1,137 @@
 {
-  "active_plan": "/home/fgonz/dev/shaula/.sisyphus/plans/shaula-capture-integrity-noctalia-overlay.md",
-  "started_at": "2026-04-19T17:10:53.156Z",
+  "active_plan": "/home/fgonz/dev/shaula/.sisyphus/plans/shaula-raylib-clay-niri-overlay.md",
+  "started_at": "2026-04-20T13:49:59.760Z",
   "session_ids": [
     "ses_259679962ffenT59BQEMAmnZDc",
-    "ses_259453522ffelY9c8fUwGUbLLY",
-    "ses_259453505ffeK7eX6zD3CmSiqK",
-    "ses_2594534ccffeKjXvNsVpRzZxl6"
+    "ses_254d5483effeSmyLuo7STIit1Y",
+    "ses_254d54822ffe7DbKK5042Oh776",
+    "ses_254d5480effeX5YHuov4KwIBOW"
   ],
   "session_origins": {
     "ses_259679962ffenT59BQEMAmnZDc": "direct",
-    "ses_259453522ffelY9c8fUwGUbLLY": "appended",
-    "ses_259453505ffeK7eX6zD3CmSiqK": "appended",
-    "ses_2594534ccffeKjXvNsVpRzZxl6": "appended"
+    "ses_254d5483effeSmyLuo7STIit1Y": "appended",
+    "ses_254d54822ffe7DbKK5042Oh776": "appended",
+    "ses_254d5480effeX5YHuov4KwIBOW": "appended"
   },
-  "plan_name": "shaula-capture-integrity-noctalia-overlay",
+  "plan_name": "shaula-raylib-clay-niri-overlay",
   "agent": "atlas",
   "task_sessions": {
     "todo:1": {
       "task_key": "todo:1",
       "task_label": "1",
-      "task_title": "Sustituir backend stub por captura real de runtime",
-      "session_id": "ses_2593bc8aaffeV5UE0yivZWw80u",
+      "task_title": "Raylib+Clay feasibility spike on Niri",
+      "session_id": "ses_254cdc430ffep1Amype5e9Pc4v",
       "agent": "Sisyphus-Junior",
-      "category": "ultrabrain",
-      "updated_at": "2026-04-19T17:47:25.013Z"
+      "category": "deep",
+      "updated_at": "2026-04-20T14:16:08.183Z"
     },
     "todo:2": {
       "task_key": "todo:2",
       "task_label": "2",
-      "task_title": "Unificar capacidades y ejecución con contrato estricto",
-      "session_id": "ses_258bc0d7fffePRmrIASqJzr2DW",
+      "task_title": "Define overlay helper stdio contract v1",
+      "session_id": "ses_254ba763fffeZhknG8xgDu63jB",
       "agent": "Sisyphus-Junior",
       "category": "deep",
-      "updated_at": "2026-04-19T20:10:35.609Z"
+      "updated_at": "2026-04-20T14:37:38.126Z"
     },
     "todo:3": {
       "task_key": "todo:3",
       "task_label": "3",
-      "task_title": "Añadir QA de integridad visual (decode PNG + rechazo stub + fixture contenido)",
-      "session_id": "ses_2589a29beffeVWznLkYzQnoywY",
+      "task_title": "Add Raylib+Clay dependency wiring in build/test",
+      "session_id": "ses_254a83e20ffeuPcXIx22C9twjp",
       "agent": "Sisyphus-Junior",
       "category": "deep",
-      "updated_at": "2026-04-19T20:32:56.608Z"
+      "updated_at": "2026-04-20T14:55:46.034Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Extend deterministic error taxonomy for overlay helper failures",
+      "session_id": "ses_25498be1affeS4kmb3q56uZJa2",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-20T15:09:20.068Z"
     },
     "todo:5": {
       "task_key": "todo:5",
       "task_label": "5",
-      "task_title": "Cambiar output default a `~/Pictures/Shaula` con fallback explícito de error",
-      "session_id": "ses_258794be8ffegVD40csxq8JvOi",
+      "task_title": "Implement Raylib overlay bootstrap and lifecycle",
+      "session_id": "ses_254879f15ffeNzFgKdPmZhGgGR",
       "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-04-19T21:00:32.464Z"
+      "category": "visual-engineering",
+      "updated_at": "2026-04-20T15:26:28.557Z"
     },
     "todo:6": {
       "task_key": "todo:6",
       "task_label": "6",
-      "task_title": "Migrar historial a Top-N=20 y exponerlo por `history list/show`",
-      "session_id": "ses_2587116dcffeVhN4v4PDENn6k8",
+      "task_title": "Implement Clay HUD layout (MVP controls)",
+      "session_id": "ses_2547cba64ffe3U4IR6RY1ya4qH",
       "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-04-19T21:17:26.167Z"
+      "category": "visual-engineering",
+      "updated_at": "2026-04-20T15:37:46.912Z"
     },
     "todo:7": {
       "task_key": "todo:7",
       "task_label": "7",
-      "task_title": "Implementar overlay v1 base (gris + selección + confirmar/cancelar)",
-      "session_id": "ses_2585f4136ffeE5erxSdGF19X4d",
+      "task_title": "Implement selection interaction engine for Raylib helper",
+      "session_id": "ses_2546c9aa2ffewv00Syztqp5PAh",
       "agent": "Sisyphus-Junior",
-      "category": "visual-engineering",
-      "updated_at": "2026-04-19T21:31:36.318Z"
+      "category": "deep",
+      "updated_at": "2026-04-20T16:00:01.323Z"
     },
     "todo:8": {
       "task_key": "todo:8",
       "task_label": "8",
-      "task_title": "Implementar guard anti-artefactos de shell antes de capturar",
-      "session_id": "ses_25851dbb5ffeHorbe5SwF5Jfif",
+      "task_title": "Integrate helper runner into `src/overlay/overlay.zig`",
+      "session_id": "ses_2545cff7cffe80aY3Cyj4AMBc1",
       "agent": "Sisyphus-Junior",
-      "category": "unspecified-high",
-      "updated_at": "2026-04-19T22:08:21.440Z"
+      "category": "deep",
+      "updated_at": "2026-04-20T16:16:55.046Z"
     },
     "todo:9": {
       "task_key": "todo:9",
       "task_label": "9",
-      "task_title": "Integrar plugin Noctalia MVP con menú de acciones mínimas",
-      "session_id": "ses_25823dd9bfferd1DhqLkzyXN0S",
+      "task_title": "Preserve capture command contracts with new overlay integration",
+      "session_id": "ses_2544f2205ffen4tZpTGhdyPqeo",
       "agent": "Sisyphus-Junior",
       "category": "unspecified-high",
-      "updated_at": "2026-04-19T22:47:05.596Z"
+      "updated_at": "2026-04-20T16:27:51.484Z"
     },
     "todo:10": {
       "task_key": "todo:10",
       "task_label": "10",
-      "task_title": "Reforzar E2E y matriz QA consolidada post-cambios",
-      "session_id": "ses_2580c4415ffe13p5kCj5tz7edW",
+      "task_title": "Add Noctalia action hooks for open folder and clipboard image",
+      "session_id": "ses_254449441ffe5POi8L65I31E91",
       "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-04-19T23:05:51.805Z"
+      "category": "unspecified-high",
+      "updated_at": "2026-04-20T16:41:38.132Z"
     },
     "todo:11": {
       "task_key": "todo:11",
       "task_label": "11",
-      "task_title": "Actualizar contratos/especificaciones y documentación operativa",
-      "session_id": "ses_257fb8ac7ffegQYjBp5ZEYSZrB",
+      "task_title": "Add interactive overlay QA suite and deterministic fixtures",
+      "session_id": "ses_2543855bdffeiP9Apy9EDr3uZ6",
       "agent": "Sisyphus-Junior",
-      "category": "writing",
-      "updated_at": "2026-04-19T23:17:43.547Z"
+      "category": "deep",
+      "updated_at": "2026-04-20T16:51:30.955Z"
     },
     "todo:12": {
       "task_key": "todo:12",
       "task_label": "12",
-      "task_title": "Cierre de remediación con checklist de release interno",
-      "session_id": "ses_257f083deffeveyMDW6JY40Uc5",
+      "task_title": "Add real interactive first-paint performance gates",
+      "session_id": "ses_253d4b7ffffe6JlDXJI5JYS5Bb",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-20T18:42:02.347Z"
+    },
+    "todo:13": {
+      "task_key": "todo:13",
+      "task_label": "13",
+      "task_title": "Add multi-output and fractional-scaling geometry fixtures",
+      "session_id": "ses_253bcc87cffeKCZ9mdmcG1aWaB",
       "agent": "Sisyphus-Junior",
       "category": "deep",
-      "updated_at": "2026-04-19T23:38:54.506Z"
-    },
-    "final-wave:f1": {
-      "task_key": "final-wave:f1",
-      "task_label": "F1",
-      "task_title": "Plan Compliance Audit — oracle",
-      "session_id": "ses_257dbd1b3ffeaQlsnRuu5k07Us",
-      "agent": "oracle",
-      "updated_at": "2026-04-20T00:04:26.395Z"
+      "updated_at": "2026-04-20T19:29:40.840Z"
     }
   }
 }

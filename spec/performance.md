@@ -19,7 +19,7 @@ All measurements are targetted at p95 latency under normal system load.
 ## Resource Constraints
 
 - **Single-Threaded Hot Path**: Capture operations must remain single-threaded or use non-blocking asynchronous I/O to avoid context-switching overhead.
-- **Hot-Path Isolation**: Plugins, OCR, and history database operations must run in separate worker processes or after the capture is completed/saved.
+- **Hot-Path Isolation**: Plugins, history persistence, and any heavy post-capture tasks must run outside the capture critical path or after the artifact is ready.
 - **Zero-Copy Capture**: Preference for DMA-BUF or shared memory protocols where supported by Niri to minimize pixel copying.
 
 ## Validation Gates

@@ -68,7 +68,7 @@ if [[ "${MODE}" == "with-plugin" || "${MODE}" == "both" ]]; then
     .plugin == "noctalia" and
     .optional == true and
     .menu.minimal == true and
-    (.menu.actions | length == 5)
+    (.menu.actions | length == 7)
   ' >/dev/null || {
     echo "ERR_NOCTALIA_PLUGIN_FLOW_INVALID reason=plugin_present_contract" >&2
     exit 1

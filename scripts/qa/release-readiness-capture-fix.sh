@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
-REPORT_JSON="${EVIDENCE_DIR}/task-12-release-readiness.json"
-ERROR_TXT="${EVIDENCE_DIR}/task-12-release-readiness-error.txt"
+REPORT_JSON="${EVIDENCE_DIR}/task-15-release-readiness.json"
+ERROR_TXT="${EVIDENCE_DIR}/task-15-release-readiness-error.txt"
 
 mkdir -p "${EVIDENCE_DIR}"
 
@@ -75,10 +75,14 @@ check_json_file() {
 }
 
 matrix_report="${EVIDENCE_DIR}/task-10-postfix-test-matrix-report.json"
+if [[ ! -f "${matrix_report}" && -f "${EVIDENCE_DIR}/task-16-full-regression.json" ]]; then
+  matrix_report="${EVIDENCE_DIR}/task-16-full-regression.json"
+fi
+
 check_json_file \
   "evidence.matrix.consolidated" \
   "${matrix_report}" \
-  '.pass == true and .layers.integration.pass == true and .layers.e2e_niri.pass == true'
+  '.pass == true and .layers.integration.pass == true and .layers.e2e_niri.pass == true and .layers.performance.pass == true'
 
 required_matrix_ids=(
   "unit.errors.matrix"
@@ -89,6 +93,10 @@ required_matrix_ids=(
   "integration.capture.output.default_path"
   "integration.history.topn_20"
   "integration.overlay.base_selection"
+  "integration.overlay.helper.contract_ok"
+  "integration.overlay.helper.contract_malformed"
+  "integration.overlay.helper.interactive_lanes"
+  "integration.overlay.geometry.fixtures"
   "integration.capture.shell_artifact_guard"
   "integration.noctalia.optional_core_without_plugin"
   "e2e.capture.capabilities.strict_contract"
@@ -125,6 +133,26 @@ check_json_file \
   "evidence.task9.noctalia_actions" \
   "${EVIDENCE_DIR}/task-9-noctalia-actions.json" \
   '.pass == true and .plugin_optional == true and .adapter_deterministic == true and .checks.execute_capture_window_expected_unsupported.pass == true'
+
+check_json_file \
+  "evidence.task10.open_folder" \
+  "${EVIDENCE_DIR}/task-10-open-folder.json" \
+  '.pass == true and .checks.action_non_fatal.pass == true and .checks.capture_remains_successful.pass == true'
+
+check_json_file \
+  "evidence.task10.open_clipboard_error" \
+  "${EVIDENCE_DIR}/task-10-open-clipboard-error.json" \
+  '.pass == true and .checks.action_non_fatal.pass == true and .checks.capture_remains_successful.pass == true'
+
+check_json_file \
+  "evidence.task13.multioutput_geometry" \
+  "${EVIDENCE_DIR}/task-13-multioutput-geometry.json" \
+  '.pass == true and .checks.fixture_shape_valid == true and .checks.runtime_arg_format_valid == true and .checks.zig_build_test_pass == true'
+
+check_json_file \
+  "evidence.task13.fractional_scaling" \
+  "${EVIDENCE_DIR}/task-13-fractional-scaling.json" \
+  '.pass == true and .checks.non_negative_dimensions == true and .checks.runtime_arg_format_valid == true and .checks.zig_build_test_pass == true'
 
 overlay_evidence="${EVIDENCE_DIR}/task-7-overlay-base.txt"
 check_json_file \
@@ -203,7 +231,7 @@ jq -n \
   --argjson blockers "${blockers_json}" \
   --argjson checks "${checks_json}" \
   '{
-    suite: "task-12-release-readiness",
+    suite: "task-15-release-readiness",
     timestamp: $timestamp,
     ready: $ready,
     blocking_issues: $blocking_issues,

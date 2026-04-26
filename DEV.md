@@ -1,228 +1,239 @@
 # Shaula Developer Guide
 
-This guide covers how to build, test, and develop Shaula.
+Esta guía describe cómo compilar, probar y usar Shaula hoy, sin depender del plan incompleto de `.sisyphus`.
 
-## Prerequisites
+## Qué es Shaula hoy
 
-- **Zig 0.16.0** - Toolchain must match exactly
-- **Niri** - Wayland compositor (required for capture)
-- **wl-clipboard** - Clipboard utilities (`wl-paste`, `wl-copy`)
-- **grim** - Screenshot tool
-- **jq** - JSON parser
+Shaula es un CLI de captura para Niri/Wayland con contratos JSON estables. La meta de producto actual es una experiencia inspirada en CleanShot: captura rápida, selección limpia de área, confirmación explícita, integración con portapapeles e historial, y errores `ERR_*` determinísticos.
 
-## Building
+Superficie soportada:
+
+- `capture area`
+- `capture fullscreen`
+- `capture window`
+- `history list`
+- `history show --id latest`
+- `clipboard copy-image`
+- `clipboard import-image`
+- `daemon start|status|stop`
+- `capabilities list`
+- `errors list`
+
+Fuera de alcance actual:
+
+- OCR
+- grabación
+- scrolling capture
+- placeholders visuales de features futuras
+
+## Requisitos
+
+- Zig `0.16.0`
+- Niri
+- `grim`
+- `slurp`
+- `wl-copy`
+- `wl-paste`
+- `jq`
+
+## Build
 
 ```bash
-# Build the application
 zig build
-
-# The binary is at zig-out/bin/shaula
+zig build test
 ```
 
-## Development Tests
+Binarios generados:
 
-### Run Full QA Suite
+- `./zig-out/bin/shaula`
+- `./zig-out/bin/shaula-overlay`
+- `./zig-out/bin/shaula-overlay-feasibility-spike`
 
-```bash
-bash scripts/qa/run-all-tests.sh
-```
-
-This executes all QA checks in sequence. See individual scripts below.
-
-### QA Profiles and Artifact Policy
-
-The QA runners support profile-based execution and artifact retention.
+## Variables de entorno útiles
 
 ```bash
-# Full suite (default)
-SHAULA_QA_PROFILE=full bash scripts/qa/run-all-tests.sh
-
-# Fast profile (reduced expensive checks)
-SHAULA_QA_PROFILE=fast bash scripts/qa/run-all-tests.sh
-
-# Debug profile (same checks as full, for troubleshooting)
-SHAULA_QA_PROFILE=debug bash scripts/qa/run-all-tests.sh
-
-# Keep generated artifacts instead of auto-cleanup
-QA_KEEP_ARTIFACTS=1 SHAULA_QA_PROFILE=debug bash scripts/qa/run-all-tests.sh
-```
-
-Runtime notes:
-- QA forces non-interactive selection via `SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1` to avoid visual overlay disruptions.
-- By default, temporary screenshots under `/tmp/shaula` are cleaned automatically at script exit.
-- Per-run metadata directory is published in script output as `run_dir`, and `/tmp/shaula/runs/latest` points to the latest run.
-
-### Individual QA Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/qa/preflight-wayland-niri.sh` | Preflight check: compositor, socket, IPC readiness |
-| `scripts/qa/test-daemon-lifecycle.sh` | Daemon start/status/stop IPC cycle |
-| `scripts/qa validate-future-feature-matrix.sh` | Verify feature spec matrix |
-| `scripts/qa/run-e2e-niri.sh` | End-to-end capture test |
-| `scripts/qa/run-integration-tests.sh` | Integration tests (capture integrity, capabilities, overlay) |
-| `scripts/qa/release-readiness-capture-fix.sh` | Release readiness checklist |
-
-### Preflight Check
-
-```bash
-# Manual preflight
-bash scripts/qa/preflight-wayland-niri.sh
-
-# Programmatic preflight (returns exit code)
-./zig-out/bin/shaula preflight --json
-```
-
-### Daemon Lifecycle
-
-```bash
-# Start daemon
-./zig-out/bin/shaula daemon start --json
-
-# Check status
-./zig-out/bin/shaula daemon status --json
-
-# Stop daemon
-./zig-out/bin/shaula daemon stop --json
-```
-
-## CLI Commands
-
-### Capture
-
-```bash
-# Area selection with overlay (interactive)
-./zig-out/bin/shaula capture area --json
-
-# Dry-run (returns deterministic geometry without actual capture)
-./zig-out/bin/shaula capture area --json --dry-run
-
-# Simulate cancel (tests error path)
-./zig-out/bin/shaula capture area --json --simulate-cancel
-
-# Save to default ~/Pictures/Shaula
-./zig-out/bin/shaula capture area --json
-
-# Save to specific path
-./zig-out/bin/shaula capture area --json --output /tmp/screenshot.png
-
-# Copy to clipboard (implies --json)
-./zig-out/bin/shaula capture area --json --copy
-```
-
-### Capabilities
-
-```bash
-# List compositor capabilities
-./zig-out/bin/shaula capabilities list --json
-```
-
-### History
-
-```bash
-# List past captures
-./zig-out/bin/shaula history list --json
-
-# Show specific capture metadata
-./zig-out/bin/shaula history show --json --id <uuid>
-```
-
-### Daemon
-
-```bash
-# Start background daemon
-./zig-out/bin/shaula daemon start --json [--socket /path/to/socket]
-
-# Check daemon status
-./zig-out/bin/shaula daemon status --json [--socket /path/to/socket]
-
-# Stop daemon
-./zig-out/bin/shaula daemon stop --json [--socket /path/to/socket]
-```
-
-## Required Environment Variables
-
-```bash
-# Wayland socket name (required for Niri)
-export WAYLAND_DISPLAY=niri
-
-# Niri socket path (optional, for multi-seat)
+export SHAULA_COMPOSITOR=niri
+export WAYLAND_DISPLAY=wayland-1
 export NIRI_SOCKET=/run/user/1000/niri-0.sock
 ```
 
-## Troubleshooting
-
-### "ERR_UNSUPPORTED_COMPOSITOR"
-
-Only Niri is supported. Verify you're running Niri:
+Variables opcionales para desarrollo y QA:
 
 ```bash
-echo $WAYLAND_DISPLAY
-# Should show your Niri socket name
+# Fuerza selección determinística no interactiva.
+export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
+
+# Helper sintético para capturas cuando no hay grim disponible.
+export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_helper.py"
+
+# Binario alternativo para el helper de overlay.
+export SHAULA_OVERLAY_HELPER_BIN="$(pwd)/zig-out/bin/shaula-overlay"
 ```
 
-### Daemon Won't Start
+## Uso del software
 
-Check if socket exists and is writable:
-
-```bash
-ls -la /run/user/1000/niri*.sock
-```
-
-### Capture Fails Silently
-
-Run preflight first:
+### 1. Preflight
 
 ```bash
 ./zig-out/bin/shaula preflight --json | jq
+./zig-out/bin/shaula capabilities list --json | jq
 ```
 
-### "ERR_CAPTURE_BACKEND_UNAVAILABLE"
+`preflight` valida que el entorno Wayland/Niri esté listo. `capabilities list` muestra qué modos de captura están habilitados según el runtime real.
 
-Shaula is now **real-capture by default** (Wayland-first). For Niri this requires `grim` available at runtime.
+### 2. Capturas
 
-Check `grim`:
+Captura de área interactiva:
+
+```bash
+./zig-out/bin/shaula capture area --json
+```
+
+Captura de área con aspecto fijo:
+
+```bash
+./zig-out/bin/shaula capture area --json --aspect 16:9
+./zig-out/bin/shaula capture area --json --aspect 4:3
+```
+
+Captura a un archivo concreto:
+
+```bash
+./zig-out/bin/shaula capture area --json --output /tmp/shot.png
+./zig-out/bin/shaula capture fullscreen --json --output /tmp/full.png
+./zig-out/bin/shaula capture window --json --window-id active --output /tmp/window.png
+```
+
+Post-capture mínimo:
+
+```bash
+./zig-out/bin/shaula capture area --json --copy
+./zig-out/bin/shaula capture area --json --save
+./zig-out/bin/shaula capture fullscreen --json --copy --save
+```
+
+Modos de prueba:
+
+```bash
+./zig-out/bin/shaula capture area --json --dry-run
+./zig-out/bin/shaula capture area --json --simulate-cancel
+```
+
+Notas del overlay:
+
+- Si el helper gráfico real no está disponible, Shaula cae a `slurp`.
+- Si no hay backend interactivo real, Shaula ya no inventa una selección exitosa implícita.
+- `--dry-run` queda reservado para pruebas y QA.
+
+### 3. Historial
+
+```bash
+./zig-out/bin/shaula history list --json | jq
+./zig-out/bin/shaula history show --json --id latest | jq
+```
+
+### 4. Portapapeles
+
+```bash
+./zig-out/bin/shaula clipboard copy-image --json --input /tmp/shot.png
+./zig-out/bin/shaula clipboard import-image --json --output /tmp/imported.png
+```
+
+### 5. Daemon
+
+```bash
+./zig-out/bin/shaula daemon start --json
+./zig-out/bin/shaula daemon status --json
+./zig-out/bin/shaula daemon stop --json
+```
+
+### 6. Taxonomía de errores
+
+```bash
+./zig-out/bin/shaula errors list --json | jq
+```
+
+## Flujo recomendado de desarrollo
+
+```bash
+zig build
+zig build test
+bash scripts/qa/run-integration-tests.sh
+bash scripts/qa/run-e2e-niri.sh
+bash scripts/qa/run-performance-gates.sh
+bash scripts/qa/run-all-tests.sh
+```
+
+Perfiles de QA:
+
+```bash
+SHAULA_QA_PROFILE=fast bash scripts/qa/run-all-tests.sh
+SHAULA_QA_PROFILE=full bash scripts/qa/run-all-tests.sh
+SHAULA_QA_PROFILE=debug QA_KEEP_ARTIFACTS=1 bash scripts/qa/run-all-tests.sh
+```
+
+## Scripts QA relevantes
+
+- `scripts/qa/run-all-tests.sh`: suite consolidada
+- `scripts/qa/run-integration-tests.sh`: integraciones de capture, overlay, historial y Noctalia
+- `scripts/qa/run-e2e-niri.sh`: recorridos end-to-end
+- `scripts/qa/run-performance-gates.sh`: budgets y latencias
+- `scripts/qa/release-readiness-capture-fix.sh`: checklist de release
+- `scripts/qa/assert-overlay-helper-interactive.sh`: lanes del helper interactivo
+
+## Troubleshooting
+
+`ERR_UNSUPPORTED_COMPOSITOR`
+
+```bash
+echo "$SHAULA_COMPOSITOR"
+echo "$WAYLAND_DISPLAY"
+echo "$NIRI_SOCKET"
+```
+
+Shaula v1 es Niri-first. Si el compositor no coincide, el preflight y capture van a fallar de forma determinística.
+
+`ERR_CAPTURE_BACKEND_UNAVAILABLE`
 
 ```bash
 command -v grim
 ```
 
-If it is missing, install it with your distro package manager and retry capture.
+Si `grim` no está disponible, configurá `SHAULA_RUNTIME_CAPTURE_HELPER` para QA o instalá el binario real.
 
-For deterministic QA in environments without `grim`, you can opt into the synthetic helper explicitly:
+`ERR_OVERLAY_UNAVAILABLE`
 
 ```bash
-export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_helper.py"
-./zig-out/bin/shaula capture area --json --output /tmp/qa-capture.png
+command -v slurp
+test -x ./zig-out/bin/shaula-overlay && echo helper-ok
 ```
 
-## Project Structure
+El helper de overlay requiere dependencias UI reales para funcionar como proceso interactivo. Si no están presentes, Shaula usa `slurp` como fallback.
 
-```
+`ERR_SELECTION_CANCELLED`
+
+El usuario canceló la selección o el flujo interactivo terminó sin una geometría válida.
+
+## Estructura breve del repo
+
+```text
 src/
-├── main.zig           # CLI entry point
-├── daemon/
-│   └── server.zig     # IPC daemon
-├── capture/
-│   └── command.zig   # Capture logic
-├── backends/
-│   └── capture_backend.zig  # Niri capture impl
-├── pipeline/
-│   └── post_capture.zig    # Image processing
-└── history/
-    └── command.zig     # History tracking
+  main.zig
+  capture/
+  overlay/
+  backends/
+  daemon/
+  history/
+  clipboard/
+
+spec/
+  architecture.md
+  requirements.md
+  wayland-niri-integration.md
 
 scripts/qa/
-├── run-all-tests.sh
-├── preflight-wayland-niri.sh
-├── test-daemon-lifecycle.sh
-├── validate-future-feature-matrix.sh
-└── run-e2e-niri.sh
+  run-all-tests.sh
+  run-integration-tests.sh
+  run-e2e-niri.sh
+  run-performance-gates.sh
 ```
-
-## Testing New Changes
-
-1. Rebuild: `zig build`
-2. Run preflight: `bash scripts/qa/preflight-wayland-niri.sh`
-3. Run full suite: `bash scripts/qa/run-all-tests.sh`
-4. Manual test: `./zig-out/bin/shaula capture area --json`

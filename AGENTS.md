@@ -1,6 +1,8 @@
 # Shaula Agent Guidance
 
 Our application is called **Shaula**.
+Use always the zig related skill.
+
 
 ## Documentation policy for contributors and agents
 

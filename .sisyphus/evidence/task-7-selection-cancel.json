@@ -1,0 +1,1 @@
+{"ok":false,"contract_version":"1.0.0","command":"capture area","timestamp":"2026-04-20T16:24:27Z","mode":"area","backend_used":null,"degraded":false,"error":{"code":"ERR_SELECTION_CANCELLED","message":"selection was cancelled by user","retryable":false,"details":{"mode":"area"}},"warnings":[]}

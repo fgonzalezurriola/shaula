@@ -1,0 +1,4 @@
+[
+  {"action":"ocr","status":"disabled","warning":"ERR_NOT_IMPLEMENTED"},
+  {"action":"record","status":"disabled","warning":"ERR_NOT_IMPLEMENTED"}
+]
