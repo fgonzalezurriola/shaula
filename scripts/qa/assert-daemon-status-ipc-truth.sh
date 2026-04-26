@@ -14,7 +14,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 EVIDENCE_OK="${EVIDENCE_DIR}/task-4-daemon-status-truth.txt"
 EVIDENCE_ERR="${EVIDENCE_DIR}/task-4-daemon-status-truth-error.txt"
 mkdir -p "${EVIDENCE_DIR}"

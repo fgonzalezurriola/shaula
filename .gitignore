@@ -2,9 +2,9 @@
 zig-out/
 node_modules/
 
-.sisyphus/evidence/*.txt
-.sisyphus/evidence/*.log
-.sisyphus/evidence/*.tmp
+.qa/evidence/*.txt
+.qa/evidence/*.log
+.qa/evidence/*.tmp
 
 .DS_Store
 third_party/niri/

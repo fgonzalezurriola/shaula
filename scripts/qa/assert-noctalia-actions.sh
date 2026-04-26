@@ -37,9 +37,9 @@ fi
 PLUGIN_SCRIPT="${ROOT_DIR}/integrations/noctalia/noctalia-plugin-poc.sh"
 ADAPTER_SCRIPT="${ROOT_DIR}/integrations/noctalia/noctalia-action-adapter.sh"
 HELPER_SCRIPT="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
-EVIDENCE_PATH="${ROOT_DIR}/.sisyphus/evidence/task-9-noctalia-actions.json"
-OPEN_FOLDER_EVIDENCE_PATH="${ROOT_DIR}/.sisyphus/evidence/task-10-open-folder.json"
-OPEN_CLIPBOARD_ERROR_EVIDENCE_PATH="${ROOT_DIR}/.sisyphus/evidence/task-10-open-clipboard-error.json"
+EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-9-noctalia-actions.json"
+OPEN_FOLDER_EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-10-open-folder.json"
+OPEN_CLIPBOARD_ERROR_EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-10-open-clipboard-error.json"
 
 if [[ ! -f "${PLUGIN_SCRIPT}" ]]; then
   echo "ERR_NOCTALIA_PLUGIN_MISSING path=integrations/noctalia/noctalia-plugin-poc.sh" >&2
@@ -65,7 +65,7 @@ fi
 
 zig build >/dev/null
 
-mkdir -p "${ROOT_DIR}/.sisyphus/evidence" /tmp/shaula /tmp/shaula-task9-home
+mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula /tmp/shaula-task9-home
 
 EXPECTED_ACTIONS='[
   {"id":"capture-area","label":"Capture Area","shaula_argv":["capture","area","--json"]},

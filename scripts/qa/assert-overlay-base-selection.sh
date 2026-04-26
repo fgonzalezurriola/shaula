@@ -12,8 +12,8 @@ if echo "$OUTPUT" | jq -e '.ok==true and .selection.cancelled==false and (.selec
   echo "$OUTPUT" | jq .
   
   # Emit evidence
-  mkdir -p .sisyphus/evidence
-  echo "$OUTPUT" > .sisyphus/evidence/task-7-overlay-base.txt
+  mkdir -p .qa/evidence
+  echo "$OUTPUT" > .qa/evidence/task-7-overlay-base.txt
   exit 0
 else
   echo "FAIL: Selection output invalid or missing geometry"

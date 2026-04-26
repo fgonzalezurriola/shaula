@@ -109,7 +109,7 @@ printf '%s\n' "${history_json}" | jq -e --argjson expected "${expected_paths}" '
   exit 1
 }
 
-evidence_dir="${ROOT_DIR}/.sisyphus/evidence"
+evidence_dir="${ROOT_DIR}/.qa/evidence"
 mkdir -p "${evidence_dir}"
 evidence_file="${evidence_dir}/task-6-history-topn.txt"
 

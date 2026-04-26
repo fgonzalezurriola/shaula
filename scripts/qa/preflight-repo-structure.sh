@@ -8,7 +8,7 @@ REQUIRED_DIRS=(
     "spec"
     "scripts/qa"
     "tests"
-    ".sisyphus/evidence"
+    ".qa/evidence"
 )
 
 REQUIRED_FILES=(

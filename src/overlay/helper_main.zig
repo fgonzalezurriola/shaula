@@ -29,7 +29,7 @@ pub fn main(init: std.process.Init) !u8 {
         if (environ.getPosix("SHAULA_OVERLAY_TEST_HUD_EVIDENCE") != null) {
             const cwd = std.Io.Dir.cwd();
 
-            var frame_file = cwd.createFile(io, ".sisyphus/evidence/task-6-hud-frame.png", .{}) catch return 1;
+            var frame_file = cwd.createFile(io, ".qa/evidence/task-6-hud-frame.png", .{}) catch return 1;
             {
                 var buf: [1024]u8 = undefined;
                 var writer = frame_file.writer(io, &buf);
@@ -83,10 +83,10 @@ fn writeSuccess(allocator: std.mem.Allocator, io: std.Io) !void {
 fn writeError(allocator: std.mem.Allocator, io: std.Io, code: []const u8, message: []const u8) !void {
     var stdout_buffer: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
-    
+
     const output = try std.fmt.allocPrint(allocator, "{{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{{\"code\":\"{s}\",\"message\":\"{s}\"}}}}\n", .{ code, message });
     defer allocator.free(output);
-    
+
     try stdout.interface.writeAll(output);
     try stdout.interface.flush();
 }

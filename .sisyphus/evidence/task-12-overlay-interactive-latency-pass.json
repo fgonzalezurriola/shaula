@@ -1,1 +1,0 @@
-{"benchmark":"overlay_interactive_first_paint","mode":"interactive_helper","samples":100,"warmup":10,"metrics_ms":{"p50":62.09,"p95":70.8,"p99":76.64,"mean":63.39},"p95_ms":70.8,"p99_ms":76.64,"thresholds_ms":{"p95_max":75.0,"p99_max":110.0},"pass":true,"error_token":null}

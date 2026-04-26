@@ -70,8 +70,8 @@ Deterministic failure token for non-ready environment:
 
 ## Evidence and Output Contract
 
-- Primary report: `.sisyphus/evidence/task-10-postfix-test-matrix-report.json`
-- Negative preflight evidence: `.sisyphus/evidence/task-17-test-matrix-report-error.txt`
+- Primary report: `.qa/evidence/task-16-full-regression.json`
+- Negative preflight evidence: `.qa/evidence/task-16-full-regression-error.txt`
 
 Report format is stable and machine-checkable:
 

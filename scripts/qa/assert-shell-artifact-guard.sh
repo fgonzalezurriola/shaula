@@ -35,7 +35,7 @@ fi
 
 zig build >/dev/null
 
-mkdir -p "${ROOT_DIR}/.sisyphus/evidence" /tmp/shaula
+mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula
 
 token_file="/tmp/shaula/task8-panel-hidden.token"
 capture_path="/tmp/shaula/task8-shell-artifact-guard.png"
@@ -195,7 +195,7 @@ printf '%s\n' "${marker_absent_json}" | jq -e '.marker_present == false' >/dev/n
 }
 
 timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-evidence_json="${ROOT_DIR}/.sisyphus/evidence/task-8-shell-artifact-guard.json"
+evidence_json="${ROOT_DIR}/.qa/evidence/task-8-shell-artifact-guard.json"
 
 jq -n \
   --arg timestamp "${timestamp}" \

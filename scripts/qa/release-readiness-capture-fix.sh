@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-15-release-readiness.json"
 ERROR_TXT="${EVIDENCE_DIR}/task-15-release-readiness-error.txt"
 
@@ -29,6 +29,11 @@ fi
 
 checks_json='[]'
 blockers_json='[]'
+
+integration_layer_report="${EVIDENCE_DIR}/task-11-layer-integration-report.json"
+e2e_layer_report="${EVIDENCE_DIR}/task-11-layer-e2e-niri-report.json"
+perf_layer_report="${EVIDENCE_DIR}/task-12-performance-gates-report.json"
+interactive_helper_report="${EVIDENCE_DIR}/task-11-interactive-overlay-report.json"
 
 append_blocker() {
   local blocker="$1"
@@ -74,50 +79,88 @@ check_json_file() {
   fi
 }
 
-matrix_report="${EVIDENCE_DIR}/task-10-postfix-test-matrix-report.json"
-if [[ ! -f "${matrix_report}" && -f "${EVIDENCE_DIR}/task-16-full-regression.json" ]]; then
-  matrix_report="${EVIDENCE_DIR}/task-16-full-regression.json"
+run_check_command() {
+  local id="$1"
+  local cmd="$2"
+  local output=""
+  local rc=0
+
+  set +e
+  output="$(bash -lc "${cmd}" 2>&1)"
+  rc=$?
+  set -e
+
+  if [[ ${rc} -eq 0 ]]; then
+    append_check "${id}" true "pass"
+  else
+    append_check "${id}" false "command_failed rc=${rc} cmd=${cmd} output=$(printf '%s' "${output}" | tr '\n' ' ')"
+  fi
+}
+
+check_report_subcheck() {
+  local report_path="$1"
+  local subcheck_id="$2"
+  local check_id="$3"
+
+  if [[ ! -f "${report_path}" ]]; then
+    append_check "${check_id}" false "missing_file path=${report_path}"
+    return
+  fi
+
+  if jq -e --arg id "${subcheck_id}" '.subchecks | any(.id == $id and .pass == true)' "${report_path}" >/dev/null 2>&1; then
+    append_check "${check_id}" true "pass"
+  else
+    append_check "${check_id}" false "missing_or_failed_subcheck id=${subcheck_id} path=${report_path}"
+  fi
+}
+
+run_check_command "unit.errors.matrix" "bash ./scripts/qa/test-failure-matrix.sh"
+run_check_command "unit.exit_code.mapping" "bash ./scripts/qa/assert-exit-code-mapping.sh"
+
+if [[ ! -f "${interactive_helper_report}" ]]; then
+  SHAULA_QA_ALLOW_INTRUSIVE_UI=1 bash ./scripts/qa/assert-overlay-helper-interactive.sh >/dev/null
 fi
 
 check_json_file \
   "evidence.matrix.consolidated" \
-  "${matrix_report}" \
-  '.pass == true and .layers.integration.pass == true and .layers.e2e_niri.pass == true and .layers.performance.pass == true'
+  "${integration_layer_report}" \
+  '.pass == true'
 
-required_matrix_ids=(
-  "unit.errors.matrix"
-  "unit.exit_code.mapping"
-  "integration.capture.integrity.runtime_non_stub"
-  "integration.capture.integrity.content_validity"
-  "integration.capture.capabilities.strict_contract"
-  "integration.capture.output.default_path"
-  "integration.history.topn_20"
-  "integration.overlay.base_selection"
-  "integration.overlay.helper.contract_ok"
-  "integration.overlay.helper.contract_malformed"
-  "integration.overlay.helper.interactive_lanes"
-  "integration.overlay.geometry.fixtures"
-  "integration.capture.shell_artifact_guard"
-  "integration.noctalia.optional_core_without_plugin"
-  "e2e.capture.capabilities.strict_contract"
-  "e2e.failure.unsupported_compositor"
-  "e2e.failure.permission_clipboard"
-)
+check_json_file \
+  "evidence.integration.layer_report" \
+  "${integration_layer_report}" \
+  '.pass == true'
 
-for matrix_id in "${required_matrix_ids[@]}"; do
-  check_id="matrix.subcheck.${matrix_id}"
+check_json_file \
+  "evidence.e2e.layer_report" \
+  "${e2e_layer_report}" \
+  '.pass == true'
 
-  if [[ ! -f "${matrix_report}" ]]; then
-    append_check "${check_id}" false "missing_file path=${matrix_report}"
-    continue
-  fi
+check_json_file \
+  "evidence.performance.layer_report" \
+  "${perf_layer_report}" \
+  '.pass == true and .benchmarks.overlay_first_paint.pass == true and .benchmarks.daemon_idle_footprint.pass == true'
 
-  if jq -e --arg id "${matrix_id}" '.matrix | any(.id == $id and .pass == true)' "${matrix_report}" >/dev/null 2>&1; then
-    append_check "${check_id}" true "pass"
-  else
-    append_check "${check_id}" false "missing_or_failed_subcheck id=${matrix_id}"
-  fi
-done
+check_json_file \
+  "evidence.overlay.interactive_helper_report" \
+  "${interactive_helper_report}" \
+  '.pass == true'
+
+check_report_subcheck "${integration_layer_report}" "integration.capture.integrity.runtime_non_stub" "matrix.subcheck.integration.capture.integrity.runtime_non_stub"
+check_report_subcheck "${integration_layer_report}" "integration.capture.integrity.content_validity" "matrix.subcheck.integration.capture.integrity.content_validity"
+check_report_subcheck "${integration_layer_report}" "integration.capture.capabilities.strict_contract" "matrix.subcheck.integration.capture.capabilities.strict_contract"
+check_report_subcheck "${integration_layer_report}" "integration.capture.output.default_path" "matrix.subcheck.integration.capture.output.default_path"
+check_report_subcheck "${integration_layer_report}" "integration.history.topn_20" "matrix.subcheck.integration.history.topn_20"
+check_report_subcheck "${integration_layer_report}" "integration.overlay.base_selection" "matrix.subcheck.integration.overlay.base_selection"
+check_report_subcheck "${integration_layer_report}" "integration.overlay.helper.contract_ok" "matrix.subcheck.integration.overlay.helper.contract_ok"
+check_report_subcheck "${integration_layer_report}" "integration.overlay.helper.contract_malformed" "matrix.subcheck.integration.overlay.helper.contract_malformed"
+check_report_subcheck "${integration_layer_report}" "integration.overlay.helper.interactive_lanes" "matrix.subcheck.integration.overlay.helper.interactive_lanes"
+check_report_subcheck "${integration_layer_report}" "integration.overlay.geometry.fixtures" "matrix.subcheck.integration.overlay.geometry.fixtures"
+check_report_subcheck "${integration_layer_report}" "integration.capture.shell_artifact_guard" "matrix.subcheck.integration.capture.shell_artifact_guard"
+check_report_subcheck "${integration_layer_report}" "integration.noctalia.optional_core_without_plugin" "matrix.subcheck.integration.noctalia.optional_core_without_plugin"
+check_report_subcheck "${e2e_layer_report}" "e2e.capture.capabilities.strict_contract" "matrix.subcheck.e2e.capture.capabilities.strict_contract"
+check_report_subcheck "${e2e_layer_report}" "e2e.failure.unsupported_compositor" "matrix.subcheck.e2e.failure.unsupported_compositor"
+check_report_subcheck "${e2e_layer_report}" "e2e.failure.permission_clipboard" "matrix.subcheck.e2e.failure.permission_clipboard"
 
 check_json_file \
   "evidence.task3.capture_content_validity" \

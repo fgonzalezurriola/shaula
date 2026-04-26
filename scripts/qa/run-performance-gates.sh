@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-12-performance-gates-report.json"
 ERROR_LOG="${EVIDENCE_DIR}/task-12-overlay-interactive-latency-error.txt"
 QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
@@ -169,7 +169,7 @@ run_json_benchmark() {
   printf '%s' "${output}"
 }
 
-overlay_json="$(run_json_benchmark overlay_interactive_first_paint 1 bash ./scripts/qa/benchmark-overlay-first-paint.sh --samples "${OVERLAY_SAMPLES}" --warmup "${OVERLAY_WARMUP}" --p95-max-ms "${OVERLAY_P95_MAX}" --p99-max-ms "${OVERLAY_P99_MAX}" --report-json "${ROOT_DIR}/.sisyphus/evidence/task-12-overlay-interactive-latency.json" --error-log "${ERROR_LOG}" --json-only)"
+overlay_json="$(run_json_benchmark overlay_interactive_first_paint 1 bash ./scripts/qa/benchmark-overlay-first-paint.sh --samples "${OVERLAY_SAMPLES}" --warmup "${OVERLAY_WARMUP}" --p95-max-ms "${OVERLAY_P95_MAX}" --p99-max-ms "${OVERLAY_P99_MAX}" --report-json "${ROOT_DIR}/.qa/evidence/task-12-overlay-interactive-latency.json" --error-log "${ERROR_LOG}" --json-only)"
 capture_json="$(run_json_benchmark capture_completion 1 bash ./scripts/qa/benchmark-capture-completion.sh --samples "${CAPTURE_SAMPLES}" --warmup "${CAPTURE_WARMUP}" --area-p95-max-ms "${CAPTURE_AREA_P95_MAX}" --window-p95-max-ms "${CAPTURE_WINDOW_P95_MAX}" --json-only)"
 daemon_json="$(run_json_benchmark daemon_idle_footprint 0 bash ./scripts/qa/benchmark-daemon-idle.sh --samples "${DAEMON_SAMPLES}" --warmup "${DAEMON_WARMUP}" --cpu-max "${DAEMON_CPU_MAX}" --rss-max-mb "${DAEMON_RSS_MAX_MB}" --interval-sec "${DAEMON_INTERVAL_SEC}" --json-only)"
 

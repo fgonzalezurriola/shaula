@@ -52,7 +52,7 @@ if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
 
-evidence_dir="${ROOT_DIR}/.sisyphus/evidence"
+evidence_dir="${ROOT_DIR}/.qa/evidence"
 evidence_json="${evidence_dir}/task-3-capture-content-validity.json"
 
 mkdir -p "${evidence_dir}" /tmp/shaula

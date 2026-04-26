@@ -1,6 +1,6 @@
 # Shaula Developer Guide
 
-Esta guía describe cómo compilar, probar y usar Shaula hoy, sin depender del plan incompleto de `.sisyphus`.
+Esta guía describe cómo compilar, probar y usar Shaula hoy, sin depender de artefactos de planificación externos al producto.
 
 ## Qué es Shaula hoy
 

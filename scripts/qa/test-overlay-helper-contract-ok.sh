@@ -11,8 +11,8 @@ if echo "$OUTPUT" | jq -e '.ok==true and .selection.cancelled==false and .select
   echo "PASS: Helper ok payload mapped to SelectionResult geometry"
   echo "$OUTPUT" | jq .
 
-  mkdir -p .sisyphus/evidence
-  echo "$OUTPUT" > .sisyphus/evidence/task-2-overlay-contract-ok.json
+  mkdir -p .qa/evidence
+  echo "$OUTPUT" > .qa/evidence/task-2-overlay-contract-ok.json
   exit 0
 else
   echo "FAIL: Helper ok payload did not map deterministically"

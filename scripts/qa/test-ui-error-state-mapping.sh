@@ -30,5 +30,5 @@ fi
 echo "PASS: UI maps backend ERR_* semantics deterministicly to state"
 rm "$SHAULA_BIN"
 
-mkdir -p .sisyphus/evidence
-echo "UI correctly maps backend errors to [UI:STATE:ERROR] semantics." > .sisyphus/evidence/task-14-ui-contract-error.txt
+mkdir -p .qa/evidence
+echo "UI correctly maps backend errors to [UI:STATE:ERROR] semantics." > .qa/evidence/task-14-ui-contract-error.txt

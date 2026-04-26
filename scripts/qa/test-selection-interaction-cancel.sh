@@ -9,8 +9,8 @@ OUTPUT=$(SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=interaction_cancel ./zig-out/bin/
 
 if echo "$OUTPUT" | grep -q 'ERR_SELECTION_CANCELLED'; then
   echo "PASS: Esc interaction mapped to deterministic cancellation"
-  mkdir -p .sisyphus/evidence
-  echo "$OUTPUT" > .sisyphus/evidence/task-7-selection-cancel.json
+  mkdir -p .qa/evidence
+  echo "$OUTPUT" > .qa/evidence/task-7-selection-cancel.json
   exit 0
 else
   echo "FAIL: Esc interaction did not trigger deterministic cancellation"

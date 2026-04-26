@@ -21,11 +21,11 @@ fi
 
 zig build >/dev/null
 
-mkdir -p "${ROOT_DIR}/.sisyphus/evidence" /tmp/shaula
+mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula
 
 token_file="/tmp/shaula/task8-noctalia-panel-hidden.token"
 capture_path="/tmp/shaula/task8-noctalia-panel-hide.png"
-timeout_evidence="${ROOT_DIR}/.sisyphus/evidence/task-8-shell-artifact-guard-error.txt"
+timeout_evidence="${ROOT_DIR}/.qa/evidence/task-8-shell-artifact-guard-error.txt"
 
 rm -f "${token_file}" "${capture_path}" "${timeout_evidence}"
 

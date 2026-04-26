@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 MULTI_FIXTURE="${ROOT_DIR}/tests/fixtures/capture/task13_multioutput_geometry.json"
 FRACTIONAL_FIXTURE="${ROOT_DIR}/tests/fixtures/capture/task13_fractional_scaling.json"
 MULTI_EVIDENCE="${EVIDENCE_DIR}/task-13-multioutput-geometry.json"

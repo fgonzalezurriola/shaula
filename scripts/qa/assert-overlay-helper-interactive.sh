@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-11-interactive-overlay-report.json"
 ERROR_LOG="${EVIDENCE_DIR}/task-11-interactive-overlay-error.txt"
 

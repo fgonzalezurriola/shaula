@@ -31,7 +31,7 @@ RUN_DIR="/tmp/shaula/runs/${RUN_TS}-integration-${QA_PROFILE}"
 mkdir -p "${RUN_DIR}"
 ln -sfn "${RUN_DIR}" /tmp/shaula/runs/latest
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-11-layer-integration-report.json"
 ERROR_LOG="${EVIDENCE_DIR}/task-11-layer-integration-report-error.txt"
 

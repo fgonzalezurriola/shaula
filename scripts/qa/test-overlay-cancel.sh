@@ -12,8 +12,8 @@ if echo "$OUTPUT" | grep -q 'ERR_SELECTION_CANCELLED'; then
   echo "$OUTPUT" | jq .
   
   # Emit evidence
-  mkdir -p .sisyphus/evidence
-  echo "$OUTPUT" > .sisyphus/evidence/task-7-overlay-base-error.txt
+  mkdir -p .qa/evidence
+  echo "$OUTPUT" > .qa/evidence/task-7-overlay-base-error.txt
   exit 0
 else
   echo "FAIL: Did not get ERR_SELECTION_CANCELLED"

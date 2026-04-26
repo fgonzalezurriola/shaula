@@ -24,5 +24,5 @@ if ! grep -q -e '--json' "$UI_SCRIPT"; then
 fi
 
 echo "PASS: UI adheres strictly to backend CLI contracts"
-mkdir -p .sisyphus/evidence
-echo "UI strictly calls --json and contains no direct Wayland tools." > .sisyphus/evidence/task-14-ui-contract.txt
+mkdir -p .qa/evidence
+echo "UI strictly calls --json and contains no direct Wayland tools." > .qa/evidence/task-14-ui-contract.txt

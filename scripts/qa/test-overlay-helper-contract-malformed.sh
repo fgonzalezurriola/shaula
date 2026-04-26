@@ -11,8 +11,8 @@ if echo "$OUTPUT" | jq -e '.ok==false and .error.code=="ERR_OVERLAY_PROTOCOL_INV
   echo "PASS: Malformed helper payload mapped deterministically to overlay protocol invalid"
   echo "$OUTPUT" | jq .
 
-  mkdir -p .sisyphus/evidence
-  echo "$OUTPUT" > .sisyphus/evidence/task-2-overlay-contract-error.txt
+  mkdir -p .qa/evidence
+  echo "$OUTPUT" > .qa/evidence/task-2-overlay-contract-error.txt
   exit 0
 else
   echo "FAIL: Malformed payload did not trigger deterministic overlay protocol mapping"

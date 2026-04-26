@@ -4,8 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-EVIDENCE_DIR="${ROOT_DIR}/.sisyphus/evidence"
-REPORT_JSON="${EVIDENCE_DIR}/task-16-full-regression.json"
+EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 ERROR_TXT="${EVIDENCE_DIR}/task-16-full-regression-error.txt"
 
 mkdir -p "${EVIDENCE_DIR}"
@@ -28,8 +27,12 @@ QA_PROFILE="${SHAULA_QA_PROFILE:-full}"
 KEEP_ARTIFACTS="${QA_KEEP_ARTIFACTS:-0}"
 ALLOW_INTRUSIVE_UI="${SHAULA_QA_ALLOW_INTRUSIVE_UI:-0}"
 UI_POLICY_MODE="non_intrusive"
+REPORT_JSON="${EVIDENCE_DIR}/task-16-full-regression.json"
 if [[ "${ALLOW_INTRUSIVE_UI}" == "1" ]]; then
   UI_POLICY_MODE="interactive_opt_in"
+fi
+if [[ "${QA_PROFILE}" == "debug" ]]; then
+  REPORT_JSON="${EVIDENCE_DIR}/task-16-debug-regression.json"
 fi
 RUN_TS="$(date -u +"%Y%m%dT%H%M%SZ")"
 RUN_DIR="/tmp/shaula/runs/${RUN_TS}-all-${QA_PROFILE}"
@@ -108,7 +111,7 @@ release_layer_pass="$(jq -r '.ready' "${release_layer_report}")"
 
 if [[ "${integration_layer_pass}" != "true" || "${e2e_layer_pass}" != "true" || "${perf_layer_pass}" != "true" || "${release_layer_pass}" != "true" ]]; then
   echo "QA failure summary (layer): integration_pass=${integration_layer_pass} e2e_pass=${e2e_layer_pass} perf_pass=${perf_layer_pass} release_ready=${release_layer_pass}" >&2
-  echo "- integration log: ${EVIDENCE_DIR}/task-10-layer-integration-report-error.txt" >&2
+  echo "- integration log: ${EVIDENCE_DIR}/task-11-layer-integration-report-error.txt" >&2
   echo "- e2e log: ${EVIDENCE_DIR}/task-11-layer-e2e-niri-report-error.txt" >&2
   echo "- perf log: ${EVIDENCE_DIR}/task-12-overlay-interactive-latency-error.txt" >&2
   echo "- release log: ${EVIDENCE_DIR}/task-15-release-readiness-error.txt" >&2
@@ -181,6 +184,14 @@ jq -n \
     },
     matrix: $matrix
   }' > "${REPORT_JSON}"
+
+if [[ "${QA_PROFILE}" == "debug" ]]; then
+  printf 'profile=%s\nkeep_artifacts=%s\nrun_dir=%s\nreport=%s\n' \
+    "${QA_PROFILE}" \
+    "${KEEP_ARTIFACTS}" \
+    "${RUN_DIR}" \
+    "${REPORT_JSON}" > "${EVIDENCE_DIR}/task-16-debug-regression.txt"
+fi
 
 if [[ "${overall_pass}" != "true" ]]; then
   echo "ERR_QA_MATRIX_INVALID reason=matrix_has_failed_subchecks report=${REPORT_JSON}" >&2
