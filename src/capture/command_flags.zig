@@ -26,6 +26,13 @@ pub const WindowFlags = struct {
     window_id: ?[]const u8 = null,
 };
 
+pub const PreviousAreaFlags = struct {
+    json_mode: bool = false,
+    save: bool = false,
+    copy: bool = false,
+    output: ?[]const u8 = null,
+};
+
 pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
     var flags: AreaFlags = .{};
     var i: usize = 3;
@@ -146,6 +153,39 @@ pub fn parseWindowFlags(io: std.Io, argv: []const [*:0]const u8) !WindowFlags {
         }
 
         try command_json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "unsupported flag", false, "window", null, false, &.{});
+        return error.CliUsage;
+    }
+    return flags;
+}
+
+pub fn parsePreviousAreaFlags(io: std.Io, argv: []const [*:0]const u8) !PreviousAreaFlags {
+    var flags: PreviousAreaFlags = .{};
+    var i: usize = 3;
+    while (i < argv.len) : (i += 1) {
+        const arg = argToSlice(argv[i]);
+        if (std.mem.eql(u8, arg, "--json")) {
+            flags.json_mode = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--output")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "--output requires a path", false, "previous-area", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.output = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--save")) {
+            flags.save = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--copy")) {
+            flags.copy = true;
+            continue;
+        }
+
+        try command_json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "unsupported flag", false, "previous-area", null, false, &.{});
         return error.CliUsage;
     }
     return flags;

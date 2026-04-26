@@ -11,6 +11,7 @@ Superficie soportada:
 - `capture area`
 - `capture fullscreen`
 - `capture window`
+- `capture previous-area`
 - `history list`
 - `history show --id latest`
 - `clipboard copy-image`
@@ -96,6 +97,12 @@ Captura de área con aspecto fijo:
 ./zig-out/bin/shaula capture area --json --aspect 4:3
 ```
 
+Repetir el último rectángulo confirmado:
+
+```bash
+./zig-out/bin/shaula capture previous-area --json
+```
+
 Captura a un archivo concreto:
 
 ```bash
@@ -123,6 +130,7 @@ Notas del overlay:
 
 - Si el helper gráfico real no está disponible, Shaula cae a `slurp`.
 - Si no hay backend interactivo real, Shaula ya no inventa una selección exitosa implícita.
+- `capture previous-area` falla con `ERR_PREVIOUS_AREA_UNAVAILABLE` hasta que exista una geometría de área válida en runtime.
 - `--dry-run` queda reservado para pruebas y QA.
 
 ### 3. Historial
@@ -218,9 +226,11 @@ El usuario canceló la selección o el flujo interactivo terminó sin una geomet
 
 ```text
 src/
+  core/
   main.zig
   capture/
   overlay/
+  runtime/
   backends/
   daemon/
   history/

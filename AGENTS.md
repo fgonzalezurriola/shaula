@@ -1,8 +1,9 @@
 # Shaula Agent Guidance
 
-Our application is called **Shaula**.
-Use always the zig related skill.
+This app doesn't have any users yet, don't make regression tests
 
+application is called **Shaula**.
+Use always the zig related skill.
 
 ## Documentation policy for contributors and agents
 

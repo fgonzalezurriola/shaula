@@ -9,6 +9,7 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 | Area capture | Supported | Interactive selection with deterministic `ERR_*` outcomes. |
 | Fullscreen capture | Supported | Runtime backend only, no productive stub success path. |
 | Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
+| Previous area capture | Supported | Reuses the last confirmed area rectangle with deterministic `ERR_PREVIOUS_AREA_UNAVAILABLE`. |
 | Clipboard copy/import | Supported | `clipboard copy-image` and `clipboard import-image`. |
 | History list/show | Supported | Top-N 20, newest-first, stable `latest` alias. |
 | Output path default | Supported | Defaults to `~/Pictures/Shaula`. |
@@ -24,6 +25,7 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 - Default output directory is `~/Pictures/Shaula`; invalid or unwritable targets fail with `ERR_OUTPUT_PATH_INVALID`.
 - History retention is Top-N 20 entries, newest-first, with deterministic trimming on write.
 - The public overlay scope is limited to selection, aspect constraint, and capture/cancel actions.
+- `previous-area` depends on runtime selection state and never fabricates geometry when no valid area has been confirmed yet.
 - Missing interactive backends must not silently degrade into fake successful area selections.
 - The shell-artifact precondition runs before capture and may fail with deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`.
 

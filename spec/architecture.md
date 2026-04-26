@@ -25,7 +25,7 @@ shaula <command-family> <command> [flags]
 
 command-family := capture | daemon | capabilities | history | clipboard
 
-capture command := area | fullscreen | window
+capture command := area | fullscreen | window | previous-area
 daemon command := start | status | stop
 capabilities command := list
 history command := list | show
@@ -41,6 +41,7 @@ All commands below require `--json` for contract-compliant automation.
 - `shaula capture area --json [--copy] [--save] [--output <path>] [--dry-run]`
 - `shaula capture fullscreen --json [--copy] [--save] [--output <path>]`
 - `shaula capture window --json [--copy] [--save] [--output <path>] [--window-id <id>]`
+- `shaula capture previous-area --json [--copy] [--save] [--output <path>]`
 
 #### Daemon family
 
@@ -121,6 +122,7 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - `ERR_CAPTURE_BACKEND_UNAVAILABLE`
 - `ERR_WINDOW_TARGET_UNRESOLVED`
 - `ERR_CAPTURE_TIMEOUT`
+- `ERR_PREVIOUS_AREA_UNAVAILABLE`
 
 #### Daemon `ERR_*`
 
@@ -157,6 +159,7 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 - **Capture backend process**: Performs compositor/protocol capture operations (`area`, `fullscreen`, `window`) and returns normalized capture metadata.
 - **Worker process(es)**: Execute asynchronous heavy tasks (long encoding, exports, uploads) outside the capture critical path.
 - **UI process**: Desktop UI shell that consumes only validated daemon/CLI contracts and never bypasses daemon control.
+- **Runtime selection state**: Stores the last confirmed area geometry independently from history so `previous-area` stays on the short capture path.
 
 ### Hot-Path Isolation Rule
 

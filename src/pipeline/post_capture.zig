@@ -15,6 +15,7 @@ pub fn writeCapturePipelineJson(
     io: std.Io,
     environ: std.process.Environ,
     command: []const u8,
+    reported_mode: []const u8,
     success: capture_types.CaptureSuccess,
     flags: PipelineFlags,
 ) !void {
@@ -49,20 +50,21 @@ pub fn writeCapturePipelineJson(
             clipboard_ok = false;
             clipboard_error_code = "ERR_UNKNOWN_UNMAPPED";
             clipboard_error_message = "clipboard copy failed with unmapped error";
-            return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
+            return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
         };
         clipboard_ok = copy_result.ok;
         clipboard_error_code = copy_result.code;
         clipboard_error_message = copy_result.message;
     }
 
-    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
+    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
 }
 
 fn writeCapturePipelineJsonWithResolvedFields(
     allocator: std.mem.Allocator,
     io: std.Io,
     command: []const u8,
+    reported_mode: []const u8,
     success: capture_types.CaptureSuccess,
     flags: PipelineFlags,
     ts: []const u8,
@@ -81,7 +83,7 @@ fn writeCapturePipelineJsonWithResolvedFields(
     defer allocator.free(command_json);
     const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
-    const mode_json = try jsonStringAlloc(allocator, capture_types.modeString(success.mode));
+    const mode_json = try jsonStringAlloc(allocator, reported_mode);
     defer allocator.free(mode_json);
     const path_json = try jsonStringAlloc(allocator, success.path);
     defer allocator.free(path_json);

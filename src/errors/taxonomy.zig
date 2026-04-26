@@ -62,6 +62,7 @@ const specs = [_]ErrorSpec{
     .{ .code = "ERR_CAPTURE_PRECONDITION_TIMEOUT", .message = "capture precondition timed out waiting for shell artifact guard", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 35 },
     .{ .code = "ERR_SELECTION_CANCELLED", .message = "selection was cancelled by user", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 33 },
     .{ .code = "ERR_CAPTURE_MODE_UNSUPPORTED", .message = "capture mode is unsupported by runtime capabilities", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 34 },
+    .{ .code = "ERR_PREVIOUS_AREA_UNAVAILABLE", .message = "previous area is unavailable", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 39 },
     .{ .code = "ERR_CLIPBOARD_UNAVAILABLE", .message = "clipboard backend is unavailable", .retryable = false, .class = .clipboard, .action = .degrade_continue, .exit_code = 40 },
     .{ .code = "ERR_OVERLAY_UNAVAILABLE", .message = "overlay helper is unavailable", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 36 },
     .{ .code = "ERR_OVERLAY_TIMEOUT", .message = "overlay helper timed out", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 37 },

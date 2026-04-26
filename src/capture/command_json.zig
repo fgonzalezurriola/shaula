@@ -8,6 +8,7 @@ pub fn writeSuccessJson(
     allocator: std.mem.Allocator,
     io: std.Io,
     command: []const u8,
+    reported_mode: []const u8,
     success: capture_types.CaptureSuccess,
     warnings: []const []const u8,
 ) !void {
@@ -19,8 +20,7 @@ pub fn writeSuccessJson(
     const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
 
-    const mode = capture_types.modeString(success.mode);
-    const mode_json = try jsonStringAlloc(allocator, mode);
+    const mode_json = try jsonStringAlloc(allocator, reported_mode);
     defer allocator.free(mode_json);
     const path_json = try jsonStringAlloc(allocator, success.path);
     defer allocator.free(path_json);

@@ -1,11 +1,13 @@
 const std = @import("std");
 
+const core_capture_mode = @import("../core/capture_mode.zig");
 const overlay = @import("../overlay/overlay.zig");
 const selection = @import("../selection/selection.zig");
 const capture_types = @import("types.zig");
 const capture_backend = @import("../backends/capture_backend.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
 const recovery_policy = @import("../recovery/policy.zig");
+const previous_area_store = @import("../runtime/previous_area_store.zig");
 
 const flags = @import("command_flags.zig");
 const guards = @import("command_guards.zig");
@@ -27,23 +29,23 @@ pub fn run(
     argv: []const [*:0]const u8,
 ) !u8 {
     if (argv.len < 3) {
-        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|window> --json", false, null, null, false, &.{});
+        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|window|previous-area> --json", false, null, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
     const subcommand = argToSlice(argv[2]);
-    if (std.mem.eql(u8, subcommand, "area")) {
-        return runArea(allocator, io, environ, argv);
-    }
-    if (std.mem.eql(u8, subcommand, "fullscreen")) {
-        return runFullscreen(allocator, io, environ, argv);
-    }
-    if (std.mem.eql(u8, subcommand, "window")) {
-        return runWindow(allocator, io, environ, argv);
-    }
+    const requested_mode = core_capture_mode.parseCliToken(subcommand) orelse {
+        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "unsupported capture subcommand", false, null, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    };
 
-    try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "unsupported capture subcommand", false, null, null, false, &.{});
-    return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    return switch (requested_mode) {
+        .area => runArea(allocator, io, environ, argv),
+        .fullscreen => runFullscreen(allocator, io, environ, argv),
+        .window => runWindow(allocator, io, environ, argv),
+        .previous_area => runPreviousArea(allocator, io, environ, argv),
+        .all_in_one => unreachable,
+    };
 }
 
 /// Execute `capture area`.
@@ -54,9 +56,10 @@ pub fn run(
 /// 3. Enforce capabilities + pre-capture guard.
 /// 4. Execute backend and emit stable JSON contract.
 fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.area);
     const parsed = flags.parseAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--json is required", false, "area", null, false, &.{});
+        try json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -75,11 +78,11 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         const overlay_code = overlay.deterministicFailureCode(environ, parsed.simulate_cancel, true);
         if (overlay_code) |code| {
             const spec = recovery_policy.specFor(code);
-            try json.writeErrorJson(io, "capture area", spec.code, spec.message, spec.retryable, "area", null, false, &.{});
+            try json.writeErrorJson(io, "capture area", spec.code, spec.message, spec.retryable, mode, null, false, &.{});
             return recovery_policy.exitCodeFor(spec.code);
         }
 
-        try json.writeErrorJson(io, "capture area", "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, "area", null, false, &.{});
+        try json.writeErrorJson(io, "capture area", "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_SELECTION_CANCELLED");
     }
 
@@ -88,10 +91,10 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return 0;
     }
 
-    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture area", "area");
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture area", mode);
     if (unsupported_rc) |code| return code;
 
-    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture area", "area") catch |err| switch (err) {
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture area", mode) catch |err| switch (err) {
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
@@ -102,7 +105,13 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         .area_geometry = capture_types.areaGeometryFromSelection(selection_result.geometry),
     });
     defer capture_backend.deinitOutcome(allocator, &outcome);
-    return writeCaptureOutcome(allocator, io, environ, "capture area", &outcome, .{
+    if (capture_types.areaGeometryFromSelection(selection_result.geometry)) |geometry| {
+        switch (outcome) {
+            .success => previous_area_store.store(allocator, io, environ, geometry) catch {},
+            .failure => {},
+        }
+    }
+    return writeCaptureOutcome(allocator, io, environ, "capture area", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
     }, precondition_warning);
@@ -110,16 +119,17 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 
 /// Execute `capture fullscreen` with strict capability/guard enforcement.
 fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.fullscreen);
     const parsed = flags.parseFullscreenFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "--json is required", false, "fullscreen", null, false, &.{});
+        try json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture fullscreen", "fullscreen");
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture fullscreen", mode);
     if (unsupported_rc) |code| return code;
 
-    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture fullscreen", "fullscreen") catch |err| switch (err) {
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture fullscreen", mode) catch |err| switch (err) {
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
@@ -129,7 +139,7 @@ fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
         .output_path = parsed.output,
     });
     defer capture_backend.deinitOutcome(allocator, &outcome);
-    return writeCaptureOutcome(allocator, io, environ, "capture fullscreen", &outcome, .{
+    return writeCaptureOutcome(allocator, io, environ, "capture fullscreen", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
     }, precondition_warning);
@@ -140,16 +150,17 @@ fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
 /// Window mode remains explicit so capability gating and deterministic contracts
 /// stay stable even when runtime support is unavailable.
 fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.window);
     const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "--json is required", false, "window", null, false, &.{});
+        try json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture window", "window");
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture window", mode);
     if (unsupported_rc) |code| return code;
 
-    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture window", "window") catch |err| switch (err) {
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture window", mode) catch |err| switch (err) {
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
@@ -160,7 +171,52 @@ fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Envi
         .window_id = parsed.window_id,
     });
     defer capture_backend.deinitOutcome(allocator, &outcome);
-    return writeCaptureOutcome(allocator, io, environ, "capture window", &outcome, .{
+    return writeCaptureOutcome(allocator, io, environ, "capture window", mode, &outcome, .{
+        .save = parsed.save,
+        .copy = parsed.copy,
+    }, precondition_warning);
+}
+
+/// Execute `capture previous-area`.
+///
+/// Contract constraints:
+/// - this flow never fabricates geometry; missing or malformed runtime state
+///   maps deterministically to `ERR_PREVIOUS_AREA_UNAVAILABLE`.
+/// - backend execution still uses the short area-capture hot path once geometry
+///   is recovered.
+fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const reported_mode = core_capture_mode.cliToken(.previous_area);
+    const backend_mode = core_capture_mode.backendModeToken(.previous_area) orelse reported_mode;
+    const parsed = flags.parsePreviousAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    if (!parsed.json_mode) {
+        try json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "--json is required", false, reported_mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    }
+
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture previous-area", backend_mode);
+    if (unsupported_rc) |code| return code;
+
+    const geometry = (try previous_area_store.load(allocator, io, environ)) orelse {
+        try json.writeErrorJson(io, "capture previous-area", "ERR_PREVIOUS_AREA_UNAVAILABLE", "previous area is unavailable", false, reported_mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_PREVIOUS_AREA_UNAVAILABLE");
+    };
+
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture previous-area", backend_mode) catch |err| switch (err) {
+        error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
+        else => return err,
+    };
+
+    var outcome = try capture_backend.execute(allocator, io, environ, .{
+        .mode = .area,
+        .output_path = parsed.output,
+        .area_geometry = geometry,
+    });
+    defer capture_backend.deinitOutcome(allocator, &outcome);
+    switch (outcome) {
+        .success => previous_area_store.store(allocator, io, environ, geometry) catch {},
+        .failure => {},
+    }
+    return writeCaptureOutcome(allocator, io, environ, "capture previous-area", reported_mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
     }, precondition_warning);
@@ -171,6 +227,7 @@ fn writeCaptureOutcome(
     io: std.Io,
     environ: std.process.Environ,
     command: []const u8,
+    reported_mode: []const u8,
     outcome: *capture_types.CaptureOutcome,
     post_flags: PostCaptureFlags,
     precondition_warning: ?[]const u8,
@@ -178,7 +235,7 @@ fn writeCaptureOutcome(
     switch (outcome.*) {
         .success => |success| {
             if (post_flags.save or post_flags.copy) {
-                try post_capture_pipeline.writeCapturePipelineJson(allocator, io, environ, command, success, .{
+                try post_capture_pipeline.writeCapturePipelineJson(allocator, io, environ, command, reported_mode, success, .{
                     .save = post_flags.save,
                     .copy = post_flags.copy,
                 });
@@ -196,7 +253,7 @@ fn writeCaptureOutcome(
                 warning_count += 1;
             }
 
-            try json.writeSuccessJson(allocator, io, command, success, warnings[0..warning_count]);
+            try json.writeSuccessJson(allocator, io, command, reported_mode, success, warnings[0..warning_count]);
             return 0;
         },
         .failure => |failure| {
@@ -217,7 +274,7 @@ fn writeCaptureOutcome(
                 failure.code,
                 failure.message,
                 failure.retryable,
-                capture_types.modeString(failure.mode),
+                reported_mode,
                 failure.backend_used,
                 failure.degraded,
                 warnings[0..warning_count],
