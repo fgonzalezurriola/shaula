@@ -25,7 +25,7 @@ shaula <command-family> <command> [flags]
 
 command-family := capture | daemon | capabilities | history | clipboard
 
-capture command := area | fullscreen | window | previous-area
+capture command := all-in-one | area | fullscreen | window | previous-area
 daemon command := start | status | stop
 capabilities command := list
 history command := list | show
@@ -38,6 +38,7 @@ All commands below require `--json` for contract-compliant automation.
 
 #### Capture family
 
+- `shaula capture all-in-one --json [--copy] [--save] [--output <path>] [--dry-run]`
 - `shaula capture area --json [--copy] [--save] [--output <path>] [--dry-run]`
 - `shaula capture fullscreen --json [--copy] [--save] [--output <path>]`
 - `shaula capture window --json [--copy] [--save] [--output <path>] [--window-id <id>]`

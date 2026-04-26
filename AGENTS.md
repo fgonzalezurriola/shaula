@@ -1,6 +1,7 @@
 # Shaula Agent Guidance
 
 This app doesn't have any users yet, don't make regression tests
+You can make non-smoke tests and use my screen, i will make the screenshot and you verify the result
 
 application is called **Shaula**.
 Use always the zig related skill.

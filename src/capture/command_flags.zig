@@ -33,6 +33,8 @@ pub const PreviousAreaFlags = struct {
     output: ?[]const u8 = null,
 };
 
+pub const AllInOneFlags = AreaFlags;
+
 pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
     var flags: AreaFlags = .{};
     var i: usize = 3;
@@ -186,6 +188,56 @@ pub fn parsePreviousAreaFlags(io: std.Io, argv: []const [*:0]const u8) !Previous
         }
 
         try command_json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "unsupported flag", false, "previous-area", null, false, &.{});
+        return error.CliUsage;
+    }
+    return flags;
+}
+
+pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlags {
+    var flags: AllInOneFlags = .{};
+    var i: usize = 3;
+    while (i < argv.len) : (i += 1) {
+        const arg = argToSlice(argv[i]);
+        if (std.mem.eql(u8, arg, "--json")) {
+            flags.json_mode = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--dry-run")) {
+            flags.dry_run = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--simulate-cancel")) {
+            flags.simulate_cancel = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--aspect")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--aspect requires a value", false, "all-in-one", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.aspect = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--output")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--output requires a path", false, "all-in-one", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.output = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--save")) {
+            flags.save = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--copy")) {
+            flags.copy = true;
+            continue;
+        }
+
+        try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "unsupported flag", false, "all-in-one", null, false, &.{});
         return error.CliUsage;
     }
     return flags;

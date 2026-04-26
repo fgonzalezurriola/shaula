@@ -62,8 +62,15 @@ pub fn writeSuccessJson(
 }
 
 pub fn writeAreaDryRunJson(allocator: std.mem.Allocator, io: std.Io, result: selection.SelectionResult) !void {
+    try writeSelectionDryRunJson(allocator, io, "capture area", result);
+}
+
+pub fn writeSelectionDryRunJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, result: selection.SelectionResult) !void {
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
+
+    const command_json = try jsonStringAlloc(allocator, command);
+    defer allocator.free(command_json);
 
     const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
@@ -82,8 +89,8 @@ pub fn writeAreaDryRunJson(allocator: std.mem.Allocator, io: std.Io, result: sel
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capture area\",\"timestamp\":{s},\"selection\":{{\"mode\":{s},\"aspect\":{s},\"geometry\":{s},\"cancelled\":false}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts_json, mode_json, aspect_json, geometry_json },
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"selection\":{{\"mode\":{s},\"aspect\":{s},\"geometry\":{s},\"cancelled\":false}},\"warnings\":[]}}\n",
+        .{ protocol.contract_version, command_json, ts_json, mode_json, aspect_json, geometry_json },
     );
     try stdout.interface.flush();
 }

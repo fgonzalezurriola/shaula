@@ -1,5 +1,7 @@
 const std = @import("std");
 const selection = @import("../selection/selection.zig");
+const all_in_one_session = @import("all_in_one_session.zig");
+const ui_state_store = @import("ui_state_store.zig");
 
 const OverlayHelperStatus = enum {
     ok,
@@ -59,18 +61,54 @@ pub fn runSelection(
 
     if (is_dry_run) {
         // Return deterministic base area coordinates for testing
-        return selection.SelectionResult{
+        const result = selection.SelectionResult{
             .mode = mode,
             .aspect = constraint.aspect,
             .geometry = .{ .x = 100, .y = 100, .width = 400, .height = 300 },
             .cancelled = false,
         };
+        persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
+        return result;
     }
 
     const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, constraint);
     switch (helper_attempt) {
-        .selection => |result| return result,
-        .fallback_to_slurp => return runSlurpSelection(allocator, io, mode, constraint),
+        .selection => |result| {
+            persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
+            return result;
+        },
+        .fallback_to_slurp => {
+            const result = runSlurpSelection(allocator, io, mode, constraint);
+            persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
+            return result;
+        },
+    }
+}
+
+/// Persists only the final valid all-in-one toolbar position after confirmation.
+///
+/// Contract constraint: cancelled or invalid selections never write UI state, so
+/// later sessions do not reuse fabricated positions after deterministic `ERR_*`
+/// overlay outcomes.
+fn persistToolbarPositionForSelection(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    result: selection.SelectionResult,
+) !void {
+    if (result.cancelled) return;
+    const geometry = result.geometry orelse return;
+
+    const persisted = try ui_state_store.load(allocator, io, environ);
+    var session = all_in_one_session.AllInOneSession.init(all_in_one_session.defaultOutput(), persisted);
+    session.updateSelection(.{
+        .x = geometry.x,
+        .y = geometry.y,
+        .width = geometry.width,
+        .height = geometry.height,
+    });
+    if (session.toolbar.position) |position| {
+        try ui_state_store.store(allocator, io, environ, position);
     }
 }
 
@@ -95,7 +133,7 @@ fn runHelperSelectionAttempt(
     const helper_bin = helperBinary(environ);
 
     const helper = std.process.run(allocator, io, .{
-        .argv = &.{ helper_bin },
+        .argv = &.{helper_bin},
         .stdout_limit = .limited(2048),
         .stderr_limit = .limited(2048),
     }) catch {
@@ -480,4 +518,24 @@ test "helper runner falls back to slurp on configured helper error class" {
         "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_PROTOCOL_INVALID\",\"message\":\"bad payload\"}}",
     );
     try std.testing.expect(!should_not_fallback);
+}
+
+test "confirmed selection persists toolbar position" {
+    var map = std.process.Environ.Map.init(std.testing.allocator);
+    defer map.deinit();
+    try map.put("SHAULA_TOOLBAR_POSITION_FILE", "/tmp/shaula/test-overlay-toolbar-position.v1");
+
+    const block = try map.createPosixBlock(std.testing.allocator, .{});
+    defer block.deinit(std.testing.allocator);
+
+    const result = selection.SelectionResult{
+        .mode = .freeform,
+        .aspect = null,
+        .geometry = .{ .x = 100, .y = 100, .width = 400, .height = 300 },
+        .cancelled = false,
+    };
+
+    try persistToolbarPositionForSelection(std.testing.allocator, std.testing.io, .{ .block = block }, result);
+    const loaded = try ui_state_store.load(std.testing.allocator, std.testing.io, .{ .block = block });
+    try std.testing.expect(loaded != null);
 }

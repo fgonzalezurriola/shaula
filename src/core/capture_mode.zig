@@ -13,13 +13,14 @@ pub const CaptureMode = enum {
 /// Contract constraints:
 /// - CLI tokens stay stable even if backend execution uses a different runtime
 ///   mode (`previous-area` currently reuses area capture underneath).
-/// - `all-in-one` remains representable here before it becomes a public CLI
-///   contract, avoiding mode growth from leaking into backend-specific enums.
+/// - `all-in-one` is a public UI mode that still executes through the area
+///   backend until the helper owns richer runtime actions.
 pub fn parseCliToken(token: []const u8) ?CaptureMode {
     if (std.mem.eql(u8, token, "area")) return .area;
     if (std.mem.eql(u8, token, "fullscreen")) return .fullscreen;
     if (std.mem.eql(u8, token, "window")) return .window;
     if (std.mem.eql(u8, token, "previous-area")) return .previous_area;
+    if (std.mem.eql(u8, token, "all-in-one")) return .all_in_one;
     return null;
 }
 
@@ -39,7 +40,7 @@ pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
         .fullscreen => "fullscreen",
         .window => "window",
         .previous_area => "area",
-        .all_in_one => null,
+        .all_in_one => "area",
     };
 }
 
@@ -53,10 +54,10 @@ pub fn requiresInteractiveSelection(mode: CaptureMode) bool {
 test "cli token parsing keeps dashed modes deterministic" {
     try std.testing.expectEqual(CaptureMode.area, parseCliToken("area") orelse return error.TestExpectedEqual);
     try std.testing.expectEqual(CaptureMode.previous_area, parseCliToken("previous-area") orelse return error.TestExpectedEqual);
-    try std.testing.expect(parseCliToken("all-in-one") == null);
+    try std.testing.expectEqual(CaptureMode.all_in_one, parseCliToken("all-in-one") orelse return error.TestExpectedEqual);
 }
 
 test "backend mode token keeps previous-area on area runtime lane" {
     try std.testing.expectEqualStrings("area", backendModeToken(.previous_area) orelse return error.TestExpectedEqual);
-    try std.testing.expect(backendModeToken(.all_in_one) == null);
+    try std.testing.expectEqualStrings("area", backendModeToken(.all_in_one) orelse return error.TestExpectedEqual);
 }

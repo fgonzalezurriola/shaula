@@ -44,8 +44,77 @@ pub fn run(
         .fullscreen => runFullscreen(allocator, io, environ, argv),
         .window => runWindow(allocator, io, environ, argv),
         .previous_area => runPreviousArea(allocator, io, environ, argv),
-        .all_in_one => unreachable,
+        .all_in_one => runAllInOne(allocator, io, environ, argv),
     };
+}
+
+/// Execute `capture all-in-one`.
+///
+/// This first public all-in-one iteration keeps backend execution on the proven
+/// area lane while using the dedicated all-in-one session state for toolbar
+/// placement and persistence. Unsupported overlay/helper failures still map to
+/// deterministic `ERR_*` outcomes or the explicit slurp fallback.
+fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const reported_mode = core_capture_mode.cliToken(.all_in_one);
+    const backend_mode = core_capture_mode.backendModeToken(.all_in_one) orelse reported_mode;
+    const parsed = flags.parseAllInOneFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    if (!parsed.json_mode) {
+        try json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--json is required", false, reported_mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    }
+
+    const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
+    const use_overlay_dry_run = parsed.dry_run or force_noninteractive_selection;
+    const selection_result = try overlay.runSelection(
+        allocator,
+        io,
+        environ,
+        selection.SelectionMode.freeform,
+        .{ .aspect = parsed.aspect },
+        use_overlay_dry_run,
+        parsed.simulate_cancel,
+    );
+    if (selection_result.cancelled) {
+        const overlay_code = overlay.deterministicFailureCode(environ, parsed.simulate_cancel, true);
+        if (overlay_code) |code| {
+            const spec = recovery_policy.specFor(code);
+            try json.writeErrorJson(io, "capture all-in-one", spec.code, spec.message, spec.retryable, reported_mode, null, false, &.{});
+            return recovery_policy.exitCodeFor(spec.code);
+        }
+
+        try json.writeErrorJson(io, "capture all-in-one", "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, reported_mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_SELECTION_CANCELLED");
+    }
+
+    if (parsed.dry_run) {
+        try json.writeSelectionDryRunJson(allocator, io, "capture all-in-one", selection_result);
+        return 0;
+    }
+
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture all-in-one", backend_mode);
+    if (unsupported_rc) |code| return code;
+
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture all-in-one", backend_mode) catch |err| switch (err) {
+        error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
+        else => return err,
+    };
+
+    var outcome = try capture_backend.execute(allocator, io, environ, .{
+        .mode = .area,
+        .output_path = parsed.output,
+        .area_geometry = capture_types.areaGeometryFromSelection(selection_result.geometry),
+    });
+    defer capture_backend.deinitOutcome(allocator, &outcome);
+    if (capture_types.areaGeometryFromSelection(selection_result.geometry)) |geometry| {
+        switch (outcome) {
+            .success => previous_area_store.store(allocator, io, environ, geometry) catch {},
+            .failure => {},
+        }
+    }
+    return writeCaptureOutcome(allocator, io, environ, "capture all-in-one", reported_mode, &outcome, .{
+        .save = parsed.save,
+        .copy = parsed.copy,
+    }, precondition_warning);
 }
 
 /// Execute `capture area`.

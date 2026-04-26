@@ -30,3 +30,11 @@ Performance budgets are enforced via the following QA scripts:
 - `scripts/qa/benchmark-daemon-idle.sh`
 
 Failure to meet these budgets results in a build/deployment block under the `ERR_PERFORMANCE_GATE_FAILURE` token.
+
+## Measurement Interpretation
+
+- Productive CLI timings such as `capture area ~= 12ms`, `capture fullscreen ~= 16ms`, and `capture previous-area ~= 12ms` are valid indicators for the current capture hot path and are comfortably below the `<= 150ms` p95 budget for area/fullscreen capture.
+- `previous-area` should remain close to `area` latency because it reuses persisted selection geometry instead of opening an interactive selection flow.
+- An `overlay_first_paint` report of `0.0ms` with `status: "degraded"` is not evidence of a real overlay first-paint measurement; it usually means intrusive interactive benchmarking was disabled by policy.
+- A `capture_completion` report marked `degraded` or carrying `ERR_CAPTURE_MODE_UNSUPPORTED` must not be treated as a productive latency datapoint for the shipped flow.
+- CleanShot-like UX validation remains incomplete until the real interactive overlay helper is measured under an allowed interactive benchmark lane.

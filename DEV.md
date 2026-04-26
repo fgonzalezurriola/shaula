@@ -9,6 +9,7 @@ Shaula es un CLI de captura para Niri/Wayland con contratos JSON estables. La me
 Superficie soportada:
 
 - `capture area`
+- `capture all-in-one`
 - `capture fullscreen`
 - `capture window`
 - `capture previous-area`
@@ -69,6 +70,9 @@ export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_hel
 
 # Binario alternativo para el helper de overlay.
 export SHAULA_OVERLAY_HELPER_BIN="$(pwd)/zig-out/bin/shaula-overlay"
+
+# Strategy del helper visual: auto | gtk4-layer-shell | raylib | raylib-clay.
+export SHAULA_OVERLAY_HELPER_STRATEGY=gtk4-layer-shell
 ```
 
 ## Uso del software
@@ -88,6 +92,12 @@ Captura de área interactiva:
 
 ```bash
 ./zig-out/bin/shaula capture area --json
+```
+
+Captura all-in-one:
+
+```bash
+./zig-out/bin/shaula capture all-in-one --json
 ```
 
 Captura de área con aspecto fijo:
@@ -123,12 +133,18 @@ Modos de prueba:
 
 ```bash
 ./zig-out/bin/shaula capture area --json --dry-run
+./zig-out/bin/shaula capture all-in-one --json --dry-run
 ./zig-out/bin/shaula capture area --json --simulate-cancel
 ```
 
 Notas del overlay:
 
 - Si el helper gráfico real no está disponible, Shaula cae a `slurp`.
+- `capture all-in-one` usa la ruta de captura de área y persiste la última
+  posición válida de la toolbar; no muestra acciones no implementadas.
+- `shaula-overlay` usa strategy seleccionable. En este árbol, `gtk4-layer-shell`
+  funciona si PyGObject/GTK4 están disponibles; `raylib` y `raylib-clay`
+  requieren compilar dependencias reales en vez de stubs.
 - Si no hay backend interactivo real, Shaula ya no inventa una selección exitosa implícita.
 - `capture previous-area` falla con `ERR_PREVIOUS_AREA_UNAVAILABLE` hasta que exista una geometría de área válida en runtime.
 - `--dry-run` queda reservado para pruebas y QA.
@@ -179,6 +195,26 @@ SHAULA_QA_PROFILE=fast bash scripts/qa/run-all-tests.sh
 SHAULA_QA_PROFILE=full bash scripts/qa/run-all-tests.sh
 SHAULA_QA_PROFILE=debug QA_KEEP_ARTIFACTS=1 bash scripts/qa/run-all-tests.sh
 ```
+
+## Cómo leer los números
+
+Resultados típicos sanos observados en la ruta crítica actual:
+
+- `capture area`: ~`12ms`
+- `capture fullscreen`: ~`16ms`
+- `capture previous-area`: ~`12ms`
+
+Interpretación:
+
+- Esos valores sí validan bien la latencia actual del hot path de captura por CLI.
+- Si están en ese rango, Shaula está muy por debajo del presupuesto documentado de `<= 150ms` p95 para `area` y `fullscreen`.
+- `capture previous-area` debería mantenerse cerca de `area`, porque reutiliza geometría persistida y evita selección interactiva.
+
+Limitaciones importantes al leer QA/benchmarks:
+
+- `overlay_first_paint` con `0.0ms` en modo `degraded` no mide el overlay real; normalmente significa que la política de QA no permitió la parte interactiva.
+- `capture_completion` en estado `degraded` con `ERR_CAPTURE_MODE_UNSUPPORTED` tampoco debe tomarse como benchmark productivo del flujo real.
+- Para validar la UX tipo CleanShot X todavía hace falta medir el helper interactivo real, no solo el backend de captura.
 
 ## Scripts QA relevantes
 

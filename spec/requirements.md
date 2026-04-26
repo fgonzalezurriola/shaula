@@ -6,6 +6,7 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 
 | Capability | Status | Contract Notes |
 | :--- | :--- | :--- |
+| All-in-one capture | Supported initial iteration | Uses area capture backend with persisted toolbar UI state and honest helper fallback. |
 | Area capture | Supported | Interactive selection with deterministic `ERR_*` outcomes. |
 | Fullscreen capture | Supported | Runtime backend only, no productive stub success path. |
 | Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
