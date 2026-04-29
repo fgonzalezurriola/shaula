@@ -75,7 +75,8 @@ Go/No-Go:
 
 Focus:
 
-- floating post-capture preview,
+- explicit `preview <file>` post-capture window,
+- automatic preview launch after capture once the explicit command is stable,
 - basic editor with crop,
 - pixelate/redaction,
 - arrows and rectangles,

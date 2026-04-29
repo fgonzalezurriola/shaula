@@ -15,6 +15,7 @@ const capabilities_probe = @import("capabilities/probe.zig");
 const capture_command = @import("capture/command.zig");
 const history_command = @import("history/command.zig");
 const clipboard_command = @import("clipboard/command.zig");
+const preview_command = @import("preview/command.zig");
 const errors_command = @import("errors/command.zig");
 const recovery_policy = @import("recovery/policy.zig");
 
@@ -24,7 +25,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = init.minimal.args.vector;
 
     if (argv.len < 2) {
-        try daemon_json.writeErrorJson(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|daemon|preflight|capabilities|history|clipboard|errors> ... --json", false);
+        try daemon_json.writeErrorJson(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|daemon|preflight|capabilities|history|clipboard|errors> ... --json", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -72,6 +73,10 @@ pub fn main(init: std.process.Init) !u8 {
 
     if (std.mem.eql(u8, family, "clipboard")) {
         return clipboard_command.run(allocator, io, init.minimal.environ, argv);
+    }
+
+    if (std.mem.eql(u8, family, "preview")) {
+        return preview_command.run(allocator, io, init.minimal.environ, argv);
     }
 
     if (std.mem.eql(u8, family, "errors")) {

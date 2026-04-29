@@ -26,8 +26,9 @@ Core:
 
 App:
   preflight      Build, then run preflight + capabilities
-  capture        Build, then run capture area --json
-  all            Build, then run capture all-in-one --json
+ capture Build, then run capture area --json
+ fullscreen Build, then run capture fullscreen --json
+ all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
   errors         Build, then list ERR_* taxonomy
 
@@ -163,10 +164,13 @@ release)
     "${SHAULA_BIN}" preflight --json | jq
     "${SHAULA_BIN}" capabilities list --json | jq
     ;;
-  capture)
-    run_shaula capture area --json "$@"
-    ;;
-  all)
+capture)
+	run_shaula capture area --json "$@"
+	;;
+fullscreen)
+	run_shaula capture fullscreen --json "$@"
+	;;
+all)
     run_shaula capture all-in-one --json "$@"
     ;;
   overlay)

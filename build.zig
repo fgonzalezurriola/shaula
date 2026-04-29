@@ -28,6 +28,10 @@ pub fn build(b: *std.Build) void {
     const install_overlay_helper = b.addInstallFileWithDir(overlay_helper_bin, .bin, "shaula-overlay");
     b.getInstallStep().dependOn(&install_overlay_helper.step);
 
+    const preview_helper_bin = buildNativeGtkPreviewHelper(b);
+    const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
+    b.getInstallStep().dependOn(&install_preview_helper.step);
+
     const run_overlay_helper_cmd = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -70,5 +74,21 @@ fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
     });
     const output = command.addOutputFileArg("shaula-overlay");
     command.addFileArg(b.path("src/overlay/native_gtk_overlay.c"));
+    return output;
+}
+
+fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  "$2" \
+        \\  -o "$1" \
+\\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
+,
+        "build-shaula-preview",
+    });
+    const output = command.addOutputFileArg("shaula-preview");
+    command.addFileArg(b.path("src/preview/native_gtk_preview.c"));
     return output;
 }

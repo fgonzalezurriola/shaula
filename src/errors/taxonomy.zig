@@ -69,6 +69,8 @@ const specs = [_]ErrorSpec{
     .{ .code = "ERR_OVERLAY_PROTOCOL_INVALID", .message = "overlay helper produced invalid protocol payload", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 38 },
     .{ .code = "ERR_CLIPBOARD_IMPORT_INVALID", .message = "clipboard image import failed", .retryable = false, .class = .clipboard, .action = .fail_fast, .exit_code = 41 },
     .{ .code = "ERR_CLIPBOARD_COPY_FAILED", .message = "clipboard image copy failed", .retryable = false, .class = .clipboard, .action = .fail_fast, .exit_code = 42 },
+    .{ .code = "ERR_PREVIEW_INPUT_INVALID", .message = "preview input image is invalid", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 43 },
+    .{ .code = "ERR_PREVIEW_UNAVAILABLE", .message = "preview helper is unavailable", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 44 },
     .{ .code = "ERR_HISTORY_STORE_UNAVAILABLE", .message = "history store unavailable", .retryable = false, .class = .output, .action = .degrade_continue, .exit_code = 50 },
     .{ .code = "ERR_HISTORY_ENTRY_NOT_FOUND", .message = "history entry was not found", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 52 },
     .{ .code = "ERR_OUTPUT_PATH_INVALID", .message = "output path is not writable", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 51 },

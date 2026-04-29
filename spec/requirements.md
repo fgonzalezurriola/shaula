@@ -12,6 +12,7 @@ Shaula is scoped as a Niri-first capture tool with deterministic CLI/JSON contra
 | Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
 | Previous area capture | Supported | Reuses the last confirmed area rectangle with deterministic `ERR_PREVIOUS_AREA_UNAVAILABLE`. |
 | Clipboard copy/import | Supported | `clipboard copy-image` and `clipboard import-image`. |
+| Post-capture preview | Supported initial iteration | `preview <file>` opens a GTK window with copy, save-as, discard, fit, 100%, zoom, and pan. |
 | History list/show | Supported | Top-N 20, newest-first, stable `latest` alias. |
 | Output path default | Supported | Defaults to `~/Pictures/Shaula`. |
 | Overlay helper contract | Supported | Helper protocol maps deterministically to `SelectionResult`. |
@@ -58,7 +59,7 @@ Low-hanging fruit:
 Deferred heavier UX work:
 
 - Replacing the overlay visual model.
-- Full post-capture preview/editor.
+- Full post-capture editor.
 - Annotation tools beyond simple geometry.
 - Pinning screenshots if compositor behavior requires a separate window/layer strategy.
 - Pixelate/redaction if it requires a new image-editing pipeline.
@@ -84,7 +85,7 @@ Deferred heavier UX work:
 
 | Priority | Candidate | Contract Gate |
 | :--- | :--- | :--- |
-| High | Floating post-capture preview | Must stay outside capture hot-path completion. |
+| High | Floating post-capture preview | Initial explicit `preview <file>` command is supported; automatic post-capture launch remains gated. |
 | High | Basic editor with crop | Editor failures must not corrupt the original artifact. |
 | High | Pixelate/redaction | Redaction output must be deterministic for release QA. |
 | High | Arrows and rectangles | Annotation data model must be versioned before persistence. |

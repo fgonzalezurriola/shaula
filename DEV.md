@@ -59,6 +59,7 @@ Run `./dev doctor` to check the local machine.
 ./dev run capture area --json --aspect 16:9
 ./dev run capture all-in-one --json
 ./dev run capture previous-area --json
+./dev run preview ~/Pictures/Shaula/example.png --json
 ./dev run history list --json
 ./dev run errors list --json
 ```

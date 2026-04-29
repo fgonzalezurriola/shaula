@@ -23,9 +23,10 @@ See [spec/algo.md](algo.md) for the central technical blueprint and decision reg
 ```text
 shaula <command-family> <command> [flags]
 
-command-family := capture | daemon | capabilities | history | clipboard
+command-family := capture | preview | daemon | capabilities | history | clipboard
 
 capture command := all-in-one | area | fullscreen | window | previous-area
+preview command := <file>
 daemon command := start | status | stop
 capabilities command := list
 history command := list | show
@@ -43,6 +44,10 @@ All commands below require `--json` for contract-compliant automation.
 - `shaula capture fullscreen --json [--copy] [--save] [--output <path>]`
 - `shaula capture window --json [--copy] [--save] [--output <path>] [--window-id <id>]`
 - `shaula capture previous-area --json [--copy] [--save] [--output <path>]`
+
+#### Preview family
+
+- `shaula preview <file> --json`
 
 #### Daemon family
 
@@ -148,6 +153,11 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - `ERR_CLIPBOARD_UNAVAILABLE`
 - `ERR_CLIPBOARD_IMPORT_INVALID`
 - `ERR_CLIPBOARD_COPY_FAILED`
+
+#### Preview `ERR_*`
+
+- `ERR_PREVIEW_INPUT_INVALID`
+- `ERR_PREVIEW_UNAVAILABLE`
 
 ## Process Topology
 
