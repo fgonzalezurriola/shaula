@@ -4,65 +4,101 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <unistd.h>
 
 enum {
-    TOOLBAR_W = 312,
-    TOOLBAR_H = 52,
-    PADDING = 12,
-    HANDLE_CLEARANCE = 18,
-    BADGE_CLEARANCE = 30,
-    JITTER = 6,
-    HANDLE_SIZE = 10,
+  TOOLBAR_W = 326,
+  TOOLBAR_H = 48,
+  PADDING = 12,
+  HANDLE_CLEARANCE = 18,
+  BADGE_CLEARANCE = 30,
+  JITTER = 6,
+  HANDLE_SIZE = 10,
+  PILL_RADIUS = 8,
+  TOOLBAR_RADIUS = 14,
+  BADGE_RADIUS = 8,
+  DROPDOWN_ITEM_H = 32,
+  DROPDOWN_PADDING = 6,
+  DROPDOWN_RADIUS = 10,
 };
 
+typedef enum {
+  ASPECT_FREE,
+  ASPECT_16_9,
+  ASPECT_4_3,
+  ASPECT_1_1,
+  ASPECT_3_2,
+  ASPECT_9_16,
+  ASPECT_COUNT,
+} ShaulaAspectChoice;
+
+static const char *ASPECT_LABELS[ASPECT_COUNT] = {
+  "Free", "16:9", "4:3", "1:1", "3:2", "9:16"
+};
+
+static const int ASPECT_WIDTHS[ASPECT_COUNT] =  { 0, 16, 4, 1, 3, 9 };
+static const int ASPECT_HEIGHTS[ASPECT_COUNT] = { 0, 9,  3, 1, 2, 16 };
+
 typedef struct {
-    int x;
-    int y;
-    int width;
-    int height;
+  int x;
+  int y;
+  int width;
+  int height;
 } ShaulaRect;
 
 typedef struct {
-    int x;
-    int y;
+  int x;
+  int y;
 } ShaulaPoint;
 
 typedef struct {
-    int width;
-    int height;
+  int width;
+  int height;
 } ShaulaAspect;
 
 typedef enum {
-    DRAG_NONE,
-    DRAG_CREATE,
-    DRAG_MOVE,
-    DRAG_TOOLBAR,
+  DRAG_NONE,
+  DRAG_CREATE,
+  DRAG_MOVE,
+  DRAG_TOOLBAR,
 } ShaulaDragMode;
 
 typedef struct {
-    GtkApplication *app;
-    GtkWidget *window;
-    GtkWidget *area;
-    GdkPixbuf *background;
-    gboolean has_selection;
-    ShaulaRect selection;
-    gboolean has_toolbar;
-    ShaulaPoint toolbar;
-    gboolean has_aspect;
-    ShaulaAspect aspect;
-    ShaulaDragMode drag_mode;
-    ShaulaPoint drag_start;
-    ShaulaRect drag_origin;
+  GtkApplication *app;
+  GtkWidget *window;
+  GtkWidget *area;
+  GdkPixbuf *background;
+  gboolean has_selection;
+  ShaulaRect selection;
+  gboolean has_toolbar;
+  ShaulaPoint toolbar;
+  gboolean has_aspect;
+  ShaulaAspect aspect;
+  ShaulaDragMode drag_mode;
+  ShaulaPoint drag_start;
+  ShaulaRect drag_origin;
+  gboolean dropdown_open;
+  ShaulaAspectChoice aspect_choice;
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
 
 static int clamp_int(int value, int low, int high) {
-    if (high < low) return low;
-    if (value < low) return low;
-    if (value > high) return high;
-    return value;
+  if (high < low) return low;
+  if (value < low) return low;
+  if (value > high) return high;
+  return value;
+}
+
+static void rounded_rect(cairo_t *cr, double x, double y, double w, double h, double r) {
+  r = fmin(r, fmin(w, h) / 2.0);
+  cairo_new_sub_path(cr);
+  cairo_arc(cr, x + r, y + r, r, G_PI, 1.5 * G_PI);
+  cairo_arc(cr, x + w - r, y + r, r, 1.5 * G_PI, 2.0 * G_PI);
+  cairo_arc(cr, x + w - r, y + h - r, r, 0, 0.5 * G_PI);
+  cairo_arc(cr, x + r, y + h - r, r, 0.5 * G_PI, G_PI);
+  cairo_close_path(cr);
 }
 
 static ShaulaPoint output_size(void) {
@@ -167,18 +203,62 @@ static void update_toolbar(void) {
     state.has_toolbar = TRUE;
 }
 
+static gboolean toolbar_aspect_hit(ShaulaPoint point) {
+  if (!state.has_toolbar) return FALSE;
+  ShaulaPoint t = state.toolbar;
+  return point.x >= t.x + 10 && point.x <= t.x + 110 &&
+         point.y >= t.y + 9 && point.y <= t.y + 39;
+}
+
 static gboolean toolbar_capture_hit(ShaulaPoint point) {
-    if (!state.has_toolbar) return FALSE;
-    ShaulaPoint t = state.toolbar;
-    return point.x >= t.x + 174 && point.x <= t.x + 248 &&
-        point.y >= t.y + 11 && point.y <= t.y + 41;
+  if (!state.has_toolbar) return FALSE;
+  ShaulaPoint t = state.toolbar;
+  return point.x >= t.x + 178 && point.x <= t.x + 252 &&
+         point.y >= t.y + 9 && point.y <= t.y + 39;
 }
 
 static gboolean toolbar_cancel_hit(ShaulaPoint point) {
-    if (!state.has_toolbar) return FALSE;
-    ShaulaPoint t = state.toolbar;
-    return point.x >= t.x + 258 && point.x <= t.x + 300 &&
-        point.y >= t.y + 11 && point.y <= t.y + 41;
+  if (!state.has_toolbar) return FALSE;
+  ShaulaPoint t = state.toolbar;
+  return point.x >= t.x + 260 && point.x <= t.x + 316 &&
+         point.y >= t.y + 9 && point.y <= t.y + 39;
+}
+
+static int dropdown_item_at(ShaulaPoint point) {
+  if (!state.dropdown_open || !state.has_toolbar) return -1;
+  ShaulaPoint t = state.toolbar;
+  int dd_x = t.x + 10;
+  int dd_y = t.y - DROPDOWN_PADDING - ASPECT_COUNT * DROPDOWN_ITEM_H;
+  int dd_w = 100;
+  int dd_h = DROPDOWN_PADDING * 2 + ASPECT_COUNT * DROPDOWN_ITEM_H;
+  if (point.x < dd_x || point.x > dd_x + dd_w || point.y < dd_y || point.y > dd_y + dd_h) return -1;
+  int relative_y = point.y - dd_y - DROPDOWN_PADDING;
+  if (relative_y < 0) return -1;
+  int idx = relative_y / DROPDOWN_ITEM_H;
+  return idx < ASPECT_COUNT ? idx : -1;
+}
+
+static void apply_aspect_choice(void) {
+  if (state.aspect_choice == ASPECT_FREE) {
+    state.has_aspect = FALSE;
+  } else {
+    state.has_aspect = TRUE;
+    state.aspect = (ShaulaAspect){
+      .width = ASPECT_WIDTHS[(int)state.aspect_choice],
+      .height = ASPECT_HEIGHTS[(int)state.aspect_choice],
+    };
+  }
+  if (state.has_selection && state.has_aspect) {
+    ShaulaPoint bounds = output_size();
+    int w = state.selection.width;
+    int h = state.selection.height;
+    apply_aspect(&w, &h, state.aspect);
+    ShaulaRect adj = { .x = state.selection.x, .y = state.selection.y, .width = w, .height = h };
+    if (clamp_selection(adj, bounds, &adj)) {
+      state.selection = adj;
+    }
+  }
+  state.dropdown_open = FALSE;
 }
 
 static void draw_background(cairo_t *cr, int width, int height) {
@@ -190,89 +270,213 @@ static void draw_background(cairo_t *cr, int width, int height) {
     g_object_unref(scaled);
 }
 
-static void draw_pill(cairo_t *cr, int x, int y, int width, int height, const char *label, double r, double g, double b, double a) {
+static void draw_pill(cairo_t *cr, int x, int y, int width, int height, const char *label, double r, double g, double b, double a, gboolean active) {
+  double rx = (double)x;
+  double ry = (double)y;
+  double rw = (double)width;
+  double rh = (double)height;
+
+  rounded_rect(cr, rx, ry, rw, rh, PILL_RADIUS);
+  if (active) {
     cairo_set_source_rgba(cr, r, g, b, a);
-    cairo_rectangle(cr, x, y, width, height);
-    cairo_fill(cr);
-    cairo_set_source_rgba(cr, 1, 1, 1, 0.95);
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, 13);
-    cairo_move_to(cr, x + 10, y + 19);
-    cairo_show_text(cr, label);
+  } else {
+    cairo_set_source_rgba(cr, r * 0.8, g * 0.8, b * 0.8, 0.45);
+  }
+  cairo_fill_preserve(cr);
+
+  cairo_set_source_rgba(cr, 1, 1, 1, active ? 0.12 : 0.06);
+  cairo_set_line_width(cr, 1);
+  cairo_stroke(cr);
+
+  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+  cairo_set_font_size(cr, 12.5);
+  cairo_text_extents_t extents;
+  cairo_text_extents(cr, label, &extents);
+  double text_x = rx + (rw - extents.width) / 2 - extents.x_bearing;
+  double text_y = ry + (rh - extents.height) / 2 - extents.y_bearing;
+  cairo_move_to(cr, text_x, text_y);
+  cairo_set_source_rgba(cr, 1, 1, 1, active ? 0.95 : 0.5);
+  cairo_show_text(cr, label);
+}
+
+static void draw_chevron(cairo_t *cr, double cx, double cy, gboolean open) {
+  double s = 3.5;
+  cairo_set_line_width(cr, 1.5);
+  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.5);
+  cairo_move_to(cr, cx - s, open ? cy + s : cy - s);
+  cairo_line_to(cr, cx, open ? cy : cy);
+  cairo_line_to(cr, cx + s, open ? cy + s : cy - s);
+  cairo_stroke(cr);
 }
 
 static void draw_handles(cairo_t *cr, ShaulaRect s) {
-    ShaulaPoint points[8] = {
-        { s.x, s.y },
-        { s.x + s.width / 2, s.y },
-        { s.x + s.width, s.y },
-        { s.x + s.width, s.y + s.height / 2 },
-        { s.x + s.width, s.y + s.height },
-        { s.x + s.width / 2, s.y + s.height },
-        { s.x, s.y + s.height },
-        { s.x, s.y + s.height / 2 },
-    };
-    cairo_set_source_rgba(cr, 1, 1, 1, 1);
-    for (int i = 0; i < 8; i += 1) {
-        cairo_rectangle(cr, points[i].x - HANDLE_SIZE / 2, points[i].y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
-        cairo_fill(cr);
-    }
+  double hw = 6;
+  double hh = 6;
+  ShaulaPoint points[8] = {
+    { s.x, s.y },
+    { s.x + s.width / 2, s.y },
+    { s.x + s.width, s.y },
+    { s.x + s.width, s.y + s.height / 2 },
+    { s.x + s.width, s.y + s.height },
+    { s.x + s.width / 2, s.y + s.height },
+    { s.x, s.y + s.height },
+    { s.x, s.y + s.height / 2 },
+  };
+  for (int i = 0; i < 8; i += 1) {
+    double px = (double)points[i].x;
+    double py = (double)points[i].y;
+    rounded_rect(cr, px - hw / 2, py - hh / 2, hw, hh, 2);
+    cairo_set_source_rgba(cr, 1, 1, 1, 0.9);
+    cairo_fill_preserve(cr);
+    cairo_set_source_rgba(cr, 0, 0, 0, 0.3);
+    cairo_set_line_width(cr, 1);
+    cairo_stroke(cr);
+  }
 }
 
 static void draw_badge(cairo_t *cr, ShaulaRect s) {
-    int y = MAX(8, s.y - 30);
-    char label[32];
-    snprintf(label, sizeof(label), "%d x %d", s.width, s.height);
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.72);
-    cairo_rectangle(cr, s.x, y, 98, 24);
-    cairo_fill(cr);
-    cairo_set_source_rgba(cr, 1, 1, 1, 0.95);
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, 13);
-    cairo_move_to(cr, s.x + 8, y + 16);
-    cairo_show_text(cr, label);
+  int y = MAX(8, s.y - 32);
+  char label[32];
+  snprintf(label, sizeof(label), "%d x %d", s.width, s.height);
+  double badge_w = 108;
+  double badge_h = 26;
+  double badge_x = (double)s.x;
+  double badge_y = (double)y;
+
+  rounded_rect(cr, badge_x, badge_y, badge_w, badge_h, BADGE_RADIUS);
+  cairo_set_source_rgba(cr, 0.06, 0.06, 0.08, 0.82);
+  cairo_fill_preserve(cr);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.08);
+  cairo_set_line_width(cr, 0.5);
+  cairo_stroke(cr);
+
+  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+  cairo_set_font_size(cr, 12);
+  cairo_text_extents_t extents;
+  cairo_text_extents(cr, label, &extents);
+  double text_x = badge_x + (badge_w - extents.width) / 2 - extents.x_bearing;
+  double text_y = badge_y + (badge_h - extents.height) / 2 - extents.y_bearing;
+  cairo_move_to(cr, text_x, text_y);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.85);
+  cairo_show_text(cr, label);
 }
 
 static void draw_toolbar(cairo_t *cr, ShaulaPoint t, gboolean enabled) {
-    cairo_set_source_rgba(cr, 0.03, 0.035, 0.04, 0.90);
-    cairo_rectangle(cr, t.x, t.y, TOOLBAR_W, TOOLBAR_H);
-    cairo_fill(cr);
-    draw_pill(cr, t.x + 12, t.y + 11, 92, 30, state.has_aspect ? "Aspect" : "Free", 0.18, 0.19, 0.22, 1);
-    draw_pill(cr, t.x + 112, t.y + 11, 52, 30, "Area", 0.24, 0.37, 0.58, 1);
-    if (enabled) {
-        draw_pill(cr, t.x + 174, t.y + 11, 74, 30, "Capture", 0.15, 0.52, 0.35, 1);
-    } else {
-        draw_pill(cr, t.x + 174, t.y + 11, 74, 30, "Capture", 0.20, 0.24, 0.22, 0.9);
+  double tx = (double)t.x;
+  double ty = (double)t.y;
+
+  cairo_set_source_rgba(cr, 0, 0, 0, 0.25);
+  rounded_rect(cr, tx + 1, ty + 3, TOOLBAR_W, TOOLBAR_H, TOOLBAR_RADIUS + 1);
+  cairo_fill(cr);
+
+  rounded_rect(cr, tx, ty, TOOLBAR_W, TOOLBAR_H, TOOLBAR_RADIUS);
+  cairo_set_source_rgba(cr, 0.10, 0.10, 0.13, 0.78);
+  cairo_fill_preserve(cr);
+
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.10);
+  cairo_set_line_width(cr, 0.8);
+  cairo_stroke(cr);
+
+  rounded_rect(cr, tx + 1, ty + 1, TOOLBAR_W - 2, 1, 0);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.06);
+  cairo_fill(cr);
+
+  const char *aspect_lbl = ASPECT_LABELS[state.aspect_choice];
+  draw_pill(cr, t.x + 10, t.y + 9, 100, 30, aspect_lbl, 0.28, 0.52, 0.83, 0.55, TRUE);
+  draw_chevron(cr, tx + 10 + 100 - 16, ty + 9 + 15, state.dropdown_open);
+
+  draw_pill(cr, t.x + 118, t.y + 9, 52, 30, "Area", 0.35, 0.42, 0.52, 0.4, TRUE);
+  if (enabled) {
+    draw_pill(cr, t.x + 178, t.y + 9, 74, 30, "Capture", 0.22, 0.72, 0.42, 0.6, TRUE);
+  } else {
+    draw_pill(cr, t.x + 178, t.y + 9, 74, 30, "Capture", 0.30, 0.33, 0.35, 0.3, FALSE);
+  }
+  draw_pill(cr, t.x + 260, t.y + 9, 56, 30, "Esc", 0.52, 0.28, 0.28, 0.4, TRUE);
+}
+
+static void draw_dropdown(cairo_t *cr, ShaulaPoint t) {
+  double dd_x = (double)(t.x + 10);
+  double dd_y = (double)(t.y - DROPDOWN_PADDING - ASPECT_COUNT * DROPDOWN_ITEM_H);
+  double dd_w = 100;
+  double dd_h = (double)(DROPDOWN_PADDING * 2 + ASPECT_COUNT * DROPDOWN_ITEM_H);
+
+  cairo_set_source_rgba(cr, 0, 0, 0, 0.20);
+  rounded_rect(cr, dd_x + 1, dd_y + 3, dd_w, dd_h, DROPDOWN_RADIUS + 1);
+  cairo_fill(cr);
+
+  rounded_rect(cr, dd_x, dd_y, dd_w, dd_h, DROPDOWN_RADIUS);
+  cairo_set_source_rgba(cr, 0.08, 0.08, 0.11, 0.92);
+  cairo_fill_preserve(cr);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.10);
+  cairo_set_line_width(cr, 0.5);
+  cairo_stroke(cr);
+
+  rounded_rect(cr, dd_x + 1, dd_y + 1, dd_w - 2, 1, 0);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.05);
+  cairo_fill(cr);
+
+  for (int i = 0; i < ASPECT_COUNT; i += 1) {
+    double item_y = dd_y + DROPDOWN_PADDING + i * DROPDOWN_ITEM_H;
+    double item_h = (double)DROPDOWN_ITEM_H;
+
+    if (i == (int)state.aspect_choice) {
+      rounded_rect(cr, dd_x + 4, item_y + 2, dd_w - 8, item_h - 4, 6);
+      cairo_set_source_rgba(cr, 0.28, 0.52, 0.83, 0.25);
+      cairo_fill(cr);
     }
-    draw_pill(cr, t.x + 258, t.y + 11, 42, 30, "Esc", 0.32, 0.19, 0.19, 1);
+
+    if (i < ASPECT_COUNT - 1) {
+      cairo_set_source_rgba(cr, 1, 1, 1, 0.05);
+      cairo_set_line_width(cr, 0.5);
+      cairo_move_to(cr, dd_x + 10, item_y + item_h);
+      cairo_line_to(cr, dd_x + dd_w - 10, item_y + item_h);
+      cairo_stroke(cr);
+    }
+
+    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, i == (int)state.aspect_choice ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, 12.5);
+    cairo_text_extents_t extents;
+    cairo_text_extents(cr, ASPECT_LABELS[i], &extents);
+    double text_x = dd_x + (dd_w - extents.width) / 2 - extents.x_bearing;
+    double text_y = item_y + (item_h - extents.height) / 2 - extents.y_bearing;
+    cairo_move_to(cr, text_x, text_y);
+    cairo_set_source_rgba(cr, 1, 1, 1, i == (int)state.aspect_choice ? 0.95 : 0.6);
+    cairo_show_text(cr, ASPECT_LABELS[i]);
+  }
 }
 
 static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer data) {
-    (void)area;
-    (void)data;
-    draw_background(cr, width, height);
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.48);
-    cairo_rectangle(cr, 0, 0, width, height);
-    cairo_fill(cr);
+  (void)area;
+  (void)data;
+  draw_background(cr, width, height);
+  cairo_set_source_rgba(cr, 0, 0, 0, 0.42);
+  cairo_rectangle(cr, 0, 0, width, height);
+  cairo_fill(cr);
 
-    if (state.has_selection) {
-        ShaulaRect s = state.selection;
-        if (state.background != NULL) {
-            cairo_save(cr);
-            cairo_rectangle(cr, s.x, s.y, s.width, s.height);
-            cairo_clip(cr);
-            draw_background(cr, width, height);
-            cairo_restore(cr);
-        }
-        cairo_set_source_rgba(cr, 1, 1, 1, 0.96);
-        cairo_set_line_width(cr, 2);
-        cairo_rectangle(cr, s.x + 0.5, s.y + 0.5, s.width, s.height);
-        cairo_stroke(cr);
-        draw_handles(cr, s);
-        draw_badge(cr, s);
+  if (state.has_selection) {
+    ShaulaRect s = state.selection;
+    if (state.background != NULL) {
+      cairo_save(cr);
+      cairo_rectangle(cr, s.x, s.y, s.width, s.height);
+      cairo_clip(cr);
+      draw_background(cr, width, height);
+      cairo_restore(cr);
     }
+    rounded_rect(cr, (double)s.x, (double)s.y, (double)s.width, (double)s.height, 2);
+    cairo_set_source_rgba(cr, 1, 1, 1, 0.85);
+    cairo_set_line_width(cr, 1.5);
+    cairo_stroke(cr);
+    draw_handles(cr, s);
+    draw_badge(cr, s);
+  }
 
-    draw_toolbar(cr, state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING }, state.has_selection);
+  ShaulaPoint t = state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING };
+  draw_toolbar(cr, t, state.has_selection);
+
+  if (state.dropdown_open) {
+    draw_dropdown(cr, t);
+  }
 }
 
 static void confirm(void) {
@@ -290,26 +494,46 @@ static void cancel(void) {
 }
 
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer data) {
-    (void)gesture;
-    (void)data;
-    ShaulaPoint p = { .x = (int)x, .y = (int)y };
-    if (state.has_selection && toolbar_capture_hit(p)) {
-        state.drag_mode = DRAG_TOOLBAR;
-        return;
+  (void)gesture;
+  (void)data;
+  ShaulaPoint p = { .x = (int)x, .y = (int)y };
+
+  if (state.dropdown_open) {
+    int idx = dropdown_item_at(p);
+    if (idx >= 0) {
+      state.aspect_choice = (ShaulaAspectChoice)idx;
+      apply_aspect_choice();
+      queue_draw();
+      return;
     }
-    if (toolbar_cancel_hit(p)) {
-        state.drag_mode = DRAG_TOOLBAR;
-        return;
-    }
-    state.drag_start = p;
-    state.drag_origin = state.selection;
-    if (state.has_selection && point_in_selection(state.selection, p)) {
-        state.drag_mode = DRAG_MOVE;
-    } else {
-        state.drag_mode = DRAG_CREATE;
-        state.has_selection = FALSE;
-    }
+    state.dropdown_open = FALSE;
     queue_draw();
+    return;
+  }
+
+  if (state.has_toolbar && toolbar_aspect_hit(p)) {
+    state.dropdown_open = !state.dropdown_open;
+    queue_draw();
+    return;
+  }
+
+  if (state.has_selection && toolbar_capture_hit(p)) {
+    state.drag_mode = DRAG_TOOLBAR;
+    return;
+  }
+  if (toolbar_cancel_hit(p)) {
+    state.drag_mode = DRAG_TOOLBAR;
+    return;
+  }
+  state.drag_start = p;
+  state.drag_origin = state.selection;
+  if (state.has_selection && point_in_selection(state.selection, p)) {
+    state.drag_mode = DRAG_MOVE;
+  } else {
+    state.drag_mode = DRAG_CREATE;
+    state.has_selection = FALSE;
+  }
+  queue_draw();
 }
 
 static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpointer data) {
@@ -338,29 +562,63 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer 
 }
 
 static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data) {
-    (void)gesture;
-    (void)n_press;
-    (void)data;
-    ShaulaPoint p = { .x = (int)x, .y = (int)y };
-    if (state.has_selection && toolbar_capture_hit(p)) {
-        confirm();
-    } else if (toolbar_cancel_hit(p)) {
-        cancel();
+  (void)gesture;
+  (void)n_press;
+  (void)data;
+  ShaulaPoint p = { .x = (int)x, .y = (int)y };
+
+  if (state.dropdown_open) {
+    int idx = dropdown_item_at(p);
+    if (idx >= 0) {
+      state.aspect_choice = (ShaulaAspectChoice)idx;
+      apply_aspect_choice();
+      queue_draw();
+      return;
     }
+    state.dropdown_open = FALSE;
+    queue_draw();
+    return;
+  }
+
+  if (state.has_toolbar && toolbar_aspect_hit(p)) {
+    state.dropdown_open = !state.dropdown_open;
+    queue_draw();
+    return;
+  }
+
+  if (state.has_selection && toolbar_capture_hit(p)) {
+    confirm();
+  } else if (toolbar_cancel_hit(p)) {
+    cancel();
+  }
 }
 
 static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint keycode, GdkModifierType modifiers, gpointer data) {
-    (void)controller;
-    (void)keycode;
-    (void)data;
-    if (keyval == GDK_KEY_Escape || keyval == GDK_KEY_q) {
-        cancel();
-        return TRUE;
+  (void)controller;
+  (void)keycode;
+  (void)data;
+  if (keyval == GDK_KEY_Escape) {
+    if (state.dropdown_open) {
+      state.dropdown_open = FALSE;
+      queue_draw();
+      return TRUE;
     }
-    if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
-        confirm();
-        return TRUE;
+    cancel();
+    return TRUE;
+  }
+  if (keyval == GDK_KEY_q) {
+    cancel();
+    return TRUE;
+  }
+  if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
+    if (state.dropdown_open) {
+      state.dropdown_open = FALSE;
+      queue_draw();
+      return TRUE;
     }
+    confirm();
+    return TRUE;
+  }
 
     int dx = 0;
     int dy = 0;
@@ -382,14 +640,29 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint ke
 }
 
 static gboolean load_aspect(void) {
-    const char *raw = getenv("SHAULA_OVERLAY_ASPECT");
-    if (raw == NULL || raw[0] == '\0') return FALSE;
-    int w = 0;
-    int h = 0;
-    if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) return FALSE;
-    state.aspect = (ShaulaAspect){ .width = w, .height = h };
-    state.has_aspect = TRUE;
-    return TRUE;
+  const char *raw = getenv("SHAULA_OVERLAY_ASPECT");
+  if (raw == NULL || raw[0] == '\0') {
+    state.has_aspect = FALSE;
+    state.aspect_choice = ASPECT_FREE;
+    return FALSE;
+  }
+  int w = 0;
+  int h = 0;
+  if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
+    state.has_aspect = FALSE;
+    state.aspect_choice = ASPECT_FREE;
+    return FALSE;
+  }
+  state.aspect = (ShaulaAspect){ .width = w, .height = h };
+  state.has_aspect = TRUE;
+  state.aspect_choice = ASPECT_FREE;
+  for (int i = 1; i < ASPECT_COUNT; i += 1) {
+    if (ASPECT_WIDTHS[i] == w && ASPECT_HEIGHTS[i] == h) {
+      state.aspect_choice = (ShaulaAspectChoice)i;
+      break;
+    }
+  }
+  return TRUE;
 }
 
 static void load_background(void) {
@@ -485,14 +758,6 @@ static void on_activate(GtkApplication *app, gpointer data) {
 }
 
 int shaula_native_gtk_overlay_run(void) {
-    const char *strategy = getenv("SHAULA_OVERLAY_HELPER_STRATEGY");
-    if (strategy != NULL && strategy[0] != '\0' &&
-        strcmp(strategy, "auto") != 0 &&
-        strcmp(strategy, "gtk4-layer-shell") != 0) {
-        printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"requested overlay strategy is not wired in the native helper\"}}\n");
-        fflush(stdout);
-        return 36;
-    }
     if (getenv("SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE") != NULL) {
         printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"forced unavailable\"}}\n");
         fflush(stdout);

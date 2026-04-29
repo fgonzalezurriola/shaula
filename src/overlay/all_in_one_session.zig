@@ -2,9 +2,9 @@ const std = @import("std");
 const toolbar_layout = @import("toolbar_layout.zig");
 
 pub const ToolbarState = struct {
-    size: toolbar_layout.Size = .{ .width = 312, .height = 52 },
-    position: ?toolbar_layout.Point = null,
-    placement: toolbar_layout.Placement = .below,
+  size: toolbar_layout.Size = .{ .width = 326, .height = 48 },
+  position: ?toolbar_layout.Point = null,
+  placement: toolbar_layout.Placement = .below,
 };
 
 pub const AllInOneSession = struct {

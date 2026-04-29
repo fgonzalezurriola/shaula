@@ -46,8 +46,8 @@
       "interval_sec": 0.2,
       "metrics": {
         "cpu_avg_percent": 0.0,
-        "rss_p95_mb": 5.586,
-        "rss_peak_mb": 5.586
+        "rss_p95_mb": 5.059,
+        "rss_peak_mb": 5.059
       },
       "thresholds": {
         "cpu_max_percent": 0.5,

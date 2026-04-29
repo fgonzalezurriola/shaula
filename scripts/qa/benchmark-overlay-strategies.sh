@@ -56,33 +56,18 @@ def run_quick(cmd: list[str], env: dict[str, str] | None = None, timeout: float 
 def gtk_available() -> tuple[bool, str | None, str]:
     env = os.environ.copy()
     env["SHAULA_OVERLAY_HELPER_PROBE"] = "1"
-    env["SHAULA_OVERLAY_HELPER_STRATEGY"] = "gtk4-layer-shell"
     rc, out = run_quick(["./zig-out/bin/shaula-overlay"], env=env)
     if rc == 0 and '"status":"ok"' in out:
         return True, None, "Native GTK/layer-shell helper reports Wayland layer-shell support"
     return False, "ERR_OVERLAY_UNAVAILABLE", "Native GTK/layer-shell helper probe failed"
 
 
-def strategy_probe(strategy: str) -> tuple[bool, str | None, str]:
-    if strategy == "gtk4-layer-shell":
-        return gtk_available()
-
-    env = os.environ.copy()
-    env["SHAULA_OVERLAY_HELPER_STRATEGY"] = strategy
-    env["SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE"] = "1"
-    rc, out = run_quick(["./zig-out/bin/shaula-overlay"], env=env)
-    if rc != 0 and "ERR_OVERLAY_UNAVAILABLE" in out:
-        return False, "ERR_OVERLAY_UNAVAILABLE", f"{strategy} is not promoted until real UI deps and layer-shell input behavior are proven"
-    return False, "ERR_OVERLAY_UNAVAILABLE", f"{strategy} probe did not prove production overlay semantics"
-
-
-def timed_capture(strategy: str) -> tuple[float, float] | None:
+def timed_capture() -> tuple[float, float] | None:
     if not allow_intrusive:
         return None
     helper_script = os.path.join(root, "scripts/qa/fake_runtime_capture_helper.sh")
     env = os.environ.copy()
     env.update({
-        "SHAULA_OVERLAY_HELPER_STRATEGY": strategy,
         "SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE": "interaction_drag",
         "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION": "0",
         "SHAULA_RUNTIME_CAPTURE_HELPER": helper_script,
@@ -99,31 +84,27 @@ def timed_capture(strategy: str) -> tuple[float, float] | None:
 
 
 supports_frozen = command_exists("grim")
-strategies = []
-for name in ("gtk4-layer-shell", "raylib", "raylib-clay"):
-    available, error_code, note = strategy_probe(name)
-    timed = timed_capture(name)
-    first_paint = timed[0] if timed else 0.0
-    interactive = timed[1] if timed else 0.0
-    is_gtk = name == "gtk4-layer-shell"
-    strategies.append({
-        "strategy": name,
-        "available": available,
-        "first_paint_ms": round(first_paint, 3),
-        "interactive_ms": round(interactive, 3),
-        "drag_resize_stability_pct": 100 if is_gtk else 0,
-        "toolbar_quality_pct": 100 if is_gtk else 0,
-        "toolbar_repositions": 0,
-        "supports_layer_shell": is_gtk,
-        "supports_frozen_background": bool(supports_frozen and is_gtk),
-        "error_code": error_code,
-        "maintainability_note": note,
-    })
+available, error_code, note = gtk_available()
+timed = timed_capture()
+first_paint = timed[0] if timed else 0.0
+interactive = timed[1] if timed else 0.0
+strategies = [{
+    "strategy": "gtk4-layer-shell",
+    "available": available,
+    "first_paint_ms": round(first_paint, 3),
+    "interactive_ms": round(interactive, 3),
+    "drag_resize_stability_pct": 100,
+    "toolbar_quality_pct": 100,
+    "toolbar_repositions": 0,
+    "supports_layer_shell": True,
+    "supports_frozen_background": bool(supports_frozen),
+    "error_code": error_code,
+    "maintainability_note": note,
+}]
 
 decision = {
     "production_strategy": "gtk4-layer-shell",
-    "reason": "GTK is the only current strategy with direct Wayland layer-shell semantics; Raylib candidates remain unavailable until real deps and input behavior are proven.",
-    "raylib_promotion_rule": "Raylib may replace GTK only after proving layer-shell-equivalent input, frozen background rendering, stable helper v1 output, and first-paint within 15ms of GTK.",
+    "reason": "GTK is the only production overlay backend. It provides native Wayland layer-shell behavior required by Niri.",
 }
 
 report = {

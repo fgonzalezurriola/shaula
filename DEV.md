@@ -1,249 +1,120 @@
 # Shaula Developer Guide
 
-Esta guía describe cómo compilar, probar y usar Shaula hoy, sin depender de artefactos de planificación externos al producto.
+Shaula is a Niri/Wayland capture CLI with deterministic JSON contracts. The
+developer workflow is intentionally routed through `./dev` so common commands do
+not require memorizing QA script names or environment flags.
 
-## Qué es Shaula hoy
+## Quick Start
 
-Shaula es un CLI de captura para Niri/Wayland con contratos JSON estables. La meta de producto actual es una experiencia inspirada en CleanShot: captura rápida, selección limpia de área, confirmación explícita, integración con portapapeles e historial, y errores `ERR_*` determinísticos.
+```bash
+./dev doctor
+./dev build
+./dev test
+./dev capture
+```
 
-Superficie soportada:
+Useful commands:
 
-- `capture area`
-- `capture all-in-one`
-- `capture fullscreen`
-- `capture window`
-- `capture previous-area`
-- `history list`
-- `history show --id latest`
-- `clipboard copy-image`
-- `clipboard import-image`
-- `daemon start|status|stop`
-- `capabilities list`
-- `errors list`
+```bash
+./dev help
+./dev check
+./dev qa
+./dev bench
+./dev strategies
+```
 
-Fuera de alcance actual:
+Commands that open or repeatedly exercise the UI are explicit:
 
-- OCR
-- grabación
-- scrolling capture
-- placeholders visuales de features futuras
+```bash
+./dev overlay
+./dev qa-ui
+./dev bench-ui
+./dev strategies-ui
+```
 
-## Requisitos
+## Requirements
 
 - Zig `0.16.0`
 - Niri
+- `cc`
+- `pkg-config`
+- `gtk4`
+- `gtk4-layer-shell-0`
+- `gdk-pixbuf-2.0`
+- `cairo`
 - `grim`
 - `wl-copy`
 - `wl-paste`
 - `jq`
 
-## Build
+Run `./dev doctor` to check the local machine.
+
+## App Commands
+
+`./dev run` forwards to the compiled Shaula binary after building:
 
 ```bash
-zig build
-zig build test
+./dev run preflight --json
+./dev run capabilities list --json
+./dev run capture area --json --aspect 16:9
+./dev run capture all-in-one --json
+./dev run capture previous-area --json
+./dev run history list --json
+./dev run errors list --json
 ```
 
-Binarios generados:
-
-- `./zig-out/bin/shaula`
-- `./zig-out/bin/shaula-overlay`
-- `./zig-out/bin/shaula-overlay-feasibility-spike`
-
-## Variables de entorno útiles
+Shortcuts:
 
 ```bash
-export SHAULA_COMPOSITOR=niri
-export WAYLAND_DISPLAY=wayland-1
-export NIRI_SOCKET=/run/user/1000/niri-0.sock
+./dev preflight
+./dev capture
+./dev all
+./dev errors
 ```
 
-Variables opcionales para desarrollo y QA:
+## QA Profiles
+
+Non-intrusive by default:
 
 ```bash
-# Fuerza selección determinística no interactiva.
-export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
-
-# Helper sintético para capturas cuando no hay grim disponible.
-export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_helper.sh"
-
-# Binario alternativo para el helper de overlay.
-export SHAULA_OVERLAY_HELPER_BIN="$(pwd)/zig-out/bin/shaula-overlay"
-
-# Strategy del helper visual: auto | gtk4-layer-shell | raylib | raylib-clay.
-export SHAULA_OVERLAY_HELPER_STRATEGY=gtk4-layer-shell
+./dev qa
+./dev qa-full
+./dev bench
+./dev strategies
 ```
 
-## Uso del software
-
-### 1. Preflight
+Intrusive UI opt-in:
 
 ```bash
-./zig-out/bin/shaula preflight --json | jq
-./zig-out/bin/shaula capabilities list --json | jq
+./dev qa-ui
+./dev bench-ui
+./dev strategies-ui
 ```
 
-`preflight` valida que el entorno Wayland/Niri esté listo. `capabilities list` muestra qué modos de captura están habilitados según el runtime real.
+The non-intrusive overlay latency report may show `0.0ms` with
+`ERR_PERF_INTRUSIVE_UI_DISABLED_BY_POLICY`; that is a degraded policy result, not
+a real first-paint measurement. Use `./dev bench-ui` for real overlay timing.
 
-### 2. Capturas
+## Overlay Notes
 
-Captura de área interactiva:
-
-```bash
-./zig-out/bin/shaula capture area --json
-```
-
-Captura all-in-one:
-
-```bash
-./zig-out/bin/shaula capture all-in-one --json
-```
-
-Captura de área con aspecto fijo:
-
-```bash
-./zig-out/bin/shaula capture area --json --aspect 16:9
-./zig-out/bin/shaula capture area --json --aspect 4:3
-```
-
-Repetir el último rectángulo confirmado:
-
-```bash
-./zig-out/bin/shaula capture previous-area --json
-```
-
-Captura a un archivo concreto:
-
-```bash
-./zig-out/bin/shaula capture area --json --output /tmp/shot.png
-./zig-out/bin/shaula capture fullscreen --json --output /tmp/full.png
-./zig-out/bin/shaula capture window --json --window-id active --output /tmp/window.png
-```
-
-Post-capture mínimo:
-
-```bash
-./zig-out/bin/shaula capture area --json --copy
-./zig-out/bin/shaula capture area --json --save
-./zig-out/bin/shaula capture fullscreen --json --copy --save
-```
-
-Modos de prueba:
-
-```bash
-./zig-out/bin/shaula capture area --json --dry-run
-./zig-out/bin/shaula capture all-in-one --json --dry-run
-./zig-out/bin/shaula capture area --json --simulate-cancel
-```
-
-Notas del overlay:
-
-- Si el helper gráfico nativo no está disponible, Shaula falla con
-  `ERR_OVERLAY_UNAVAILABLE`; no hay selector secundario.
-- El helper GTK intenta preparar una captura congelada de fondo con `grim` antes
-  de abrir el overlay; si esa captura visual falla, la selección sigue usando
-  el overlay transparente sin inventar éxito.
-- La selección soporta crear rectángulo, moverlo, redimensionar desde esquinas y
-  bordes, confirmar con Enter, cancelar con Esc y mover con flechas; Shift+flecha
-  mueve en pasos de 10 px.
-- `capture all-in-one` usa la ruta de captura de área y persiste la última
-  posición válida de la toolbar; no muestra acciones no implementadas.
-- `shaula-overlay` es un helper nativo GTK/layer-shell. `raylib` y `raylib-clay`
-  quedan como candidatos medidos, no como rutas productivas.
-- `bash scripts/qa/benchmark-overlay-strategies.sh` genera evidencia comparativa
-  y mantiene `gtk4-layer-shell` como strategy productiva hasta que Raylib pruebe
-  semántica equivalente de overlay/input en Wayland.
-- Si no hay backend interactivo real, Shaula ya no inventa una selección exitosa implícita.
-- `capture previous-area` falla con `ERR_PREVIOUS_AREA_UNAVAILABLE` hasta que exista una geometría de área válida en runtime.
-- `--dry-run` queda reservado para pruebas y QA.
-
-### 3. Historial
-
-```bash
-./zig-out/bin/shaula history list --json | jq
-./zig-out/bin/shaula history show --json --id latest | jq
-```
-
-### 4. Portapapeles
-
-```bash
-./zig-out/bin/shaula clipboard copy-image --json --input /tmp/shot.png
-./zig-out/bin/shaula clipboard import-image --json --output /tmp/imported.png
-```
-
-### 5. Daemon
-
-```bash
-./zig-out/bin/shaula daemon start --json
-./zig-out/bin/shaula daemon status --json
-./zig-out/bin/shaula daemon stop --json
-```
-
-### 6. Taxonomía de errores
-
-```bash
-./zig-out/bin/shaula errors list --json | jq
-```
-
-## Flujo recomendado de desarrollo
-
-```bash
-zig build
-zig build test
-bash scripts/qa/run-integration-tests.sh
-bash scripts/qa/run-e2e-niri.sh
-bash scripts/qa/run-performance-gates.sh
-bash scripts/qa/run-all-tests.sh
-```
-
-Perfiles de QA:
-
-```bash
-SHAULA_QA_PROFILE=fast bash scripts/qa/run-all-tests.sh
-SHAULA_QA_PROFILE=full bash scripts/qa/run-all-tests.sh
-SHAULA_QA_PROFILE=debug QA_KEEP_ARTIFACTS=1 bash scripts/qa/run-all-tests.sh
-```
-
-## Cómo leer los números
-
-Resultados típicos sanos observados en la ruta crítica actual:
-
-- `capture area`: ~`12ms`
-- `capture fullscreen`: ~`16ms`
-- `capture previous-area`: ~`12ms`
-
-Interpretación:
-
-- Esos valores sí validan bien la latencia actual del hot path de captura por CLI.
-- Si están en ese rango, Shaula está muy por debajo del presupuesto documentado de `<= 150ms` p95 para `area` y `fullscreen`.
-- `capture previous-area` debería mantenerse cerca de `area`, porque reutiliza geometría persistida y evita selección interactiva.
-
-Limitaciones importantes al leer QA/benchmarks:
-
-- `overlay_first_paint` con `0.0ms` en modo `degraded` no mide el overlay real; normalmente significa que la política de QA no permitió la parte interactiva.
-- `capture_completion` en estado `degraded` con `ERR_CAPTURE_MODE_UNSUPPORTED` tampoco debe tomarse como benchmark productivo del flujo real.
-- Para validar la UX tipo CleanShot X todavía hace falta medir el helper interactivo real, no solo el backend de captura.
-
-## Scripts QA relevantes
-
-- `scripts/qa/run-all-tests.sh`: suite consolidada
-- `scripts/qa/run-integration-tests.sh`: integraciones de capture, overlay, historial y Noctalia
-- `scripts/qa/run-e2e-niri.sh`: recorridos end-to-end
-- `scripts/qa/run-performance-gates.sh`: budgets y latencias
-- `scripts/qa/release-readiness-capture-fix.sh`: checklist de release
-- `scripts/qa/assert-overlay-helper-interactive.sh`: lanes del helper interactivo
+- Production overlay backend is `gtk4-layer-shell`.
+- Legacy experimental UI code paths were removed from the product tree to keep the
+  overlay architecture focused on native Wayland layer-shell behavior.
+- If the native helper is unavailable, Shaula fails deterministically with
+  `ERR_OVERLAY_UNAVAILABLE`; there is no secondary selector fallback.
+- `capture area` and `capture all-in-one` copy to the Wayland clipboard by
+  default.
 
 ## Troubleshooting
 
 `ERR_UNSUPPORTED_COMPOSITOR`
 
 ```bash
-echo "$SHAULA_COMPOSITOR"
-echo "$WAYLAND_DISPLAY"
-echo "$NIRI_SOCKET"
+./dev doctor
 ```
 
-Shaula v1 es Niri-first. Si el compositor no coincide, el preflight y capture van a fallar de forma determinística.
+Shaula v1 is Niri-first. Confirm `SHAULA_COMPOSITOR`, `WAYLAND_DISPLAY`, and
+`NIRI_SOCKET`.
 
 `ERR_CAPTURE_BACKEND_UNAVAILABLE`
 
@@ -251,42 +122,24 @@ Shaula v1 es Niri-first. Si el compositor no coincide, el preflight y capture va
 command -v grim
 ```
 
-Si `grim` no está disponible, configurá `SHAULA_RUNTIME_CAPTURE_HELPER` para QA o instalá el binario real.
-
 `ERR_OVERLAY_UNAVAILABLE`
 
 ```bash
+./dev build
 test -x ./zig-out/bin/shaula-overlay && echo helper-ok
 ```
 
-El helper de overlay requiere dependencias UI reales para funcionar como proceso interactivo. Si no están presentes, Shaula devuelve `ERR_OVERLAY_UNAVAILABLE`.
+`ERR_CLIPBOARD_COPY_FAILED`
 
-`ERR_SELECTION_CANCELLED`
+```bash
+command -v wl-copy
+```
 
-El usuario canceló la selección o el flujo interactivo terminó sin una geometría válida.
-
-## Estructura breve del repo
+## Repo Shape
 
 ```text
-src/
-  core/
-  main.zig
-  capture/
-  overlay/
-  runtime/
-  backends/
-  daemon/
-  history/
-  clipboard/
-
-spec/
-  architecture.md
-  requirements.md
-  wayland-niri-integration.md
-
-scripts/qa/
-  run-all-tests.sh
-  run-integration-tests.sh
-  run-e2e-niri.sh
-  run-performance-gates.sh
+src/          Zig implementation and native overlay shim boundary
+scripts/qa/   QA, benchmarks, and evidence scripts
+spec/         Product and architecture contracts
+integrations/ Optional integration adapters
 ```

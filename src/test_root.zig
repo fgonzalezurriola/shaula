@@ -9,9 +9,6 @@ const _overlay_runtime = @import("overlay/runtime.zig");
 const _overlay_toolbar_layout = @import("overlay/toolbar_layout.zig");
 const _overlay_ui_state_store = @import("overlay/ui_state_store.zig");
 const _overlay_all_in_one_session = @import("overlay/all_in_one_session.zig");
-const _overlay_strategy = @import("overlay/strategy.zig");
-const _raylib = @import("raylib");
-const _clay = @import("clay");
 
 test {
     _ = _main;
@@ -21,7 +18,4 @@ test {
     _ = _overlay_toolbar_layout;
     _ = _overlay_ui_state_store;
     _ = _overlay_all_in_one_session;
-    _ = _overlay_strategy;
-    _ = _raylib;
-    _ = _clay;
 }
