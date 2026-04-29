@@ -975,6 +975,28 @@ static void load_background(void) {
     state.background = gdk_pixbuf_new_from_file(path, NULL);
 }
 
+static void load_initial_geometry(void) {
+  const char *raw = getenv("SHAULA_OVERLAY_INITIAL_GEOMETRY");
+  if (raw == NULL || raw[0] == '\0') return;
+
+  int x = 0;
+  int y = 0;
+  int width = 0;
+  int height = 0;
+  if (sscanf(raw, "%d,%d,%d,%d", &x, &y, &width, &height) != 4 || width <= 0 || height <= 0) {
+    return;
+  }
+
+  ShaulaRect rect;
+  if (!clamp_selection((ShaulaRect){ .x = x, .y = y, .width = width, .height = height }, output_size(), &rect)) {
+    return;
+  }
+
+  state.selection = rect;
+  state.has_selection = TRUE;
+  update_toolbar();
+}
+
 static GdkMonitor *monitor_for_output(void) {
     const char *name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
     if (name == NULL || name[0] == '\0') return NULL;
@@ -1042,6 +1064,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
     gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(area), size.y);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, NULL, NULL);
     gtk_window_set_child(GTK_WINDOW(window), area);
+    load_initial_geometry();
 
     GtkGesture *drag = gtk_gesture_drag_new();
     g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), NULL);

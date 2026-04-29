@@ -2,6 +2,7 @@ const std = @import("std");
 const selection = @import("../selection/selection.zig");
 const all_in_one_session = @import("all_in_one_session.zig");
 const ui_state_store = @import("ui_state_store.zig");
+const previous_area_store = @import("../runtime/previous_area_store.zig");
 
 const OverlayHelperStatus = enum {
     ok,
@@ -159,6 +160,16 @@ fn runHelperSelectionAttempt(
     }
     if (output_name) |name| {
         try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
+    }
+    if (try previous_area_store.load(allocator, io, environ)) |geometry| {
+        const initial_geometry = try std.fmt.allocPrint(allocator, "{d},{d},{d},{d}", .{
+            geometry.x,
+            geometry.y,
+            geometry.width,
+            geometry.height,
+        });
+        defer allocator.free(initial_geometry);
+        try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY", initial_geometry);
     }
 
     const helper = std.process.run(allocator, io, .{
