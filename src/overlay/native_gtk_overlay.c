@@ -14,7 +14,6 @@ enum {
   HANDLE_CLEARANCE = 18,
   BADGE_CLEARANCE = 30,
   JITTER = 6,
-  HANDLE_SIZE = 10,
   PILL_RADIUS = 8,
   TOOLBAR_RADIUS = 14,
   BADGE_RADIUS = 8,
@@ -80,6 +79,8 @@ typedef struct {
   ShaulaRect drag_origin;
   gboolean dropdown_open;
   ShaulaAspectChoice aspect_choice;
+  char aspect_custom_label[32];
+  gboolean suppress_pointer_drag;
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
@@ -224,15 +225,25 @@ static gboolean toolbar_cancel_hit(ShaulaPoint point) {
          point.y >= t.y + 9 && point.y <= t.y + 39;
 }
 
-static int dropdown_item_at(ShaulaPoint point) {
-  if (!state.dropdown_open || !state.has_toolbar) return -1;
+static ShaulaRect dropdown_rect(void) {
+  if (!state.has_toolbar) return (ShaulaRect){ .x = 0, .y = 0, .width = 0, .height = 0 };
   ShaulaPoint t = state.toolbar;
-  int dd_x = t.x + 10;
-  int dd_y = t.y - DROPDOWN_PADDING - ASPECT_COUNT * DROPDOWN_ITEM_H;
+  ShaulaPoint bounds = output_size();
   int dd_w = 100;
   int dd_h = DROPDOWN_PADDING * 2 + ASPECT_COUNT * DROPDOWN_ITEM_H;
-  if (point.x < dd_x || point.x > dd_x + dd_w || point.y < dd_y || point.y > dd_y + dd_h) return -1;
-  int relative_y = point.y - dd_y - DROPDOWN_PADDING;
+  int dd_x = clamp_int(t.x + 10, PADDING, MAX(PADDING, bounds.x - PADDING - dd_w));
+  int below_y = t.y + TOOLBAR_H + 6;
+  int above_y = t.y - dd_h - 6;
+  int dd_y = below_y + dd_h <= bounds.y - PADDING ? below_y : above_y;
+  dd_y = clamp_int(dd_y, PADDING, MAX(PADDING, bounds.y - PADDING - dd_h));
+  return (ShaulaRect){ .x = dd_x, .y = dd_y, .width = dd_w, .height = dd_h };
+}
+
+static int dropdown_item_at(ShaulaPoint point) {
+  if (!state.dropdown_open || !state.has_toolbar) return -1;
+  ShaulaRect dd = dropdown_rect();
+  if (point.x < dd.x || point.x > dd.x + dd.width || point.y < dd.y || point.y > dd.y + dd.height) return -1;
+  int relative_y = point.y - dd.y - DROPDOWN_PADDING;
   if (relative_y < 0) return -1;
   int idx = relative_y / DROPDOWN_ITEM_H;
   return idx < ASPECT_COUNT ? idx : -1;
@@ -241,6 +252,7 @@ static int dropdown_item_at(ShaulaPoint point) {
 static void apply_aspect_choice(void) {
   if (state.aspect_choice == ASPECT_FREE) {
     state.has_aspect = FALSE;
+    state.aspect_custom_label[0] = '\0';
   } else {
     state.has_aspect = TRUE;
     state.aspect = (ShaulaAspect){
@@ -258,6 +270,7 @@ static void apply_aspect_choice(void) {
       state.selection = adj;
     }
   }
+  update_toolbar();
   state.dropdown_open = FALSE;
 }
 
@@ -382,7 +395,9 @@ static void draw_toolbar(cairo_t *cr, ShaulaPoint t, gboolean enabled) {
   cairo_set_source_rgba(cr, 1, 1, 1, 0.06);
   cairo_fill(cr);
 
-  const char *aspect_lbl = ASPECT_LABELS[state.aspect_choice];
+  const char *aspect_lbl = state.has_aspect && state.aspect_choice == ASPECT_FREE && state.aspect_custom_label[0] != '\0'
+    ? state.aspect_custom_label
+    : ASPECT_LABELS[state.aspect_choice];
   draw_pill(cr, t.x + 10, t.y + 9, 100, 30, aspect_lbl, 0.28, 0.52, 0.83, 0.55, TRUE);
   draw_chevron(cr, tx + 10 + 100 - 16, ty + 9 + 15, state.dropdown_open);
 
@@ -396,10 +411,12 @@ static void draw_toolbar(cairo_t *cr, ShaulaPoint t, gboolean enabled) {
 }
 
 static void draw_dropdown(cairo_t *cr, ShaulaPoint t) {
-  double dd_x = (double)(t.x + 10);
-  double dd_y = (double)(t.y - DROPDOWN_PADDING - ASPECT_COUNT * DROPDOWN_ITEM_H);
-  double dd_w = 100;
-  double dd_h = (double)(DROPDOWN_PADDING * 2 + ASPECT_COUNT * DROPDOWN_ITEM_H);
+  (void)t;
+  ShaulaRect dd = dropdown_rect();
+  double dd_x = (double)dd.x;
+  double dd_y = (double)dd.y;
+  double dd_w = (double)dd.width;
+  double dd_h = (double)dd.height;
 
   cairo_set_source_rgba(cr, 0, 0, 0, 0.20);
   rounded_rect(cr, dd_x + 1, dd_y + 3, dd_w, dd_h, DROPDOWN_RADIUS + 1);
@@ -498,22 +515,18 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
   (void)data;
   ShaulaPoint p = { .x = (int)x, .y = (int)y };
 
+  if (state.suppress_pointer_drag) {
+    state.drag_mode = DRAG_TOOLBAR;
+    return;
+  }
+
   if (state.dropdown_open) {
-    int idx = dropdown_item_at(p);
-    if (idx >= 0) {
-      state.aspect_choice = (ShaulaAspectChoice)idx;
-      apply_aspect_choice();
-      queue_draw();
-      return;
-    }
-    state.dropdown_open = FALSE;
-    queue_draw();
+    state.drag_mode = DRAG_TOOLBAR;
     return;
   }
 
   if (state.has_toolbar && toolbar_aspect_hit(p)) {
-    state.dropdown_open = !state.dropdown_open;
-    queue_draw();
+    state.drag_mode = DRAG_TOOLBAR;
     return;
   }
 
@@ -558,6 +571,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpoint
 static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer data) {
     on_drag_update(gesture, dx, dy, data);
     state.drag_mode = DRAG_NONE;
+    state.suppress_pointer_drag = FALSE;
     queue_draw();
 }
 
@@ -569,6 +583,7 @@ static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, 
 
   if (state.dropdown_open) {
     int idx = dropdown_item_at(p);
+    state.suppress_pointer_drag = TRUE;
     if (idx >= 0) {
       state.aspect_choice = (ShaulaAspectChoice)idx;
       apply_aspect_choice();
@@ -581,16 +596,28 @@ static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, 
   }
 
   if (state.has_toolbar && toolbar_aspect_hit(p)) {
+    state.suppress_pointer_drag = TRUE;
     state.dropdown_open = !state.dropdown_open;
     queue_draw();
     return;
   }
 
   if (state.has_selection && toolbar_capture_hit(p)) {
+    state.suppress_pointer_drag = TRUE;
     confirm();
   } else if (toolbar_cancel_hit(p)) {
+    state.suppress_pointer_drag = TRUE;
     cancel();
   }
+}
+
+static void on_click_released(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data) {
+  (void)gesture;
+  (void)n_press;
+  (void)x;
+  (void)y;
+  (void)data;
+  state.suppress_pointer_drag = FALSE;
 }
 
 static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint keycode, GdkModifierType modifiers, gpointer data) {
@@ -651,14 +678,17 @@ static gboolean load_aspect(void) {
   if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
     state.has_aspect = FALSE;
     state.aspect_choice = ASPECT_FREE;
+    state.aspect_custom_label[0] = '\0';
     return FALSE;
   }
   state.aspect = (ShaulaAspect){ .width = w, .height = h };
   state.has_aspect = TRUE;
   state.aspect_choice = ASPECT_FREE;
+  snprintf(state.aspect_custom_label, sizeof(state.aspect_custom_label), "%d:%d", w, h);
   for (int i = 1; i < ASPECT_COUNT; i += 1) {
     if (ASPECT_WIDTHS[i] == w && ASPECT_HEIGHTS[i] == h) {
       state.aspect_choice = (ShaulaAspectChoice)i;
+      state.aspect_custom_label[0] = '\0';
       break;
     }
   }
@@ -747,6 +777,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
     GtkGesture *click = gtk_gesture_click_new();
     g_signal_connect(click, "pressed", G_CALLBACK(on_click), NULL);
+    g_signal_connect(click, "released", G_CALLBACK(on_click_released), NULL);
     gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(click));
 
     GtkEventController *keys = gtk_event_controller_key_new();

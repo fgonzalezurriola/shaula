@@ -2,9 +2,7 @@
 zig-out/
 node_modules/
 
-.qa/evidence/*.txt
-.qa/evidence/*.log
-.qa/evidence/*.tmp
+.qa/evidence/
 
 .DS_Store
 third_party/niri/
