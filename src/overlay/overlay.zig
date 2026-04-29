@@ -3,6 +3,9 @@ const selection = @import("../selection/selection.zig");
 const all_in_one_session = @import("all_in_one_session.zig");
 const ui_state_store = @import("ui_state_store.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
+const selection_draft_store = @import("selection_draft_store.zig");
+
+pub const DraftMode = selection_draft_store.DraftMode;
 
 const OverlayHelperStatus = enum {
     ok,
@@ -59,6 +62,7 @@ pub fn runSelection(
     io: std.Io,
     environ: std.process.Environ,
     mode: selection.SelectionMode,
+    draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
     is_dry_run: bool,
     simulate_cancel: bool,
@@ -84,18 +88,31 @@ pub fn runSelection(
             .geometry = .{ .x = 100, .y = 100, .width = 400, .height = 300 },
             .cancelled = false,
         };
+        persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
         persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
         return result;
     }
 
-    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, constraint);
+    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, draft_mode, constraint);
     switch (helper_attempt) {
         .selection => |result| {
+            persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
             return result;
         },
         .unavailable => return cancelledSelection(mode, constraint),
     }
+}
+
+fn persistSelectionDraft(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    draft_mode: DraftMode,
+    result: selection.SelectionResult,
+) !void {
+    const geometry = captureAreaGeometryFromSelection(result.geometry) orelse return;
+    try selection_draft_store.store(allocator, io, environ, draft_mode, geometry);
 }
 
 /// Persists only the final valid all-in-one toolbar position after confirmation.
@@ -141,6 +158,7 @@ fn runHelperSelectionAttempt(
     io: std.Io,
     environ: std.process.Environ,
     mode: selection.SelectionMode,
+    draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
 ) !HelperSelectionAttempt {
     const helper_bin = try resolveHelperBinary(allocator, io, environ);
@@ -161,7 +179,9 @@ fn runHelperSelectionAttempt(
     if (output_name) |name| {
         try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
     }
-    if (try previous_area_store.load(allocator, io, environ)) |geometry| {
+    const initial = (try selection_draft_store.load(allocator, io, environ, draft_mode)) orelse
+        (try previous_area_store.load(allocator, io, environ));
+    if (initial) |geometry| {
         const initial_geometry = try std.fmt.allocPrint(allocator, "{d},{d},{d},{d}", .{
             geometry.x,
             geometry.y,
@@ -421,9 +441,39 @@ fn parseHelperSelectionEnvelope(
             };
         },
         .cancel, .@"error" => {
+            if (validEnvelopeGeometry(envelope.geometry)) |geometry| {
+                return selection.SelectionResult{
+                    .mode = mode,
+                    .aspect = constraint.aspect,
+                    .geometry = .{
+                        .x = geometry.x,
+                        .y = geometry.y,
+                        .width = geometry.width,
+                        .height = geometry.height,
+                    },
+                    .cancelled = true,
+                };
+            }
             return cancelledSelection(mode, constraint);
         },
     }
+}
+
+fn validEnvelopeGeometry(geometry: ?OverlayHelperGeometry) ?OverlayHelperGeometry {
+    const value = geometry orelse return null;
+    if (value.width == 0 or value.height == 0) return null;
+    return value;
+}
+
+fn captureAreaGeometryFromSelection(geometry: ?selection.Geometry) ?@import("../capture/types.zig").AreaGeometry {
+    const value = geometry orelse return null;
+    if (value.width == 0 or value.height == 0) return null;
+    return .{
+        .x = value.x,
+        .y = value.y,
+        .width = value.width,
+        .height = value.height,
+    };
 }
 
 fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.SelectionConstraint) selection.SelectionResult {
@@ -538,6 +588,22 @@ test "helper envelope maps cancel status to cancelled result" {
     try std.testing.expectEqualStrings("16:9", result.aspect orelse "");
 }
 
+test "helper envelope preserves cancelled draft geometry" {
+    const result = parseHelperSelectionEnvelope(
+        std.testing.allocator,
+        "{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":40,\"y\":50,\"width\":600,\"height\":400},\"error\":null}",
+        .freeform,
+        .{ .aspect = null },
+    );
+
+    try std.testing.expect(result.cancelled);
+    const geometry = result.geometry orelse return error.TestExpectedEqual;
+    try std.testing.expectEqual(@as(i32, 40), geometry.x);
+    try std.testing.expectEqual(@as(i32, 50), geometry.y);
+    try std.testing.expectEqual(@as(u32, 600), geometry.width);
+    try std.testing.expectEqual(@as(u32, 400), geometry.height);
+}
+
 test "helper envelope maps malformed payload to cancelled result" {
     const result = parseHelperSelectionEnvelope(
         std.testing.allocator,
@@ -602,6 +668,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         std.testing.io,
         .{ .block = block },
         .freeform,
+        .area,
         .{ .aspect = null },
         false,
         false,
@@ -628,6 +695,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
         std.testing.io,
         .{ .block = block },
         .freeform,
+        .area,
         .{ .aspect = null },
     );
     try std.testing.expect(attempt == .unavailable);

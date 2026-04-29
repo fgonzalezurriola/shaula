@@ -732,7 +732,12 @@ static void confirm(void) {
 }
 
 static void cancel(void) {
-    printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}\n");
+    if (state.has_selection && state.selection.width > 0 && state.selection.height > 0) {
+        printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
+            state.selection.x, state.selection.y, state.selection.width, state.selection.height);
+    } else {
+        printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}\n");
+    }
     fflush(stdout);
     if (state.app != NULL) g_application_quit(G_APPLICATION(state.app));
 }

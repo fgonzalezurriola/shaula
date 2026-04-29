@@ -9,6 +9,7 @@ const _overlay_runtime = @import("overlay/runtime.zig");
 const _overlay_toolbar_layout = @import("overlay/toolbar_layout.zig");
 const _overlay_ui_state_store = @import("overlay/ui_state_store.zig");
 const _overlay_all_in_one_session = @import("overlay/all_in_one_session.zig");
+const _overlay_selection_draft_store = @import("overlay/selection_draft_store.zig");
 
 test {
     _ = _main;
@@ -18,4 +19,5 @@ test {
     _ = _overlay_toolbar_layout;
     _ = _overlay_ui_state_store;
     _ = _overlay_all_in_one_session;
+    _ = _overlay_selection_draft_store;
 }
