@@ -93,11 +93,7 @@ pub fn runSelection(
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
             return result;
         },
-        .fallback_to_slurp => {
-            const result = runSlurpSelection(allocator, io, mode, constraint);
-            persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
-            return result;
-        },
+        .unavailable => return cancelledSelection(mode, constraint),
     }
 }
 
@@ -130,15 +126,15 @@ fn persistToolbarPositionForSelection(
 
 const HelperSelectionAttempt = union(enum) {
     selection: selection.SelectionResult,
-    fallback_to_slurp,
+    unavailable,
 };
 
 /// Executes overlay helper first and decides deterministic fallback behavior.
 ///
 /// Contract constraints:
 /// - helper output mapping must pass through `parseHelperSelectionEnvelope`.
-/// - fallback to `slurp` only occurs for configured helper unavailability/timeout
-///   failure classes or helper process/runtime failures.
+/// - productive runtime never falls back to another selector UI. Helper
+///   unavailability maps to deterministic overlay cancellation taxonomy.
 fn runHelperSelectionAttempt(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -171,22 +167,22 @@ fn runHelperSelectionAttempt(
         .stderr_limit = .limited(2048),
         .environ_map = &helper_env,
     }) catch {
-        return .fallback_to_slurp;
+        return .unavailable;
     };
     defer allocator.free(helper.stdout);
     defer allocator.free(helper.stderr);
 
-    if (helperEnvelopeRequiresFallback(allocator, helper.stdout) catch false) {
-        return .fallback_to_slurp;
+    if (helperEnvelopeReportsUnavailable(allocator, helper.stdout) catch false) {
+        return .unavailable;
     }
 
     switch (helper.term) {
         .exited => |code| {
             if (code != 0) {
-                return .fallback_to_slurp;
+                return .unavailable;
             }
         },
-        else => return .fallback_to_slurp,
+        else => return .unavailable,
     }
 
     return .{ .selection = parseHelperSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
@@ -303,7 +299,7 @@ fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ)
     return allocator.dupe(u8, "/tmp/shaula/overlay");
 }
 
-fn helperEnvelopeRequiresFallback(allocator: std.mem.Allocator, payload: []const u8) !bool {
+fn helperEnvelopeReportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {
     const parsed = std.json.parseFromSlice(OverlayHelperEnvelope, allocator, payload, .{}) catch return false;
     defer parsed.deinit();
 
@@ -320,7 +316,7 @@ fn helperEnvelopeRequiresFallback(allocator: std.mem.Allocator, payload: []const
 ///
 /// Contract constraint: local `zig build` output must use the sibling
 /// `shaula-overlay` binary before falling back to PATH, otherwise users silently
-/// lose the Shaula overlay and see only the `slurp` fallback.
+/// lose the Shaula overlay and only see deterministic overlay unavailability.
 fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
     if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |raw_z| {
         const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
@@ -337,54 +333,6 @@ fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
         allocator.free(sibling);
         return allocator.dupe(u8, "shaula-overlay");
     }
-}
-
-fn runSlurpSelection(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    mode: selection.SelectionMode,
-    constraint: selection.SelectionConstraint,
-) selection.SelectionResult {
-    // Functional fallback path while helper runtime is being integrated incrementally.
-    const result = std.process.run(allocator, io, .{
-        .argv = &.{ "slurp", "-b", "#80808080", "-c", "#FFFFFF" },
-        .stdout_limit = .limited(1024),
-        .stderr_limit = .limited(1024),
-    }) catch {
-        return cancelledSelection(mode, constraint);
-    };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    switch (result.term) {
-        .exited => |code| {
-            if (code != 0) {
-                return cancelledSelection(mode, constraint);
-            }
-        },
-        else => {
-            return cancelledSelection(mode, constraint);
-        },
-    }
-
-    // Parse stdout: "10,20 300x400"
-    var x: i32 = 0;
-    var y: i32 = 0;
-    var w: u32 = 0;
-    var h: u32 = 0;
-
-    var it = std.mem.tokenizeAny(u8, result.stdout, " ,x\r\n");
-    if (it.next()) |sx| x = std.fmt.parseInt(i32, sx, 10) catch 0;
-    if (it.next()) |sy| y = std.fmt.parseInt(i32, sy, 10) catch 0;
-    if (it.next()) |sw| w = std.fmt.parseInt(u32, sw, 10) catch 0;
-    if (it.next()) |sh| h = std.fmt.parseInt(u32, sh, 10) catch 0;
-
-    return selection.SelectionResult{
-        .mode = mode,
-        .aspect = constraint.aspect,
-        .geometry = .{ .x = x, .y = y, .width = w, .height = h },
-        .cancelled = false,
-    };
 }
 
 /// Resolve deterministic overlay helper failure taxonomy for cancelled selections.
@@ -410,6 +358,9 @@ pub fn deterministicFailureCode(
         return "ERR_OVERLAY_TIMEOUT";
     }
     if (envFlagEnabled(environ, "SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE")) {
+        return "ERR_OVERLAY_UNAVAILABLE";
+    }
+    if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |_| {
         return "ERR_OVERLAY_UNAVAILABLE";
     }
 
@@ -653,7 +604,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
     try std.testing.expectEqual(@as(u32, 360), geometry.height);
 }
 
-test "helper runner marks fallback when helper process is unavailable" {
+test "helper runner marks unavailable when helper process is unavailable" {
     var map = std.process.Environ.Map.init(std.testing.allocator);
     defer map.deinit();
     try map.put("SHAULA_OVERLAY_HELPER_BIN", "/definitely/missing/shaula-overlay");
@@ -668,21 +619,21 @@ test "helper runner marks fallback when helper process is unavailable" {
         .freeform,
         .{ .aspect = null },
     );
-    try std.testing.expect(attempt == .fallback_to_slurp);
+    try std.testing.expect(attempt == .unavailable);
 }
 
-test "helper runner falls back to slurp on configured helper error class" {
-    const should_fallback = try helperEnvelopeRequiresFallback(
+test "helper runner marks unavailable on configured helper error class" {
+    const should_be_unavailable = try helperEnvelopeReportsUnavailable(
         std.testing.allocator,
         "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"helper missing\"}}",
     );
-    try std.testing.expect(should_fallback);
+    try std.testing.expect(should_be_unavailable);
 
-    const should_not_fallback = try helperEnvelopeRequiresFallback(
+    const should_not_be_unavailable = try helperEnvelopeReportsUnavailable(
         std.testing.allocator,
         "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_PROTOCOL_INVALID\",\"message\":\"bad payload\"}}",
     );
-    try std.testing.expect(!should_not_fallback);
+    try std.testing.expect(!should_not_be_unavailable);
 }
 
 test "confirmed selection persists toolbar position" {

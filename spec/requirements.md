@@ -6,7 +6,7 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 
 | Capability | Status | Contract Notes |
 | :--- | :--- | :--- |
-| All-in-one capture | Supported initial iteration | Uses area capture backend with persisted toolbar UI state and honest helper fallback. |
+| All-in-one capture | Supported initial iteration | Uses area capture backend with persisted toolbar UI state and deterministic helper failures. |
 | Area capture | Supported | Interactive selection with deterministic `ERR_*` outcomes. |
 | Fullscreen capture | Supported | Runtime backend only, no productive stub success path. |
 | Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
@@ -15,7 +15,7 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 | History list/show | Supported | Top-N 20, newest-first, stable `latest` alias. |
 | Output path default | Supported | Defaults to `~/Pictures/Shaula`. |
 | Overlay helper contract | Supported | Helper protocol maps deterministically to `SelectionResult`. |
-| `slurp` fallback | Supported | Used when the dedicated helper is unavailable. |
+| Overlay unavailability | Supported | Missing native helper fails deterministically with `ERR_OVERLAY_UNAVAILABLE`. |
 | Noctalia adapter | Optional | Never part of the capture hot path. |
 
 ## Locked Operational Contracts

@@ -53,21 +53,16 @@ pub fn build(b: *std.Build) void {
     const run_overlay_spike_step = b.step("run-overlay-spike", "Run overlay feasibility spike executable");
     run_overlay_spike_step.dependOn(&run_overlay_spike_cmd.step);
 
-    const overlay_helper_module = b.createModule(.{
-        .root_source_file = b.path("src/overlay/helper_main.zig"),
-        .target = target,
-        .optimize = optimize,
+    const overlay_helper_bin = buildNativeGtkOverlayHelper(b);
+    const install_overlay_helper = b.addInstallFileWithDir(overlay_helper_bin, .bin, "shaula-overlay");
+    b.getInstallStep().dependOn(&install_overlay_helper.step);
+
+    const run_overlay_helper_cmd = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        "exec ./zig-out/bin/shaula-overlay \"$@\"",
+        "shaula-overlay",
     });
-    attachOverlayUiImports(overlay_helper_module, overlay_ui_deps);
-
-    const overlay_helper_exe = b.addExecutable(.{
-        .name = "shaula-overlay",
-        .root_module = overlay_helper_module,
-    });
-
-    b.installArtifact(overlay_helper_exe);
-
-    const run_overlay_helper_cmd = b.addRunArtifact(overlay_helper_exe);
     run_overlay_helper_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_overlay_helper_cmd.addArgs(args);
 
@@ -158,4 +153,21 @@ fn resolveOverlayUiDeps(
 fn attachOverlayUiImports(module: *std.Build.Module, deps: OverlayUiDeps) void {
     module.addImport("raylib", deps.raylib);
     module.addImport("clay", deps.clay);
+}
+
+fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  -DSHAULA_OVERLAY_STANDALONE \
+        \\  "$2" \
+        \\  -o "$1" \
+        \\  $(pkg-config --cflags --libs gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo)
+        ,
+        "build-shaula-overlay",
+    });
+    const output = command.addOutputFileArg("shaula-overlay");
+    command.addFileArg(b.path("src/overlay/native_gtk_overlay.c"));
+    return output;
 }

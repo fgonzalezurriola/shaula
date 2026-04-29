@@ -76,7 +76,7 @@ json_only = int(sys.argv[4]) == 1
 root_dir = sys.argv[5]
 shaula_bin = os.path.join(root_dir, "zig-out", "bin", "shaula")
 adapter_script = os.path.join(root_dir, "integrations", "noctalia", "noctalia-action-adapter.sh")
-helper_script = os.path.join(root_dir, "scripts", "qa", "fake_runtime_capture_helper.py")
+helper_script = os.path.join(root_dir, "scripts", "qa", "fake_runtime_capture_helper.sh")
 
 env = os.environ.copy()
 env.setdefault("SHAULA_RUNTIME_CAPTURE_HELPER", helper_script)

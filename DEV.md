@@ -33,7 +33,6 @@ Fuera de alcance actual:
 - Zig `0.16.0`
 - Niri
 - `grim`
-- `slurp`
 - `wl-copy`
 - `wl-paste`
 - `jq`
@@ -66,7 +65,7 @@ Variables opcionales para desarrollo y QA:
 export SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1
 
 # Helper sintético para capturas cuando no hay grim disponible.
-export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_helper.py"
+export SHAULA_RUNTIME_CAPTURE_HELPER="$(pwd)/scripts/qa/fake_runtime_capture_helper.sh"
 
 # Binario alternativo para el helper de overlay.
 export SHAULA_OVERLAY_HELPER_BIN="$(pwd)/zig-out/bin/shaula-overlay"
@@ -139,7 +138,8 @@ Modos de prueba:
 
 Notas del overlay:
 
-- Si el helper gráfico real no está disponible, Shaula cae a `slurp`.
+- Si el helper gráfico nativo no está disponible, Shaula falla con
+  `ERR_OVERLAY_UNAVAILABLE`; no hay selector secundario.
 - El helper GTK intenta preparar una captura congelada de fondo con `grim` antes
   de abrir el overlay; si esa captura visual falla, la selección sigue usando
   el overlay transparente sin inventar éxito.
@@ -148,9 +148,8 @@ Notas del overlay:
   mueve en pasos de 10 px.
 - `capture all-in-one` usa la ruta de captura de área y persiste la última
   posición válida de la toolbar; no muestra acciones no implementadas.
-- `shaula-overlay` usa strategy seleccionable. En este árbol, `gtk4-layer-shell`
-  funciona si PyGObject/GTK4 están disponibles; `raylib` y `raylib-clay`
-  requieren compilar dependencias reales en vez de stubs.
+- `shaula-overlay` es un helper nativo GTK/layer-shell. `raylib` y `raylib-clay`
+  quedan como candidatos medidos, no como rutas productivas.
 - `bash scripts/qa/benchmark-overlay-strategies.sh` genera evidencia comparativa
   y mantiene `gtk4-layer-shell` como strategy productiva hasta que Raylib pruebe
   semántica equivalente de overlay/input en Wayland.
@@ -257,11 +256,10 @@ Si `grim` no está disponible, configurá `SHAULA_RUNTIME_CAPTURE_HELPER` para Q
 `ERR_OVERLAY_UNAVAILABLE`
 
 ```bash
-command -v slurp
 test -x ./zig-out/bin/shaula-overlay && echo helper-ok
 ```
 
-El helper de overlay requiere dependencias UI reales para funcionar como proceso interactivo. Si no están presentes, Shaula usa `slurp` como fallback.
+El helper de overlay requiere dependencias UI reales para funcionar como proceso interactivo. Si no están presentes, Shaula devuelve `ERR_OVERLAY_UNAVAILABLE`.
 
 `ERR_SELECTION_CANCELLED`
 

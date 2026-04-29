@@ -54,21 +54,13 @@ def run_quick(cmd: list[str], env: dict[str, str] | None = None, timeout: float 
 
 
 def gtk_available() -> tuple[bool, str | None, str]:
-    code = """
-from ctypes import CDLL
-CDLL('libgtk4-layer-shell.so')
-import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Gtk4LayerShell', '1.0')
-from gi.repository import Gtk4LayerShell
-print('1' if Gtk4LayerShell.is_supported() else '0')
-"""
-    rc, out = run_quick(["python3", "-c", code])
-    if rc != 0:
-        return False, "ERR_OVERLAY_UNAVAILABLE", "GTK4/GI/layer-shell import failed"
-    if out.strip() != "1":
-        return False, "ERR_OVERLAY_UNAVAILABLE", "Gtk4LayerShell reported unsupported compositor/runtime"
-    return True, None, "Wayland layer-shell path is available"
+    env = os.environ.copy()
+    env["SHAULA_OVERLAY_HELPER_PROBE"] = "1"
+    env["SHAULA_OVERLAY_HELPER_STRATEGY"] = "gtk4-layer-shell"
+    rc, out = run_quick(["./zig-out/bin/shaula-overlay"], env=env)
+    if rc == 0 and '"status":"ok"' in out:
+        return True, None, "Native GTK/layer-shell helper reports Wayland layer-shell support"
+    return False, "ERR_OVERLAY_UNAVAILABLE", "Native GTK/layer-shell helper probe failed"
 
 
 def strategy_probe(strategy: str) -> tuple[bool, str | None, str]:
@@ -87,7 +79,7 @@ def strategy_probe(strategy: str) -> tuple[bool, str | None, str]:
 def timed_capture(strategy: str) -> tuple[float, float] | None:
     if not allow_intrusive:
         return None
-    helper_script = os.path.join(root, "scripts/qa/fake_runtime_capture_helper.py")
+    helper_script = os.path.join(root, "scripts/qa/fake_runtime_capture_helper.sh")
     env = os.environ.copy()
     env.update({
         "SHAULA_OVERLAY_HELPER_STRATEGY": strategy,

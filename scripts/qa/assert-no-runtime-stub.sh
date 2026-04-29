@@ -14,7 +14,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
@@ -44,7 +44,7 @@ printf '%s\n' "${capture_json}" | jq -e --arg capture_path "${capture_path}" '
   exit 1
 }
 
-python3 scripts/qa/assert_png_not_stub_signature.py "${capture_path}" >/dev/null
+bash scripts/qa/assert_png_not_stub_signature.sh "${capture_path}" >/dev/null
 
 set +e
 forced_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_CAPTURE_BACKEND=__stub__ SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output "${forced_stub_path}" 2>/tmp/shaula-qa-runtime-stub.err)"

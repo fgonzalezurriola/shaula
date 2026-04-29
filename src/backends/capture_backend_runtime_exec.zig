@@ -39,7 +39,6 @@ fn writeRuntimeCaptureWithHelper(
 
     const result = if (area_geometry) |region| std.process.run(std.heap.smp_allocator, io, .{
         .argv = &.{
-            "python3",
             helper_path,
             "--backend",
             backend_label,
@@ -57,7 +56,6 @@ fn writeRuntimeCaptureWithHelper(
         else => return err,
     } else std.process.run(std.heap.smp_allocator, io, .{
         .argv = &.{
-            "python3",
             helper_path,
             "--backend",
             backend_label,

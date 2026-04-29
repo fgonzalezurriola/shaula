@@ -6,7 +6,7 @@ pub const AreaFlags = struct {
     dry_run: bool = false,
     simulate_cancel: bool = false,
     save: bool = false,
-    copy: bool = false,
+    copy: bool = true,
     aspect: ?[]const u8 = null,
     output: ?[]const u8 = null,
 };

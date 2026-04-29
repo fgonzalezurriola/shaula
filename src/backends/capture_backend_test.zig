@@ -153,7 +153,7 @@ test "window mode unresolved target returns deterministic failure" {
 test "runtime capture helper missing maps to backend unavailable" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "/tmp/shaula/missing-helper.py" },
+        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "/tmp/shaula/missing-helper" },
     });
     defer test_environ.deinit(std.testing.allocator);
 
@@ -182,7 +182,7 @@ test "default output path resolves under HOME Pictures Shaula" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "HOME", .value = "/tmp/shaula-test-home" },
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.py" },
+        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.sh" },
     });
     defer test_environ.deinit(std.testing.allocator);
 
@@ -205,7 +205,7 @@ test "default output path resolves under HOME Pictures Shaula" {
 test "default output path without HOME returns OutputPathInvalid" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
-        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.py" },
+        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.sh" },
     });
     defer test_environ.deinit(std.testing.allocator);
 
@@ -314,12 +314,7 @@ test "forcing stub backend fails deterministically and writes no file" {
 
 test "runtime capture output does not match stub signature" {
     const io = std.testing.io;
-    const helper_path = "/tmp/shaula/test-runtime-capture-helper.py";
-    const helper_source = "scripts/qa/fake_runtime_capture_helper.py";
-    const helper_bytes = try std.Io.Dir.cwd().readFileAlloc(io, helper_source, std.testing.allocator, .unlimited);
-    defer std.testing.allocator.free(helper_bytes);
-    try createExecutableHelper(io, helper_path, helper_bytes);
-    defer std.Io.Dir.deleteFileAbsolute(io, helper_path) catch {};
+    const helper_path = "scripts/qa/fake_runtime_capture_helper.sh";
 
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
@@ -374,11 +369,10 @@ test "runtime capture output does not match stub signature" {
 
 test "runtime helper nonzero exit maps to backend unavailable and no output" {
     const io = std.testing.io;
-    const helper_path = "/tmp/shaula/test-runtime-capture-helper-fail.py";
+    const helper_path = "/tmp/shaula/test-runtime-capture-helper-fail.sh";
     const fail_script =
-        "#!/usr/bin/env python3\n" ++
-        "import sys\n" ++
-        "sys.exit(7)\n";
+        "#!/usr/bin/env bash\n" ++
+        "exit 7\n";
     try createExecutableHelper(io, helper_path, fail_script);
     defer std.Io.Dir.deleteFileAbsolute(io, helper_path) catch {};
 

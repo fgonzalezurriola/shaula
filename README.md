@@ -14,9 +14,8 @@ Shaula es una herramienta de captura para Niri/Wayland con salida JSON determin�
   - confirm/cancel,
   - constraint por aspecto vía `--aspect`,
   - flujo honesto para `previous-area`,
-  - helper dedicado cuando existen dependencias UI reales,
-  - strategy seleccionable `auto|gtk4-layer-shell|raylib|raylib-clay`,
-  - fallback a `slurp` en runtime.
+  - helper nativo GTK/layer-shell,
+  - strategy benchmark para comparar `gtk4-layer-shell|raylib|raylib-clay`.
 
 Fuera de alcance por ahora:
 
@@ -30,7 +29,6 @@ Fuera de alcance por ahora:
 - Zig 0.16.0
 - Niri
 - `grim`
-- `slurp`
 - `wl-copy` y `wl-paste`
 - `jq` para QA y depuración
 

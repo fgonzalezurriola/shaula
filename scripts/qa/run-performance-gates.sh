@@ -93,7 +93,7 @@ mkdir -p "${EVIDENCE_DIR}"
 : > "${ERROR_LOG}"
 apply_profile_defaults
 
-helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-}" ]]; then
   if [[ ! -x "${helper_script}" ]]; then
     chmod +x "${helper_script}"

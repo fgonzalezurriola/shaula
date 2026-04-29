@@ -52,8 +52,8 @@ pub fn run(
 ///
 /// This first public all-in-one iteration keeps backend execution on the proven
 /// area lane while using the dedicated all-in-one session state for toolbar
-/// placement and persistence. Unsupported overlay/helper failures still map to
-/// deterministic `ERR_*` outcomes or the explicit slurp fallback.
+/// placement and persistence. Unsupported overlay/helper failures map to
+/// deterministic `ERR_*` outcomes; there is no secondary selector fallback.
 fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     const reported_mode = core_capture_mode.cliToken(.all_in_one);
     const backend_mode = core_capture_mode.backendModeToken(.all_in_one) orelse reported_mode;

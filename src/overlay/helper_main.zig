@@ -5,10 +5,10 @@ const hud = @import("hud.zig");
 const all_in_one_session = @import("all_in_one_session.zig");
 const overlay_strategy = @import("strategy.zig");
 const ui_state_store = @import("ui_state_store.zig");
+const native_gtk_overlay = @import("native_gtk_overlay.zig");
 
 // Real PNG evidence with 320x180 resolution containing drawn visual regions
 const valid_png = @embedFile("hud_evidence_stub.png");
-const gtk_overlay_script = @embedFile("gtk_overlay.py");
 
 pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
@@ -137,38 +137,14 @@ fn writeError(allocator: std.mem.Allocator, io: std.Io, code: []const u8, messag
     try stdout.interface.flush();
 }
 
-/// Runs the GTK layer-shell overlay when Raylib/Clay are not wired.
+/// Runs the native GTK layer-shell overlay when Raylib/Clay are not wired.
 ///
 /// Contract constraints:
 /// - stdout remains the helper envelope v1 consumed by the parent parser.
-/// - Python/GTK startup failures map to deterministic `ERR_OVERLAY_UNAVAILABLE`.
+/// - GTK startup failures map to deterministic `ERR_OVERLAY_UNAVAILABLE`.
 /// - capture geometry is produced only from a committed user selection.
 fn runGtkOverlay(allocator: std.mem.Allocator, io: std.Io) !u8 {
-    const result = std.process.run(allocator, io, .{
-        .argv = &.{ "python3", "-c", gtk_overlay_script },
-        .stdout_limit = .limited(4096),
-        .stderr_limit = .limited(4096),
-    }) catch {
-        try writeError(allocator, io, "ERR_OVERLAY_UNAVAILABLE", "python gtk overlay helper could not be started");
-        return 36;
-    };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    if (result.stdout.len > 0) {
-        var stdout_buffer: [4096]u8 = undefined;
-        var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
-        try stdout.interface.writeAll(result.stdout);
-        if (result.stdout[result.stdout.len - 1] != '\n') {
-            try stdout.interface.writeAll("\n");
-        }
-        try stdout.interface.flush();
-    } else {
-        try writeError(allocator, io, "ERR_OVERLAY_UNAVAILABLE", "python gtk overlay helper exited without a protocol payload");
-    }
-
-    return switch (result.term) {
-        .exited => |code| @intCast(@min(code, 255)),
-        else => 36,
-    };
+    _ = allocator;
+    _ = io;
+    return native_gtk_overlay.run();
 }

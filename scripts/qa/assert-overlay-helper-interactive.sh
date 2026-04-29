@@ -16,7 +16,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-}" ]]; then
   if [[ ! -x "${helper_script}" ]]; then
     chmod +x "${helper_script}"
@@ -28,21 +28,6 @@ zig build >/dev/null
 
 subchecks_json='[]'
 failed_checks='[]'
-
-SLURP_BIN_DIR="/tmp/shaula/task11-slurp-bin"
-SLURP_CALL_LOG="/tmp/shaula/task11-slurp-called.log"
-rm -rf "${SLURP_BIN_DIR}"
-mkdir -p "${SLURP_BIN_DIR}"
-
-# Keep fallback probe deterministic by injecting a local slurp binary.
-cat > "${SLURP_BIN_DIR}/slurp" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-: "${SLURP_CALL_LOG:=/tmp/shaula/task11-slurp-called.log}"
-printf 'called\n' > "${SLURP_CALL_LOG}"
-printf '10,20 300x400\n'
-EOF
-chmod +x "${SLURP_BIN_DIR}/slurp"
 
 run_subcheck() {
   local id="$1"
@@ -88,8 +73,8 @@ run_subcheck "interactive.helper.cancel" "set +e; OUT=\$(SHAULA_CAPTURE_FORCE_NO
 # Helper-interactive malformed lane must map to protocol-invalid deterministically.
 run_subcheck "interactive.helper.error" "set +e; OUT=\$(SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=0 SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=malformed SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json 2>&1); RC=\$?; set -e; [[ \${RC} -ne 0 ]] && printf '%s\\n' \"\${OUT}\" | jq -e '.ok==false and .error.code==\"ERR_OVERLAY_PROTOCOL_INVALID\"' >/dev/null"
 
-# Fallback lane: force helper process unavailable, then prove slurp fallback was used.
-run_subcheck "interactive.helper.fallback" "FALLBACK_PATH=/tmp/shaula/task11-interactive-fallback.png; rm -f \"\${FALLBACK_PATH}\" \"${SLURP_CALL_LOG}\"; OUT=\$(PATH=\"${SLURP_BIN_DIR}:\${PATH}\" SLURP_CALL_LOG=\"${SLURP_CALL_LOG}\" SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=0 SHAULA_OVERLAY_HELPER_BIN=/definitely/missing/shaula-overlay SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output \"\${FALLBACK_PATH}\"); printf '%s\\n' \"\${OUT}\" | jq -e --arg path \"\${FALLBACK_PATH}\" '.ok==true and .mode==\"area\" and .path==\$path and .dimensions.width>0 and .dimensions.height>0' >/dev/null && [[ -f \"\${FALLBACK_PATH}\" ]] && [[ -f \"${SLURP_CALL_LOG}\" ]]"
+# Unavailable lane: force helper process unavailable and require deterministic taxonomy.
+run_subcheck "interactive.helper.unavailable" "set +e; OUT=\$(SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=0 SHAULA_OVERLAY_HELPER_BIN=/definitely/missing/shaula-overlay SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json 2>&1); RC=\$?; set -e; [[ \${RC} -ne 0 ]] && printf '%s\\n' \"\${OUT}\" | jq -e '.ok==false and .error.code==\"ERR_OVERLAY_UNAVAILABLE\"' >/dev/null"
 
 suite_pass="$(jq -e 'all(.[]; .pass == true)' <<<"${subchecks_json}" >/dev/null && echo true || echo false)"
 timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"

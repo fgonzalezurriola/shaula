@@ -9,7 +9,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi

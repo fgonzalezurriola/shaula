@@ -26,7 +26,47 @@ pub fn copyImage(io: std.Io, environ: std.process.Environ, path: []const u8) !Cl
     try writer.interface.print("{s}\n", .{path});
     try writer.interface.flush();
 
+    if (!try publishWaylandImage(io, path)) {
+        return .{
+            .ok = false,
+            .code = "ERR_CLIPBOARD_COPY_FAILED",
+            .message = "wl-copy could not publish the PNG image to the clipboard",
+        };
+    }
+
     return .{ .ok = true, .code = null, .message = null };
+}
+
+/// Publishes the captured PNG bytes to the real Wayland clipboard.
+///
+/// Contract constraint: the state-file copy is kept for Shaula import flows, but
+/// this boundary must also write image/png bytes so clipboard managers can see
+/// the capture. Failures map to deterministic clipboard `ERR_*` outcomes.
+fn publishWaylandImage(io: std.Io, path: []const u8) !bool {
+    const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.smp_allocator, .unlimited) catch return false;
+    defer std.heap.smp_allocator.free(bytes);
+
+    var child = std.process.spawn(io, .{
+        .argv = &.{ "wl-copy", "--type", "image/png" },
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    }) catch return false;
+
+    if (child.stdin) |stdin| {
+        stdin.writeStreamingAll(io, bytes) catch {
+            child.kill(io);
+            return false;
+        };
+        stdin.close(io);
+        child.stdin = null;
+    }
+
+    const term = child.wait(io) catch return false;
+    return switch (term) {
+        .exited => |code| code == 0,
+        else => false,
+    };
 }
 
 pub fn importImage(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, output_path: ?[]const u8) ![]u8 {

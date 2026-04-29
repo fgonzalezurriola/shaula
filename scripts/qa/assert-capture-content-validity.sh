@@ -47,7 +47,7 @@ case "${mode}" in
     ;;
 esac
 
-helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
@@ -225,24 +225,12 @@ printf '%s\n' "${decoded_json}" | jq -e --argjson capture "${capture_json}" '
   exit 1
 }
 
-python3 scripts/qa/assert_png_not_stub_signature.py "${capture_path}" >/dev/null
+bash scripts/qa/assert_png_not_stub_signature.sh "${capture_path}" >/dev/null
 
-python3 - "${stub_path}" <<'PY'
-import importlib.util
-import pathlib
-import sys
-
-script_path = pathlib.Path("scripts/qa/assert_png_not_stub_signature.py")
-spec = importlib.util.spec_from_file_location("stub_checker", script_path)
-if spec is None or spec.loader is None:
-    raise SystemExit("ERR_CAPTURE_CONTENT_INVALID reason=stub_loader_unavailable")
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-pathlib.Path(sys.argv[1]).write_bytes(module.STUB_SIGNATURE)
-PY
+printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01\xe5\x27\xd4\xa2\x00\x00\x00IEND\xaeB`\x82' > "${stub_path}"
 
 set +e
-stub_reject_output="$(python3 scripts/qa/assert_png_not_stub_signature.py "${stub_path}" 2>&1)"
+stub_reject_output="$(bash scripts/qa/assert_png_not_stub_signature.sh "${stub_path}" 2>&1)"
 stub_reject_rc=$?
 set -e
 

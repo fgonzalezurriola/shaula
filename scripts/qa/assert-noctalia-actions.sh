@@ -36,7 +36,7 @@ fi
 
 PLUGIN_SCRIPT="${ROOT_DIR}/integrations/noctalia/noctalia-plugin-poc.sh"
 ADAPTER_SCRIPT="${ROOT_DIR}/integrations/noctalia/noctalia-action-adapter.sh"
-HELPER_SCRIPT="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.py"
+HELPER_SCRIPT="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-9-noctalia-actions.json"
 OPEN_FOLDER_EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-10-open-folder.json"
 OPEN_CLIPBOARD_ERROR_EVIDENCE_PATH="${ROOT_DIR}/.qa/evidence/task-10-open-clipboard-error.json"
