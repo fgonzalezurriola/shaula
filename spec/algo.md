@@ -56,6 +56,17 @@ Shaula provides a machine-first interface designed for consumption by LLM agents
 - Capture completion: `<= 150ms` (area/fullscreen), `<= 220ms` (window).
 - Daemon idle: `<= 0.5%` CPU, `<= 40MB` RSS.
 
+## Uncertainty / Pending Verification List
+
+The product direction is Linux/Niri-first: capture speed, precise overlay behavior, pin screenshots, redaction, ruler/color picker, and file-first configuration. The items below must be verified before becoming supported public contract:
+
+- Focused output capture semantics through Niri/Wayland capability probing.
+- Focused window identity and tile/window ambiguity through Niri IPC.
+- Pin screenshot behavior under Niri layer-shell or compositor-supported window rules.
+- Pixelate, blur, and solid-bar redaction output determinism for QA/release gates.
+- Ruler and color picker behavior across logical vs physical pixels and fractional output scale.
+- OCR, QR reading, upload, smart selection, object removal, and scrolling screenshot as optional non-hot-path work.
+
 ## Risk and Dependency Matrix
 
 | ID | Risk / Dependency | Impact | Mitigation Strategy |

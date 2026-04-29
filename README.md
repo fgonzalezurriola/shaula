@@ -1,6 +1,6 @@
 # Shaula
 
-Shaula es una herramienta de captura para Niri/Wayland con salida JSON determinística. El objetivo actual es simple: ofrecer una base tipo CleanShot, centrada en capturas rápidas, overlay de selección y post-capture mínimo, sin arrastrar roadmap especulativo.
+Shaula es una herramienta de captura para Niri/Wayland con salida JSON determinística. El objetivo actual es simple: captura rápida, overlay de selección preciso y post-capture mínimo sobre una base Linux/Niri-first.
 
 ## Alcance actual
 
@@ -8,13 +8,21 @@ Shaula es una herramienta de captura para Niri/Wayland con salida JSON determin�
 - Historial local de capturas.
 - Integración de portapapeles para copiar o importar imágenes.
 - Daemon e IPC versionados.
-- Overlay tipo CleanShot como línea de trabajo activa:
+- Overlay de selección como línea de trabajo activa:
   - selección de área,
   - modo `all-in-one` inicial con toolbar flotante persistida,
   - confirm/cancel,
   - constraint por aspecto vía `--aspect`,
   - flujo honesto para `previous-area`,
   - helper nativo GTK/layer-shell.
+- Dirección de producto:
+  - captura por Niri IPC/Wayland,
+  - overlay pulido,
+  - una UX de selección y post-captura a la altura de Shottr,
+  - pin screenshots,
+  - pixelate/redaction,
+  - ruler/color picker,
+  - configuración file-first.
 
 Fuera de alcance por ahora:
 

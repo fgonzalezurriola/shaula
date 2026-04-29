@@ -37,4 +37,4 @@ Failure to meet these budgets results in a build/deployment block under the `ERR
 - `previous-area` should remain close to `area` latency because it reuses persisted selection geometry instead of opening an interactive selection flow.
 - An `overlay_first_paint` report of `0.0ms` with `status: "degraded"` is not evidence of a real overlay first-paint measurement; it usually means intrusive interactive benchmarking was disabled by policy.
 - A `capture_completion` report marked `degraded` or carrying `ERR_CAPTURE_MODE_UNSUPPORTED` must not be treated as a productive latency datapoint for the shipped flow.
-- CleanShot-like UX validation remains incomplete until the real interactive overlay helper is measured under an allowed interactive benchmark lane.
+- Niri-first overlay UX validation remains incomplete until the real interactive overlay helper is measured under an allowed interactive benchmark lane.

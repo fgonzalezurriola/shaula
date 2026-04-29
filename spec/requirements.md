@@ -1,6 +1,6 @@
 # Shaula Product Requirements
 
-Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/JSON contracts. This document intentionally defines the product that exists now, not speculative roadmap items.
+Shaula is scoped as a Niri-first capture tool with deterministic CLI/JSON contracts. This document separates the supported product contract from candidate direction so future work stays Linux/Niri-first instead of mirroring macOS-only capture tools.
 
 ## Supported Surface
 
@@ -30,12 +30,67 @@ Shaula is currently scoped as a Niri-first capture tool with deterministic CLI/J
 - Missing interactive backends must not silently degrade into fake successful area selections.
 - The shell-artifact precondition runs before capture and may fail with deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`.
 
+## Product Direction
+
+Shaula should copy the useful philosophy of fast capture tools, not their platform-specific feature lists. Shottr is the quality bar for selection precision, interaction speed, and post-capture usefulness, while Shaula remains a Linux/Niri-first product. Candidate work must remain valid for Linux, Wayland, and Niri, and must preserve deterministic CLI/JSON contracts before it becomes public surface.
+
+Differentiators:
+
+- Niri IPC and Wayland-first capture paths.
+- Polished selection overlay with precise geometry controls.
+- Pin screenshots on screen when compositor behavior allows it.
+- Pixelate, blur, and solid-bar redaction for sensitive information.
+- Frontend/dev tools: ruler, manual measurement, color picker, and average-area color.
+- File-first configuration through TOML.
+
+## Candidate Feature Priorities
+
+### v0: Solid Capture Base
+
+| Priority | Candidate | Contract Gate |
+| :--- | :--- | :--- |
+| High | Fullscreen capture | Runtime backend success only. |
+| High | Region capture | Overlay must emit deterministic selection or cancellation. |
+| High | Focused output capture | Capability-gated for Niri/Wayland runtime availability. |
+| High | Focused window capture via Niri IPC | Deterministic failure when target identity is unresolved. |
+| High | Save to file | Defaults to `~/Pictures/Shaula`; invalid paths fail deterministically. |
+| High | Copy image to clipboard | Clipboard failures remain explicit and machine-readable. |
+| High | TOML configuration | Config errors must map to stable `ERR_*` outcomes before being public contract. |
+| High | Decent selection overlay | Esc cancel and Enter confirm are required interactions. |
+| Medium | Visible selection size | Must not change capture JSON shape without contract versioning. |
+| Medium | Repeat last region | Must use last confirmed geometry only. |
+
+### v1: Differentiating UX
+
+| Priority | Candidate | Contract Gate |
+| :--- | :--- | :--- |
+| High | Floating post-capture preview | Must stay outside capture hot-path completion. |
+| High | Basic editor with crop | Editor failures must not corrupt the original artifact. |
+| High | Pixelate/redaction | Redaction output must be deterministic for release QA. |
+| High | Arrows and rectangles | Annotation data model must be versioned before persistence. |
+| High | Pin screenshot | Must be capability-gated for Wayland/Niri behavior. |
+| Medium | Color picker | Clipboard/export behavior must be explicit. |
+| Medium | Magnifier | Shared with overlay/editor when possible. |
+| Medium | Ruler/manual measurement | Must support logical/physical pixel clarity. |
+| Medium | Simple history | Retention and ordering remain deterministic. |
+| Medium | Configurable file naming | Invalid templates must fail deterministically. |
+
+### v2: Power User
+
+| Priority | Candidate | Contract Gate |
+| :--- | :--- | :--- |
+| Medium | Region OCR | External engine/service availability must be optional and explicit. |
+| Medium | QR reader | Decode failures must be non-destructive. |
+| Medium | Pretty export with padding, shadow, and rounded corners | Export presets stay outside the capture hot path. |
+| Medium | Combine screenshots | Canvas model must be versioned. |
+| Medium | S3-compatible upload | Upload is optional worker/plugin surface, never capture-critical. |
+| Low | Smart selection | Requires reliable edge/component detection before public exposure. |
+| Low | Remove object | Requires an explicit image-editing strategy. |
+| Low | Scrolling screenshot | Deferred until Wayland/Niri strategy is clear. |
+
 ## Explicit Non-Goals
 
-The following are intentionally not part of the current product contract:
+The following are intentionally not part of the current supported product contract:
 
-- OCR
 - screen recording
-- scrolling capture
-- annotation/editor workflows
 - public UI placeholders for future features

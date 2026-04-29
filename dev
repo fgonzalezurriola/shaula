@@ -17,7 +17,8 @@ Usage:
   ./dev <command> [args...]
 
 Core:
-  build          Build shaula and overlay helper
+ build Build shaula and overlay helper
+  release Build shaula and overlay helper (ReleaseSafe)
   test           Run Zig tests
   check          Run build + tests
   doctor         Check local toolchain/runtime dependencies
@@ -67,6 +68,10 @@ shaula_env() {
 
 build() {
   zig build
+}
+
+release() {
+  zig build -Doptimize=ReleaseSafe
 }
 
 run_shaula() {
@@ -133,9 +138,12 @@ case "${cmd}" in
   help|-h|--help)
     usage
     ;;
-  build)
-    build
-    ;;
+build)
+  build
+  ;;
+release)
+  release
+  ;;
   test)
     zig build test "$@"
     ;;
