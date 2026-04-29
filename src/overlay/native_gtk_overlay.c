@@ -103,6 +103,7 @@ typedef struct {
   ShaulaAspect aspect;
   ShaulaDragMode drag_mode;
   ShaulaResizeHandle active_handle;
+  ShaulaResizeHandle hover_handle;
   ShaulaPoint drag_start;
   ShaulaRect drag_origin;
   gboolean dropdown_open;
@@ -199,6 +200,30 @@ static ShaulaCursorShape cursor_for_handle(ShaulaResizeHandle handle) {
       case HANDLE_NONE:
       default:
         return CURSOR_DEFAULT;
+    }
+}
+
+static int handle_index(ShaulaResizeHandle handle) {
+    switch (handle) {
+      case HANDLE_TOP_LEFT:
+        return 0;
+      case HANDLE_TOP:
+        return 1;
+      case HANDLE_TOP_RIGHT:
+        return 2;
+      case HANDLE_RIGHT:
+        return 3;
+      case HANDLE_BOTTOM_RIGHT:
+        return 4;
+      case HANDLE_BOTTOM:
+        return 5;
+      case HANDLE_BOTTOM_LEFT:
+        return 6;
+      case HANDLE_LEFT:
+        return 7;
+      case HANDLE_NONE:
+      default:
+        return -1;
     }
 }
 
@@ -550,9 +575,35 @@ static void draw_chevron(cairo_t *cr, double cx, double cy, gboolean open) {
   cairo_stroke(cr);
 }
 
+static void draw_selection_guides(cairo_t *cr, ShaulaRect s, int width, int height) {
+  double dash[] = { 5.0, 7.0 };
+  double left = (double)s.x + 0.5;
+  double right = (double)(s.x + s.width) + 0.5;
+  double top = (double)s.y + 0.5;
+  double bottom = (double)(s.y + s.height) + 0.5;
+
+  cairo_save(cr);
+  cairo_set_dash(cr, dash, 2, 0);
+  cairo_set_line_width(cr, 1);
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.20);
+
+  cairo_move_to(cr, left, 0);
+  cairo_line_to(cr, left, height);
+  cairo_move_to(cr, right, 0);
+  cairo_line_to(cr, right, height);
+  cairo_move_to(cr, 0, top);
+  cairo_line_to(cr, width, top);
+  cairo_move_to(cr, 0, bottom);
+  cairo_line_to(cr, width, bottom);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
 static void draw_handles(cairo_t *cr, ShaulaRect s) {
   double hw = 6;
   double hh = 6;
+  ShaulaResizeHandle emphasized = state.drag_mode == DRAG_RESIZE ? state.active_handle : state.hover_handle;
+  int emphasized_index = handle_index(emphasized);
   ShaulaPoint points[8] = {
     { s.x, s.y },
     { s.x + s.width / 2, s.y },
@@ -566,23 +617,35 @@ static void draw_handles(cairo_t *cr, ShaulaRect s) {
   for (int i = 0; i < 8; i += 1) {
     double px = (double)points[i].x;
     double py = (double)points[i].y;
-    rounded_rect(cr, px - hw / 2, py - hh / 2, hw, hh, 2);
-    cairo_set_source_rgba(cr, 1, 1, 1, 0.9);
+    double scale = i == emphasized_index ? 1.45 : 1.0;
+    double handle_w = hw * scale;
+    double handle_h = hh * scale;
+    rounded_rect(cr, px - handle_w / 2, py - handle_h / 2, handle_w, handle_h, 2.5);
+    if (i == emphasized_index) {
+      cairo_set_source_rgba(cr, 0.30, 0.62, 1.0, 0.96);
+    } else {
+      cairo_set_source_rgba(cr, 1, 1, 1, 0.9);
+    }
     cairo_fill_preserve(cr);
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.3);
+    cairo_set_source_rgba(cr, 0, 0, 0, i == emphasized_index ? 0.45 : 0.3);
     cairo_set_line_width(cr, 1);
     cairo_stroke(cr);
   }
 }
 
-static void draw_badge(cairo_t *cr, ShaulaRect s) {
-  int y = MAX(8, s.y - 32);
-  char label[32];
-  snprintf(label, sizeof(label), "%d x %d", s.width, s.height);
-  double badge_w = 108;
+static void draw_badge(cairo_t *cr, ShaulaRect s, int width, int height) {
+  char label[48];
+  snprintf(label, sizeof(label), "x %d y %d  %d x %d", s.x, s.y, s.width, s.height);
   double badge_h = 26;
-  double badge_x = (double)s.x;
-  double badge_y = (double)y;
+
+  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+  cairo_set_font_size(cr, 12);
+  cairo_text_extents_t extents;
+  cairo_text_extents(cr, label, &extents);
+
+  double badge_w = MAX(126.0, extents.width + 22.0);
+  double badge_x = (double)clamp_int(s.x, 8, MAX(8, width - (int)badge_w - 8));
+  double badge_y = s.y >= 36 ? (double)(s.y - 32) : (double)MIN(height - (int)badge_h - 8, s.y + s.height + 8);
 
   rounded_rect(cr, badge_x, badge_y, badge_w, badge_h, BADGE_RADIUS);
   cairo_set_source_rgba(cr, 0.06, 0.06, 0.08, 0.82);
@@ -591,10 +654,6 @@ static void draw_badge(cairo_t *cr, ShaulaRect s) {
   cairo_set_line_width(cr, 0.5);
   cairo_stroke(cr);
 
-  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-  cairo_set_font_size(cr, 12);
-  cairo_text_extents_t extents;
-  cairo_text_extents(cr, label, &extents);
   double text_x = badge_x + (badge_w - extents.width) / 2 - extents.x_bearing;
   double text_y = badge_y + (badge_h - extents.height) / 2 - extents.y_bearing;
   cairo_move_to(cr, text_x, text_y);
@@ -707,12 +766,13 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gp
       draw_background(cr, width, height);
       cairo_restore(cr);
     }
+    draw_selection_guides(cr, s, width, height);
     rounded_rect(cr, (double)s.x, (double)s.y, (double)s.width, (double)s.height, 2);
     cairo_set_source_rgba(cr, 1, 1, 1, 0.85);
     cairo_set_line_width(cr, 1.5);
     cairo_stroke(cr);
     draw_handles(cr, s);
-    draw_badge(cr, s);
+    draw_badge(cr, s, width, height);
   }
 
   ShaulaPoint t = state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING };
@@ -776,10 +836,12 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
   state.drag_start = p;
   state.drag_origin = state.selection;
   state.active_handle = HANDLE_NONE;
+  state.hover_handle = HANDLE_NONE;
   if (state.has_selection) {
     ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
     if (handle != HANDLE_NONE) {
       state.active_handle = handle;
+      state.hover_handle = handle;
       state.drag_mode = DRAG_RESIZE;
       apply_cursor(cursor_for_handle(handle));
       queue_draw();
@@ -833,7 +895,9 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer 
     state.drag_mode = DRAG_NONE;
     state.active_handle = HANDLE_NONE;
     state.suppress_pointer_drag = FALSE;
-    apply_cursor(resolve_hover_cursor((ShaulaPoint){ .x = state.drag_start.x + (int)dx, .y = state.drag_start.y + (int)dy }));
+    ShaulaPoint p = { .x = state.drag_start.x + (int)dx, .y = state.drag_start.y + (int)dy };
+    state.hover_handle = state.has_selection ? resize_handle_at(state.selection, p) : HANDLE_NONE;
+    apply_cursor(resolve_hover_cursor(p));
     queue_draw();
 }
 
@@ -841,7 +905,13 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y, 
   (void)controller;
   (void)data;
   if (state.drag_mode != DRAG_NONE) return;
-  apply_cursor(resolve_hover_cursor((ShaulaPoint){ .x = (int)x, .y = (int)y }));
+  ShaulaPoint p = { .x = (int)x, .y = (int)y };
+  ShaulaResizeHandle next_hover = state.has_selection ? resize_handle_at(state.selection, p) : HANDLE_NONE;
+  if (next_hover != state.hover_handle) {
+    state.hover_handle = next_hover;
+    queue_draw();
+  }
+  apply_cursor(resolve_hover_cursor(p));
 }
 
 static void on_motion_enter(GtkEventControllerMotion *controller, double x, double y, gpointer data) {
@@ -851,7 +921,9 @@ static void on_motion_enter(GtkEventControllerMotion *controller, double x, doub
 static void on_motion_leave(GtkEventControllerMotion *controller, gpointer data) {
   (void)controller;
   (void)data;
+  state.hover_handle = HANDLE_NONE;
   apply_cursor(CURSOR_DEFAULT);
+  queue_draw();
 }
 
 static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data) {

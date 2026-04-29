@@ -43,6 +43,26 @@ Differentiators:
 - Frontend/dev tools: ruler, manual measurement, color picker, and average-area color.
 - File-first configuration through TOML.
 
+## Incremental UX Strategy
+
+Shottr-level UX is the quality target, but Shaula should reach it through low-risk improvements before redesigning the current UI. The first pass should prefer changes that improve confidence, speed, and precision without replacing the overlay architecture or adding a full editor surface.
+
+Low-hanging fruit:
+
+- Make selection feedback clearer: size badge, coordinates, handle affordances, and stable toolbar placement.
+- Tighten keyboard behavior: Esc cancel, Enter confirm, arrow-key nudging, and predictable focus handling.
+- Improve repeatability: last-region reuse, persisted toolbar state, and explicit previous-area failures.
+- Polish output defaults: save directory, filename templates, copy-image behavior, and copy-path behavior.
+- Add small dev-facing utilities where the current capture pipeline can support them cleanly, such as color picking and manual measurement.
+
+Deferred heavier UX work:
+
+- Replacing the overlay visual model.
+- Full post-capture preview/editor.
+- Annotation tools beyond simple geometry.
+- Pinning screenshots if compositor behavior requires a separate window/layer strategy.
+- Pixelate/redaction if it requires a new image-editing pipeline.
+
 ## Candidate Feature Priorities
 
 ### v0: Solid Capture Base

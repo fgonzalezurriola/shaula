@@ -52,7 +52,26 @@ Go/No-Go:
 - `./dev doctor`
 - `./dev strategies`
 
-## Track 4: v1 Differentiating UX
+## Track 4: Low-Hanging UX Polish
+
+Focus:
+
+- clearer size and coordinate feedback,
+- stronger handle affordances for move/resize,
+- stable toolbar placement and anti-jitter behavior,
+- keyboard polish: Esc, Enter, nudging, and focus predictability,
+- previous-area and toolbar persistence reliability,
+- output polish: filename templates, copy-path, and post-capture action defaults,
+- small utilities that do not require a new UI shell, such as color picker or manual measurement.
+
+Go/No-Go:
+
+- no replacement of the current overlay architecture,
+- no full editor dependency,
+- no capture hot-path regression,
+- all new failures map to deterministic `ERR_*` outcomes.
+
+## Track 5: v1 Differentiating UX
 
 Focus:
 
@@ -73,7 +92,7 @@ Go/No-Go:
 - optional preview/editor/pin failures remain outside capture-critical completion,
 - all new public failures map to deterministic `ERR_*` outcomes.
 
-## Track 5: v2 Power User Surface
+## Track 6: v2 Power User Surface
 
 Focus:
 
@@ -92,7 +111,7 @@ Go/No-Go:
 - capability absence is represented explicitly instead of placeholder UI,
 - contracts are versioned before automation-visible shape changes.
 
-## Track 6: Release Hardening
+## Track 7: Release Hardening
 
 Focus:
 

@@ -19,6 +19,7 @@ Shaula es una herramienta de captura para Niri/Wayland con salida JSON determin�
   - captura por Niri IPC/Wayland,
   - overlay pulido,
   - una UX de selección y post-captura a la altura de Shottr,
+  - mejoras incrementales primero, antes de rediseñar la UI,
   - pin screenshots,
   - pixelate/redaction,
   - ruler/color picker,
