@@ -20,6 +20,7 @@ enum {
   DROPDOWN_ITEM_H = 32,
   DROPDOWN_PADDING = 6,
   DROPDOWN_RADIUS = 10,
+  RESIZE_HIT_RADIUS = 10,
 };
 
 typedef enum {
@@ -60,8 +61,34 @@ typedef enum {
   DRAG_NONE,
   DRAG_CREATE,
   DRAG_MOVE,
+  DRAG_RESIZE,
   DRAG_TOOLBAR,
 } ShaulaDragMode;
+
+typedef enum {
+  HANDLE_NONE,
+  HANDLE_TOP_LEFT,
+  HANDLE_TOP,
+  HANDLE_TOP_RIGHT,
+  HANDLE_RIGHT,
+  HANDLE_BOTTOM_RIGHT,
+  HANDLE_BOTTOM,
+  HANDLE_BOTTOM_LEFT,
+  HANDLE_LEFT,
+} ShaulaResizeHandle;
+
+typedef enum {
+  CURSOR_UNSET,
+  CURSOR_DEFAULT,
+  CURSOR_CROSSHAIR,
+  CURSOR_POINTER,
+  CURSOR_MOVE,
+  CURSOR_GRABBING,
+  CURSOR_RESIZE_EW,
+  CURSOR_RESIZE_NS,
+  CURSOR_RESIZE_NWSE,
+  CURSOR_RESIZE_NESW,
+} ShaulaCursorShape;
 
 typedef struct {
   GtkApplication *app;
@@ -75,12 +102,14 @@ typedef struct {
   gboolean has_aspect;
   ShaulaAspect aspect;
   ShaulaDragMode drag_mode;
+  ShaulaResizeHandle active_handle;
   ShaulaPoint drag_start;
   ShaulaRect drag_origin;
   gboolean dropdown_open;
   ShaulaAspectChoice aspect_choice;
   char aspect_custom_label[32];
   gboolean suppress_pointer_drag;
+  ShaulaCursorShape cursor_shape;
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
@@ -119,8 +148,64 @@ static gboolean point_in_selection(ShaulaRect selection, ShaulaPoint point) {
         point.y <= selection.y + selection.height;
 }
 
+static gboolean point_near(ShaulaPoint a, ShaulaPoint b, int radius) {
+    return abs(a.x - b.x) <= radius && abs(a.y - b.y) <= radius;
+}
+
 static void queue_draw(void) {
     if (state.area != NULL) gtk_widget_queue_draw(state.area);
+}
+
+static const char *cursor_name(ShaulaCursorShape shape) {
+    switch (shape) {
+      case CURSOR_DEFAULT:
+        return NULL;
+      case CURSOR_CROSSHAIR:
+        return "crosshair";
+      case CURSOR_POINTER:
+        return "pointer";
+      case CURSOR_MOVE:
+        return "move";
+      case CURSOR_GRABBING:
+        return "grabbing";
+      case CURSOR_RESIZE_EW:
+        return "ew-resize";
+      case CURSOR_RESIZE_NS:
+        return "ns-resize";
+      case CURSOR_RESIZE_NWSE:
+        return "nwse-resize";
+      case CURSOR_RESIZE_NESW:
+        return "nesw-resize";
+      case CURSOR_UNSET:
+      default:
+        return NULL;
+    }
+}
+
+static ShaulaCursorShape cursor_for_handle(ShaulaResizeHandle handle) {
+    switch (handle) {
+      case HANDLE_LEFT:
+      case HANDLE_RIGHT:
+        return CURSOR_RESIZE_EW;
+      case HANDLE_TOP:
+      case HANDLE_BOTTOM:
+        return CURSOR_RESIZE_NS;
+      case HANDLE_TOP_LEFT:
+      case HANDLE_BOTTOM_RIGHT:
+        return CURSOR_RESIZE_NWSE;
+      case HANDLE_TOP_RIGHT:
+      case HANDLE_BOTTOM_LEFT:
+        return CURSOR_RESIZE_NESW;
+      case HANDLE_NONE:
+      default:
+        return CURSOR_DEFAULT;
+    }
+}
+
+static void apply_cursor(ShaulaCursorShape shape) {
+    if (state.area == NULL || state.cursor_shape == shape) return;
+    gtk_widget_set_cursor_from_name(state.area, cursor_name(shape));
+    state.cursor_shape = shape;
 }
 
 static void apply_aspect(int *width, int *height, ShaulaAspect ratio) {
@@ -150,8 +235,8 @@ static gboolean clamp_selection(ShaulaRect input, ShaulaPoint bounds, ShaulaRect
 }
 
 static gboolean geometry_from_points(ShaulaPoint anchor, ShaulaPoint point, ShaulaPoint bounds, ShaulaRect *out) {
-    int width = abs(point.x - anchor.x);
-    int height = abs(point.y - anchor.y);
+    int width = abs(point.x - anchor.x) + 1;
+    int height = abs(point.y - anchor.y) + 1;
     if (state.has_aspect) apply_aspect(&width, &height, state.aspect);
     if (width <= 0 || height <= 0) return FALSE;
     int x = point.x >= anchor.x ? anchor.x : anchor.x - width;
@@ -167,6 +252,132 @@ static gboolean move_selection(ShaulaRect selection, int dx, int dy, ShaulaPoint
         .height = selection.height,
     };
     return TRUE;
+}
+
+static gboolean normalize_selection(int left, int top, int right, int bottom, ShaulaPoint bounds, ShaulaRect *out) {
+    int x0 = MIN(left, right);
+    int x1 = MAX(left, right);
+    int y0 = MIN(top, bottom);
+    int y1 = MAX(top, bottom);
+    if (x1 <= x0) x1 = x0 + 1;
+    if (y1 <= y0) y1 = y0 + 1;
+    return clamp_selection((ShaulaRect){ .x = x0, .y = y0, .width = x1 - x0, .height = y1 - y0 }, bounds, out);
+}
+
+static gboolean resize_free(ShaulaRect origin, ShaulaResizeHandle handle, ShaulaPoint point, ShaulaPoint bounds, ShaulaRect *out) {
+    int left = origin.x;
+    int top = origin.y;
+    int right = origin.x + origin.width;
+    int bottom = origin.y + origin.height;
+
+    switch (handle) {
+      case HANDLE_TOP_LEFT:
+        left = point.x;
+        top = point.y;
+        break;
+      case HANDLE_TOP:
+        top = point.y;
+        break;
+      case HANDLE_TOP_RIGHT:
+        right = point.x + 1;
+        top = point.y;
+        break;
+      case HANDLE_RIGHT:
+        right = point.x + 1;
+        break;
+      case HANDLE_BOTTOM_RIGHT:
+        right = point.x + 1;
+        bottom = point.y + 1;
+        break;
+      case HANDLE_BOTTOM:
+        bottom = point.y + 1;
+        break;
+      case HANDLE_BOTTOM_LEFT:
+        left = point.x;
+        bottom = point.y + 1;
+        break;
+      case HANDLE_LEFT:
+        left = point.x;
+        break;
+      default:
+        return FALSE;
+    }
+
+    return normalize_selection(left, top, right, bottom, bounds, out);
+}
+
+static gboolean resize_aspect(ShaulaRect origin, ShaulaResizeHandle handle, ShaulaPoint point, ShaulaPoint bounds, ShaulaRect *out) {
+    int left = origin.x;
+    int top = origin.y;
+    int right = origin.x + origin.width;
+    int bottom = origin.y + origin.height;
+    int center_x = origin.x + origin.width / 2;
+    int center_y = origin.y + origin.height / 2;
+    int width = origin.width;
+    int height = origin.height;
+
+    switch (handle) {
+      case HANDLE_TOP_LEFT:
+        return geometry_from_points((ShaulaPoint){ .x = right, .y = bottom }, point, bounds, out);
+      case HANDLE_TOP_RIGHT:
+        return geometry_from_points((ShaulaPoint){ .x = left, .y = bottom }, point, bounds, out);
+      case HANDLE_BOTTOM_RIGHT:
+        return geometry_from_points((ShaulaPoint){ .x = left, .y = top }, point, bounds, out);
+      case HANDLE_BOTTOM_LEFT:
+        return geometry_from_points((ShaulaPoint){ .x = right, .y = top }, point, bounds, out);
+      case HANDLE_LEFT:
+        width = abs(right - point.x);
+        height = MAX(1, (width * state.aspect.height) / state.aspect.width);
+        return normalize_selection(right - width, center_y - height / 2, right, center_y + (height + 1) / 2, bounds, out);
+      case HANDLE_RIGHT:
+        width = abs(point.x + 1 - left);
+        height = MAX(1, (width * state.aspect.height) / state.aspect.width);
+        return normalize_selection(left, center_y - height / 2, left + width, center_y + (height + 1) / 2, bounds, out);
+      case HANDLE_TOP:
+        height = abs(bottom - point.y);
+        width = MAX(1, (height * state.aspect.width) / state.aspect.height);
+        return normalize_selection(center_x - width / 2, bottom - height, center_x + (width + 1) / 2, bottom, bounds, out);
+      case HANDLE_BOTTOM:
+        height = abs(point.y + 1 - top);
+        width = MAX(1, (height * state.aspect.width) / state.aspect.height);
+        return normalize_selection(center_x - width / 2, top, center_x + (width + 1) / 2, top + height, bounds, out);
+      default:
+        return FALSE;
+    }
+}
+
+static gboolean resize_selection(ShaulaRect origin, ShaulaResizeHandle handle, ShaulaPoint point, ShaulaPoint bounds, ShaulaRect *out) {
+    if (state.has_aspect) return resize_aspect(origin, handle, point, bounds, out);
+    return resize_free(origin, handle, point, bounds, out);
+}
+
+static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
+  int left = s.x;
+  int top = s.y;
+  int right = s.x + s.width;
+  int bottom = s.y + s.height;
+  int mid_x = s.x + s.width / 2;
+  int mid_y = s.y + s.height / 2;
+
+  if (point_near(p, (ShaulaPoint){ .x = left, .y = top }, RESIZE_HIT_RADIUS)) return HANDLE_TOP_LEFT;
+  if (point_near(p, (ShaulaPoint){ .x = right, .y = top }, RESIZE_HIT_RADIUS)) return HANDLE_TOP_RIGHT;
+  if (point_near(p, (ShaulaPoint){ .x = right, .y = bottom }, RESIZE_HIT_RADIUS)) return HANDLE_BOTTOM_RIGHT;
+  if (point_near(p, (ShaulaPoint){ .x = left, .y = bottom }, RESIZE_HIT_RADIUS)) return HANDLE_BOTTOM_LEFT;
+  if (point_near(p, (ShaulaPoint){ .x = mid_x, .y = top }, RESIZE_HIT_RADIUS)) return HANDLE_TOP;
+  if (point_near(p, (ShaulaPoint){ .x = right, .y = mid_y }, RESIZE_HIT_RADIUS)) return HANDLE_RIGHT;
+  if (point_near(p, (ShaulaPoint){ .x = mid_x, .y = bottom }, RESIZE_HIT_RADIUS)) return HANDLE_BOTTOM;
+  if (point_near(p, (ShaulaPoint){ .x = left, .y = mid_y }, RESIZE_HIT_RADIUS)) return HANDLE_LEFT;
+
+  if (p.x >= left - RESIZE_HIT_RADIUS && p.x <= right + RESIZE_HIT_RADIUS) {
+    if (abs(p.y - top) <= RESIZE_HIT_RADIUS) return HANDLE_TOP;
+    if (abs(p.y - bottom) <= RESIZE_HIT_RADIUS) return HANDLE_BOTTOM;
+  }
+  if (p.y >= top - RESIZE_HIT_RADIUS && p.y <= bottom + RESIZE_HIT_RADIUS) {
+    if (abs(p.x - left) <= RESIZE_HIT_RADIUS) return HANDLE_LEFT;
+    if (abs(p.x - right) <= RESIZE_HIT_RADIUS) return HANDLE_RIGHT;
+  }
+
+  return HANDLE_NONE;
 }
 
 static void update_toolbar(void) {
@@ -247,6 +458,22 @@ static int dropdown_item_at(ShaulaPoint point) {
   if (relative_y < 0) return -1;
   int idx = relative_y / DROPDOWN_ITEM_H;
   return idx < ASPECT_COUNT ? idx : -1;
+}
+
+static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
+  if (state.dropdown_open && dropdown_item_at(p) >= 0) return CURSOR_POINTER;
+  if (state.has_toolbar &&
+      (toolbar_aspect_hit(p) ||
+       (state.has_selection && toolbar_capture_hit(p)) ||
+       toolbar_cancel_hit(p))) {
+    return CURSOR_POINTER;
+  }
+  if (state.has_selection) {
+    ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
+    if (handle != HANDLE_NONE) return cursor_for_handle(handle);
+    if (point_in_selection(state.selection, p)) return CURSOR_MOVE;
+  }
+  return CURSOR_CROSSHAIR;
 }
 
 static void apply_aspect_choice(void) {
@@ -517,16 +744,19 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
 
   if (state.suppress_pointer_drag) {
     state.drag_mode = DRAG_TOOLBAR;
+    apply_cursor(resolve_hover_cursor(p));
     return;
   }
 
   if (state.dropdown_open) {
     state.drag_mode = DRAG_TOOLBAR;
+    apply_cursor(resolve_hover_cursor(p));
     return;
   }
 
   if (state.has_toolbar && toolbar_aspect_hit(p)) {
     state.drag_mode = DRAG_TOOLBAR;
+    apply_cursor(CURSOR_POINTER);
     return;
   }
 
@@ -540,11 +770,24 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
   }
   state.drag_start = p;
   state.drag_origin = state.selection;
+  state.active_handle = HANDLE_NONE;
+  if (state.has_selection) {
+    ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
+    if (handle != HANDLE_NONE) {
+      state.active_handle = handle;
+      state.drag_mode = DRAG_RESIZE;
+      apply_cursor(cursor_for_handle(handle));
+      queue_draw();
+      return;
+    }
+  }
   if (state.has_selection && point_in_selection(state.selection, p)) {
     state.drag_mode = DRAG_MOVE;
+    apply_cursor(CURSOR_GRABBING);
   } else {
     state.drag_mode = DRAG_CREATE;
     state.has_selection = FALSE;
+    apply_cursor(CURSOR_CROSSHAIR);
   }
   queue_draw();
 }
@@ -563,6 +806,18 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpoint
             state.selection = next;
             state.has_selection = TRUE;
         }
+    } else if (state.drag_mode == DRAG_RESIZE) {
+        if (resize_selection(state.drag_origin, state.active_handle, p, bounds, &next)) {
+            state.selection = next;
+            state.has_selection = TRUE;
+        }
+    }
+    if (state.drag_mode == DRAG_MOVE) {
+        apply_cursor(CURSOR_GRABBING);
+    } else if (state.drag_mode == DRAG_RESIZE) {
+        apply_cursor(cursor_for_handle(state.active_handle));
+    } else if (state.drag_mode == DRAG_CREATE) {
+        apply_cursor(CURSOR_CROSSHAIR);
     }
     update_toolbar();
     queue_draw();
@@ -571,8 +826,27 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpoint
 static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer data) {
     on_drag_update(gesture, dx, dy, data);
     state.drag_mode = DRAG_NONE;
+    state.active_handle = HANDLE_NONE;
     state.suppress_pointer_drag = FALSE;
+    apply_cursor(resolve_hover_cursor((ShaulaPoint){ .x = state.drag_start.x + (int)dx, .y = state.drag_start.y + (int)dy }));
     queue_draw();
+}
+
+static void on_motion(GtkEventControllerMotion *controller, double x, double y, gpointer data) {
+  (void)controller;
+  (void)data;
+  if (state.drag_mode != DRAG_NONE) return;
+  apply_cursor(resolve_hover_cursor((ShaulaPoint){ .x = (int)x, .y = (int)y }));
+}
+
+static void on_motion_enter(GtkEventControllerMotion *controller, double x, double y, gpointer data) {
+  on_motion(controller, x, y, data);
+}
+
+static void on_motion_leave(GtkEventControllerMotion *controller, gpointer data) {
+  (void)controller;
+  (void)data;
+  apply_cursor(CURSOR_DEFAULT);
 }
 
 static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, gpointer data) {
@@ -780,6 +1054,12 @@ static void on_activate(GtkApplication *app, gpointer data) {
     g_signal_connect(click, "released", G_CALLBACK(on_click_released), NULL);
     gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(click));
 
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "motion", G_CALLBACK(on_motion), NULL);
+    g_signal_connect(motion, "enter", G_CALLBACK(on_motion_enter), NULL);
+    g_signal_connect(motion, "leave", G_CALLBACK(on_motion_leave), NULL);
+    gtk_widget_add_controller(area, motion);
+
     GtkEventController *keys = gtk_event_controller_key_new();
     g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), NULL);
     gtk_widget_add_controller(window, keys);
@@ -814,6 +1094,7 @@ int shaula_native_gtk_overlay_run(void) {
     memset(&state, 0, sizeof(state));
     state.toolbar = (ShaulaPoint){ .x = PADDING, .y = PADDING };
     state.has_toolbar = TRUE;
+    state.cursor_shape = CURSOR_UNSET;
     load_aspect();
     load_background();
 

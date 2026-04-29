@@ -15,3 +15,27 @@ Use always the zig related skill.
   - important contract attributes used by QA and release gates.
 - Keep comments focused on **why and contract constraints**, not obvious syntax.
 - When behavior is taxonomy-sensitive, mention expected deterministic `ERR_*` outcomes.
+
+## Verification after changes
+
+Run these after every code change:
+
+```bash
+./dev check
+git diff --check
+```
+
+For overlay, capture, clipboard, GTK, Wayland, or Niri behavior changes, also run the relevant targeted command:
+
+```bash
+./dev doctor
+./dev strategies
+./dev bench
+```
+
+For interactive overlay UX changes, ask the user to run or allow:
+
+```bash
+./dev capture
+./dev all
+```
