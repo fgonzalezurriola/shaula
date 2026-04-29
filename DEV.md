@@ -140,11 +140,20 @@ Modos de prueba:
 Notas del overlay:
 
 - Si el helper gráfico real no está disponible, Shaula cae a `slurp`.
+- El helper GTK intenta preparar una captura congelada de fondo con `grim` antes
+  de abrir el overlay; si esa captura visual falla, la selección sigue usando
+  el overlay transparente sin inventar éxito.
+- La selección soporta crear rectángulo, moverlo, redimensionar desde esquinas y
+  bordes, confirmar con Enter, cancelar con Esc y mover con flechas; Shift+flecha
+  mueve en pasos de 10 px.
 - `capture all-in-one` usa la ruta de captura de área y persiste la última
   posición válida de la toolbar; no muestra acciones no implementadas.
 - `shaula-overlay` usa strategy seleccionable. En este árbol, `gtk4-layer-shell`
   funciona si PyGObject/GTK4 están disponibles; `raylib` y `raylib-clay`
   requieren compilar dependencias reales en vez de stubs.
+- `bash scripts/qa/benchmark-overlay-strategies.sh` genera evidencia comparativa
+  y mantiene `gtk4-layer-shell` como strategy productiva hasta que Raylib pruebe
+  semántica equivalente de overlay/input en Wayland.
 - Si no hay backend interactivo real, Shaula ya no inventa una selección exitosa implícita.
 - `capture previous-area` falla con `ERR_PREVIOUS_AREA_UNAVAILABLE` hasta que exista una geometría de área válida en runtime.
 - `--dry-run` queda reservado para pruebas y QA.

@@ -33,6 +33,22 @@ const OverlayHelperEnvelope = struct {
     @"error": ?OverlayHelperError = null,
 };
 
+const NiriFocusedOutput = struct {
+    name: []const u8,
+};
+
+const OverlayBackground = struct {
+    path: []u8,
+    cleanup: bool,
+
+    fn deinit(self: OverlayBackground, allocator: std.mem.Allocator, io: std.Io) void {
+        if (self.cleanup) {
+            std.Io.Dir.deleteFileAbsolute(io, self.path) catch {};
+        }
+        allocator.free(self.path);
+    }
+};
+
 /// Executes overlay selection and maps helper/runtime outputs to SelectionResult.
 ///
 /// Contract constraint: helper contract parsing failures are converted to
@@ -130,12 +146,30 @@ fn runHelperSelectionAttempt(
     mode: selection.SelectionMode,
     constraint: selection.SelectionConstraint,
 ) !HelperSelectionAttempt {
-    const helper_bin = helperBinary(environ);
+    const helper_bin = try resolveHelperBinary(allocator, io, environ);
+    defer allocator.free(helper_bin);
+    const output_name = try resolveOverlayOutputName(allocator, io, environ);
+    defer if (output_name) |name| allocator.free(name);
+    const background = try prepareOverlayBackground(allocator, io, environ, output_name);
+    defer if (background) |prepared| prepared.deinit(allocator, io);
+
+    var helper_env = try std.process.Environ.createMap(environ, allocator);
+    defer helper_env.deinit();
+    if (constraint.aspect) |aspect| {
+        try helper_env.put("SHAULA_OVERLAY_ASPECT", aspect);
+    }
+    if (background) |prepared| {
+        try helper_env.put("SHAULA_OVERLAY_BACKGROUND_PATH", prepared.path);
+    }
+    if (output_name) |name| {
+        try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
+    }
 
     const helper = std.process.run(allocator, io, .{
         .argv = &.{helper_bin},
         .stdout_limit = .limited(2048),
         .stderr_limit = .limited(2048),
+        .environ_map = &helper_env,
     }) catch {
         return .fallback_to_slurp;
     };
@@ -158,6 +192,117 @@ fn runHelperSelectionAttempt(
     return .{ .selection = parseHelperSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
 }
 
+/// Prepares the optional frozen-screen visual background for the helper.
+///
+/// Contract constraint: this is a visual-only best-effort path. Capture failure
+/// here must not become an overlay `ERR_*` outcome or fabricate a selection.
+fn prepareOverlayBackground(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    output_name: ?[]const u8,
+) !?OverlayBackground {
+    if (environ.getPosix("SHAULA_OVERLAY_BACKGROUND_PATH")) |existing_z| {
+        const existing = std.mem.trim(u8, std.mem.sliceTo(existing_z, 0), " \t\r\n");
+        if (existing.len > 0) {
+            return .{ .path = try allocator.dupe(u8, existing), .cleanup = false };
+        }
+    }
+
+    if (envFlagEnabled(environ, "SHAULA_OVERLAY_DISABLE_BACKGROUND")) {
+        return null;
+    }
+
+    const dir = try overlayRuntimeDir(allocator, environ);
+    defer allocator.free(dir);
+    std.Io.Dir.cwd().createDirPath(io, dir) catch return null;
+
+    const millis = std.Io.Timestamp.now(io, .real).toMilliseconds();
+    const safe_millis: i64 = if (millis < 0) 0 else millis;
+    const path = try std.fmt.allocPrint(allocator, "{s}/background-{d}.png", .{ dir, safe_millis });
+    errdefer allocator.free(path);
+
+    const argv: []const []const u8 = if (output_name) |name|
+        &.{ "grim", "-o", name, path }
+    else
+        &.{ "grim", path };
+
+    const result = std.process.run(allocator, io, .{
+        .argv = argv,
+        .stdout_limit = .limited(1024),
+        .stderr_limit = .limited(1024),
+    }) catch {
+        return null;
+    };
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+
+    switch (result.term) {
+        .exited => |code| {
+            if (code != 0) {
+                std.Io.Dir.deleteFileAbsolute(io, path) catch {};
+                allocator.free(path);
+                return null;
+            }
+        },
+        else => {
+            std.Io.Dir.deleteFileAbsolute(io, path) catch {};
+            allocator.free(path);
+            return null;
+        },
+    }
+
+    return .{ .path = path, .cleanup = true };
+}
+
+/// Resolves the focused Niri output for monitor-scoped overlay and preview capture.
+///
+/// Contract constraint: output resolution is advisory. Failure falls back to
+/// compositor-chosen placement and full-output screenshot behavior.
+fn resolveOverlayOutputName(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+) !?[]u8 {
+    if (environ.getPosix("SHAULA_OVERLAY_OUTPUT_NAME")) |raw_z| {
+        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+        if (raw.len > 0) return try allocator.dupe(u8, raw);
+    }
+
+    if (environ.getPosix("NIRI_SOCKET") == null) return null;
+
+    const result = std.process.run(allocator, io, .{
+        .argv = &.{ "niri", "msg", "-j", "focused-output" },
+        .stdout_limit = .limited(8192),
+        .stderr_limit = .limited(1024),
+    }) catch return null;
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+
+    switch (result.term) {
+        .exited => |code| if (code != 0) return null,
+        else => return null,
+    }
+
+    const parsed = std.json.parseFromSlice(NiriFocusedOutput, allocator, result.stdout, .{
+        .ignore_unknown_fields = true,
+    }) catch return null;
+    defer parsed.deinit();
+    if (parsed.value.name.len == 0) return null;
+
+    return try allocator.dupe(u8, parsed.value.name);
+}
+
+fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
+    if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
+        const runtime_dir = std.mem.trim(u8, std.mem.sliceTo(runtime_dir_z, 0), " \t\r\n");
+        if (runtime_dir.len > 0) {
+            return std.fmt.allocPrint(allocator, "{s}/shaula/overlay", .{runtime_dir});
+        }
+    }
+    return allocator.dupe(u8, "/tmp/shaula/overlay");
+}
+
 fn helperEnvelopeRequiresFallback(allocator: std.mem.Allocator, payload: []const u8) !bool {
     const parsed = std.json.parseFromSlice(OverlayHelperEnvelope, allocator, payload, .{}) catch return false;
     defer parsed.deinit();
@@ -171,11 +316,27 @@ fn helperEnvelopeRequiresFallback(allocator: std.mem.Allocator, payload: []const
     return false;
 }
 
-fn helperBinary(environ: std.process.Environ) []const u8 {
+/// Resolves the overlay helper executable used by local builds and installs.
+///
+/// Contract constraint: local `zig build` output must use the sibling
+/// `shaula-overlay` binary before falling back to PATH, otherwise users silently
+/// lose the Shaula overlay and see only the `slurp` fallback.
+fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
     if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |raw_z| {
-        return std.mem.sliceTo(raw_z, 0);
+        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+        if (raw.len > 0) return allocator.dupe(u8, raw);
     }
-    return "shaula-overlay";
+
+    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-overlay");
+    defer allocator.free(exe_dir);
+
+    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-overlay", .{exe_dir});
+    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
+        return sibling;
+    } else |_| {
+        allocator.free(sibling);
+        return allocator.dupe(u8, "shaula-overlay");
+    }
 }
 
 fn runSlurpSelection(
@@ -347,6 +508,10 @@ fn deterministicInteractionScenarioPayload(
         if (std.mem.eql(u8, raw_mode, "interaction_drag")) break :blk .drag_confirm;
         if (std.mem.eql(u8, raw_mode, "interaction_cancel")) break :blk .drag_cancel_escape;
         if (std.mem.eql(u8, raw_mode, "interaction_resize")) break :blk .drag_then_resize_confirm;
+        if (std.mem.eql(u8, raw_mode, "interaction_move")) break :blk .drag_then_move_confirm;
+        if (std.mem.eql(u8, raw_mode, "interaction_edge_resize")) break :blk .drag_then_edge_resize_confirm;
+        if (std.mem.eql(u8, raw_mode, "interaction_nudge")) break :blk .drag_then_nudge_confirm;
+        if (std.mem.eql(u8, raw_mode, "interaction_large_nudge")) break :blk .drag_then_large_nudge_confirm;
         return null;
     };
 

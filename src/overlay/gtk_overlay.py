@@ -1,13 +1,17 @@
 import json
 import os
 import sys
+from ctypes import CDLL
 
+CDLL("libgtk4-layer-shell.so")
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 
-from gi.repository import Gdk, Gtk, Gtk4LayerShell
+from gi.repository import Gdk, GdkPixbuf, Gtk, Gtk4LayerShell
 
 
 TOOLBAR_W = 312
@@ -16,6 +20,9 @@ PADDING = 12
 HANDLE_CLEARANCE = 18
 BADGE_CLEARANCE = 30
 JITTER = 6
+HANDLE_SIZE = 10
+EDGE_GRAB = 8
+MIN_SELECTION_SIZE = 1
 
 
 class Overlay(Gtk.Application):
@@ -23,11 +30,17 @@ class Overlay(Gtk.Application):
         super().__init__(application_id="dev.shaula.overlay")
         self.window = None
         self.area = None
-        self.start = None
-        self.pointer = None
         self.selection = None
         self.toolbar = load_toolbar_position()
-        self.dragging = False
+        self.aspect = load_aspect_constraint()
+        self.output_name = load_output_name()
+        self.background = load_background()
+        self.scaled_background = None
+        self.scaled_size = None
+        self.drag_mode = None
+        self.drag_start = None
+        self.drag_origin_selection = None
+        self.active_handle = None
 
     def do_activate(self):
         self.window = Gtk.ApplicationWindow(application=self)
@@ -39,6 +52,9 @@ class Overlay(Gtk.Application):
         Gtk4LayerShell.init_for_window(self.window)
         Gtk4LayerShell.set_namespace(self.window, "shaula-overlay")
         Gtk4LayerShell.set_layer(self.window, Gtk4LayerShell.Layer.OVERLAY)
+        monitor = monitor_for_output(self.output_name)
+        if monitor:
+            Gtk4LayerShell.set_monitor(self.window, monitor)
         Gtk4LayerShell.set_keyboard_mode(self.window, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         Gtk4LayerShell.set_anchor(self.window, Gtk4LayerShell.Edge.TOP, True)
         Gtk4LayerShell.set_anchor(self.window, Gtk4LayerShell.Edge.BOTTOM, True)
@@ -48,6 +64,12 @@ class Overlay(Gtk.Application):
 
         self.area = Gtk.DrawingArea()
         self.area.set_focusable(True)
+        self.area.set_hexpand(True)
+        self.area.set_vexpand(True)
+        width, height = initial_surface_size(self.output_name)
+        self.area.set_content_width(width)
+        self.area.set_content_height(height)
+        self.window.set_default_size(width, height)
         self.area.set_draw_func(self.draw)
         self.window.set_child(self.area)
 
@@ -72,56 +94,97 @@ class Overlay(Gtk.Application):
         return max(1, self.area.get_width()), max(1, self.area.get_height())
 
     def on_drag_begin(self, _gesture, x, y):
-        self.start = (int(x), int(y))
-        self.pointer = self.start
-        self.dragging = True
-        self.update_selection()
+        px, py = int(x), int(y)
+        if self.selection and toolbar_capture_hit(self.toolbar, px, py):
+            self.drag_mode = "toolbar"
+            return
+        if toolbar_cancel_hit(self.toolbar, px, py):
+            self.drag_mode = "toolbar"
+            return
+
+        self.drag_start = (px, py)
+        self.drag_origin_selection = self.selection
+        self.active_handle = hit_resize_handle(self.selection, px, py)
+
+        if self.active_handle:
+            self.drag_mode = "resize"
+        elif self.selection and point_in_selection(self.selection, px, py):
+            self.drag_mode = "move"
+        else:
+            self.drag_mode = "create"
+            self.selection = None
+
+        self.area.queue_draw()
 
     def on_drag_update(self, _gesture, dx, dy):
-        if self.start is None:
+        if self.drag_start is None or self.drag_mode in (None, "toolbar"):
             return
-        self.pointer = (int(self.start[0] + dx), int(self.start[1] + dy))
-        self.update_selection()
+        px = int(self.drag_start[0] + dx)
+        py = int(self.drag_start[1] + dy)
+
+        if self.drag_mode == "create":
+            self.selection = geometry_from_points(self.drag_start, (px, py), self.aspect, self.output_size())
+        elif self.drag_mode == "move" and self.drag_origin_selection:
+            self.selection = move_selection(self.drag_origin_selection, int(dx), int(dy), self.output_size())
+        elif self.drag_mode == "resize" and self.drag_origin_selection and self.active_handle:
+            self.selection = resize_selection(
+                self.drag_origin_selection,
+                self.active_handle,
+                (px, py),
+                self.aspect,
+                self.output_size(),
+            )
+
+        self.update_toolbar()
+        self.area.queue_draw()
 
     def on_drag_end(self, _gesture, dx, dy):
-        if self.start is None:
-            return
-        self.pointer = (int(self.start[0] + dx), int(self.start[1] + dy))
-        self.dragging = False
-        self.update_selection()
+        self.on_drag_update(_gesture, dx, dy)
+        self.drag_mode = None
+        self.drag_start = None
+        self.drag_origin_selection = None
+        self.active_handle = None
+        if not valid_selection(self.selection):
+            self.selection = None
+        self.area.queue_draw()
 
     def on_click(self, _gesture, _presses, x, y):
-        if self.selection and toolbar_capture_hit(self.toolbar, int(x), int(y)):
+        px, py = int(x), int(y)
+        if self.selection and toolbar_capture_hit(self.toolbar, px, py):
             self.confirm()
             return
-        if toolbar_cancel_hit(self.toolbar, int(x), int(y)):
+        if toolbar_cancel_hit(self.toolbar, px, py):
             self.cancel()
 
-    def on_key(self, _controller, keyval, _keycode, _state):
+    def on_key(self, _controller, keyval, _keycode, state):
         if keyval in (Gdk.KEY_Escape, Gdk.KEY_q):
             self.cancel()
             return True
         if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             self.confirm()
             return True
+
+        delta = key_delta(keyval)
+        if delta and self.selection:
+            step = 10 if state & Gdk.ModifierType.SHIFT_MASK else 1
+            self.selection = move_selection(
+                self.selection,
+                delta[0] * step,
+                delta[1] * step,
+                self.output_size(),
+            )
+            self.update_toolbar()
+            self.area.queue_draw()
+            return True
+
         return False
 
-    def update_selection(self):
-        if self.start is None or self.pointer is None:
-            return
-        x1, y1 = self.start
-        x2, y2 = self.pointer
-        x = min(x1, x2)
-        y = min(y1, y2)
-        w = abs(x2 - x1)
-        h = abs(y2 - y1)
-        if w > 0 and h > 0:
-            self.selection = (x, y, w, h)
+    def update_toolbar(self):
+        if self.selection:
             self.toolbar = compute_toolbar(self.output_size(), self.selection, self.toolbar)
-        self.area.queue_draw()
 
     def confirm(self):
-        if not self.selection:
+        if not valid_selection(self.selection):
             return
         x, y, w, h = self.selection
         print(json.dumps({
@@ -142,26 +205,52 @@ class Overlay(Gtk.Application):
         self.quit()
 
     def draw(self, _area, cr, width, height):
+        self.draw_background(cr, width, height)
+
         cr.set_source_rgba(0, 0, 0, 0.48)
         cr.rectangle(0, 0, width, height)
         cr.fill()
 
         if self.selection:
             x, y, w, h = self.selection
-            cr.set_operator(1)
-            cr.set_source_rgba(0, 0, 0, 0)
-            cr.rectangle(x, y, w, h)
-            cr.fill()
-            cr.set_operator(2)
+            if self.background:
+                cr.save()
+                cr.rectangle(x, y, w, h)
+                cr.clip()
+                self.draw_background(cr, width, height)
+                cr.restore()
+            else:
+                cr.set_operator(1)
+                cr.set_source_rgba(0, 0, 0, 0)
+                cr.rectangle(x, y, w, h)
+                cr.fill()
+                cr.set_operator(2)
 
-            cr.set_source_rgba(1, 1, 1, 0.95)
+            cr.set_source_rgba(1, 1, 1, 0.96)
             cr.set_line_width(2)
             cr.rectangle(x + 0.5, y + 0.5, w, h)
             cr.stroke()
             draw_handles(cr, x, y, w, h)
             draw_badge(cr, x, y, w, h)
 
-        draw_toolbar(cr, self.toolbar, enabled=self.selection is not None)
+        draw_toolbar(cr, self.toolbar, enabled=self.selection is not None, aspect=self.aspect)
+
+    def draw_background(self, cr, width, height):
+        if not self.background:
+            return
+
+        # The helper accepts a parent-prepared frozen screenshot only as a visual aid;
+        # selection output must still come solely from committed input geometry.
+        if self.scaled_background is None or self.scaled_size != (width, height):
+            self.scaled_background = self.background.scale_simple(
+                max(1, width),
+                max(1, height),
+                GdkPixbuf.InterpType.BILINEAR,
+            )
+            self.scaled_size = (width, height)
+
+        Gdk.cairo_set_source_pixbuf(cr, self.scaled_background, 0, 0)
+        cr.paint()
 
 
 def load_toolbar_position():
@@ -181,6 +270,228 @@ def load_toolbar_position():
             return (int(left), int(right))
         except Exception:
             pass
+    return None
+
+
+def load_aspect_constraint():
+    raw = os.environ.get("SHAULA_OVERLAY_ASPECT")
+    if not raw:
+        return None
+    parts = raw.split(":", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        left = int(parts[0])
+        right = int(parts[1])
+    except ValueError:
+        return None
+    if left <= 0 or right <= 0:
+        return None
+    return (left, right)
+
+
+def load_background():
+    path = os.environ.get("SHAULA_OVERLAY_BACKGROUND_PATH")
+    if not path:
+        return None
+    try:
+        return GdkPixbuf.Pixbuf.new_from_file(path)
+    except Exception:
+        return None
+
+
+def load_output_name():
+    raw = os.environ.get("SHAULA_OVERLAY_OUTPUT_NAME")
+    if raw:
+        value = raw.strip()
+        if value:
+            return value
+    return None
+
+
+def monitor_for_output(output_name):
+    display = Gdk.Display.get_default()
+    if display:
+        monitors = display.get_monitors()
+        if monitors and monitors.get_n_items() > 0:
+            for index in range(monitors.get_n_items()):
+                monitor = monitors.get_item(index)
+                if not monitor:
+                    continue
+                connector = monitor.get_connector()
+                if output_name and connector == output_name:
+                    return monitor
+            return monitors.get_item(0)
+    return None
+
+
+def initial_surface_size(output_name):
+    monitor = monitor_for_output(output_name)
+    if monitor:
+        geometry = monitor.get_geometry()
+        return max(1, geometry.width), max(1, geometry.height)
+    return 1920, 1080
+
+
+def geometry_from_points(anchor, point, aspect, output):
+    ax, ay = anchor
+    px, py = point
+    abs_w = abs(px - ax)
+    abs_h = abs(py - ay)
+    abs_w, abs_h = apply_aspect(abs_w, abs_h, aspect)
+    if abs_w < MIN_SELECTION_SIZE or abs_h < MIN_SELECTION_SIZE:
+        return None
+
+    x = ax if px >= ax else ax - abs_w
+    y = ay if py >= ay else ay - abs_h
+    return clamp_selection((x, y, abs_w, abs_h), output)
+
+
+def resize_selection(selection, handle, point, aspect, output):
+    if selection is None:
+        return None
+    x, y, w, h = selection
+    px, py = point
+    right = x + w
+    bottom = y + h
+
+    if aspect:
+        if handle == "top_left":
+            return geometry_from_points((right, bottom), (px, py), aspect, output)
+        if handle == "top_right":
+            return geometry_from_points((x, bottom), (px, py), aspect, output)
+        if handle == "bottom_left":
+            return geometry_from_points((right, y), (px, py), aspect, output)
+        if handle == "bottom_right":
+            return geometry_from_points((x, y), (px, py), aspect, output)
+        if handle in ("top", "bottom"):
+            fixed_y = bottom if handle == "top" else y
+            height = abs(py - fixed_y)
+            if height < MIN_SELECTION_SIZE:
+                return None
+            width = max(1, height * aspect[0] // aspect[1])
+            center_x = x + w // 2
+            return clamp_selection((center_x - width // 2, min(py, fixed_y), width, height), output)
+        if handle in ("left", "right"):
+            fixed_x = right if handle == "left" else x
+            width = abs(px - fixed_x)
+            if width < MIN_SELECTION_SIZE:
+                return None
+            height = max(1, width * aspect[1] // aspect[0])
+            center_y = y + h // 2
+            return clamp_selection((min(px, fixed_x), center_y - height // 2, width, height), output)
+
+    left = x
+    top = y
+    new_right = right
+    new_bottom = bottom
+    if "left" in handle:
+        left = px
+    if "right" in handle:
+        new_right = px
+    if "top" in handle:
+        top = py
+    if "bottom" in handle:
+        new_bottom = py
+
+    new_x = min(left, new_right)
+    new_y = min(top, new_bottom)
+    new_w = abs(new_right - left)
+    new_h = abs(new_bottom - top)
+    if new_w < MIN_SELECTION_SIZE or new_h < MIN_SELECTION_SIZE:
+        return None
+    return clamp_selection((new_x, new_y, new_w, new_h), output)
+
+
+def move_selection(selection, dx, dy, output):
+    if selection is None:
+        return None
+    x, y, w, h = selection
+    out_w, out_h = output
+    return (
+        clamp(x + dx, 0, max(0, out_w - w)),
+        clamp(y + dy, 0, max(0, out_h - h)),
+        w,
+        h,
+    )
+
+
+def clamp_selection(selection, output):
+    if selection is None:
+        return None
+    x, y, w, h = selection
+    out_w, out_h = output
+    left = clamp(x, 0, max(0, out_w - 1))
+    top = clamp(y, 0, max(0, out_h - 1))
+    right = clamp(x + w, 1, out_w)
+    bottom = clamp(y + h, 1, out_h)
+    if right <= left:
+        right = min(out_w, left + 1)
+    if bottom <= top:
+        bottom = min(out_h, top + 1)
+    if right <= left or bottom <= top:
+        return None
+    return (left, top, right - left, bottom - top)
+
+
+def apply_aspect(width, height, aspect):
+    if not aspect:
+        return width, height
+    aw, ah = aspect
+    if width == 0 and height > 0:
+        width = max(1, height * aw // ah)
+    elif height == 0 and width > 0:
+        height = max(1, width * ah // aw)
+    elif width > 0 and height > 0:
+        if width * ah >= height * aw:
+            width = max(1, height * aw // ah)
+        else:
+            height = max(1, width * ah // aw)
+    return width, height
+
+
+def valid_selection(selection):
+    return selection is not None and selection[2] > 0 and selection[3] > 0
+
+
+def point_in_selection(selection, x, y):
+    if not selection:
+        return False
+    sx, sy, sw, sh = selection
+    return sx <= x <= sx + sw and sy <= y <= sy + sh
+
+
+def hit_resize_handle(selection, x, y):
+    if not selection:
+        return None
+    sx, sy, sw, sh = selection
+    right = sx + sw
+    bottom = sy + sh
+    centers = {
+        "top_left": (sx, sy),
+        "top": (sx + sw // 2, sy),
+        "top_right": (right, sy),
+        "right": (right, sy + sh // 2),
+        "bottom_right": (right, bottom),
+        "bottom": (sx + sw // 2, bottom),
+        "bottom_left": (sx, bottom),
+        "left": (sx, sy + sh // 2),
+    }
+    for name, (hx, hy) in centers.items():
+        if abs(x - hx) <= EDGE_GRAB and abs(y - hy) <= EDGE_GRAB:
+            return name
+    return None
+
+
+def key_delta(keyval):
+    if keyval == Gdk.KEY_Left:
+        return (-1, 0)
+    if keyval == Gdk.KEY_Right:
+        return (1, 0)
+    if keyval == Gdk.KEY_Up:
+        return (0, -1)
+    if keyval == Gdk.KEY_Down:
+        return (0, 1)
     return None
 
 
@@ -233,8 +544,18 @@ def toolbar_cancel_hit(toolbar, x, y):
 
 def draw_handles(cr, x, y, w, h):
     cr.set_source_rgba(1, 1, 1, 1)
-    for hx, hy in ((x, y), (x + w, y), (x, y + h), (x + w, y + h)):
-        cr.rectangle(hx - 5, hy - 5, 10, 10)
+    centers = (
+        (x, y),
+        (x + w // 2, y),
+        (x + w, y),
+        (x + w, y + h // 2),
+        (x + w, y + h),
+        (x + w // 2, y + h),
+        (x, y + h),
+        (x, y + h // 2),
+    )
+    for hx, hy in centers:
+        cr.rectangle(hx - HANDLE_SIZE // 2, hy - HANDLE_SIZE // 2, HANDLE_SIZE, HANDLE_SIZE)
         cr.fill()
 
 
@@ -251,7 +572,7 @@ def draw_badge(cr, x, y, w, h):
     cr.show_text(label)
 
 
-def draw_toolbar(cr, toolbar, enabled):
+def draw_toolbar(cr, toolbar, enabled, aspect):
     if toolbar is None:
         toolbar = (PADDING, PADDING)
     x, y = toolbar
@@ -263,7 +584,8 @@ def draw_toolbar(cr, toolbar, enabled):
     rounded_rect(cr, x + 0.5, y + 0.5, TOOLBAR_W - 1, TOOLBAR_H - 1, 8)
     cr.stroke()
 
-    draw_pill(cr, x + 12, y + 11, 92, 30, "Aspect", (0.18, 0.19, 0.22, 1))
+    aspect_label = f"{aspect[0]}:{aspect[1]}" if aspect else "Free"
+    draw_pill(cr, x + 12, y + 11, 92, 30, aspect_label, (0.18, 0.19, 0.22, 1))
     draw_pill(cr, x + 112, y + 11, 52, 30, "Area", (0.24, 0.37, 0.58, 1))
     draw_pill(cr, x + 174, y + 11, 74, 30, "Capture", (0.15, 0.52, 0.35, 1) if enabled else (0.20, 0.24, 0.22, 0.9))
     draw_pill(cr, x + 258, y + 11, 42, 30, "Esc", (0.32, 0.19, 0.19, 1))
