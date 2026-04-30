@@ -76,19 +76,21 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"all_in_one\":{s},\"area\":{s},\"fullscreen\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"result\":{{\"capture\":{{\"all_in_one\":{s},\"area\":{s},\"fullscreen\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"niri\",\"ipc_version\":\"{s}\"}},\"warnings\":{s}}}\n",
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"all_in_one\":{s},\"area\":{s},\"fullscreen\":{s},\"focused\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"result\":{{\"capture\":{{\"all_in_one\":{s},\"area\":{s},\"fullscreen\":{s},\"focused\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"niri\",\"ipc_version\":\"{s}\"}},\"warnings\":{s}}}\n",
         .{
             protocol.contract_version,
             ts,
             boolToJson(runtime.capture.all_in_one),
             boolToJson(runtime.capture.area),
             boolToJson(runtime.capture.fullscreen),
+            boolToJson(runtime.capture.focused),
             boolToJson(runtime.capture.window),
             backend,
             fallbacks_json,
             boolToJson(runtime.capture.all_in_one),
             boolToJson(runtime.capture.area),
             boolToJson(runtime.capture.fullscreen),
+            boolToJson(runtime.capture.focused),
             boolToJson(runtime.capture.window),
             backend,
             fallbacks_json,

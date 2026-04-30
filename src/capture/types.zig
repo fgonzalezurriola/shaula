@@ -4,6 +4,7 @@ const selection = @import("../selection/selection.zig");
 pub const CaptureMode = enum {
     area,
     fullscreen,
+    focused,
     window,
 };
 
@@ -141,6 +142,7 @@ pub fn modeString(mode: CaptureMode) []const u8 {
     return switch (mode) {
         .area => "area",
         .fullscreen => "fullscreen",
+        .focused => "focused",
         .window => "window",
     };
 }

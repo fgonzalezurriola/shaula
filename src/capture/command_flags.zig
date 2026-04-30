@@ -18,6 +18,13 @@ pub const FullscreenFlags = struct {
     output: ?[]const u8 = null,
 };
 
+pub const FocusedFlags = struct {
+    json_mode: bool = false,
+    save: bool = false,
+    copy: bool = false,
+    output: ?[]const u8 = null,
+};
+
 pub const WindowFlags = struct {
     json_mode: bool = false,
     save: bool = false,
@@ -35,6 +42,7 @@ pub const PreviousAreaFlags = struct {
 
 pub const AllInOneFlags = AreaFlags;
 
+/// Parse `capture area` flags and emit deterministic CLI usage errors.
 pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
     var flags: AreaFlags = .{};
     var i: usize = 3;
@@ -113,6 +121,40 @@ pub fn parseFullscreenFlags(io: std.Io, argv: []const [*:0]const u8) !Fullscreen
         }
 
         try command_json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "unsupported flag", false, "fullscreen", null, false, &.{});
+        return error.CliUsage;
+    }
+    return flags;
+}
+
+/// Parse `capture focused` flags and emit deterministic CLI usage errors.
+pub fn parseFocusedFlags(io: std.Io, argv: []const [*:0]const u8) !FocusedFlags {
+    var flags: FocusedFlags = .{};
+    var i: usize = 3;
+    while (i < argv.len) : (i += 1) {
+        const arg = argToSlice(argv[i]);
+        if (std.mem.eql(u8, arg, "--json")) {
+            flags.json_mode = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--output")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "--output requires a path", false, "focused", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.output = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--save")) {
+            flags.save = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--copy")) {
+            flags.copy = true;
+            continue;
+        }
+
+        try command_json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "unsupported flag", false, "focused", null, false, &.{});
         return error.CliUsage;
     }
     return flags;

@@ -9,6 +9,7 @@ const standalone_capture_types = struct {
     pub const CaptureMode = enum {
         area,
         fullscreen,
+        focused,
         window,
     };
 
@@ -66,6 +67,7 @@ const standalone_capture_types = struct {
         return switch (mode) {
             .area => "area",
             .fullscreen => "fullscreen",
+            .focused => "focused",
             .window => "window",
         };
     }
@@ -260,6 +262,7 @@ pub fn execute(
         backend_used,
         mode_string,
         request.mode == .area,
+        request.mode == .focused,
         area_geometry,
         resolved_output_path,
     ) catch |err| switch (err) {
@@ -358,6 +361,7 @@ fn defaultLatencyMs(mode: capture_types.CaptureMode, degraded_backend: bool) u32
     const base: u32 = switch (mode) {
         .area => 12,
         .fullscreen => 16,
+        .focused => 14,
         .window => 20,
     };
 

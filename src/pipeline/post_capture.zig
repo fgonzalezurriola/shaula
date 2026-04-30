@@ -10,6 +10,12 @@ pub const PipelineFlags = struct {
     copy: bool,
 };
 
+/// Emit capture JSON when save/copy are requested.
+///
+/// Contract constraints:
+/// - never suppress backend success payload, instead report `saved`/`clipboard`
+///   fields with deterministic `ERR_*` codes.
+/// - keep JSON contract version and fields stable for QA assertions.
 pub fn writeCapturePipelineJson(
     allocator: std.mem.Allocator,
     io: std.Io,

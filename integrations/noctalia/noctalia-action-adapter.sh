@@ -62,9 +62,10 @@ PY
 }
 
 action_label() {
-  case "$1" in
+    case "$1" in
     capture-area) printf 'Capture Area' ;;
     capture-fullscreen) printf 'Capture Fullscreen' ;;
+    capture-focused) printf 'Capture Focused' ;;
     capture-window) printf 'Capture Window' ;;
     open-last) printf 'Open Last' ;;
     history) printf 'History' ;;
@@ -75,9 +76,10 @@ action_label() {
 }
 
 action_command_json() {
-  case "$1" in
+    case "$1" in
     capture-area) printf '["capture","area","--json"]' ;;
     capture-fullscreen) printf '["capture","fullscreen","--json"]' ;;
+    capture-focused) printf '["capture","focused","--json"]' ;;
     capture-window) printf '["capture","window","--json"]' ;;
     open-last) printf '["history","show","--json","--id","latest"]' ;;
     history) printf '["history","list","--json"]' ;;
@@ -194,17 +196,18 @@ build_action_entry() {
 }
 
 if [[ "${MODE}" == "menu" ]]; then
-  a1="$(build_action_entry capture-area)"
-  a2="$(build_action_entry capture-fullscreen)"
-  a3="$(build_action_entry capture-window)"
-  a4="$(build_action_entry open-last)"
-  a5="$(build_action_entry history)"
-  a6="$(build_action_entry open-output-folder)"
-  a7="$(build_action_entry open-clipboard-image)"
+a1="$(build_action_entry capture-area)"
+a2="$(build_action_entry capture-fullscreen)"
+a3="$(build_action_entry capture-focused)"
+a4="$(build_action_entry capture-window)"
+a5="$(build_action_entry open-last)"
+a6="$(build_action_entry history)"
+a7="$(build_action_entry open-output-folder)"
+a8="$(build_action_entry open-clipboard-image)"
 
-  printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s,%s,%s]},"warnings":[]}\n' \
+printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s,%s,%s,%s]},"warnings":[]}\n' \
     "${REQUEST_ID}" \
-    "${a1}" "${a2}" "${a3}" "${a4}" "${a5}" "${a6}" "${a7}"
+    "${a1}" "${a2}" "${a3}" "${a4}" "${a5}" "${a6}" "${a7}" "${a8}"
   exit 0
 fi
 
@@ -278,10 +281,11 @@ import json
 import sys
 
 action = sys.argv[1]
-mapping = {
-    "capture-area": ["capture", "area", "--json"],
-    "capture-fullscreen": ["capture", "fullscreen", "--json"],
-    "capture-window": ["capture", "window", "--json"],
+    mapping = {
+        "capture-area": ["capture", "area", "--json"],
+        "capture-fullscreen": ["capture", "fullscreen", "--json"],
+        "capture-focused": ["capture", "focused", "--json"],
+        "capture-window": ["capture", "window", "--json"],
     "open-last": ["history", "show", "--json", "--id", "latest"],
     "history": ["history", "list", "--json"],
 }

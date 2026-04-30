@@ -36,6 +36,7 @@ pub const CaptureModes = struct {
     all_in_one: bool,
     area: bool,
     fullscreen: bool,
+    focused: bool,
     window: bool,
 };
 
@@ -106,6 +107,7 @@ pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
     if (std.mem.eql(u8, mode, "all-in-one")) return capture.all_in_one;
     if (std.mem.eql(u8, mode, "area")) return capture.area;
     if (std.mem.eql(u8, mode, "fullscreen")) return capture.fullscreen;
+    if (std.mem.eql(u8, mode, "focused")) return capture.focused;
     if (std.mem.eql(u8, mode, "window")) return capture.window;
     return false;
 }
@@ -124,13 +126,13 @@ pub fn fallbacksFor(backend: BackendKind) []const []const u8 {
 /// Note: window mode remains disabled in current scope by design.
 fn captureModesFor(backend: BackendKind, compositor_supported: bool) CaptureModes {
     if (!compositor_supported) {
-        return .{ .all_in_one = false, .area = false, .fullscreen = false, .window = false };
+        return .{ .all_in_one = false, .area = false, .fullscreen = false, .focused = false, .window = false };
     }
 
     return switch (backend) {
-        .niri_wayland_direct => .{ .all_in_one = true, .area = true, .fullscreen = true, .window = false },
-        .portal_screenshot => .{ .all_in_one = true, .area = true, .fullscreen = true, .window = false },
-        .stub => .{ .all_in_one = false, .area = false, .fullscreen = false, .window = false },
+        .niri_wayland_direct => .{ .all_in_one = true, .area = true, .fullscreen = true, .focused = true, .window = false },
+        .portal_screenshot => .{ .all_in_one = true, .area = true, .fullscreen = true, .focused = true, .window = false },
+        .stub => .{ .all_in_one = false, .area = false, .fullscreen = false, .focused = false, .window = false },
     };
 }
 
@@ -149,5 +151,6 @@ test "runtime decision keeps window disabled for current niri backend" {
     try std.testing.expect(decision.capture.all_in_one);
     try std.testing.expect(decision.capture.area);
     try std.testing.expect(decision.capture.fullscreen);
+    try std.testing.expect(decision.capture.focused);
     try std.testing.expect(!decision.capture.window);
 }

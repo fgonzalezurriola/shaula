@@ -56,7 +56,7 @@ const OverlayBackground = struct {
 /// Executes overlay selection and maps helper/runtime outputs to SelectionResult.
 ///
 /// Contract constraint: helper contract parsing failures are converted to
-/// deterministic cancellation so caller boundaries emit stable ERR_* outcomes.
+/// deterministic cancellation so caller boundaries emit stable `ERR_*` outcomes.
 pub fn runSelection(
     allocator: std.mem.Allocator,
     io: std.Io,

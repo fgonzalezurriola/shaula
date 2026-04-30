@@ -3,6 +3,7 @@ const std = @import("std");
 pub const CaptureMode = enum {
     area,
     fullscreen,
+    focused,
     window,
     previous_area,
     all_in_one,
@@ -18,6 +19,7 @@ pub const CaptureMode = enum {
 pub fn parseCliToken(token: []const u8) ?CaptureMode {
     if (std.mem.eql(u8, token, "area")) return .area;
     if (std.mem.eql(u8, token, "fullscreen")) return .fullscreen;
+    if (std.mem.eql(u8, token, "focused")) return .focused;
     if (std.mem.eql(u8, token, "window")) return .window;
     if (std.mem.eql(u8, token, "previous-area")) return .previous_area;
     if (std.mem.eql(u8, token, "all-in-one")) return .all_in_one;
@@ -28,6 +30,7 @@ pub fn cliToken(mode: CaptureMode) []const u8 {
     return switch (mode) {
         .area => "area",
         .fullscreen => "fullscreen",
+        .focused => "focused",
         .window => "window",
         .previous_area => "previous-area",
         .all_in_one => "all-in-one",
@@ -38,6 +41,7 @@ pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
     return switch (mode) {
         .area => "area",
         .fullscreen => "fullscreen",
+        .focused => "focused",
         .window => "window",
         .previous_area => "area",
         .all_in_one => "area",
@@ -47,7 +51,7 @@ pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
 pub fn requiresInteractiveSelection(mode: CaptureMode) bool {
     return switch (mode) {
         .area, .all_in_one => true,
-        .fullscreen, .window, .previous_area => false,
+        .fullscreen, .focused, .window, .previous_area => false,
     };
 }
 

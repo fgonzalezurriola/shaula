@@ -29,7 +29,7 @@ pub fn run(
     argv: []const [*:0]const u8,
 ) !u8 {
     if (argv.len < 3) {
-        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|window|previous-area> --json", false, null, null, false, &.{});
+        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|focused|window|previous-area> --json", false, null, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -42,6 +42,7 @@ pub fn run(
     return switch (requested_mode) {
         .area => runArea(allocator, io, environ, argv),
         .fullscreen => runFullscreen(allocator, io, environ, argv),
+        .focused => runFocused(allocator, io, environ, argv),
         .window => runWindow(allocator, io, environ, argv),
         .previous_area => runPreviousArea(allocator, io, environ, argv),
         .all_in_one => runAllInOne(allocator, io, environ, argv),
@@ -125,6 +126,10 @@ fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
 /// 2. Run overlay selection (or deterministic dry-run path).
 /// 3. Enforce capabilities + pre-capture guard.
 /// 4. Execute backend and emit stable JSON contract.
+///
+/// Deterministic errors: CLI misuse -> `ERR_CLI_USAGE`, overlay cancellation ->
+/// `ERR_SELECTION_CANCELLED`/`ERR_OVERLAY_*`, guard timeout ->
+/// `ERR_CAPTURE_PRECONDITION_TIMEOUT`.
 fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     const mode = core_capture_mode.cliToken(.area);
     const parsed = flags.parseAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
@@ -216,6 +221,38 @@ fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
     }, precondition_warning);
 }
 
+/// Execute `capture focused` — capture the currently focused output only.
+///
+/// Deterministic errors: CLI misuse -> `ERR_CLI_USAGE`, guard timeout ->
+/// `ERR_CAPTURE_PRECONDITION_TIMEOUT`, backend unavailable ->
+/// `ERR_CAPTURE_BACKEND_UNAVAILABLE`.
+fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.focused);
+    const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    if (!parsed.json_mode) {
+        try json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    }
+
+    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture focused", mode);
+    if (unsupported_rc) |code| return code;
+
+    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, "capture focused", mode) catch |err| switch (err) {
+        error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
+        else => return err,
+    };
+
+    var outcome = try capture_backend.execute(allocator, io, environ, .{
+        .mode = .focused,
+        .output_path = parsed.output,
+    });
+    defer capture_backend.deinitOutcome(allocator, &outcome);
+    return writeCaptureOutcome(allocator, io, environ, "capture focused", mode, &outcome, .{
+        .save = parsed.save,
+        .copy = parsed.copy,
+    }, precondition_warning);
+}
+
 /// Execute `capture window`.
 ///
 /// Window mode remains explicit so capability gating and deterministic contracts
@@ -293,6 +330,11 @@ fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     }, precondition_warning);
 }
 
+/// Emit the final capture JSON response and exit code.
+///
+/// Contract constraint: preserves `ERR_*` taxonomy and warning markers. When
+/// save/copy is requested, the post-capture pipeline JSON is emitted instead of
+/// the base success payload.
 fn writeCaptureOutcome(
     allocator: std.mem.Allocator,
     io: std.Io,

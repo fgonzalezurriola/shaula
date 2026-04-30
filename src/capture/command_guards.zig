@@ -7,8 +7,8 @@ const command_json = @import("command_json.zig");
 
 /// Enforce strict runtime capability contract before backend execution.
 ///
-/// Important behavior:
-/// - Forced stub returns `ERR_CAPTURE_BACKEND_UNAVAILABLE`.
+/// Contract constraints:
+/// - Forced stub returns `ERR_CAPTURE_BACKEND_UNAVAILABLE` and uses exit-code mapping.
 /// - Unsupported mode returns `ERR_CAPTURE_MODE_UNSUPPORTED` with mismatch marker.
 pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: []const u8, mode: []const u8) !?u8 {
     const runtime = runtime_capabilities.resolve(environ);
@@ -52,8 +52,8 @@ pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: [
 /// Enforce pre-capture shell-artifact guard.
 ///
 /// Returns optional warning token to be surfaced in success/failure JSON.
-/// On timeout this function writes deterministic error JSON and returns
-/// `error.PreconditionTimeout` for exit-code mapping.
+/// On timeout this function writes deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`
+/// and returns `error.PreconditionTimeout` for exit-code mapping.
 pub fn enforcePreCaptureGuard(
     allocator: std.mem.Allocator,
     io: std.Io,
