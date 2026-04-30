@@ -20,7 +20,7 @@ test_home="/tmp/shaula-home"
 rm -rf "${test_home}"
 mkdir -p "${test_home}"
 
-default_json="$(HOME="${test_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json)"
+default_json="$(HOME="${test_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview)"
 
 default_path="$(printf '%s\n' "${default_json}" | jq -r '.path')"
 
@@ -81,7 +81,7 @@ printf '%s\n' "${invalid_home_json}" | jq -e '
   exit 1
 }
 
-explicit_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output /tmp/explicit-path.png)"
+explicit_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --output /tmp/explicit-path.png)"
 
 printf '%s\n' "${explicit_json}" | jq -e '
   .ok == true and

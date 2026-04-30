@@ -14,20 +14,37 @@ Esto ya empezamos.
 
 Fase 1: Preview Post-Capture
 
-Objetivo: después de capturar, no terminar el flujo inmediatamente.
+Objetivo: después de capturar, no terminar el flujo inmediatamente. Estado:
+implementado en primera versión, con preview explícito y auto-preview
+post-capture para area/all-in-one.
 
-Implementar shaula preview <file> o abrirlo automáticamente después de capture area.
+shaula preview <file> --json.
+Auto-preview después de capture area/all-in-one por defecto.
+--preview / --no-preview en todos los modos de captura.
 
 Ventana con imagen capturada.
 Acciones básicas: copy, save, discard.
 Zoom/pan.
 Tamaño real / fit.
 Sin herramientas de edición todavía.
-Esta es la primera diferencia grande contra lo actual.
+El resultado de preview ya reporta action/copy/save/saved_path para preparar
+canvas editable sin otra ruta paralela.
 
 Fase 2: Canvas Editable Básico
 
-Objetivo: acercarse al flujo Shottr de “imagen en canvas”.
+Objetivo: acercarse al flujo Shottr de “imagen en canvas” usando la ventana
+preview actual como shell.
+
+Antes de entrar fuerte al canvas:
+
+Configuración TOML base implementada.
+shaula config show --json.
+shaula config init --json.
+shaula config niri-window-rule --json.
+shaula config niri-install --json.
+Preview app-id estable para reglas Niri.
+Bloque Niri administrado con backup/idempotencia.
+Base interna lista para UI/watcher.
 
 Imagen dentro de canvas.
 Selección de la imagen con handles.

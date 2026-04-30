@@ -46,6 +46,6 @@ assert_failure_code ERR_CLIPBOARD_UNAVAILABLE env SHAULA_CLIPBOARD_AVAILABLE=0 .
 assert_failure_code ERR_OUTPUT_PATH_INVALID env SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output /tmp/::invalid::/path.png
 assert_failure_code ERR_OVERLAY_TIMEOUT env SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=timeout SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --dry-run
 assert_failure_code ERR_OVERLAY_PROTOCOL_INVALID env SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=malformed SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --dry-run
-assert_failure_code ERR_UNKNOWN_UNMAPPED env SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1 SHAULA_INJECT_UNKNOWN_FAILURE=1 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json
+assert_failure_code ERR_UNKNOWN_UNMAPPED env SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1 SHAULA_INJECT_UNKNOWN_FAILURE=1 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview
 
 echo "ok failure_matrix deterministic"

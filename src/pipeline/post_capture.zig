@@ -4,17 +4,38 @@ const protocol = @import("../ipc/protocol.zig");
 const capture_types = @import("../capture/types.zig");
 const history_store = @import("../history/store.zig");
 const clipboard_service = @import("../clipboard/service.zig");
+const preview_service = @import("../preview/service.zig");
+const capture_command_json = @import("../capture/command_json.zig");
 
 pub const PipelineFlags = struct {
     save: bool,
     copy: bool,
+    preview: bool,
 };
 
-/// Emit capture JSON when save/copy are requested.
+const PreviewPipelineResult = struct {
+    attempted: bool = false,
+    ok: bool = false,
+    code: ?[]const u8 = null,
+    message: ?[]const u8 = null,
+    action: ?preview_service.PreviewAction = null,
+    copied: bool = false,
+    saved: bool = false,
+    saved_path: ?[]u8 = null,
+
+    fn deinit(self: *PreviewPipelineResult, allocator: std.mem.Allocator) void {
+        if (self.saved_path) |value| allocator.free(value);
+        self.saved_path = null;
+    }
+};
+
+/// Emit the post-capture JSON envelope after optional save/copy/preview work.
 ///
 /// Contract constraints:
 /// - never suppress backend success payload, instead report `saved`/`clipboard`
-///   fields with deterministic `ERR_*` codes.
+///   and `preview` fields with deterministic `ERR_*` codes.
+/// - preview is explicitly degraded; helper failures never invalidate the
+///   already-created capture artifact.
 /// - keep JSON contract version and fields stable for QA assertions.
 pub fn writeCapturePipelineJson(
     allocator: std.mem.Allocator,
@@ -24,6 +45,7 @@ pub fn writeCapturePipelineJson(
     reported_mode: []const u8,
     success: capture_types.CaptureSuccess,
     flags: PipelineFlags,
+    warnings: []const []const u8,
 ) !void {
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
@@ -52,18 +74,42 @@ pub fn writeCapturePipelineJson(
     var clipboard_error_message: ?[]const u8 = null;
 
     if (flags.copy) {
-        const copy_result = clipboard_service.copyImage(io, environ, success.path) catch {
+        if (clipboard_service.copyImage(io, environ, success.path)) |copy_result| {
+            clipboard_ok = copy_result.ok;
+            clipboard_error_code = copy_result.code;
+            clipboard_error_message = copy_result.message;
+        } else |_| {
             clipboard_ok = false;
             clipboard_error_code = "ERR_UNKNOWN_UNMAPPED";
             clipboard_error_message = "clipboard copy failed with unmapped error";
-            return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
-        };
-        clipboard_ok = copy_result.ok;
-        clipboard_error_code = copy_result.code;
-        clipboard_error_message = copy_result.message;
+        }
     }
 
-    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message);
+    var preview_result: PreviewPipelineResult = .{};
+    defer preview_result.deinit(allocator);
+    if (flags.preview) {
+        preview_result.attempted = true;
+        var preview_outcome = try preview_service.runPreview(allocator, io, environ, success.path);
+        switch (preview_outcome) {
+            .success => |*preview_success| {
+                defer preview_success.deinit(allocator);
+                preview_result.ok = true;
+                preview_result.action = preview_success.action;
+                preview_result.copied = preview_success.copied;
+                preview_result.saved = preview_success.saved;
+                if (preview_success.saved_path) |saved_path| {
+                    preview_result.saved_path = try allocator.dupe(u8, saved_path);
+                }
+            },
+            .failure => |failure| {
+                preview_result.ok = false;
+                preview_result.code = failure.code;
+                preview_result.message = failure.message;
+            },
+        }
+    }
+
+    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message, preview_result, warnings);
 }
 
 fn writeCapturePipelineJsonWithResolvedFields(
@@ -80,6 +126,8 @@ fn writeCapturePipelineJsonWithResolvedFields(
     clipboard_ok: bool,
     clipboard_error_code: ?[]const u8,
     clipboard_error_message: ?[]const u8,
+    preview_result: PreviewPipelineResult,
+    warnings: []const []const u8,
 ) !void {
 
     const partial = (flags.save and saved_ok) and (flags.copy and !clipboard_ok);
@@ -103,11 +151,20 @@ fn writeCapturePipelineJsonWithResolvedFields(
 
     const clipboard_error_json = try errorJsonField(allocator, clipboard_error_code, clipboard_error_message);
     defer allocator.free(clipboard_error_json);
+    const preview_json = try previewJsonField(allocator, preview_result);
+    defer allocator.free(preview_json);
+    const warnings_json = try capture_command_json.warningsJson(allocator, warnings);
+    defer allocator.free(warnings_json);
+
+    const saved_report_ok = flags.save and saved_ok;
+    const clipboard_report_ok = flags.copy and clipboard_ok;
+    const saved_report_path_json = if (flags.save) try allocator.dupe(u8, path_json) else try allocator.dupe(u8, "null");
+    defer allocator.free(saved_report_path_json);
 
     var stdout_buffer: [8192]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":{s},\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"degraded\":{s},\"saved\":{{\"ok\":{s},\"path\":{s},\"error\":{s}}},\"clipboard\":{{\"ok\":{s},\"error\":{s}}},\"partial\":{s},\"result\":{{\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"saved\":{{\"ok\":{s},\"path\":{s}}},\"clipboard\":{{\"ok\":{s}}}}},\"warnings\":[]}}\n",
+        "{{\"ok\":{s},\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"degraded\":{s},\"saved\":{{\"ok\":{s},\"path\":{s},\"error\":{s}}},\"clipboard\":{{\"ok\":{s},\"error\":{s}}},\"preview\":{s},\"partial\":{s},\"result\":{{\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"saved\":{{\"ok\":{s},\"path\":{s}}},\"clipboard\":{{\"ok\":{s}}},\"preview\":{s}}},\"warnings\":{s}}}\n",
         .{
             if (overall_ok) "true" else "false",
             protocol.contract_version,
@@ -121,11 +178,12 @@ fn writeCapturePipelineJsonWithResolvedFields(
             backend_json,
             success.latency_ms,
             if (success.degraded) "true" else "false",
-            if (saved_ok) "true" else "false",
-            path_json,
+            if (saved_report_ok) "true" else "false",
+            saved_report_path_json,
             saved_error_json,
-            if (clipboard_ok) "true" else "false",
+            if (clipboard_report_ok) "true" else "false",
             clipboard_error_json,
+            preview_json,
             if (partial) "true" else "false",
             mode_json,
             path_json,
@@ -134,9 +192,11 @@ fn writeCapturePipelineJsonWithResolvedFields(
             success.dimensions.height,
             backend_json,
             success.latency_ms,
-            if (saved_ok) "true" else "false",
-            path_json,
-            if (clipboard_ok) "true" else "false",
+            if (saved_report_ok) "true" else "false",
+            saved_report_path_json,
+            if (clipboard_report_ok) "true" else "false",
+            preview_json,
+            warnings_json,
         },
     );
     try stdout.interface.flush();
@@ -153,8 +213,41 @@ fn errorJsonField(allocator: std.mem.Allocator, code: ?[]const u8, message: ?[]c
     return std.fmt.allocPrint(allocator, "{{\"code\":{s},\"message\":{s}}}", .{ code_json, message_json });
 }
 
+fn previewJsonField(allocator: std.mem.Allocator, result: PreviewPipelineResult) ![]u8 {
+    const error_json = try errorJsonField(allocator, result.code, result.message);
+    defer allocator.free(error_json);
+
+    const action_json = if (result.action) |action|
+        try jsonStringAlloc(allocator, action.asString())
+    else
+        try allocator.dupe(u8, "null");
+    defer allocator.free(action_json);
+
+    const saved_path_json = try jsonNullableStringAlloc(allocator, result.saved_path);
+    defer allocator.free(saved_path_json);
+
+    return std.fmt.allocPrint(
+        allocator,
+        "{{\"attempted\":{s},\"ok\":{s},\"error\":{s},\"action\":{s},\"copied\":{s},\"saved\":{s},\"saved_path\":{s}}}",
+        .{
+            if (result.attempted) "true" else "false",
+            if (result.ok) "true" else "false",
+            error_json,
+            action_json,
+            if (result.copied) "true" else "false",
+            if (result.saved) "true" else "false",
+            saved_path_json,
+        },
+    );
+}
+
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
     return std.json.Stringify.valueAlloc(allocator, value, .{});
+}
+
+fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
+    if (value) |text| return jsonStringAlloc(allocator, text);
+    return allocator.dupe(u8, "null");
 }
 
 fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
@@ -195,4 +288,22 @@ test "pipeline error json field escapes quotes" {
     const encoded = try errorJsonField(std.testing.allocator, "ERR_TEST", "quoted \"message\"");
     defer std.testing.allocator.free(encoded);
     try std.testing.expect(std.mem.indexOf(u8, encoded, "\\\"message\\\"") != null);
+}
+
+test "pipeline preview json reports unattempted state" {
+    const encoded = try previewJsonField(std.testing.allocator, .{});
+    defer std.testing.allocator.free(encoded);
+    try std.testing.expect(std.mem.indexOf(u8, encoded, "\"attempted\":false") != null);
+    try std.testing.expect(std.mem.indexOf(u8, encoded, "\"error\":null") != null);
+}
+
+test "pipeline preview json reports degraded error" {
+    const encoded = try previewJsonField(std.testing.allocator, .{
+        .attempted = true,
+        .ok = false,
+        .code = "ERR_PREVIEW_UNAVAILABLE",
+        .message = "preview helper is unavailable",
+    });
+    defer std.testing.allocator.free(encoded);
+    try std.testing.expect(std.mem.indexOf(u8, encoded, "ERR_PREVIEW_UNAVAILABLE") != null);
 }

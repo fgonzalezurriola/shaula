@@ -8,6 +8,8 @@ Shaula es una herramienta de captura para Niri/Wayland con salida JSON determin�
 - Historial local de capturas.
 - Integración de portapapeles para copiar o importar imágenes.
 - Preview post-capture explícita con `shaula preview <file> --json`.
+- Auto-preview post-capture para `capture area` y `capture all-in-one`, con
+  `--preview`/`--no-preview` disponible en todos los modos de captura.
 - Daemon e IPC versionados.
 - Overlay de selección como línea de trabajo activa:
   - selección de área,
@@ -51,7 +53,9 @@ export NIRI_SOCKET=/run/user/1000/niri-0.sock
 
 ./zig-out/bin/shaula preflight --json
 ./zig-out/bin/shaula capture area --json
+./zig-out/bin/shaula capture area --json --no-preview
 ./zig-out/bin/shaula capture all-in-one --json
+./zig-out/bin/shaula capture fullscreen --json --preview
 ./zig-out/bin/shaula capture previous-area --json
 ./zig-out/bin/shaula preview ~/Pictures/Shaula/example.png --json
 ```
@@ -62,3 +66,20 @@ export NIRI_SOCKET=/run/user/1000/niri-0.sock
 - `scripts/qa/`: suites y checks automatizados
 - `spec/`: contratos y decisiones de arquitectura
 - `DEV.md`: guía práctica de uso y desarrollo
+
+## Configuración
+
+Shaula lee configuración desde `SHAULA_CONFIG_FILE`,
+`$XDG_CONFIG_HOME/shaula/config.toml` o `$HOME/.config/shaula/config.toml`.
+La primera superficie soportada es cómo Niri debería abrir la ventana de preview.
+
+```bash
+./zig-out/bin/shaula config show --json
+./zig-out/bin/shaula config init --json
+./zig-out/bin/shaula config niri-window-rule --json | jq -r '.result.kdl'
+./zig-out/bin/shaula config niri-install --json
+```
+
+`config niri-install` edita sólo un bloque marcado de Shaula dentro de
+`~/.config/niri/config.kdl` y crea un backup antes de modificar el archivo. La
+lógica está separada del CLI para que una UI/watcher pueda reutilizarla después.

@@ -57,9 +57,15 @@ Run `./dev doctor` to check the local machine.
 ./dev run preflight --json
 ./dev run capabilities list --json
 ./dev run capture area --json --aspect 16:9
+./dev run capture area --json --no-preview
 ./dev run capture all-in-one --json
 ./dev run capture previous-area --json
 ./dev run preview ~/Pictures/Shaula/example.png --json
+./dev run config show --json
+./dev config-init
+./dev niri-rule
+./dev niri-install
+./dev run config niri-window-rule --json
 ./dev run history list --json
 ./dev run errors list --json
 ```
@@ -103,8 +109,9 @@ a real first-paint measurement. Use `./dev bench-ui` for real overlay timing.
   overlay architecture focused on native Wayland layer-shell behavior.
 - If the native helper is unavailable, Shaula fails deterministically with
   `ERR_OVERLAY_UNAVAILABLE`; there is no secondary selector fallback.
-- `capture area` and `capture all-in-one` copy to the Wayland clipboard by
-  default.
+- `capture area` and `capture all-in-one` copy to the Wayland clipboard and
+  open post-capture preview by default. Use `--no-preview` for automation that
+  should not open UI.
 
 ## Troubleshooting
 

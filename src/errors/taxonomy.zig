@@ -74,6 +74,8 @@ const specs = [_]ErrorSpec{
     .{ .code = "ERR_HISTORY_STORE_UNAVAILABLE", .message = "history store unavailable", .retryable = false, .class = .output, .action = .degrade_continue, .exit_code = 50 },
     .{ .code = "ERR_HISTORY_ENTRY_NOT_FOUND", .message = "history entry was not found", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 52 },
     .{ .code = "ERR_OUTPUT_PATH_INVALID", .message = "output path is not writable", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 51 },
+    .{ .code = "ERR_CONFIG_UNREADABLE", .message = "configuration file is unreadable", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 60 },
+    .{ .code = "ERR_CONFIG_INVALID", .message = "invalid configuration file", .retryable = false, .class = .cli, .action = .fail_fast, .exit_code = 61 },
     .{ .code = "ERR_UNKNOWN_UNMAPPED", .message = "unmapped internal failure class", .retryable = false, .class = .unknown, .action = .fail_fast, .exit_code = 99 },
 };
 

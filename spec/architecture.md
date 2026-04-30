@@ -23,10 +23,11 @@ See [spec/algo.md](algo.md) for the central technical blueprint and decision reg
 ```text
 shaula <command-family> <command> [flags]
 
-command-family := capture | preview | daemon | capabilities | history | clipboard
+command-family := capture | preview | config | daemon | capabilities | history | clipboard
 
 capture command := all-in-one | area | fullscreen | window | previous-area
 preview command := <file>
+config command := show | init | niri-window-rule | niri-install
 daemon command := start | status | stop
 capabilities command := list
 history command := list | show
@@ -39,15 +40,28 @@ All commands below require `--json` for contract-compliant automation.
 
 #### Capture family
 
-- `shaula capture all-in-one --json [--copy] [--save] [--output <path>] [--dry-run]`
-- `shaula capture area --json [--copy] [--save] [--output <path>] [--dry-run]`
-- `shaula capture fullscreen --json [--copy] [--save] [--output <path>]`
-- `shaula capture window --json [--copy] [--save] [--output <path>] [--window-id <id>]`
-- `shaula capture previous-area --json [--copy] [--save] [--output <path>]`
+- `shaula capture all-in-one --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
+- `shaula capture area --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
+- `shaula capture fullscreen --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
+- `shaula capture window --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--window-id <id>]`
+- `shaula capture previous-area --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
 
 #### Preview family
 
 - `shaula preview <file> --json`
+
+#### Config family
+
+- `shaula config show --json`
+- `shaula config init --json [--force] [--dry-run]`
+- `shaula config niri-window-rule --json`
+- `shaula config niri-install --json [--dry-run] [--path <path>]`
+
+Preview defaults:
+
+- `capture area` and `capture all-in-one` launch post-capture preview by default.
+- `capture fullscreen`, `capture focused`, `capture window`, and `capture previous-area` do not launch preview unless `--preview` is supplied.
+- `--no-preview` disables preview explicitly. `--dry-run` never launches preview.
 
 #### Daemon family
 
@@ -84,7 +98,40 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `result`.
   "result": {
     "mode": "area",
     "path": "/tmp/shaula/capture-001.png",
-    "mime": "image/png"
+    "mime": "image/png",
+    "preview": {
+      "attempted": true,
+      "ok": true,
+      "error": null,
+      "action": "close",
+      "copied": false,
+      "saved": false,
+      "saved_path": null
+    }
+  },
+  "warnings": []
+}
+```
+
+Capture success responses also include a top-level `preview` object. Preview
+helper failures are degraded post-capture state and do not change a successful
+capture into an error response.
+
+Preview command success responses include the final user action:
+
+```json
+{
+  "ok": true,
+  "contract_version": "1.0.0",
+  "command": "preview",
+  "timestamp": "2026-04-18T20:45:00Z",
+  "result": {
+    "path": "/tmp/shaula/capture-001.png",
+    "closed": true,
+    "action": "copy",
+    "copied": true,
+    "saved": false,
+    "saved_path": null
   },
   "warnings": []
 }
@@ -159,6 +206,11 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - `ERR_PREVIEW_INPUT_INVALID`
 - `ERR_PREVIEW_UNAVAILABLE`
 
+#### Config `ERR_*`
+
+- `ERR_CONFIG_UNREADABLE`
+- `ERR_CONFIG_INVALID`
+
 ## Process Topology
 
 Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isolation for Niri-first capture.
@@ -193,6 +245,21 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 - Invalid or non-writable default destination resolves to deterministic `ERR_OUTPUT_PATH_INVALID`, no silent fallback to `/tmp`.
 - History retention is Top-N 20 entries, newest-first, with deterministic trimming on write.
 - `history show --id latest` resolves to the first retained entry and remains contract-stable.
+
+## Configuration Contract
+
+- Shaula resolves TOML config from `SHAULA_CONFIG_FILE`,
+  `$XDG_CONFIG_HOME/shaula/config.toml`, then
+  `$HOME/.config/shaula/config.toml`.
+- Missing config is not an error and returns integrated defaults.
+- Present unreadable config fails with `ERR_CONFIG_UNREADABLE`.
+- Present invalid config fails with `ERR_CONFIG_INVALID`.
+- Preview window identity is stable: app-id `dev.shaula.preview`, title
+  `Shaula Preview`.
+- `config niri-window-rule` renders a Niri `window-rule` for the preview app-id.
+- `config niri-install` installs or replaces only Shaula's marked block in Niri
+  config and creates a backup before changing an existing file.
+- Shaula does not reload Niri automatically.
 
 ## Pre-Capture Guard Contract
 

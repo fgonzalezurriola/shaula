@@ -12,9 +12,10 @@ Shaula is scoped as a Niri-first capture tool with deterministic CLI/JSON contra
 | Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
 | Previous area capture | Supported | Reuses the last confirmed area rectangle with deterministic `ERR_PREVIOUS_AREA_UNAVAILABLE`. |
 | Clipboard copy/import | Supported | `clipboard copy-image` and `clipboard import-image`. |
-| Post-capture preview | Supported initial iteration | `preview <file>` opens a GTK window with copy, save-as, discard, fit, 100%, zoom, and pan. |
+| Post-capture preview | Supported | `preview <file>` opens a GTK window with copy, save-as, discard, fit, 100%, zoom, and pan. `capture area` and `capture all-in-one` launch preview by default; all capture modes accept `--preview`/`--no-preview`. |
 | History list/show | Supported | Top-N 20, newest-first, stable `latest` alias. |
 | Output path default | Supported | Defaults to `~/Pictures/Shaula`. |
+| TOML configuration | Supported initial iteration | Resolves Shaula config from env/XDG/HOME and renders Niri preview-window rules. |
 | Overlay helper contract | Supported | Helper protocol maps deterministically to `SelectionResult`. |
 | Overlay unavailability | Supported | Missing native helper fails deterministically with `ERR_OVERLAY_UNAVAILABLE`. |
 | Noctalia adapter | Optional | Never part of the capture hot path. |
@@ -42,7 +43,7 @@ Differentiators:
 - Pin screenshots on screen when compositor behavior allows it.
 - Pixelate, blur, and solid-bar redaction for sensitive information.
 - Frontend/dev tools: ruler, manual measurement, color picker, and average-area color.
-- File-first configuration through TOML.
+- File-first configuration through TOML, starting with preview-window intent for Niri.
 
 ## Incremental UX Strategy
 
@@ -76,7 +77,7 @@ Deferred heavier UX work:
 | High | Focused window capture via Niri IPC | Deterministic failure when target identity is unresolved. |
 | High | Save to file | Defaults to `~/Pictures/Shaula`; invalid paths fail deterministically. |
 | High | Copy image to clipboard | Clipboard failures remain explicit and machine-readable. |
-| High | TOML configuration | Config errors must map to stable `ERR_*` outcomes before being public contract. |
+| High | TOML configuration | Initial preview-window config is supported with `ERR_CONFIG_UNREADABLE` and `ERR_CONFIG_INVALID`. |
 | High | Decent selection overlay | Esc cancel and Enter confirm are required interactions. |
 | Medium | Visible selection size | Must not change capture JSON shape without contract versioning. |
 | Medium | Repeat last region | Must use last confirmed geometry only. |
@@ -85,7 +86,7 @@ Deferred heavier UX work:
 
 | Priority | Candidate | Contract Gate |
 | :--- | :--- | :--- |
-| High | Floating post-capture preview | Initial explicit `preview <file>` command is supported; automatic post-capture launch remains gated. |
+| High | Floating post-capture preview | Explicit `preview <file>` and automatic post-capture launch are supported. Preview failures degrade capture success instead of invalidating the artifact. |
 | High | Basic editor with crop | Editor failures must not corrupt the original artifact. |
 | High | Pixelate/redaction | Redaction output must be deterministic for release QA. |
 | High | Arrows and rectangles | Annotation data model must be versioned before persistence. |

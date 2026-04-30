@@ -16,7 +16,7 @@ FULL_PATH="/tmp/shaula/task9-fullscreen.png"
 
 rm -f "${AREA_PATH}" "${FULL_PATH}"
 
-area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output "${AREA_PATH}")"
+area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --output "${AREA_PATH}")"
 printf '%s\n' "${area_json}" | jq -e '
   .ok == true and
   .mode == "area" and

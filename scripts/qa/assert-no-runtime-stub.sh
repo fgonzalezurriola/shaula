@@ -26,7 +26,7 @@ forced_stub_path="/tmp/shaula/qa-forced-stub-should-not-exist.png"
 
 rm -f "${capture_path}" "${forced_stub_path}"
 
-capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output "${capture_path}")"
+capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --output "${capture_path}")"
 
 printf '%s\n' "${capture_json}" | jq -e --arg capture_path "${capture_path}" '
   .ok == true and

@@ -9,6 +9,11 @@ pub const ClipboardCopyResult = struct {
     message: ?[]const u8,
 };
 
+/// Copy a captured PNG into the persistent clipboard state and Wayland clipboard.
+///
+/// Contract constraints: unavailable clipboard support returns
+/// `ERR_CLIPBOARD_UNAVAILABLE`; publish failures return
+/// `ERR_CLIPBOARD_COPY_FAILED` so capture pipelines can degrade explicitly.
 pub fn copyImage(io: std.Io, environ: std.process.Environ, path: []const u8) !ClipboardCopyResult {
     if (!isClipboardAvailable(environ)) {
         return .{

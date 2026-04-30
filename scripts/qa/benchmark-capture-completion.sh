@@ -77,7 +77,7 @@ def run_and_extract(command: list[str], bench_name: str) -> float:
         sys.exit(1)
     return float(latency)
 
-area_cmd = ["./zig-out/bin/shaula", "capture", "area", "--json"]
+area_cmd = ["./zig-out/bin/shaula", "capture", "area", "--json", "--no-preview"]
 window_cmd = ["./zig-out/bin/shaula", "capture", "window", "--json", "--window-id", "bench-window"]
 
 for _ in range(warmup):

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
+const preview_service = @import("service.zig");
 
 /// Runs the interactive post-capture preview command.
 ///
@@ -36,70 +37,47 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    std.Io.Dir.cwd().access(io, path, .{}) catch {
-        try writeErrorJson(io, "preview", "ERR_PREVIEW_INPUT_INVALID", "preview input image is not readable", false);
-        return recovery_policy.exitCodeFor("ERR_PREVIEW_INPUT_INVALID");
-    };
-
-    const helper_bin = try resolvePreviewBinary(allocator, io, environ);
-    defer allocator.free(helper_bin);
-
-    const result = std.process.run(allocator, io, .{
-        .argv = &.{ helper_bin, path },
-        .stdout_limit = .limited(2048),
-        .stderr_limit = .limited(4096),
-    }) catch {
-        try writeErrorJson(io, "preview", "ERR_PREVIEW_UNAVAILABLE", "preview helper is unavailable", true);
-        return recovery_policy.exitCodeFor("ERR_PREVIEW_UNAVAILABLE");
-    };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 43) {
-                try writeErrorJson(io, "preview", "ERR_PREVIEW_INPUT_INVALID", "preview input image is invalid", false);
-                return recovery_policy.exitCodeFor("ERR_PREVIEW_INPUT_INVALID");
-            }
-            if (code != 0) {
-                try writeErrorJson(io, "preview", "ERR_PREVIEW_UNAVAILABLE", "preview helper exited unsuccessfully", true);
-                return recovery_policy.exitCodeFor("ERR_PREVIEW_UNAVAILABLE");
-            }
+    var outcome = try preview_service.runPreview(allocator, io, environ, path);
+    switch (outcome) {
+        .failure => |failure| {
+            try writeErrorJson(io, "preview", failure.code, failure.message, failure.retryable);
+            return recovery_policy.exitCodeFor(failure.code);
         },
-        else => {
-            try writeErrorJson(io, "preview", "ERR_PREVIEW_UNAVAILABLE", "preview helper terminated unexpectedly", true);
-            return recovery_policy.exitCodeFor("ERR_PREVIEW_UNAVAILABLE");
+        .success => |*result| {
+            defer result.deinit(allocator);
+            try writeSuccessJson(allocator, io, path, result.*);
+            return 0;
         },
     }
+}
 
+fn writeSuccessJson(allocator: std.mem.Allocator, io: std.Io, path: []const u8, result: preview_service.PreviewRunResult) !void {
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
+
+    const path_json = try jsonStringAlloc(allocator, path);
+    defer allocator.free(path_json);
+    const action_json = try jsonStringAlloc(allocator, result.action.asString());
+    defer allocator.free(action_json);
+    const saved_path_json = try jsonNullableStringAlloc(allocator, result.saved_path);
+    defer allocator.free(saved_path_json);
+
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preview\",\"timestamp\":\"{s}\",\"result\":{{\"path\":\"{s}\",\"closed\":true}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts, path },
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preview\",\"timestamp\":\"{s}\",\"result\":{{\"path\":{s},\"closed\":{s},\"action\":{s},\"copied\":{s},\"saved\":{s},\"saved_path\":{s}}},\"warnings\":[]}}\n",
+        .{
+            protocol.contract_version,
+            ts,
+            path_json,
+            if (result.closed) "true" else "false",
+            action_json,
+            if (result.copied) "true" else "false",
+            if (result.saved) "true" else "false",
+            saved_path_json,
+        },
     );
     try stdout.interface.flush();
-    return 0;
-}
-
-fn resolvePreviewBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_PREVIEW_HELPER_BIN")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
-    }
-
-    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-preview");
-    defer allocator.free(exe_dir);
-
-    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-preview", .{exe_dir});
-    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
-        return sibling;
-    } else |_| {
-        allocator.free(sibling);
-        return allocator.dupe(u8, "shaula-preview");
-    }
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
@@ -121,6 +99,15 @@ fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []
         .{ protocol.contract_version, command, ts, code, message, if (retryable) "true" else "false" },
     );
     try stdout.interface.flush();
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    return std.json.Stringify.valueAlloc(allocator, value, .{});
+}
+
+fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
+    if (value) |text| return jsonStringAlloc(allocator, text);
+    return allocator.dupe(u8, "null");
 }
 
 fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {

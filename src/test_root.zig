@@ -10,6 +10,10 @@ const _overlay_toolbar_layout = @import("overlay/toolbar_layout.zig");
 const _overlay_ui_state_store = @import("overlay/ui_state_store.zig");
 const _overlay_all_in_one_session = @import("overlay/all_in_one_session.zig");
 const _overlay_selection_draft_store = @import("overlay/selection_draft_store.zig");
+const _preview_service = @import("preview/service.zig");
+const _config_loader = @import("config/loader.zig");
+const _config_niri_rule = @import("config/niri_rule.zig");
+const _config_manager = @import("config/manager.zig");
 
 test {
     _ = _main;
@@ -20,4 +24,8 @@ test {
     _ = _overlay_ui_state_store;
     _ = _overlay_all_in_one_session;
     _ = _overlay_selection_draft_store;
+    _ = _preview_service;
+    _ = _config_loader;
+    _ = _config_niri_rule;
+    _ = _config_manager;
 }

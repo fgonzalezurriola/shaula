@@ -26,7 +26,7 @@ schema_expr='
   has("warnings")
 '
 
-area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json)"
+area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview)"
 printf '%s\n' "${area_json}" | jq -e "${schema_expr}" >/dev/null || {
   echo "ERR_CAPTURE_SCHEMA_INVALID reason=area_shape" >&2
   exit 1

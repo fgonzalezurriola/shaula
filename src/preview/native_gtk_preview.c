@@ -29,6 +29,8 @@ typedef struct {
   double pan_origin_y;
   gboolean copied;
   gboolean saved;
+  char *saved_path;
+  const char *last_action;
 } ShaulaPreviewState;
 
 static ShaulaPreviewState state;
@@ -81,6 +83,7 @@ static gboolean publish_clipboard(const char *path) {
 static void on_copy_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
+  state.last_action = "copy";
   state.copied = publish_clipboard(state.path);
 }
 
@@ -94,6 +97,11 @@ static void on_save_response(GtkNativeDialog *dialog, int response, gpointer dat
       if (target != NULL) {
         GError *error = NULL;
         state.saved = copy_file_bytes(state.path, target, &error);
+        if (state.saved) {
+          g_free(state.saved_path);
+          state.saved_path = g_strdup(target);
+          state.last_action = "save";
+        }
         if (error != NULL) g_error_free(error);
         g_free(target);
       }
@@ -125,6 +133,7 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
 static void on_discard_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
+  state.last_action = "discard";
   if (state.app != NULL) g_application_quit(G_APPLICATION(state.app));
 }
 
@@ -252,6 +261,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint ke
   (void)modifiers;
   (void)data;
   if (keyval == GDK_KEY_Escape || keyval == GDK_KEY_q) {
+    if (state.last_action == NULL) state.last_action = "close";
     if (state.app != NULL) g_application_quit(G_APPLICATION(state.app));
     return TRUE;
   }
@@ -276,6 +286,59 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint ke
     return TRUE;
   }
   return FALSE;
+}
+
+static void print_json_string(const char *value) {
+  fputc('"', stdout);
+  for (const unsigned char *p = (const unsigned char *)value; *p != '\0'; p++) {
+    switch (*p) {
+      case '"':
+        fputs("\\\"", stdout);
+        break;
+      case '\\':
+        fputs("\\\\", stdout);
+        break;
+      case '\b':
+        fputs("\\b", stdout);
+        break;
+      case '\f':
+        fputs("\\f", stdout);
+        break;
+      case '\n':
+        fputs("\\n", stdout);
+        break;
+      case '\r':
+        fputs("\\r", stdout);
+        break;
+      case '\t':
+        fputs("\\t", stdout);
+        break;
+      default:
+        if (*p < 0x20) {
+          fprintf(stdout, "\\u%04x", *p);
+        } else {
+          fputc(*p, stdout);
+        }
+        break;
+    }
+  }
+  fputc('"', stdout);
+}
+
+static void emit_preview_result(void) {
+  const char *action = state.last_action != NULL ? state.last_action : "close";
+  fputs("{\"closed\":true,\"action\":", stdout);
+  print_json_string(action);
+  fprintf(stdout, ",\"copied\":%s,\"saved\":%s,\"saved_path\":",
+          state.copied ? "true" : "false",
+          state.saved ? "true" : "false");
+  if (state.saved_path != NULL) {
+    print_json_string(state.saved_path);
+  } else {
+    fputs("null", stdout);
+  }
+  fputs("}\n", stdout);
+  fflush(stdout);
 }
 
 static GtkWidget *toolbar_button(const char *label, GCallback callback) {
@@ -358,6 +421,7 @@ int main(int argc, char **argv) {
   state.zoom = 1.0;
   state.fit_zoom = 1.0;
   state.fit_mode = TRUE;
+  state.last_action = "close";
 
   GtkApplication *app = gtk_application_new("dev.shaula.preview", G_APPLICATION_DEFAULT_FLAGS);
   if (app == NULL) {
@@ -367,8 +431,10 @@ int main(int argc, char **argv) {
   }
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);
   int rc = g_application_run(G_APPLICATION(app), 0, NULL);
+  if (rc == 0) emit_preview_result();
   g_object_unref(app);
   g_object_unref(state.image);
+  g_free(state.saved_path);
   g_free(state.path);
   return rc > 255 ? 255 : rc;
 }

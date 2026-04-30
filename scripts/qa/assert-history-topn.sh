@@ -55,7 +55,7 @@ mkdir -p "${capture_dir}"
 
 for ((i = 1; i <= SHOTS; i++)); do
   capture_path="${capture_dir}/capture-$(printf '%03d' "${i}").png"
-  capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --save --output "${capture_path}")"
+  capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --save --output "${capture_path}")"
 
   printf '%s\n' "${capture_json}" | jq -e --arg p "${capture_path}" '
     .ok == true and

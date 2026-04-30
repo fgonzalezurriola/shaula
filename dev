@@ -31,6 +31,10 @@ App:
  focused Build, then run capture focused --json --copy
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
+  config         Build, then show resolved Shaula config
+  config-init    Build, then create Shaula config.toml if missing
+  niri-rule      Build, then print Shaula's managed Niri preview rule
+  niri-install   Build, then install Shaula's managed Niri preview rule
   errors         Build, then list ERR_* taxonomy
 
 QA:
@@ -181,6 +185,18 @@ all)
     build >/dev/null
     shaula_env
     exec "${OVERLAY_BIN}" "$@"
+    ;;
+  config)
+    run_shaula config show --json "$@"
+    ;;
+  config-init)
+    run_shaula config init --json "$@"
+    ;;
+  niri-rule)
+    run_shaula config niri-window-rule --json "$@" | jq -r '.result.kdl'
+    ;;
+  niri-install)
+    run_shaula config niri-install --json "$@"
     ;;
   errors)
     run_shaula errors list --json "$@"

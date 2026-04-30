@@ -76,7 +76,8 @@ Go/No-Go:
 Focus:
 
 - explicit `preview <file>` post-capture window,
-- automatic preview launch after capture once the explicit command is stable,
+- automatic preview launch after `capture area` and `capture all-in-one`, with
+  `--preview`/`--no-preview` for all capture modes,
 - basic editor with crop,
 - pixelate/redaction,
 - arrows and rectangles,

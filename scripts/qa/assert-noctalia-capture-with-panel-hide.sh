@@ -54,7 +54,7 @@ handshake_json="$({
   SHAULA_CAPTURE_SETTLE_BARRIER_MS=30 \
   SHAULA_CAPTURE_INJECT_PANEL_MARKER=1 \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --output "${capture_path}"
+  ./zig-out/bin/shaula capture area --json --no-preview --output "${capture_path}"
 } )"
 
 wait "${token_writer_pid}"
@@ -89,7 +89,7 @@ fallback_json="$({
   SHAULA_CAPTURE_INJECT_PANEL_MARKER=1 \
   SHAULA_PANEL_MARKER_VISIBLE_UNTIL_MS="$(( $(date +%s%3N) + 10 ))" \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --output "${fallback_path}"
+  ./zig-out/bin/shaula capture area --json --no-preview --output "${fallback_path}"
 } )"
 
 printf '%s\n' "${fallback_json}" | jq -e --arg path "${fallback_path}" '

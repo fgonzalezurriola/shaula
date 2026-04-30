@@ -97,7 +97,7 @@ if [[ "${MODE}" == "without-plugin" || "${MODE}" == "both" ]]; then
     SHAULA_COMPOSITOR=niri \
     NIRI_SOCKET=/tmp/niri.sock \
     WAYLAND_DISPLAY=wayland-1 \
-    ./zig-out/bin/shaula capture area --json --output "${CAPTURE_PATH}"
+    ./zig-out/bin/shaula capture area --json --no-preview --output "${CAPTURE_PATH}"
   })"
   printf '%s\n' "${capture_json}" | jq -e '
     .ok == true and

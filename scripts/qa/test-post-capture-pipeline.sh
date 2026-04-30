@@ -19,7 +19,7 @@ zig build >/dev/null
 CAPTURE_PATH="/tmp/shaula/task10-post-pipeline.png"
 rm -f "${CAPTURE_PATH}"
 
-json_ok="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --save --copy --output "${CAPTURE_PATH}")"
+json_ok="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output "${CAPTURE_PATH}")"
 
 printf '%s\n' "${json_ok}" | jq -e '
   .ok == true and
@@ -59,7 +59,7 @@ history_hash="$(sha256sum "${history_path}" | awk '{print $1}')"
   exit 1
 }
 
-json_partial="$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --save --copy --output "${CAPTURE_PATH}")"
+json_partial="$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output "${CAPTURE_PATH}")"
 
 printf '%s\n' "${json_partial}" | jq -e '
   .ok == true and

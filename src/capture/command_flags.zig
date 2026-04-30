@@ -7,6 +7,7 @@ pub const AreaFlags = struct {
     simulate_cancel: bool = false,
     save: bool = false,
     copy: bool = true,
+    preview: ?bool = null,
     aspect: ?[]const u8 = null,
     output: ?[]const u8 = null,
 };
@@ -15,6 +16,7 @@ pub const FullscreenFlags = struct {
     json_mode: bool = false,
     save: bool = false,
     copy: bool = false,
+    preview: ?bool = null,
     output: ?[]const u8 = null,
 };
 
@@ -22,6 +24,7 @@ pub const FocusedFlags = struct {
     json_mode: bool = false,
     save: bool = false,
     copy: bool = false,
+    preview: ?bool = null,
     output: ?[]const u8 = null,
 };
 
@@ -29,6 +32,7 @@ pub const WindowFlags = struct {
     json_mode: bool = false,
     save: bool = false,
     copy: bool = false,
+    preview: ?bool = null,
     output: ?[]const u8 = null,
     window_id: ?[]const u8 = null,
 };
@@ -37,6 +41,7 @@ pub const PreviousAreaFlags = struct {
     json_mode: bool = false,
     save: bool = false,
     copy: bool = false,
+    preview: ?bool = null,
     output: ?[]const u8 = null,
 };
 
@@ -86,6 +91,14 @@ pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
             flags.copy = true;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
+            continue;
+        }
 
         try command_json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "unsupported flag", false, "area", null, false, &.{});
         return error.CliUsage;
@@ -117,6 +130,14 @@ pub fn parseFullscreenFlags(io: std.Io, argv: []const [*:0]const u8) !Fullscreen
         }
         if (std.mem.eql(u8, arg, "--copy")) {
             flags.copy = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
             continue;
         }
 
@@ -151,6 +172,14 @@ pub fn parseFocusedFlags(io: std.Io, argv: []const [*:0]const u8) !FocusedFlags 
         }
         if (std.mem.eql(u8, arg, "--copy")) {
             flags.copy = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
             continue;
         }
 
@@ -195,6 +224,14 @@ pub fn parseWindowFlags(io: std.Io, argv: []const [*:0]const u8) !WindowFlags {
             flags.copy = true;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
+            continue;
+        }
 
         try command_json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "unsupported flag", false, "window", null, false, &.{});
         return error.CliUsage;
@@ -226,6 +263,14 @@ pub fn parsePreviousAreaFlags(io: std.Io, argv: []const [*:0]const u8) !Previous
         }
         if (std.mem.eql(u8, arg, "--copy")) {
             flags.copy = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
             continue;
         }
 
@@ -278,6 +323,14 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
             flags.copy = true;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--preview")) {
+            flags.preview = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-preview")) {
+            flags.preview = false;
+            continue;
+        }
 
         try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "unsupported flag", false, "all-in-one", null, false, &.{});
         return error.CliUsage;
@@ -287,4 +340,20 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
+}
+
+pub fn resolvePreviewDefault(mode: []const u8, explicit: ?bool) bool {
+    if (explicit) |value| return value;
+    return std.mem.eql(u8, mode, "area") or std.mem.eql(u8, mode, "all-in-one");
+}
+
+test "preview defaults follow interactive capture modes" {
+    try std.testing.expect(resolvePreviewDefault("area", null));
+    try std.testing.expect(resolvePreviewDefault("all-in-one", null));
+    try std.testing.expect(!resolvePreviewDefault("fullscreen", null));
+    try std.testing.expect(!resolvePreviewDefault("focused", null));
+    try std.testing.expect(!resolvePreviewDefault("window", null));
+    try std.testing.expect(!resolvePreviewDefault("previous-area", null));
+    try std.testing.expect(resolvePreviewDefault("fullscreen", true));
+    try std.testing.expect(!resolvePreviewDefault("area", false));
 }

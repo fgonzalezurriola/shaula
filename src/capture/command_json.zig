@@ -89,7 +89,7 @@ pub fn writeSelectionDryRunJson(allocator: std.mem.Allocator, io: std.Io, comman
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"selection\":{{\"mode\":{s},\"aspect\":{s},\"geometry\":{s},\"cancelled\":false}},\"warnings\":[]}}\n",
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"selection\":{{\"mode\":{s},\"aspect\":{s},\"geometry\":{s},\"cancelled\":false}},\"preview\":{{\"attempted\":false,\"ok\":false,\"error\":null}},\"warnings\":[]}}\n",
         .{ protocol.contract_version, command_json, ts_json, mode_json, aspect_json, geometry_json },
     );
     try stdout.interface.flush();

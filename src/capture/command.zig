@@ -16,6 +16,7 @@ const json = @import("command_json.zig");
 const PostCaptureFlags = struct {
     save: bool,
     copy: bool,
+    preview: bool,
 };
 
 /// Entry point for the `capture` command family.
@@ -116,6 +117,7 @@ fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     return writeCaptureOutcome(allocator, io, environ, "capture all-in-one", reported_mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(reported_mode, parsed.preview),
     }, precondition_warning);
 }
 
@@ -190,6 +192,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     return writeCaptureOutcome(allocator, io, environ, "capture area", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(mode, parsed.preview),
     }, precondition_warning);
 }
 
@@ -218,6 +221,7 @@ fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
     return writeCaptureOutcome(allocator, io, environ, "capture fullscreen", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(mode, parsed.preview),
     }, precondition_warning);
 }
 
@@ -250,6 +254,7 @@ fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Env
     return writeCaptureOutcome(allocator, io, environ, "capture focused", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(mode, parsed.preview),
     }, precondition_warning);
 }
 
@@ -282,6 +287,7 @@ fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Envi
     return writeCaptureOutcome(allocator, io, environ, "capture window", mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(mode, parsed.preview),
     }, precondition_warning);
 }
 
@@ -327,14 +333,15 @@ fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     return writeCaptureOutcome(allocator, io, environ, "capture previous-area", reported_mode, &outcome, .{
         .save = parsed.save,
         .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(reported_mode, parsed.preview),
     }, precondition_warning);
 }
 
 /// Emit the final capture JSON response and exit code.
 ///
 /// Contract constraint: preserves `ERR_*` taxonomy and warning markers. When
-/// save/copy is requested, the post-capture pipeline JSON is emitted instead of
-/// the base success payload.
+/// save/copy/preview post-capture work is always represented in the success
+/// payload so automation can distinguish unattempted preview from degradation.
 fn writeCaptureOutcome(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -347,14 +354,6 @@ fn writeCaptureOutcome(
 ) !u8 {
     switch (outcome.*) {
         .success => |success| {
-            if (post_flags.save or post_flags.copy) {
-                try post_capture_pipeline.writeCapturePipelineJson(allocator, io, environ, command, reported_mode, success, .{
-                    .save = post_flags.save,
-                    .copy = post_flags.copy,
-                });
-                return 0;
-            }
-
             var warnings: [2][]const u8 = undefined;
             var warning_count: usize = 0;
             if (precondition_warning) |warning| {
@@ -366,7 +365,11 @@ fn writeCaptureOutcome(
                 warning_count += 1;
             }
 
-            try json.writeSuccessJson(allocator, io, command, reported_mode, success, warnings[0..warning_count]);
+            try post_capture_pipeline.writeCapturePipelineJson(allocator, io, environ, command, reported_mode, success, .{
+                .save = post_flags.save,
+                .copy = post_flags.copy,
+                .preview = post_flags.preview,
+            }, warnings[0..warning_count]);
             return 0;
         },
         .failure => |failure| {
