@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
         .name = "shaula",
         .root_module = main_module,
     });
+    exe.root_module.strip = optimize != .Debug;
 
     b.installArtifact(exe);
 
