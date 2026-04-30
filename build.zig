@@ -10,11 +10,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const strip = b.option(bool, "strip", "Strip debug symbols from the binary") orelse false;
     const exe = b.addExecutable(.{
         .name = "shaula",
         .root_module = main_module,
     });
-    exe.root_module.strip = optimize != .Debug;
+    exe.root_module.strip = strip;
 
     b.installArtifact(exe);
 

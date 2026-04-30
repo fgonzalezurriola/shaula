@@ -18,7 +18,8 @@ Usage:
 
 Core:
  build Build shaula and overlay helper
-  release Build shaula and overlay helper (ReleaseSafe)
+  release     Build shaula and overlay helper (ReleaseSafe, x86_64)
+  release-arm Build shaula and overlay helper (ReleaseSafe, aarch64)
   test           Run Zig tests
   check          Run build + tests
   doctor         Check local toolchain/runtime dependencies
@@ -77,7 +78,11 @@ build() {
 }
 
 release() {
-  zig build -Doptimize=ReleaseSafe
+zig build -Doptimize=ReleaseSafe -Dstrip -Dtarget=x86_64-linux-gnu
+}
+
+release-arm() {
+zig build -Doptimize=ReleaseSafe -Dstrip -Dtarget=aarch64-linux-gnu
 }
 
 run_shaula() {
@@ -148,8 +153,11 @@ build)
   build
   ;;
 release)
-  release
-  ;;
+    release
+    ;;
+release-arm)
+    release-arm
+    ;;
   test)
     zig build test "$@"
     ;;
