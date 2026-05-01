@@ -6,9 +6,23 @@
 #include <math.h>
 
 enum {
-  PREVIEW_MIN_W = 860,
-  PREVIEW_MIN_H = 560,
+  /* Niri floating windows may be initially constrained by placement rules; keep
+   * the preview large enough that the toolbar does not become the layout driver.
+   */
+  PREVIEW_MIN_W = 900,
+  PREVIEW_MIN_H = 650,
+  PREVIEW_DEFAULT_W = 960,
+  PREVIEW_DEFAULT_H = 680,
+  /* Canvas padding is applied only inside the GtkDrawingArea allocation. The
+   * topbar owns its own height, so fit zoom should shrink the image rather than
+   * letting chrome reduce or clip the drawing area.
+   */
   PREVIEW_CONTENT_INSET = 24,
+  /* Optional metadata is decoration. Primary actions must remain visible first
+   * when floating windows are manually resized below the comfortable width.
+   */
+  PREVIEW_METADATA_COLLAPSE_W = 760,
+  PREVIEW_ZOOM_COLLAPSE_W = 640,
 
 };
 
@@ -17,6 +31,8 @@ typedef struct {
   GtkWidget *window;
   GtkWidget *area;
   GtkWidget *zoom_label;
+  GtkWidget *metadata_optional[8];
+  int metadata_optional_count;
   GdkPixbuf *image;
   char *path;
   double zoom;
@@ -76,6 +92,10 @@ static void update_zoom_label(void) {
 
 static void get_preview_content_rect(int width, int height, int *x, int *y,
                                      int *content_w, int *content_h) {
+  /* Contract: callers pass the real GtkDrawingArea allocation, never the
+   * toplevel window size. Returned dimensions are clamped so fit-contain math
+   * remains deterministic even during tiny intermediate resize allocations.
+   */
   int inset = PREVIEW_CONTENT_INSET;
   if (x != NULL)
     *x = inset;
@@ -85,6 +105,28 @@ static void get_preview_content_rect(int width, int height, int *x, int *y,
     *content_w = MAX(1, width - inset * 2);
   if (content_h != NULL)
     *content_h = MAX(1, height - inset * 2);
+}
+
+static void update_metadata_visibility(int width) {
+  /* Collapse non-critical readouts before GTK has to choose between clipping
+   * controls and growing the topbar. Copy/save/more/discard stay available.
+   */
+  gboolean show_details = width >= PREVIEW_METADATA_COLLAPSE_W;
+  gboolean show_zoom = width >= PREVIEW_ZOOM_COLLAPSE_W;
+  for (int i = 0; i < state.metadata_optional_count; i++) {
+    if (state.metadata_optional[i] != NULL)
+      gtk_widget_set_visible(state.metadata_optional[i], show_details);
+  }
+  if (state.zoom_label != NULL)
+    gtk_widget_set_visible(state.zoom_label, show_zoom);
+}
+
+static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
+                               gpointer data) {
+  (void)clock;
+  (void)data;
+  update_metadata_visibility(gtk_widget_get_width(widget));
+  return G_SOURCE_CONTINUE;
 }
 
 static void update_fit_zoom(void) {
@@ -104,6 +146,9 @@ static void update_fit_zoom(void) {
   double scale_y = (double)content_h / (double)image_h;
   state.fit_zoom = MIN(1.0, MAX(0.05, MIN(scale_x, scale_y)));
   if (state.fit_mode) {
+    /* Fit mode is a centered canvas contract: window resizes recompute the
+     * zoom and pan together so the image stays contained instead of clipping.
+     */
     state.zoom = state.fit_zoom;
     state.pan_x = (double)content_x +
                   ((double)content_w - (double)image_w * state.zoom) / 2.0;
@@ -508,6 +553,13 @@ static GtkWidget *make_normal_label(const char *text) {
   return label;
 }
 
+static void append_optional_metadata(GtkWidget *metadata, GtkWidget *child) {
+  if (state.metadata_optional_count <
+      (int)(sizeof(state.metadata_optional) / sizeof(state.metadata_optional[0])))
+    state.metadata_optional[state.metadata_optional_count++] = child;
+  gtk_box_append(GTK_BOX(metadata), child);
+}
+
 static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
                         gpointer data) {
   (void)area;
@@ -530,6 +582,23 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 }
 
 static GtkWidget *build_tool_group(void) {
+  /* Toolbar order is the visual contract for the preview editor. Reorder by
+   * moving the matching append call and its separator as a unit:
+   *
+   * 1. Copy (implemented)
+   * 2. Save As (implemented)
+   * 3. Pin (placeholder, no behavior yet)
+   * 4. Share (placeholder, no behavior yet)
+   * 5. Crop (placeholder, no behavior yet)
+   * 6. Select (placeholder toggle, no selection model yet)
+   * 7. Arrow (placeholder, no annotation model yet)
+   * 8. Text (placeholder, no annotation model yet)
+   * 9. Measure (placeholder, no measurement model yet)
+   * 10. Rectangle (placeholder, no annotation model yet)
+   * 11. Highlight (placeholder, no annotation model yet)
+   * 12. Pen (placeholder, no annotation model yet)
+   * 13. More (placeholder, no menu yet)
+   */
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
 
@@ -586,6 +655,7 @@ static GtkWidget *build_tool_group(void) {
 static GtkWidget *build_metadata_group(void) {
   GtkWidget *metadata = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
   gtk_widget_set_valign(metadata, GTK_ALIGN_CENTER);
+  state.metadata_optional_count = 0;
 
   GtkWidget *swatch = gtk_drawing_area_new();
   gtk_widget_set_size_request(swatch, 16, 16);
@@ -593,26 +663,26 @@ static GtkWidget *build_metadata_group(void) {
   gtk_widget_set_margin_end(swatch, 4);
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(swatch), draw_swatch, NULL,
                                  NULL);
-  gtk_box_append(GTK_BOX(metadata), swatch);
+  append_optional_metadata(metadata, swatch);
 
-  gtk_box_append(GTK_BOX(metadata), make_normal_label("#2A4A66"));
-  gtk_box_append(GTK_BOX(metadata), make_dot_separator());
-  gtk_box_append(GTK_BOX(metadata), make_muted_label("Tab to copy"));
+  append_optional_metadata(metadata, make_normal_label("#2A4A66"));
+  append_optional_metadata(metadata, make_dot_separator());
+  append_optional_metadata(metadata, make_muted_label("Tab to copy"));
 
-  gtk_box_append(GTK_BOX(metadata), make_dot_separator());
+  append_optional_metadata(metadata, make_dot_separator());
 
   if (state.image != NULL) {
     char size_buf[32];
     snprintf(size_buf, sizeof(size_buf), "%d\xc3\x97%d px",
              gdk_pixbuf_get_width(state.image),
              gdk_pixbuf_get_height(state.image));
-    gtk_box_append(GTK_BOX(metadata), make_muted_label(size_buf));
+    append_optional_metadata(metadata, make_muted_label(size_buf));
   } else {
-    gtk_box_append(GTK_BOX(metadata), make_muted_label("840\xc3\x97"
-                                                       "582 px"));
+    append_optional_metadata(metadata, make_muted_label("840\xc3\x97"
+                                                        "582 px"));
   }
 
-  gtk_box_append(GTK_BOX(metadata), make_dot_separator());
+  append_optional_metadata(metadata, make_dot_separator());
 
   state.zoom_label = make_muted_label("100% Zoom");
   gtk_box_append(GTK_BOX(metadata), state.zoom_label);
@@ -626,10 +696,13 @@ static GtkWidget *build_metadata_group(void) {
 }
 
 static GtkWidget *build_topbar(void) {
-  GtkWidget *overlay = gtk_overlay_new();
-
-  GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_size_request(main_box, -1, 46);
+  /* Use a single horizontal layout instead of GtkOverlay. Overlay placement
+   * lets the centered toolbar and right metadata occupy the same pixels in
+   * narrow floating windows, while this box preserves allocation boundaries.
+   */
+  GtkWidget *topbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(topbar, -1, 46);
+  gtk_widget_set_hexpand(topbar, TRUE);
 
   GtkWidget *toolbar = build_tool_group();
   gtk_widget_set_halign(toolbar, GTK_ALIGN_CENTER);
@@ -640,11 +713,27 @@ static GtkWidget *build_topbar(void) {
   gtk_widget_set_valign(right_group, GTK_ALIGN_CENTER);
   gtk_widget_set_margin_end(right_group, 6);
 
-  gtk_overlay_set_child(GTK_OVERLAY(overlay), main_box);
-  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), toolbar);
-  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), right_group);
+  GtkWidget *left_space = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(left_space, TRUE);
 
-  return overlay;
+  /* The left spacer and right slot both expand, so the toolbar remains visually
+   * centered when there is room; the metadata is pushed to the far right inside
+   * its own slot and collapses before it can overlap the toolbar.
+   */
+  GtkWidget *right_slot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(right_slot, TRUE);
+  gtk_widget_set_halign(right_slot, GTK_ALIGN_FILL);
+  GtkWidget *right_space = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(right_space, TRUE);
+  gtk_box_append(GTK_BOX(right_slot), right_space);
+  gtk_box_append(GTK_BOX(right_slot), right_group);
+
+  gtk_box_append(GTK_BOX(topbar), left_space);
+  gtk_box_append(GTK_BOX(topbar), toolbar);
+  gtk_box_append(GTK_BOX(topbar), right_slot);
+  gtk_widget_add_tick_callback(topbar, on_topbar_tick, NULL, NULL);
+
+  return topbar;
 }
 
 static void on_map(GtkWidget *widget, gpointer data) {
@@ -660,7 +749,9 @@ static void on_activate(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
   state.window = window;
   gtk_window_set_title(GTK_WINDOW(window), "Shaula Preview");
-  gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_MIN_W, PREVIEW_MIN_H);
+  gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
+  gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_DEFAULT_W,
+                              PREVIEW_DEFAULT_H);
   gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
   GtkWidget *area = gtk_drawing_area_new();
@@ -671,17 +762,16 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_set_cursor_from_name(area, "grab");
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, NULL, NULL);
 
-  GtkWidget *main_overlay = gtk_overlay_new();
-  gtk_overlay_set_child(GTK_OVERLAY(main_overlay), area);
-
+  /* Window structure is intentionally simple: fixed-height topbar plus one
+   * expanding canvas. There is no second preview layer or overlay placement, so
+   * all image positioning is owned by on_draw/update_fit_zoom.
+   */
   GtkWidget *topbar = build_topbar();
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_hexpand(root, TRUE);
   gtk_widget_set_vexpand(root, TRUE);
   gtk_box_append(GTK_BOX(root), topbar);
-  gtk_box_append(GTK_BOX(root), main_overlay);
-  gtk_widget_set_hexpand(main_overlay, TRUE);
-  gtk_widget_set_vexpand(main_overlay, TRUE);
+  gtk_box_append(GTK_BOX(root), area);
 
   gtk_window_set_child(GTK_WINDOW(window), root);
 
