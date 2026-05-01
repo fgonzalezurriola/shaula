@@ -23,6 +23,8 @@ pub const PreviewResult = struct {
     action: PreviewAction = .unknown,
     copied: bool = false,
     saved: bool = false,
+    /// Set by the helper when it already emitted the save/copy notification.
+    notified: bool = false,
     saved_path: ?[]u8 = null,
 
     pub fn deinit(self: *PreviewResult, allocator: std.mem.Allocator) void {
@@ -36,7 +38,9 @@ pub const PreviewResult = struct {
 /// The helper must emit a final JSON object when it exits. Unknown action names
 /// are accepted as `.unknown` so newly-built helpers do not crash older Zig
 /// callers, while malformed or missing JSON maps to deterministic preview
-/// `ERR_*` handling in the service layer.
+/// `ERR_*` handling in the service layer. When present, `notified` means the
+/// native helper already emitted the user-facing save/copy banner, so callers
+/// can avoid duplicate fallback notifications.
 pub fn parse(allocator: std.mem.Allocator, stdout: []const u8) !PreviewResult {
     const trimmed = std.mem.trim(u8, stdout, " \t\r\n");
     if (trimmed.len == 0) return error.PreviewResultMissing;
@@ -65,6 +69,9 @@ pub fn parse(allocator: std.mem.Allocator, stdout: []const u8) !PreviewResult {
     }
     if (object.get("saved")) |value| {
         if (value == .bool) result.saved = value.bool;
+    }
+    if (object.get("notified")) |value| {
+        if (value == .bool) result.notified = value.bool;
     }
     if (object.get("saved_path")) |value| {
         if (value == .string and value.string.len > 0) {

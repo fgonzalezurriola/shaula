@@ -95,6 +95,8 @@ typedef struct {
   gboolean modified;
   gboolean copied;
   gboolean saved;
+  /* Set when the helper already emitted the user-facing save/copy banner. */
+  gboolean notified;
   char *saved_path;
   const char *last_action;
   gboolean is_dark;

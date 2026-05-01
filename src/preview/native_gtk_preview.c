@@ -50,8 +50,9 @@ static void emit_preview_result(void) {
   const char *action = state.last_action != NULL ? state.last_action : "close";
   fputs("{\"closed\":true,\"action\":", stdout);
   print_json_string(action);
-  fprintf(stdout, ",\"copied\":%s,\"saved\":%s,\"saved_path\":",
-          state.copied ? "true" : "false", state.saved ? "true" : "false");
+  fprintf(stdout, ",\"copied\":%s,\"saved\":%s,\"notified\":%s,\"saved_path\":",
+          state.copied ? "true" : "false", state.saved ? "true" : "false",
+          state.notified ? "true" : "false");
   if (state.saved_path != NULL) {
     print_json_string(state.saved_path);
   } else {

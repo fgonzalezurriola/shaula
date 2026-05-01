@@ -11,6 +11,8 @@ pub const PreviewRunResult = struct {
     action: PreviewAction = .close,
     copied: bool = false,
     saved: bool = false,
+    /// Mirrors the helper contract so the Zig service can suppress duplicates.
+    notified: bool = false,
     saved_path: ?[]u8 = null,
 
     pub fn deinit(self: *PreviewRunResult, allocator: std.mem.Allocator) void {
@@ -32,6 +34,10 @@ pub const PreviewOutcome = union(enum) {
 
 /// Launches the native preview helper and maps helper/runtime failures to stable
 /// preview `ERR_*` outcomes used by both CLI and post-capture orchestration.
+///
+/// The GTK helper owns immediate save/copy notifications. This boundary keeps a
+/// fallback path only when the helper could not emit one, so callers never get
+/// duplicate banners.
 pub fn runPreview(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -101,7 +107,9 @@ pub fn runPreview(
         cleanup.deinit(allocator);
     }
 
-    notifyForPreviewResult(allocator, io, helper_result) catch {};
+    if (!helper_result.notified) {
+        notifyForPreviewResult(allocator, io, helper_result) catch {};
+    }
 
     return .{ .success = helper_result };
 }
@@ -116,6 +124,7 @@ fn parseHelperResult(allocator: std.mem.Allocator, path: []const u8, stdout: []c
         .action = parsed.action,
         .copied = parsed.copied,
         .saved = parsed.saved,
+        .notified = parsed.notified,
         .saved_path = parsed.saved_path,
     };
 }
