@@ -1,21 +1,38 @@
+#define _GNU_SOURCE
 #include <gtk/gtk.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <linux/limits.h>
+#include <unistd.h>
+#include <limits.h>
 
 enum {
   PREVIEW_MIN_W = 860,
   PREVIEW_MIN_H = 560,
+  PREVIEW_TOOLBAR_BASE_VISIBLE_W = 860,
+  PREVIEW_TOOLBAR_REVEAL_STEP_W = 48,
 
 };
+
+typedef struct {
+  const char *icon_name;
+  const char *label;
+  const char *tooltip;
+  GCallback callback;
+} ToolbarActionSpec;
 
 typedef struct {
   GtkApplication *app;
   GtkWidget *window;
   GtkWidget *area;
   GtkWidget *zoom_label;
+  GtkWidget *toolbar_secondary[6];
+  GtkWidget *more_button;
+  GtkWidget *more_popover;
+  GtkWidget *more_menu_box;
   GdkPixbuf *image;
   char *path;
   double zoom;
@@ -33,6 +50,8 @@ typedef struct {
   char *saved_path;
   const char *last_action;
   gboolean is_dark;
+  int toolbar_secondary_count;
+  int toolbar_overflow_visible_count;
 } ShaulaPreviewState;
 
 static ShaulaPreviewState state;
@@ -415,10 +434,53 @@ static void emit_preview_result(void) {
   fflush(stdout);
 }
 
+/* Register the install-prefix icon theme parent so GTK can resolve Shaula's
+ * hicolor fallback icons before toolbar widgets request icon names.
+ */
+static void register_custom_icons(void) {
+  char exe[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+  if (len < 0)
+    return;
+  exe[len] = '\0';
+
+  char *slash = strrchr(exe, '/');
+  if (slash == NULL)
+    return;
+  *slash = '\0';
+
+  char icon_dir[PATH_MAX * 2];
+  snprintf(icon_dir, sizeof(icon_dir), "%s/../share/icons", exe);
+
+  GdkDisplay *display = gdk_display_get_default();
+  if (display == NULL)
+    return;
+
+  GtkIconTheme *theme = gtk_icon_theme_get_for_display(display);
+  if (theme == NULL)
+    return;
+
+  gtk_icon_theme_add_search_path(theme, icon_dir);
+}
+
 static void on_noop_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
 }
+
+static const ToolbarActionSpec secondary_actions[] = {
+	{"shaula-arrow-symbolic", "Arrow", "Arrow", G_CALLBACK(on_noop_clicked)},
+	{"shaula-text-symbolic", "Text", "Text", G_CALLBACK(on_noop_clicked)},
+	{"shaula-measure-symbolic", "Measure", "Measure",
+	 G_CALLBACK(on_noop_clicked)},
+	{"shaula-rectangle-symbolic", "Rectangle", "Rectangle",
+	 G_CALLBACK(on_noop_clicked)},
+	{"shaula-highlight-symbolic", "Highlight", "Highlight",
+	 G_CALLBACK(on_noop_clicked)},
+	{"shaula-pen-symbolic", "Pen", "Pen", G_CALLBACK(on_noop_clicked)},
+};
+
+static GtkWidget *make_muted_label(const char *text);
 
 static GtkWidget *make_toolbar_button(const char *icon_name,
                                       const char *tooltip, GCallback callback) {
@@ -442,6 +504,118 @@ static GtkWidget *make_toolbar_toggle_button(const char *icon_name,
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), active);
   g_signal_connect(button, "clicked", callback, NULL);
+  return button;
+}
+
+static GtkWidget *make_more_menu_row(const ToolbarActionSpec *spec) {
+  GtkWidget *button = gtk_button_new();
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  GtkWidget *icon = gtk_image_new_from_icon_name(spec->icon_name);
+  GtkWidget *label = gtk_label_new(spec->label);
+  gtk_widget_set_halign(label, GTK_ALIGN_START);
+  gtk_widget_set_hexpand(label, TRUE);
+  gtk_box_append(GTK_BOX(row), icon);
+  gtk_box_append(GTK_BOX(row), label);
+  gtk_button_set_child(GTK_BUTTON(button), row);
+  gtk_widget_set_tooltip_text(button, spec->tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  g_signal_connect(button, "clicked", spec->callback, NULL);
+  return button;
+}
+
+static int visible_secondary_count_for_width(int width) {
+  int extra = width - PREVIEW_TOOLBAR_BASE_VISIBLE_W;
+  if (extra <= 0)
+    return 0;
+  int count = extra / PREVIEW_TOOLBAR_REVEAL_STEP_W;
+  return MIN(count, state.toolbar_secondary_count);
+}
+
+static void rebuild_more_menu(int visible_count) {
+  if (state.more_menu_box == NULL)
+    return;
+
+  GtkWidget *child = gtk_widget_get_first_child(state.more_menu_box);
+  while (child != NULL) {
+    GtkWidget *next = gtk_widget_get_next_sibling(child);
+    gtk_box_remove(GTK_BOX(state.more_menu_box), child);
+    child = next;
+  }
+
+  gboolean has_hidden = FALSE;
+  for (int i = visible_count; i < state.toolbar_secondary_count; i++) {
+    gtk_box_append(GTK_BOX(state.more_menu_box),
+                   make_more_menu_row(&secondary_actions[i]));
+    has_hidden = TRUE;
+  }
+
+  if (!has_hidden) {
+    GtkWidget *label = make_muted_label("All tools visible");
+    gtk_widget_set_margin_top(label, 8);
+    gtk_widget_set_margin_bottom(label, 8);
+    gtk_widget_set_margin_start(label, 10);
+    gtk_widget_set_margin_end(label, 10);
+    gtk_box_append(GTK_BOX(state.more_menu_box), label);
+  }
+}
+
+/* Contract: the minimum preview width owns primary actions. Secondary
+ * placeholder tools overflow deterministically so GTK never clips header
+ * controls when the window is resized.
+ */
+static void update_toolbar_overflow(int width) {
+  int visible_count = visible_secondary_count_for_width(width);
+  if (visible_count == state.toolbar_overflow_visible_count)
+    return;
+
+  for (int i = 0; i < state.toolbar_secondary_count; i++)
+    gtk_widget_set_visible(state.toolbar_secondary[i], i < visible_count);
+
+  rebuild_more_menu(visible_count);
+  state.toolbar_overflow_visible_count = visible_count;
+}
+
+static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
+                               gpointer data) {
+  (void)clock;
+  (void)data;
+  update_toolbar_overflow(gtk_widget_get_width(widget));
+  return G_SOURCE_CONTINUE;
+}
+
+static GtkWidget *make_more_button(void) {
+  GtkWidget *button = gtk_menu_button_new();
+	GtkWidget *icon = gtk_image_new_from_icon_name("shaula-more-symbolic");
+  GtkWidget *popover = gtk_popover_new();
+  GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+
+  gtk_menu_button_set_child(GTK_MENU_BUTTON(button), icon);
+  gtk_widget_set_tooltip_text(button, "More");
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_margin_top(menu_box, 6);
+  gtk_widget_set_margin_bottom(menu_box, 6);
+  gtk_widget_set_margin_start(menu_box, 6);
+  gtk_widget_set_margin_end(menu_box, 6);
+  gtk_popover_set_child(GTK_POPOVER(popover), menu_box);
+  gtk_menu_button_set_popover(GTK_MENU_BUTTON(button), popover);
+
+  state.more_button = button;
+  state.more_popover = popover;
+  state.more_menu_box = menu_box;
+  return button;
+}
+
+static GtkWidget *append_secondary_toolbar_button(GtkWidget *actions,
+                                                  int index) {
+  GtkWidget *button =
+      make_toolbar_button(secondary_actions[index].icon_name,
+                          secondary_actions[index].tooltip,
+                          secondary_actions[index].callback);
+  gtk_widget_set_visible(button, FALSE);
+  gtk_box_append(GTK_BOX(actions), button);
+  state.toolbar_secondary[state.toolbar_secondary_count++] = button;
   return button;
 }
 
@@ -483,49 +657,34 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 static GtkWidget *build_tool_group(void) {
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
-
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("edit-copy-symbolic", "Copy (Ctrl+C)",
-                                     G_CALLBACK(on_copy_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("document-save-as-symbolic",
-                                     "Save As (Ctrl+S)",
-                                     G_CALLBACK(on_save_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("view-pin-symbolic", "Pin",
-                                     G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("send-to-symbolic", "Share",
-                                     G_CALLBACK(on_noop_clicked)));
+  state.toolbar_secondary_count = 0;
+  state.toolbar_overflow_visible_count = -1;
 
 	gtk_box_append(GTK_BOX(actions),
-		make_toolbar_button("image-crop-symbolic", "Crop",
-                                     G_CALLBACK(on_noop_clicked)));
-  GtkWidget *select_btn = make_toolbar_toggle_button(
-      "edit-select-symbolic", "Select", TRUE, G_CALLBACK(on_noop_clicked));
+		make_toolbar_button("shaula-copy-symbolic", "Copy (Ctrl+C)",
+			G_CALLBACK(on_copy_clicked)));
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("shaula-save-symbolic",
+			"Save As (Ctrl+S)",
+			G_CALLBACK(on_save_clicked)));
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("shaula-pin-symbolic", "Pin",
+			G_CALLBACK(on_noop_clicked)));
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("shaula-share-symbolic", "Share",
+			G_CALLBACK(on_noop_clicked)));
+
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("shaula-crop-symbolic", "Crop",
+			G_CALLBACK(on_noop_clicked)));
+	GtkWidget *select_btn = make_toolbar_toggle_button(
+		"shaula-select-symbolic", "Select", TRUE, G_CALLBACK(on_noop_clicked));
   gtk_box_append(GTK_BOX(actions), select_btn);
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("mail-forward-symbolic", "Arrow",
-                                     G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("font-x-generic-symbolic", "Text",
-                                     G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("preferences-desktop-display-symbolic",
-                                     "Measure", G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("window-new-symbolic", "Rectangle",
-                                     G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("object-select-symbolic", "Highlight",
-                                     G_CALLBACK(on_noop_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("document-edit-symbolic", "Pen",
-                                     G_CALLBACK(on_noop_clicked)));
 
-	gtk_box_append(GTK_BOX(actions),
-		make_toolbar_button("view-more-symbolic", "More",
-                                     G_CALLBACK(on_noop_clicked)));
+  for (int i = 0; i < (int)G_N_ELEMENTS(secondary_actions); i++)
+    append_secondary_toolbar_button(actions, i);
+
+  gtk_box_append(GTK_BOX(actions), make_more_button());
 
   return actions;
 }
@@ -542,8 +701,8 @@ static GtkWidget *build_metadata_group(void) {
                                  NULL);
   gtk_box_append(GTK_BOX(metadata), swatch);
 
-	gtk_box_append(GTK_BOX(metadata), make_normal_label("#2A4A66"));
-	gtk_box_append(GTK_BOX(metadata), make_muted_label("Tab to copy"));
+  gtk_box_append(GTK_BOX(metadata), make_normal_label("#2A4A66"));
+  gtk_box_append(GTK_BOX(metadata), make_muted_label("Tab to copy"));
 
   if (state.image != NULL) {
     char size_buf[32];
@@ -556,12 +715,12 @@ static GtkWidget *build_metadata_group(void) {
                                                        "582 px"));
   }
 
-	state.zoom_label = make_muted_label("100% Zoom");
+  state.zoom_label = make_muted_label("100% Zoom");
   gtk_box_append(GTK_BOX(metadata), state.zoom_label);
   gtk_widget_set_margin_end(metadata, 8);
 
-  GtkWidget *discard_btn = make_toolbar_button(
-      "edit-delete-symbolic", "Discard (Esc)", G_CALLBACK(on_discard_clicked));
+	GtkWidget *discard_btn = make_toolbar_button(
+		"shaula-discard-symbolic", "Discard (Esc)", G_CALLBACK(on_discard_clicked));
   gtk_box_append(GTK_BOX(metadata), discard_btn);
 
   return metadata;
@@ -580,6 +739,8 @@ static GtkWidget *build_topbar(void) {
 
   gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), toolbar);
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
+  update_toolbar_overflow(PREVIEW_TOOLBAR_BASE_VISIBLE_W);
+  gtk_widget_add_tick_callback(bar, on_topbar_tick, NULL, NULL);
 
   return bar;
 }
@@ -592,14 +753,15 @@ static void on_map(GtkWidget *widget, gpointer data) {
 }
 
 static void on_activate(GtkApplication *app, gpointer data) {
-  (void)data;
-  state.app = app;
-  GtkWidget *window = gtk_application_window_new(app);
+	(void)data;
+	state.app = app;
+	register_custom_icons();
+	GtkWidget *window = gtk_application_window_new(app);
   state.window = window;
   gtk_window_set_title(GTK_WINDOW(window), "Shaula Preview");
-	gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
-	gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_MIN_W, PREVIEW_MIN_H);
-	gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+  gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
+  gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_MIN_W, PREVIEW_MIN_H);
+  gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
   GtkWidget *area = gtk_drawing_area_new();
   state.area = area;

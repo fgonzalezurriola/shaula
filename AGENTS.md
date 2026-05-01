@@ -1,9 +1,6 @@
-# Shaula Agent Guidance
+# Shaula
 
 This app doesn't have any users yet, don't make regression tests
-You can make non-smoke tests and use my screen, i will make the screenshot and you verify the result
-
-application is called **Shaula**.
 Use always the zig related skill.
 
 ## Documentation policy for contributors and agents
@@ -33,7 +30,7 @@ For overlay, capture, clipboard, GTK, Wayland, or Niri behavior changes, also ru
 ./dev bench
 ```
 
-For interactive overlay UX changes, ask the user to run or allow:
+For interactive overlay UX changes, ask the user to run:
 
 ```bash
 ./dev capture

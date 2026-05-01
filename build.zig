@@ -34,6 +34,13 @@ pub fn build(b: *std.Build) void {
     const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
     b.getInstallStep().dependOn(&install_preview_helper.step);
 
+    const install_preview_icons = b.addInstallDirectory(.{
+        .source_dir = b.path("src/preview/icons/hicolor"),
+        .install_dir = .{ .custom = "share" },
+        .install_subdir = "icons/hicolor",
+    });
+    b.getInstallStep().dependOn(&install_preview_icons.step);
+
     const run_overlay_helper_cmd = b.addSystemCommand(&.{
         "sh",
         "-c",

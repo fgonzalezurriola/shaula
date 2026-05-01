@@ -1,0 +1,68 @@
+[
+  {
+    "name": "five-quarter-scale",
+    "local": {
+      "x": 100,
+      "y": 60,
+      "width": 250,
+      "height": 125
+    },
+    "output": {
+      "x": 1920,
+      "y": 0,
+      "scale_numerator": 4,
+      "scale_denominator": 5
+    },
+    "expected": {
+      "x": 2045,
+      "y": 75,
+      "width": 313,
+      "height": 156
+    },
+    "expected_runtime_arg": "2045,75 313x156"
+  },
+  {
+    "name": "negative-local-coordinate-rounding",
+    "local": {
+      "x": -25,
+      "y": 15,
+      "width": 81,
+      "height": 41
+    },
+    "output": {
+      "x": 0,
+      "y": 1080,
+      "scale_numerator": 2,
+      "scale_denominator": 3
+    },
+    "expected": {
+      "x": -38,
+      "y": 1103,
+      "width": 122,
+      "height": 62
+    },
+    "expected_runtime_arg": "-38,1103 122x62"
+  },
+  {
+    "name": "two-times-scale",
+    "local": {
+      "x": 5,
+      "y": 7,
+      "width": 99,
+      "height": 53
+    },
+    "output": {
+      "x": -2560,
+      "y": -1440,
+      "scale_numerator": 1,
+      "scale_denominator": 2
+    },
+    "expected": {
+      "x": -2550,
+      "y": -1426,
+      "width": 198,
+      "height": 106
+    },
+    "expected_runtime_arg": "-2550,-1426 198x106"
+  }
+]
