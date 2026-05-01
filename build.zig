@@ -90,14 +90,26 @@ fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
+        \\out="$1"
+        \\shift
         \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
-        \\  "$2" \
-        \\  -o "$1" \
+        \\  "$@" \
+        \\  -o "${out}" \
 \\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
 ,
         "build-shaula-preview",
     });
     const output = command.addOutputFileArg("shaula-preview");
     command.addFileArg(b.path("src/preview/native_gtk_preview.c"));
+    command.addFileArg(b.path("src/preview/preview_actions.c"));
+    command.addFileArg(b.path("src/preview/preview_annotations.c"));
+    command.addFileArg(b.path("src/preview/preview_canvas.c"));
+    command.addFileArg(b.path("src/preview/preview_clipboard.c"));
+    command.addFileArg(b.path("src/preview/preview_geometry.c"));
+    command.addFileArg(b.path("src/preview/preview_icons.c"));
+    command.addFileArg(b.path("src/preview/preview_image_io.c"));
+    command.addFileArg(b.path("src/preview/preview_render.c"));
+    command.addFileArg(b.path("src/preview/preview_state.c"));
+    command.addFileArg(b.path("src/preview/preview_toolbar.c"));
     return output;
 }
