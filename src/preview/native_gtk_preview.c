@@ -52,6 +52,8 @@ typedef struct {
   gboolean is_dark;
   int toolbar_secondary_count;
   int toolbar_overflow_visible_count;
+  char *icon_roots[2];
+  int icon_root_count;
 } ShaulaPreviewState;
 
 static ShaulaPreviewState state;
@@ -434,24 +436,26 @@ static void emit_preview_result(void) {
   fflush(stdout);
 }
 
-/* Register the install-prefix icon theme parent so GTK can resolve Shaula's
- * hicolor fallback icons before toolbar widgets request icon names.
+/* Register preview icon theme parents before toolbar widgets request icon
+ * names. Installed builds resolve via the prefix; local ./dev runs can resolve
+ * directly from the source tree.
  */
+static void add_icon_search_path(GtkIconTheme *theme, const char *path) {
+  if (path == NULL || path[0] == '\0')
+    return;
+  if (g_file_test(path, G_FILE_TEST_IS_DIR))
+    gtk_icon_theme_add_search_path(theme, path);
+}
+
+static void remember_icon_root(const char *path) {
+  if (path == NULL || path[0] == '\0' || state.icon_root_count >= 2)
+    return;
+  if (!g_file_test(path, G_FILE_TEST_IS_DIR))
+    return;
+  state.icon_roots[state.icon_root_count++] = g_strdup(path);
+}
+
 static void register_custom_icons(void) {
-  char exe[PATH_MAX];
-  ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-  if (len < 0)
-    return;
-  exe[len] = '\0';
-
-  char *slash = strrchr(exe, '/');
-  if (slash == NULL)
-    return;
-  *slash = '\0';
-
-  char icon_dir[PATH_MAX * 2];
-  snprintf(icon_dir, sizeof(icon_dir), "%s/../share/icons", exe);
-
   GdkDisplay *display = gdk_display_get_default();
   if (display == NULL)
     return;
@@ -460,7 +464,53 @@ static void register_custom_icons(void) {
   if (theme == NULL)
     return;
 
-  gtk_icon_theme_add_search_path(theme, icon_dir);
+  char exe[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+  if (len >= 0) {
+    exe[len] = '\0';
+
+    char *slash = strrchr(exe, '/');
+    if (slash != NULL) {
+      *slash = '\0';
+
+      char icon_dir[PATH_MAX * 2];
+      snprintf(icon_dir, sizeof(icon_dir), "%s/../share/icons", exe);
+      add_icon_search_path(theme, icon_dir);
+      remember_icon_root(icon_dir);
+    }
+  }
+
+  char cwd[PATH_MAX];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    char source_icon_dir[PATH_MAX * 2];
+    snprintf(source_icon_dir, sizeof(source_icon_dir),
+             "%s/src/preview/icons", cwd);
+    add_icon_search_path(theme, source_icon_dir);
+    remember_icon_root(source_icon_dir);
+  }
+}
+
+static char *find_toolbar_icon_file(const char *icon_name) {
+  for (int i = 0; i < state.icon_root_count; i++) {
+    char *path = g_strdup_printf("%s/hicolor/scalable/actions/%s.svg",
+                                 state.icon_roots[i], icon_name);
+    if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
+      return path;
+    g_free(path);
+  }
+  return NULL;
+}
+
+static GtkWidget *make_toolbar_icon(const char *icon_name) {
+  char *path = find_toolbar_icon_file(icon_name);
+  GtkWidget *icon = path != NULL ? gtk_image_new_from_file(path)
+                                 : gtk_image_new_from_icon_name(icon_name);
+  g_free(path);
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), 16);
+  gtk_widget_set_size_request(icon, 16, 16);
+  gtk_widget_set_halign(icon, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(icon, GTK_ALIGN_CENTER);
+  return icon;
 }
 
 static void on_noop_clicked(GtkButton *button, gpointer data) {
@@ -485,10 +535,11 @@ static GtkWidget *make_muted_label(const char *text);
 static GtkWidget *make_toolbar_button(const char *icon_name,
                                       const char *tooltip, GCallback callback) {
   GtkWidget *button = gtk_button_new();
-  gtk_button_set_icon_name(GTK_BUTTON(button), icon_name);
+  gtk_button_set_child(GTK_BUTTON(button), make_toolbar_icon(icon_name));
   gtk_widget_set_tooltip_text(button, tooltip);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 32, 32);
   g_signal_connect(button, "clicked", callback, NULL);
   return button;
 }
@@ -498,10 +549,11 @@ static GtkWidget *make_toolbar_toggle_button(const char *icon_name,
                                              gboolean active,
                                              GCallback callback) {
   GtkWidget *button = gtk_toggle_button_new();
-  gtk_button_set_icon_name(GTK_BUTTON(button), icon_name);
+  gtk_button_set_child(GTK_BUTTON(button), make_toolbar_icon(icon_name));
   gtk_widget_set_tooltip_text(button, tooltip);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 32, 32);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), active);
   g_signal_connect(button, "clicked", callback, NULL);
   return button;
@@ -510,7 +562,7 @@ static GtkWidget *make_toolbar_toggle_button(const char *icon_name,
 static GtkWidget *make_more_menu_row(const ToolbarActionSpec *spec) {
   GtkWidget *button = gtk_button_new();
   GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  GtkWidget *icon = gtk_image_new_from_icon_name(spec->icon_name);
+  GtkWidget *icon = make_toolbar_icon(spec->icon_name);
   GtkWidget *label = gtk_label_new(spec->label);
   gtk_widget_set_halign(label, GTK_ALIGN_START);
   gtk_widget_set_hexpand(label, TRUE);
@@ -586,7 +638,7 @@ static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
 
 static GtkWidget *make_more_button(void) {
   GtkWidget *button = gtk_menu_button_new();
-	GtkWidget *icon = gtk_image_new_from_icon_name("shaula-more-symbolic");
+	GtkWidget *icon = make_toolbar_icon("shaula-more-symbolic");
   GtkWidget *popover = gtk_popover_new();
   GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
 
@@ -594,6 +646,7 @@ static GtkWidget *make_more_button(void) {
   gtk_widget_set_tooltip_text(button, "More");
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 32, 32);
   gtk_widget_set_margin_top(menu_box, 6);
   gtk_widget_set_margin_bottom(menu_box, 6);
   gtk_widget_set_margin_start(menu_box, 6);
@@ -836,6 +889,8 @@ int main(int argc, char **argv) {
     emit_preview_result();
   g_object_unref(app);
   g_object_unref(state.image);
+  for (int i = 0; i < state.icon_root_count; i++)
+    g_free(state.icon_roots[i]);
   g_free(state.saved_path);
   g_free(state.path);
   return rc > 255 ? 255 : rc;
