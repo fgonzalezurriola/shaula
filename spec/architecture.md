@@ -1,6 +1,6 @@
 # Shaula Architecture Spec
 
-See [spec/algo.md](algo.md) for the central technical blueprint and decision register.
+See [spec/requirements.md](requirements.md) for product direction and [spec/algo.md](algo.md) for the locked engineering decisions.
 
 ## AGENT-FIRST CLI Contract
 

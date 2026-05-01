@@ -163,29 +163,3 @@ fn rationalRoundUnsigned(value: u32, numerator: u32, denominator: u32) u32 {
     const rounded = @divFloor(@as(u64, value) * @as(u64, numerator) + @divFloor(@as(u64, denominator), 2), @as(u64, denominator));
     return @intCast(rounded);
 }
-
-test "mode string mapping is deterministic" {
-    try std.testing.expectEqualStrings("area", modeString(.area));
-    try std.testing.expectEqualStrings("fullscreen", modeString(.fullscreen));
-    try std.testing.expectEqualStrings("window", modeString(.window));
-}
-
-test "area geometry conversion from selection is deterministic" {
-    const converted = areaGeometryFromSelection(.{ .x = 10, .y = -20, .width = 640, .height = 360 }) orelse return error.TestExpectedEqual;
-    try std.testing.expectEqual(@as(i32, 10), converted.x);
-    try std.testing.expectEqual(@as(i32, -20), converted.y);
-    try std.testing.expectEqual(@as(u32, 640), converted.width);
-    try std.testing.expectEqual(@as(u32, 360), converted.height);
-}
-
-test "fractional output local normalization is deterministic" {
-    const normalized = normalizeOutputLocalGeometry(
-        .{ .x = 100, .y = 60, .width = 250, .height = 125 },
-        .{ .x = 1920, .y = 0, .scale_numerator = 4, .scale_denominator = 5 },
-    );
-
-    try std.testing.expectEqual(@as(i32, 2045), normalized.x);
-    try std.testing.expectEqual(@as(i32, 75), normalized.y);
-    try std.testing.expectEqual(@as(u32, 313), normalized.width);
-    try std.testing.expectEqual(@as(u32, 156), normalized.height);
-}

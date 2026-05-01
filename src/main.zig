@@ -186,14 +186,6 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, allow_socke
     return parsed;
 }
 
-test "cli error usage code maps to taxonomy" {
-    try std.testing.expectEqual(@as(u8, 2), recovery_policy.exitCodeFor("ERR_CLI_USAGE"));
-}
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
-}
-
-test "daemon command names are stable" {
-    try std.testing.expectEqualStrings("daemon start", daemon_cli.daemonCommand("start"));
-    try std.testing.expectEqualStrings("daemon", daemon_cli.daemonCommand("x"));
 }

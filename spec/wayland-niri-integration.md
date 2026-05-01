@@ -1,6 +1,6 @@
 # Shaula Wayland/Niri Integration
 
-See [spec/algo.md](algo.md) for the central technical blueprint and performance budgets.
+See [spec/requirements.md](requirements.md) for the product scope and [spec/algo.md](algo.md) for the locked engineering decisions.
 
 ## Scope and Strategy
 

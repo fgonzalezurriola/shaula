@@ -1,80 +1,75 @@
 # Shaula Algo Spec (Central Technical Blueprint)
 
+See [spec/requirements.md](requirements.md) for product direction and [spec/performance.md](performance.md) for numeric budgets. This document keeps the locked engineering choices, runtime constraints, and recovery rules in one place.
+
 ## Executive Technical Summary
 
-Shaula is a high-performance, machine-first instant capture tool for Niri and Wayland. It prioritizes deterministic behavior, low-latency execution, and non-blocking integration with external plugins (e.g., Noctalia). The system is built with Zig 0.16.0, leveraging Niri-specific IPC and Wayland protocols (wlr-screencopy, layer-shell) to achieve sub-150ms capture cycles on the hot path.
+Shaula is a machine-first, Niri-first screenshot tool written in Zig. The product direction lives in [spec/requirements.md](requirements.md); this file keeps the implementation contracts that make the product deterministic, low-latency, and easy to automate.
 
 ## Decision Register
 
 | ID | Decision | Status | Rationale |
 | --- | --- | --- | --- |
-| D-001 | Niri-first focus | Locked | Optimize for Niri's tile-based workflow and performance primitives. |
-| D-002 | Agent-First CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
+| D-001 | Niri-first focus | Locked | Optimize for Niri's tile-based workflow and runtime contracts. |
+| D-002 | Agent-first CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
 | D-003 | Zig 0.16.0 pin | Locked | Stable toolchain with deterministic behavior and error handling. |
-| D-004 | Hot-path isolation | Locked | Decouple capture critical path from non-essential processing (Noctalia, history, exports). |
+| D-004 | Hot-path isolation | Locked | Keep capture separate from non-essential work such as preview, history, and exports. |
 | D-005 | Daemon-first architecture | Locked | Centralize state, capabilities, and cross-process orchestration. |
 | D-006 | Deterministic error taxonomy | Locked | Map every failure to specific `ERR_*` tokens and recovery actions. |
-| D-007 | Performance gates | Locked | Enforce strict p95 latency and resource budgets for hot-path operations. |
+| D-007 | Performance gates | Locked | Keep the hot path inside the budgets in [spec/performance.md](performance.md). |
 
 ## MVP Capability Matrix
 
 | Feature | Path | Status | Risk |
 | --- | --- | --- | --- |
-| Area Capture | `wlr-screencopy` | MVP | Protocol deprecation (ext-image-copy-capture). |
-| Fullscreen Capture | `wlr-screencopy` | MVP | Same as Area Capture. |
-| Window Capture | Niri IPC / Heuristics | MVP | Window/tile semantics are evolving in Niri. |
-| Selection Overlay | `layer-shell` | MVP | Input/focus edge cases on multi-output. |
-| History Store | SQLite / Flat-file | MVP | Storage availability and concurrent access. |
-| Clipboard Export | `wl-clipboard` | MVP | External dependency reliability. |
+| Area capture | `wlr-screencopy` | MVP | Protocol deprecation path to `ext-image-copy-capture-v1`. |
+| Fullscreen capture | `wlr-screencopy` | MVP | Same risk as area capture. |
+| Window capture | Niri IPC / heuristics | MVP | Window/tile semantics are still evolving in Niri. |
+| Selection overlay | `layer-shell` | MVP | Input and focus edge cases on multi-output. |
+| Clipboard export | `wl-clipboard` | MVP | External dependency reliability. |
+| History store | File-backed | MVP | Storage availability and concurrent access. |
 ## AGENT-FIRST CLI
 
-Shaula provides a machine-first interface designed for consumption by LLM agents and automation scripts.
+Shaula is machine-first. `--json` emits one JSON object on stdout, every response includes `contract_version`, and every failure carries a deterministic `ERR_*` code. The public grammar is documented in [spec/architecture.md](architecture.md).
 
-### Core Policy
-- **JSON Default**: Commands with `--json` MUST emit a single valid JSON object on stdout.
-- **Contract Versioning**: Every response includes `contract_version` (pinned at `1.0.0` for MVP).
-- **Deterministic Error Tokens**: Failures MUST include a machine-readable `error.code` (starting with `ERR_`).
+Command families:
 
-### Command Families
-- `capture`: Area, fullscreen, and window modes with latency guarantees.
-- `daemon`: Lifecycle management (start, status, stop) via Unix socket.
-- `capabilities`: Runtime probe for compositor features and fallbacks.
-- `history`: Query and retrieval of capture metadata.
-- `clipboard`: Import/Export primitives for system integration.
-- `errors`: Canonical source for taxonomy and exit code mapping.
+- `capture`
+- `preview`
+- `config`
+- `daemon`
+- `capabilities`
+- `history`
+- `clipboard`
 
 ## Runtime Constraint List
 
-| Item | Status | Risk / Dependency |
-| :--- | :--- | :--- |
-| `ext-image-copy-capture-v1` | Pending | Migration from deprecated `wlr-screencopy` requires Niri protocol update. |
-| Niri Window vs Tile ID | Active | Evolving semantics in Niri IPC PR #3731; guarded by degradation. |
-| Permission Prompt Latency | Pending | User-mediated portal prompts may exceed latency budget by design. |
+- `ext-image-copy-capture-v1` is a future migration path, not a public promise.
+- Niri window vs tile identity remains capability-gated and must fail deterministically when unresolved.
+- Portal or permission-mediated paths are fallback-only and may exceed the hot-path budget.
+- Optional integrations must never block capture completion.
 
-## Performance Budgets (p95)
-- Overlay selection to first-paint: `<= 75ms` (p95), `<= 110ms` (p99).
-- Capture completion: `<= 150ms` (area/fullscreen), `<= 220ms` (window).
-- Daemon idle: `<= 0.5%` CPU, `<= 40MB` RSS.
+## Performance Budgets
+
+See [spec/performance.md](performance.md) for the numeric targets. The only contract statement here is that the capture hot path must stay inside those budgets and avoid unnecessary allocations or blocking work.
 
 ## Uncertainty / Pending Verification List
 
-The product direction is Linux/Niri-first: capture speed, precise overlay behavior, pin screenshots, redaction, ruler/color picker, and file-first configuration. The items below must be verified before becoming supported public contract:
-
-- Focused output capture semantics through Niri/Wayland capability probing.
+- Focused output semantics through Niri/Wayland capability probing.
 - Focused window identity and tile/window ambiguity through Niri IPC.
-- Pin screenshot behavior under Niri layer-shell or compositor-supported window rules.
-- Pixelate, blur, and solid-bar redaction output determinism for QA/release gates.
-- Ruler and color picker behavior across logical vs physical pixels and fractional output scale.
-- OCR, QR reading, upload, smart selection, object removal, and scrolling screenshot as optional non-hot-path work.
+- Pinning behavior under Niri layer-shell or compositor-supported window rules.
+- Pixelate, blur, and solid-bar redaction determinism for QA/release gates.
+- Ruler and color picker behavior across logical versus physical pixels and fractional output scale.
+- OCR, QR reading, uploads, smart selection, object removal, and scrolling screenshot remain optional work.
 
 ## Risk and Dependency Matrix
 
 | ID | Risk / Dependency | Impact | Mitigation Strategy |
 | :--- | :--- | :--- | :--- |
-| R-001 | `wlr-screencopy` deprecation | Medium | Prepare migration path to `ext-image-copy-capture-v1`. |
-| R-002 | Niri IPC breaking changes | High | Stable capability probing + versioned internal IPC. |
-| D-001 | Zig 0.16.0 stability | Low | Pinned toolchain with deterministic build matrix. |
-| D-002 | Wayland portal latency | Low | Use as fallback; keep direct Niri path as primary. |
+| R-001 | `wlr-screencopy` deprecation | Medium | Keep the migration path to `ext-image-copy-capture-v1` visible. |
+| R-002 | Niri IPC breaking changes | High | Stable capability probing plus versioned internal IPC. |
+| R-003 | Zig toolchain drift | Low | Keep the toolchain pinned in the build matrix. |
+| R-004 | Portal latency | Low | Use fallback-only paths and keep direct Niri capture primary. |
 
 ## References
 
@@ -86,4 +81,4 @@ The product direction is Linux/Niri-first: capture speed, precise overlay behavi
 
 ## Technical Summary
 
-This document consolidates architecture, performance, and testing decisions from Tasks 1-12. It serves as the single source of truth for the Shaula technical implementation. No speculative features are included; all entries reflect current implemented reality.
+This document is the locked implementation register. Product scope lives in [spec/requirements.md](requirements.md); performance lives in [spec/performance.md](performance.md); the rest of the folder breaks the contract surface down by subsystem.

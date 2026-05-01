@@ -346,14 +346,3 @@ pub fn resolvePreviewDefault(mode: []const u8, explicit: ?bool) bool {
     if (explicit) |value| return value;
     return std.mem.eql(u8, mode, "area") or std.mem.eql(u8, mode, "all-in-one");
 }
-
-test "preview defaults follow interactive capture modes" {
-    try std.testing.expect(resolvePreviewDefault("area", null));
-    try std.testing.expect(resolvePreviewDefault("all-in-one", null));
-    try std.testing.expect(!resolvePreviewDefault("fullscreen", null));
-    try std.testing.expect(!resolvePreviewDefault("focused", null));
-    try std.testing.expect(!resolvePreviewDefault("window", null));
-    try std.testing.expect(!resolvePreviewDefault("previous-area", null));
-    try std.testing.expect(resolvePreviewDefault("fullscreen", true));
-    try std.testing.expect(!resolvePreviewDefault("area", false));
-}

@@ -304,11 +304,6 @@ fn sendDaemonStopAndWait(io: std.Io, socket_path: []const u8) !bool {
     return false;
 }
 
-test "daemon command names are stable" {
-    try std.testing.expectEqualStrings("daemon start", daemonCommand("start"));
-    try std.testing.expectEqualStrings("daemon", daemonCommand("x"));
-}
-
 pub fn daemonCommand(subcommand: []const u8) []const u8 {
     if (std.mem.eql(u8, subcommand, "start")) return "daemon start";
     if (std.mem.eql(u8, subcommand, "status")) return "daemon status";

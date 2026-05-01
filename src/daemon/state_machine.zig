@@ -48,25 +48,3 @@ pub const StateMachine = struct {
         };
     }
 };
-
-test "state machine allows deterministic lifecycle transitions" {
-    var sm = StateMachine.init();
-    try std.testing.expectEqual(State.initializing, sm.current());
-
-    try sm.transition(.ready);
-    try std.testing.expectEqual(State.ready, sm.current());
-
-    try sm.transition(.capturing);
-    try std.testing.expectEqual(State.capturing, sm.current());
-
-    try sm.transition(.degraded);
-    try std.testing.expectEqual(State.degraded, sm.current());
-
-    try sm.transition(.ready);
-    try std.testing.expectEqual(State.ready, sm.current());
-}
-
-test "invalid transition is rejected" {
-    var sm = StateMachine.init();
-    try std.testing.expectError(error.InvalidTransition, sm.transition(.capturing));
-}

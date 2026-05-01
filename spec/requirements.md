@@ -1,118 +1,80 @@
-# Shaula Product Requirements
+# Shaula Product Direction
 
-Shaula is scoped as a Niri-first capture tool with deterministic CLI/JSON contracts. This document separates the supported product contract from candidate direction so future work stays Linux/Niri-first instead of mirroring macOS-only capture tools.
+Shaula is a Wayland-first, Niri-first screenshot tool written in Zig. It should feel fast in the hand and small on the system. The hot path must stay inside the budgets in [spec/performance.md](performance.md), and the default footprint must remain modest enough that capture feels instant instead of heavy.
 
-## Supported Surface
+Shottr is the behavior benchmark, not the platform model. The goal is to copy the useful characteristics of Shottr that make a screenshot tool pleasant to use: precise selection, low-friction capture, a fast post-capture path, and practical tools for developers and documentation work. macOS-only APIs, Apple Silicon assumptions, and desktop-specific integrations do not belong in Shaula's core scope.
 
-| Capability | Status | Contract Notes |
-| :--- | :--- | :--- |
-| All-in-one capture | Supported initial iteration | Uses area capture backend with persisted toolbar UI state and deterministic helper failures. |
-| Area capture | Supported | Interactive selection with deterministic `ERR_*` outcomes. |
-| Fullscreen capture | Supported | Runtime backend only, no productive stub success path. |
-| Window capture | Supported with capability gating | Unsupported runtimes fail deterministically. |
-| Previous area capture | Supported | Reuses the last confirmed area rectangle with deterministic `ERR_PREVIOUS_AREA_UNAVAILABLE`. |
-| Clipboard copy/import | Supported | `clipboard copy-image` and `clipboard import-image`. |
-| Post-capture preview | Supported | `preview <file>` opens a GTK window with copy, save-as, discard, fit, 100%, zoom, and pan. `capture area` and `capture all-in-one` launch preview by default; all capture modes accept `--preview`/`--no-preview`. |
-| History list/show | Supported | Top-N 20, newest-first, stable `latest` alias. |
-| Output path default | Supported | Defaults to `~/Pictures/Shaula`. |
-| TOML configuration | Supported initial iteration | Resolves Shaula config from env/XDG/HOME and renders Niri preview-window rules. |
-| Overlay helper contract | Supported | Helper protocol maps deterministically to `SelectionResult`. |
-| Overlay unavailability | Supported | Missing native helper fails deterministically with `ERR_OVERLAY_UNAVAILABLE`. |
-| Noctalia adapter | Optional | Never part of the capture hot path. |
+## Product Principles
 
-## Locked Operational Contracts
+- Wayland-first and Niri-first by default.
+- CLI-first, file-first, and deterministic.
+- The capture path stays short; preview and editing are downstream work.
+- Every machine-visible failure maps to a stable `ERR_*` token.
+- Product polish comes from precision, not decorative UI.
 
-- Runtime capture success must come from runtime backend execution, not stub artifact generation.
-- Forced stub backend usage is a deterministic failure path: `ERR_CAPTURE_BACKEND_UNAVAILABLE`.
-- `capabilities` remains a strict contract: when `capabilities.capture.<mode>=false`, `capture <mode>` cannot succeed.
-- Default output directory is `~/Pictures/Shaula`; invalid or unwritable targets fail with `ERR_OUTPUT_PATH_INVALID`.
-- History retention is Top-N 20 entries, newest-first, with deterministic trimming on write.
-- The public overlay scope is limited to selection, aspect constraint, and capture/cancel actions.
-- `previous-area` depends on runtime selection state and never fabricates geometry when no valid area has been confirmed yet.
-- Missing interactive backends must not silently degrade into fake successful area selections.
-- The shell-artifact precondition runs before capture and may fail with deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`.
+## Shottr Characteristics We Want
 
-## Product Direction
+### Capture
 
-Shaula should copy the useful philosophy of fast capture tools, not their platform-specific feature lists. Shottr is the quality bar for selection precision, interaction speed, and post-capture usefulness, while Shaula remains a Linux/Niri-first product. Candidate work must remain valid for Linux, Wayland, and Niri, and must preserve deterministic CLI/JSON contracts before it becomes public surface.
+- Area capture.
+- Fullscreen capture.
+- Focused output capture.
+- Focused window capture through Niri IPC.
+- Repeat previous area.
+- Scrolling capture is deferred until the Wayland/Niri strategy is clear.
 
-Differentiators:
+### Selection UX
 
-- Niri IPC and Wayland-first capture paths.
-- Polished selection overlay with precise geometry controls.
-- Pin screenshots on screen when compositor behavior allows it.
-- Pixelate, blur, and solid-bar redaction for sensitive information.
-- Frontend/dev tools: ruler, manual measurement, color picker, and average-area color.
-- File-first configuration through TOML, starting with preview-window intent for Niri.
+- Fullscreen overlay.
+- Resize handles.
+- Move the active selection.
+- Aspect-ratio locking.
+- Visible `x y width height` feedback.
+- Magnifier during selection.
+- `Esc` cancels.
+- `Enter` confirms.
 
-## Incremental UX Strategy
+### Post-Capture Flow
 
-Shottr-level UX is the quality target, but Shaula should reach it through low-risk improvements before redesigning the current UI. The first pass should prefer changes that improve confidence, speed, and precision without replacing the overlay architecture or adding a full editor surface.
+- Floating preview after capture.
+- Copy, save, and discard actions.
+- Crop before export.
+- Pin screenshot on screen when the compositor allows it.
 
-Low-hanging fruit:
+### Editing and Redaction
 
-- Make selection feedback clearer: size badge, coordinates, handle affordances, and stable toolbar placement.
-- Tighten keyboard behavior: Esc cancel, Enter confirm, arrow-key nudging, and predictable focus handling.
-- Improve repeatability: last-region reuse, persisted toolbar state, and explicit previous-area failures.
-- Polish output defaults: save directory, filename templates, copy-image behavior, and copy-path behavior.
-- Add small dev-facing utilities where the current capture pipeline can support them cleanly, such as color picking and manual measurement.
+- Pixelate, blur, or solid-bar redaction first.
+- Rectangles and arrows next.
+- Text, highlight, and free draw after the core path is stable.
+- Remove-object style tools are intentionally late.
 
-Deferred heavier UX work:
+### Dev Tools
 
-- Replacing the overlay visual model.
-- Full post-capture editor.
-- Annotation tools beyond simple geometry.
-- Pinning screenshots if compositor behavior requires a separate window/layer strategy.
-- Pixelate/redaction if it requires a new image-editing pipeline.
+- Color picker.
+- Manual ruler / distance measurement.
+- Logical vs physical pixel awareness.
+- Average-area color if it stays cheap and deterministic.
 
-## Candidate Feature Priorities
+### Clipboard, Export, and Config
 
-### v0: Solid Capture Base
+- Copy PNG to clipboard.
+- Save PNG to disk.
+- Copy the saved path.
+- Default save folder and filename template.
+- TOML configuration.
+- Post-capture action defaults.
 
-| Priority | Candidate | Contract Gate |
-| :--- | :--- | :--- |
-| High | Fullscreen capture | Runtime backend success only. |
-| High | Region capture | Overlay must emit deterministic selection or cancellation. |
-| High | Focused output capture | Capability-gated for Niri/Wayland runtime availability. |
-| High | Focused window capture via Niri IPC | Deterministic failure when target identity is unresolved. |
-| High | Save to file | Defaults to `~/Pictures/Shaula`; invalid paths fail deterministically. |
-| High | Copy image to clipboard | Clipboard failures remain explicit and machine-readable. |
-| High | TOML configuration | Initial preview-window config is supported with `ERR_CONFIG_UNREADABLE` and `ERR_CONFIG_INVALID`. |
-| High | Decent selection overlay | Esc cancel and Enter confirm are required interactions. |
-| Medium | Visible selection size | Must not change capture JSON shape without contract versioning. |
-| Medium | Repeat last region | Must use last confirmed geometry only. |
+## Priority Slices
 
-### v1: Differentiating UX
-
-| Priority | Candidate | Contract Gate |
-| :--- | :--- | :--- |
-| High | Floating post-capture preview | Explicit `preview <file>` and automatic post-capture launch are supported. Preview failures degrade capture success instead of invalidating the artifact. |
-| High | Basic editor with crop | Editor failures must not corrupt the original artifact. |
-| High | Pixelate/redaction | Redaction output must be deterministic for release QA. |
-| High | Arrows and rectangles | Annotation data model must be versioned before persistence. |
-| High | Pin screenshot | Must be capability-gated for Wayland/Niri behavior. |
-| Medium | Color picker | Clipboard/export behavior must be explicit. |
-| Medium | Magnifier | Shared with overlay/editor when possible. |
-| Medium | Ruler/manual measurement | Must support logical/physical pixel clarity. |
-| Medium | Simple history | Retention and ordering remain deterministic. |
-| Medium | Configurable file naming | Invalid templates must fail deterministically. |
-
-### v2: Power User
-
-| Priority | Candidate | Contract Gate |
-| :--- | :--- | :--- |
-| Medium | Region OCR | External engine/service availability must be optional and explicit. |
-| Medium | QR reader | Decode failures must be non-destructive. |
-| Medium | Pretty export with padding, shadow, and rounded corners | Export presets stay outside the capture hot path. |
-| Medium | Combine screenshots | Canvas model must be versioned. |
-| Medium | S3-compatible upload | Upload is optional worker/plugin surface, never capture-critical. |
-| Low | Smart selection | Requires reliable edge/component detection before public exposure. |
-| Low | Remove object | Requires an explicit image-editing strategy. |
-| Low | Scrolling screenshot | Deferred until Wayland/Niri strategy is clear. |
+| Slice | Focus |
+| --- | --- |
+| v0 | Area/fullscreen/focused output/window capture, repeat previous area, overlay selection, Esc/Enter, copy/save, TOML config |
+| v1 | Floating preview, crop, pixelate/redaction, arrows/rectangles, pin screenshot, history, file naming |
+| v2 | Color picker, ruler, OCR/QR, combine screenshots, pretty export, smart selection, uploads |
 
 ## Explicit Non-Goals
 
-The following are intentionally not part of the current supported product contract:
-
-- screen recording
-- public UI placeholders for future features
+- Screen recording.
+- macOS-specific APIs or workflows.
+- Placeholder future UI surfaces.
+- Smart selection, object removal, OCR, QR, uploads, and scrolling capture before a clear implementation strategy exists.

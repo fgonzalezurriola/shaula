@@ -1,6 +1,6 @@
 # Shaula Testing Strategy (Task 17)
 
-See [spec/algo.md](algo.md) for the central technical blueprint and error taxonomy.
+See [spec/algo.md](algo.md) for the locked engineering decisions and [spec/performance.md](performance.md) for the budgets the tests protect.
 
 ## Scope
 
