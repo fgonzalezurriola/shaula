@@ -1,20 +1,9 @@
 const std = @import("std");
 
-pub const PreviewAction = enum {
-    close,
-    copy,
-    save,
-    discard,
+const notify = @import("../notify.zig");
+const preview_result = @import("../preview_result.zig");
 
-    pub fn asString(action: PreviewAction) []const u8 {
-        return switch (action) {
-            .close => "close",
-            .copy => "copy",
-            .save => "save",
-            .discard => "discard",
-        };
-    }
-};
+pub const PreviewAction = preview_result.PreviewAction;
 
 pub const PreviewRunResult = struct {
     path: []const u8,
@@ -100,51 +89,55 @@ pub fn runPreview(
         },
     }
 
-    return .{ .success = try parseHelperResult(allocator, path, result.stdout) };
+    const helper_result = parseHelperResult(allocator, path, result.stdout) catch {
+        return .{ .failure = .{
+            .code = "ERR_PREVIEW_RESULT_INVALID",
+            .message = "preview helper did not emit valid result JSON",
+            .retryable = true,
+        } };
+    };
+    errdefer {
+        var cleanup = helper_result;
+        cleanup.deinit(allocator);
+    }
+
+    notifyForPreviewResult(allocator, io, helper_result) catch {};
+
+    return .{ .success = helper_result };
 }
 
 fn parseHelperResult(allocator: std.mem.Allocator, path: []const u8, stdout: []const u8) !PreviewRunResult {
-    const trimmed = std.mem.trim(u8, stdout, " \t\r\n");
-    if (trimmed.len == 0) {
-        return .{ .path = path };
-    }
+    var parsed = try preview_result.parse(allocator, stdout);
+    errdefer parsed.deinit(allocator);
 
-    var parsed = std.json.parseFromSlice(std.json.Value, allocator, trimmed, .{}) catch {
-        return .{ .path = path };
+    return .{
+        .path = path,
+        .closed = parsed.closed,
+        .action = parsed.action,
+        .copied = parsed.copied,
+        .saved = parsed.saved,
+        .saved_path = parsed.saved_path,
     };
-    defer parsed.deinit();
-
-    const object = switch (parsed.value) {
-        .object => |object| object,
-        else => return .{ .path = path },
-    };
-
-    var result: PreviewRunResult = .{ .path = path };
-    if (object.get("closed")) |value| {
-        if (value == .bool) result.closed = value.bool;
-    }
-    if (object.get("action")) |value| {
-        if (value == .string) result.action = parseAction(value.string);
-    }
-    if (object.get("copied")) |value| {
-        if (value == .bool) result.copied = value.bool;
-    }
-    if (object.get("saved")) |value| {
-        if (value == .bool) result.saved = value.bool;
-    }
-    if (object.get("saved_path")) |value| {
-        if (value == .string and value.string.len > 0) {
-            result.saved_path = try allocator.dupe(u8, value.string);
-        }
-    }
-    return result;
 }
 
-fn parseAction(value: []const u8) PreviewAction {
-    if (std.mem.eql(u8, value, "copy")) return .copy;
-    if (std.mem.eql(u8, value, "save")) return .save;
-    if (std.mem.eql(u8, value, "discard")) return .discard;
-    return .close;
+fn notifyForPreviewResult(allocator: std.mem.Allocator, io: std.Io, result: PreviewRunResult) !void {
+    switch (result.action) {
+        .save => {
+            if (result.saved) {
+                try notify.notifyScreenshotSaved(allocator, io, result.saved_path orelse "");
+            } else {
+                try notify.notifyScreenshotSaveFailed(allocator, io, "Save failed");
+            }
+        },
+        .copy => {
+            if (result.copied) {
+                try notify.notifyScreenshotCopied(allocator, io);
+            } else {
+                try notify.notifyScreenshotCopyFailed(allocator, io, "Copy failed");
+            }
+        },
+        .discard, .close, .unknown => {},
+    }
 }
 
 fn resolvePreviewBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
@@ -165,11 +158,8 @@ fn resolvePreviewBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.p
     }
 }
 
-test "preview helper result defaults to close on empty stdout" {
-    const result = try parseHelperResult(std.testing.allocator, "/tmp/a.png", "");
-    try std.testing.expectEqual(PreviewAction.close, result.action);
-    try std.testing.expect(!result.copied);
-    try std.testing.expect(!result.saved);
+test "preview helper result rejects empty stdout" {
+    try std.testing.expectError(error.PreviewResultMissing, parseHelperResult(std.testing.allocator, "/tmp/a.png", ""));
 }
 
 test "preview helper result parses save action" {

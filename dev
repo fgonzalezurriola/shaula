@@ -33,6 +33,7 @@ App:
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
+  state          Copy minimal state, last 3 commits, and working diff to clipboard
   config         Build, then show resolved Shaula config
   config-init    Build, then create Shaula config.toml if missing
   niri-rule      Build, then print Shaula's managed Niri preview rule
@@ -141,6 +142,37 @@ clean() {
   rm -rf .zig-cache zig-out src/overlay/__pycache__ scripts/qa/__pycache__
   rm -f .qa/evidence/*.tmp .qa/evidence/*.log .qa/evidence/*.txt
   echo "ok clean"
+}
+
+# Copy the prompt snapshot without mutating the real Git index.
+state() {
+  if ! have wl-copy; then
+    echo "missing wl-copy" >&2
+    exit 1
+  fi
+
+  local git_index temp_index
+  git_index="$(git rev-parse --git-path index)"
+  temp_index="$(mktemp)"
+
+  (
+    trap 'rm -f "${temp_index}"' EXIT
+    cp "${git_index}" "${temp_index}"
+
+    {
+      if [[ -f STATE.md ]]; then
+        cat STATE.md
+        printf '\n'
+      fi
+      printf '## Last 3 commits\n'
+      git log --format='- %h %s' -3
+      printf '\n## Diff\n'
+      GIT_INDEX_FILE="${temp_index}" git add -N .
+      GIT_INDEX_FILE="${temp_index}" git diff
+    }
+  ) | wl-copy
+
+  echo "ok state copied to clipboard"
 }
 
 stage() {
@@ -258,6 +290,9 @@ all)
     ;;
   stage)
     stage "$@"
+    ;;
+  state)
+    state
     ;;
   config)
     run_shaula config show --json "$@"
