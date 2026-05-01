@@ -19,8 +19,8 @@ pub const default_config_toml =
     \\
 ;
 
-pub const managed_block_begin = "# BEGIN SHAULA PREVIEW WINDOW RULE";
-pub const managed_block_end = "# END SHAULA PREVIEW WINDOW RULE";
+pub const managed_block_begin = "// BEGIN SHAULA PREVIEW WINDOW RULE";
+pub const managed_block_end = "// END SHAULA PREVIEW WINDOW RULE";
 const max_backup_attempts = 100;
 
 pub const InitOptions = struct {
@@ -315,9 +315,9 @@ test "managed block appends when missing" {
 test "managed block replaces existing block only" {
     const old =
         \\before
-        \\# BEGIN SHAULA PREVIEW WINDOW RULE
+        \\// BEGIN SHAULA PREVIEW WINDOW RULE
         \\old
-        \\# END SHAULA PREVIEW WINDOW RULE
+        \\// END SHAULA PREVIEW WINDOW RULE
         \\after
         \\
     ;
@@ -356,9 +356,9 @@ test "managed block rejects end without begin" {
 
 test "managed block rejects end before begin" {
     const current =
-        \\# END SHAULA PREVIEW WINDOW RULE
+        \\// END SHAULA PREVIEW WINDOW RULE
         \\body
-        \\# BEGIN SHAULA PREVIEW WINDOW RULE
+        \\// BEGIN SHAULA PREVIEW WINDOW RULE
         \\
     ;
     const block = try managedBlock(std.testing.allocator, "new\n");
@@ -368,10 +368,10 @@ test "managed block rejects end before begin" {
 
 test "managed block rejects duplicate begin markers" {
     const current =
-        \\# BEGIN SHAULA PREVIEW WINDOW RULE
+        \\// BEGIN SHAULA PREVIEW WINDOW RULE
         \\first
-        \\# BEGIN SHAULA PREVIEW WINDOW RULE
-        \\# END SHAULA PREVIEW WINDOW RULE
+        \\// BEGIN SHAULA PREVIEW WINDOW RULE
+        \\// END SHAULA PREVIEW WINDOW RULE
         \\
     ;
     const block = try managedBlock(std.testing.allocator, "new\n");
@@ -381,10 +381,10 @@ test "managed block rejects duplicate begin markers" {
 
 test "managed block rejects duplicate end markers" {
     const current =
-        \\# BEGIN SHAULA PREVIEW WINDOW RULE
+        \\// BEGIN SHAULA PREVIEW WINDOW RULE
         \\first
-        \\# END SHAULA PREVIEW WINDOW RULE
-        \\# END SHAULA PREVIEW WINDOW RULE
+        \\// END SHAULA PREVIEW WINDOW RULE
+        \\// END SHAULA PREVIEW WINDOW RULE
         \\
     ;
     const block = try managedBlock(std.testing.allocator, "new\n");

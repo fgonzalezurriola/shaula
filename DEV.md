@@ -62,6 +62,8 @@ Run `./dev doctor` to check the local machine.
 ./dev run capture previous-area --json
 ./dev run preview ~/Pictures/Shaula/example.png --json
 ./dev run config show --json
+./dev stage floating
+./dev stage tiling
 ./dev config-init
 ./dev niri-rule
 ./dev niri-install
@@ -142,6 +144,22 @@ test -x ./zig-out/bin/shaula-overlay && echo helper-ok
 ```bash
 command -v wl-copy
 ```
+
+## Preview Window Staging
+
+Use `./dev stage <mode>` to create the Shaula config file, set
+`preview.window.mode`, and install Shaula's managed Niri window rule.
+
+```bash
+./dev stage floating
+./dev stage tiling
+./dev stage maximized-to-edges
+```
+
+This command writes `~/.config/shaula/config.toml` unless `SHAULA_CONFIG_FILE`
+overrides it. It also updates only the marked Shaula block in Niri config and
+creates a backup before replacing an existing file. Reload Niri config using
+your normal Niri workflow before testing preview placement.
 
 ## Repo Shape
 

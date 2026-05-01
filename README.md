@@ -78,8 +78,12 @@ La primera superficie soportada es cómo Niri debería abrir la ventana de previ
 ./zig-out/bin/shaula config init --json
 ./zig-out/bin/shaula config niri-window-rule --json | jq -r '.result.kdl'
 ./zig-out/bin/shaula config niri-install --json
+./dev stage floating
+./dev stage tiling
 ```
 
 `config niri-install` edita sólo un bloque marcado de Shaula dentro de
 `~/.config/niri/config.kdl` y crea un backup antes de modificar el archivo. La
 lógica está separada del CLI para que una UI/watcher pueda reutilizarla después.
+`./dev stage <mode>` agrupa el flujo de desarrollo: crea el TOML si falta,
+actualiza `preview.window.mode` y reinstala el bloque administrado de Niri.

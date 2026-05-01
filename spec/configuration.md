@@ -144,7 +144,7 @@ window-rule {
 Managed block installed by Shaula:
 
 ```kdl
-# BEGIN SHAULA PREVIEW WINDOW RULE
+// BEGIN SHAULA PREVIEW WINDOW RULE
 window-rule {
     match app-id="^dev\\.shaula\\.preview$"
     open-floating true
@@ -153,7 +153,7 @@ window-rule {
     default-window-height { fixed 720; }
     default-column-display "normal"
 }
-# END SHAULA PREVIEW WINDOW RULE
+// END SHAULA PREVIEW WINDOW RULE
 ```
 
 Reload Niri using the user's normal workflow after install.

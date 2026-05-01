@@ -32,6 +32,7 @@ App:
  focused Build, then run capture focused --json --copy
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
+  stage          Build, create config, set preview mode, and install Niri rule
   config         Build, then show resolved Shaula config
   config-init    Build, then create Shaula config.toml if missing
   niri-rule      Build, then print Shaula's managed Niri preview rule
@@ -52,6 +53,8 @@ Pass-through:
 
 Examples:
   ./dev capture
+  ./dev stage tiling
+  ./dev stage floating
   ./dev run capture area --json --aspect 16:9
   ./dev bench-ui
 EOF
@@ -140,6 +143,65 @@ clean() {
   echo "ok clean"
 }
 
+stage() {
+  local mode="${1:-floating}"
+  case "${mode}" in
+    auto|tiling|floating|maximized|maximized-to-edges|fullscreen)
+      ;;
+    *)
+      echo "usage: ./dev stage [auto|tiling|floating|maximized|maximized-to-edges|fullscreen]" >&2
+      exit 2
+      ;;
+  esac
+
+  build >/dev/null
+  shaula_env
+
+  local init_json config_path tmp_path install_json
+  init_json="$("${SHAULA_BIN}" config init --json)"
+  config_path="$(printf '%s\n' "${init_json}" | jq -r '.result.path')"
+  if [[ -z "${config_path}" || "${config_path}" == "null" ]]; then
+    echo "failed to resolve Shaula config path" >&2
+    printf '%s\n' "${init_json}" | jq >&2
+    exit 1
+  fi
+
+  tmp_path="${config_path}.tmp"
+  awk -v mode="${mode}" '
+    BEGIN { in_preview = 0; inserted = 0 }
+    /^\[preview\.window\][[:space:]]*$/ {
+      print
+      in_preview = 1
+      next
+    }
+    /^\[/ {
+      if (in_preview && !inserted) {
+        print "mode = \"" mode "\""
+        inserted = 1
+      }
+      in_preview = 0
+    }
+    in_preview && /^[[:space:]]*mode[[:space:]]*=/ {
+      print "mode = \"" mode "\""
+      inserted = 1
+      next
+    }
+    { print }
+    END {
+      if (in_preview && !inserted) {
+        print "mode = \"" mode "\""
+      }
+    }
+  ' "${config_path}" > "${tmp_path}"
+  mv "${tmp_path}" "${config_path}"
+
+  install_json="$("${SHAULA_BIN}" config niri-install --json)"
+  printf '%s\n' "${install_json}" | jq
+  echo "staged preview.window.mode=${mode}"
+  echo "config ${config_path}"
+  echo "reload Niri config with your normal Niri workflow before testing preview placement"
+}
+
 cmd="${1:-help}"
 if [[ $# -gt 0 ]]; then
   shift
@@ -193,6 +255,9 @@ all)
     build >/dev/null
     shaula_env
     exec "${OVERLAY_BIN}" "$@"
+    ;;
+  stage)
+    stage "$@"
     ;;
   config)
     run_shaula config show --json "$@"
