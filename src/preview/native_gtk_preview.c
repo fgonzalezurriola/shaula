@@ -8,6 +8,7 @@
 enum {
   PREVIEW_MIN_W = 860,
   PREVIEW_MIN_H = 560,
+  PREVIEW_CONTENT_INSET = 24,
 
 };
 
@@ -73,6 +74,19 @@ static void update_zoom_label(void) {
   gtk_label_set_text(GTK_LABEL(state.zoom_label), buf);
 }
 
+static void get_preview_content_rect(int width, int height, int *x, int *y,
+                                     int *content_w, int *content_h) {
+  int inset = PREVIEW_CONTENT_INSET;
+  if (x != NULL)
+    *x = inset;
+  if (y != NULL)
+    *y = inset;
+  if (content_w != NULL)
+    *content_w = MAX(1, width - inset * 2);
+  if (content_h != NULL)
+    *content_h = MAX(1, height - inset * 2);
+}
+
 static void update_fit_zoom(void) {
   if (state.area == NULL || state.image == NULL)
     return;
@@ -80,13 +94,21 @@ static void update_fit_zoom(void) {
   int area_h = MAX(1, gtk_widget_get_height(state.area));
   int image_w = MAX(1, gdk_pixbuf_get_width(state.image));
   int image_h = MAX(1, gdk_pixbuf_get_height(state.image));
-  double scale_x = (double)(area_w - 48) / (double)image_w;
-  double scale_y = (double)(area_h - 48) / (double)image_h;
+  int content_x = 0;
+  int content_y = 0;
+  int content_w = 0;
+  int content_h = 0;
+  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
+                           &content_h);
+  double scale_x = (double)content_w / (double)image_w;
+  double scale_y = (double)content_h / (double)image_h;
   state.fit_zoom = MIN(1.0, MAX(0.05, MIN(scale_x, scale_y)));
   if (state.fit_mode) {
     state.zoom = state.fit_zoom;
-    state.pan_x = ((double)area_w - (double)image_w * state.zoom) / 2.0;
-    state.pan_y = ((double)area_h - (double)image_h * state.zoom) / 2.0;
+    state.pan_x = (double)content_x +
+                  ((double)content_w - (double)image_w * state.zoom) / 2.0;
+    state.pan_y = (double)content_y +
+                  ((double)content_h - (double)image_h * state.zoom) / 2.0;
   }
 }
 
@@ -185,8 +207,14 @@ static void on_actual_clicked(GtkButton *button, gpointer data) {
   int area_h = MAX(1, gtk_widget_get_height(state.area));
   int image_w = MAX(1, gdk_pixbuf_get_width(state.image));
   int image_h = MAX(1, gdk_pixbuf_get_height(state.image));
-  state.pan_x = ((double)area_w - (double)image_w) / 2.0;
-  state.pan_y = ((double)area_h - (double)image_h) / 2.0;
+  int content_x = 0;
+  int content_y = 0;
+  int content_w = 0;
+  int content_h = 0;
+  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
+                           &content_h);
+  state.pan_x = (double)content_x + ((double)content_w - (double)image_w) / 2.0;
+  state.pan_y = (double)content_y + ((double)content_h - (double)image_h) / 2.0;
   update_zoom_label();
   queue_draw();
 }
@@ -197,6 +225,13 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   (void)data;
   update_theme_state();
   update_fit_zoom();
+
+  int content_x = 0;
+  int content_y = 0;
+  int content_w = 0;
+  int content_h = 0;
+  get_preview_content_rect(width, height, &content_x, &content_y, &content_w,
+                           &content_h);
 
   if (state.is_dark) {
     cairo_set_source_rgb(cr, 0.11, 0.11, 0.12);
@@ -272,8 +307,14 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
 
   int area_w = MAX(1, gtk_widget_get_width(state.area));
   int area_h = MAX(1, gtk_widget_get_height(state.area));
-  double cx = (double)area_w / 2.0;
-  double cy = (double)area_h / 2.0;
+  int content_x = 0;
+  int content_y = 0;
+  int content_w = 0;
+  int content_h = 0;
+  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
+                           &content_h);
+  double cx = (double)content_x + (double)content_w / 2.0;
+  double cy = (double)content_y + (double)content_h / 2.0;
   double image_cx = (cx - state.pan_x) / old_zoom;
   double image_cy = (cy - state.pan_y) / old_zoom;
   state.zoom = next;
@@ -634,10 +675,15 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_overlay_set_child(GTK_OVERLAY(main_overlay), area);
 
   GtkWidget *topbar = build_topbar();
-  gtk_widget_set_valign(topbar, GTK_ALIGN_START);
-  gtk_overlay_add_overlay(GTK_OVERLAY(main_overlay), topbar);
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_hexpand(root, TRUE);
+  gtk_widget_set_vexpand(root, TRUE);
+  gtk_box_append(GTK_BOX(root), topbar);
+  gtk_box_append(GTK_BOX(root), main_overlay);
+  gtk_widget_set_hexpand(main_overlay, TRUE);
+  gtk_widget_set_vexpand(main_overlay, TRUE);
 
-  gtk_window_set_child(GTK_WINDOW(window), main_overlay);
+  gtk_window_set_child(GTK_WINDOW(window), root);
 
   GtkGesture *drag = gtk_gesture_drag_new();
   g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), NULL);
