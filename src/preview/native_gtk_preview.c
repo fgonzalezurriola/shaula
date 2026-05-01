@@ -6,23 +6,8 @@
 #include <math.h>
 
 enum {
-  /* Niri floating windows may be initially constrained by placement rules; keep
-   * the preview large enough that the toolbar does not become the layout driver.
-   */
-  PREVIEW_MIN_W = 900,
-  PREVIEW_MIN_H = 650,
-  PREVIEW_DEFAULT_W = 960,
-  PREVIEW_DEFAULT_H = 680,
-  /* Canvas padding is applied only inside the GtkDrawingArea allocation. The
-   * topbar owns its own height, so fit zoom should shrink the image rather than
-   * letting chrome reduce or clip the drawing area.
-   */
-  PREVIEW_CONTENT_INSET = 24,
-  /* Optional metadata is decoration. Primary actions must remain visible first
-   * when floating windows are manually resized below the comfortable width.
-   */
-  PREVIEW_METADATA_COLLAPSE_W = 760,
-  PREVIEW_ZOOM_COLLAPSE_W = 640,
+  PREVIEW_MIN_W = 860,
+  PREVIEW_MIN_H = 560,
 
 };
 
@@ -31,8 +16,6 @@ typedef struct {
   GtkWidget *window;
   GtkWidget *area;
   GtkWidget *zoom_label;
-  GtkWidget *metadata_optional[8];
-  int metadata_optional_count;
   GdkPixbuf *image;
   char *path;
   double zoom;
@@ -90,45 +73,6 @@ static void update_zoom_label(void) {
   gtk_label_set_text(GTK_LABEL(state.zoom_label), buf);
 }
 
-static void get_preview_content_rect(int width, int height, int *x, int *y,
-                                     int *content_w, int *content_h) {
-  /* Contract: callers pass the real GtkDrawingArea allocation, never the
-   * toplevel window size. Returned dimensions are clamped so fit-contain math
-   * remains deterministic even during tiny intermediate resize allocations.
-   */
-  int inset = PREVIEW_CONTENT_INSET;
-  if (x != NULL)
-    *x = inset;
-  if (y != NULL)
-    *y = inset;
-  if (content_w != NULL)
-    *content_w = MAX(1, width - inset * 2);
-  if (content_h != NULL)
-    *content_h = MAX(1, height - inset * 2);
-}
-
-static void update_metadata_visibility(int width) {
-  /* Collapse non-critical readouts before GTK has to choose between clipping
-   * controls and growing the topbar. Copy/save/more/discard stay available.
-   */
-  gboolean show_details = width >= PREVIEW_METADATA_COLLAPSE_W;
-  gboolean show_zoom = width >= PREVIEW_ZOOM_COLLAPSE_W;
-  for (int i = 0; i < state.metadata_optional_count; i++) {
-    if (state.metadata_optional[i] != NULL)
-      gtk_widget_set_visible(state.metadata_optional[i], show_details);
-  }
-  if (state.zoom_label != NULL)
-    gtk_widget_set_visible(state.zoom_label, show_zoom);
-}
-
-static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
-                               gpointer data) {
-  (void)clock;
-  (void)data;
-  update_metadata_visibility(gtk_widget_get_width(widget));
-  return G_SOURCE_CONTINUE;
-}
-
 static void update_fit_zoom(void) {
   if (state.area == NULL || state.image == NULL)
     return;
@@ -136,24 +80,13 @@ static void update_fit_zoom(void) {
   int area_h = MAX(1, gtk_widget_get_height(state.area));
   int image_w = MAX(1, gdk_pixbuf_get_width(state.image));
   int image_h = MAX(1, gdk_pixbuf_get_height(state.image));
-  int content_x = 0;
-  int content_y = 0;
-  int content_w = 0;
-  int content_h = 0;
-  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
-                           &content_h);
-  double scale_x = (double)content_w / (double)image_w;
-  double scale_y = (double)content_h / (double)image_h;
+  double scale_x = (double)(area_w - 48) / (double)image_w;
+  double scale_y = (double)(area_h - 48) / (double)image_h;
   state.fit_zoom = MIN(1.0, MAX(0.05, MIN(scale_x, scale_y)));
   if (state.fit_mode) {
-    /* Fit mode is a centered canvas contract: window resizes recompute the
-     * zoom and pan together so the image stays contained instead of clipping.
-     */
     state.zoom = state.fit_zoom;
-    state.pan_x = (double)content_x +
-                  ((double)content_w - (double)image_w * state.zoom) / 2.0;
-    state.pan_y = (double)content_y +
-                  ((double)content_h - (double)image_h * state.zoom) / 2.0;
+    state.pan_x = ((double)area_w - (double)image_w * state.zoom) / 2.0;
+    state.pan_y = ((double)area_h - (double)image_h * state.zoom) / 2.0;
   }
 }
 
@@ -252,14 +185,8 @@ static void on_actual_clicked(GtkButton *button, gpointer data) {
   int area_h = MAX(1, gtk_widget_get_height(state.area));
   int image_w = MAX(1, gdk_pixbuf_get_width(state.image));
   int image_h = MAX(1, gdk_pixbuf_get_height(state.image));
-  int content_x = 0;
-  int content_y = 0;
-  int content_w = 0;
-  int content_h = 0;
-  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
-                           &content_h);
-  state.pan_x = (double)content_x + ((double)content_w - (double)image_w) / 2.0;
-  state.pan_y = (double)content_y + ((double)content_h - (double)image_h) / 2.0;
+  state.pan_x = ((double)area_w - (double)image_w) / 2.0;
+  state.pan_y = ((double)area_h - (double)image_h) / 2.0;
   update_zoom_label();
   queue_draw();
 }
@@ -270,13 +197,6 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   (void)data;
   update_theme_state();
   update_fit_zoom();
-
-  int content_x = 0;
-  int content_y = 0;
-  int content_w = 0;
-  int content_h = 0;
-  get_preview_content_rect(width, height, &content_x, &content_y, &content_w,
-                           &content_h);
 
   if (state.is_dark) {
     cairo_set_source_rgb(cr, 0.11, 0.11, 0.12);
@@ -352,14 +272,8 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
 
   int area_w = MAX(1, gtk_widget_get_width(state.area));
   int area_h = MAX(1, gtk_widget_get_height(state.area));
-  int content_x = 0;
-  int content_y = 0;
-  int content_w = 0;
-  int content_h = 0;
-  get_preview_content_rect(area_w, area_h, &content_x, &content_y, &content_w,
-                           &content_h);
-  double cx = (double)content_x + (double)content_w / 2.0;
-  double cy = (double)content_y + (double)content_h / 2.0;
+  double cx = (double)area_w / 2.0;
+  double cy = (double)area_h / 2.0;
   double image_cx = (cx - state.pan_x) / old_zoom;
   double image_cy = (cy - state.pan_y) / old_zoom;
   state.zoom = next;
@@ -531,14 +445,6 @@ static GtkWidget *make_toolbar_toggle_button(const char *icon_name,
   return button;
 }
 
-static GtkWidget *make_dot_separator(void) {
-  GtkWidget *label = gtk_label_new("·");
-  gtk_widget_add_css_class(label, "dim-label");
-  gtk_widget_set_margin_start(label, 6);
-  gtk_widget_set_margin_end(label, 6);
-  gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
-  return label;
-}
 
 static GtkWidget *make_muted_label(const char *text) {
   GtkWidget *label = gtk_label_new(text);
@@ -551,13 +457,6 @@ static GtkWidget *make_normal_label(const char *text) {
   GtkWidget *label = gtk_label_new(text);
   gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
   return label;
-}
-
-static void append_optional_metadata(GtkWidget *metadata, GtkWidget *child) {
-  if (state.metadata_optional_count <
-      (int)(sizeof(state.metadata_optional) / sizeof(state.metadata_optional[0])))
-    state.metadata_optional[state.metadata_optional_count++] = child;
-  gtk_box_append(GTK_BOX(metadata), child);
 }
 
 static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
@@ -582,23 +481,6 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 }
 
 static GtkWidget *build_tool_group(void) {
-  /* Toolbar order is the visual contract for the preview editor. Reorder by
-   * moving the matching append call and its separator as a unit:
-   *
-   * 1. Copy (implemented)
-   * 2. Save As (implemented)
-   * 3. Pin (placeholder, no behavior yet)
-   * 4. Share (placeholder, no behavior yet)
-   * 5. Crop (placeholder, no behavior yet)
-   * 6. Select (placeholder toggle, no selection model yet)
-   * 7. Arrow (placeholder, no annotation model yet)
-   * 8. Text (placeholder, no annotation model yet)
-   * 9. Measure (placeholder, no measurement model yet)
-   * 10. Rectangle (placeholder, no annotation model yet)
-   * 11. Highlight (placeholder, no annotation model yet)
-   * 12. Pen (placeholder, no annotation model yet)
-   * 13. More (placeholder, no menu yet)
-   */
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
 
@@ -616,10 +498,8 @@ static GtkWidget *build_tool_group(void) {
                  make_toolbar_button("send-to-symbolic", "Share",
                                      G_CALLBACK(on_noop_clicked)));
 
-  gtk_box_append(GTK_BOX(actions), make_dot_separator());
-
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("image-crop-symbolic", "Crop",
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("image-crop-symbolic", "Crop",
                                      G_CALLBACK(on_noop_clicked)));
   GtkWidget *select_btn = make_toolbar_toggle_button(
       "edit-select-symbolic", "Select", TRUE, G_CALLBACK(on_noop_clicked));
@@ -643,10 +523,8 @@ static GtkWidget *build_tool_group(void) {
                  make_toolbar_button("document-edit-symbolic", "Pen",
                                      G_CALLBACK(on_noop_clicked)));
 
-  gtk_box_append(GTK_BOX(actions), make_dot_separator());
-
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button("view-more-symbolic", "More",
+	gtk_box_append(GTK_BOX(actions),
+		make_toolbar_button("view-more-symbolic", "More",
                                      G_CALLBACK(on_noop_clicked)));
 
   return actions;
@@ -655,7 +533,6 @@ static GtkWidget *build_tool_group(void) {
 static GtkWidget *build_metadata_group(void) {
   GtkWidget *metadata = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
   gtk_widget_set_valign(metadata, GTK_ALIGN_CENTER);
-  state.metadata_optional_count = 0;
 
   GtkWidget *swatch = gtk_drawing_area_new();
   gtk_widget_set_size_request(swatch, 16, 16);
@@ -663,28 +540,23 @@ static GtkWidget *build_metadata_group(void) {
   gtk_widget_set_margin_end(swatch, 4);
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(swatch), draw_swatch, NULL,
                                  NULL);
-  append_optional_metadata(metadata, swatch);
+  gtk_box_append(GTK_BOX(metadata), swatch);
 
-  append_optional_metadata(metadata, make_normal_label("#2A4A66"));
-  append_optional_metadata(metadata, make_dot_separator());
-  append_optional_metadata(metadata, make_muted_label("Tab to copy"));
-
-  append_optional_metadata(metadata, make_dot_separator());
+	gtk_box_append(GTK_BOX(metadata), make_normal_label("#2A4A66"));
+	gtk_box_append(GTK_BOX(metadata), make_muted_label("Tab to copy"));
 
   if (state.image != NULL) {
     char size_buf[32];
     snprintf(size_buf, sizeof(size_buf), "%d\xc3\x97%d px",
              gdk_pixbuf_get_width(state.image),
              gdk_pixbuf_get_height(state.image));
-    append_optional_metadata(metadata, make_muted_label(size_buf));
+    gtk_box_append(GTK_BOX(metadata), make_muted_label(size_buf));
   } else {
-    append_optional_metadata(metadata, make_muted_label("840\xc3\x97"
-                                                        "582 px"));
+    gtk_box_append(GTK_BOX(metadata), make_muted_label("840\xc3\x97"
+                                                       "582 px"));
   }
 
-  append_optional_metadata(metadata, make_dot_separator());
-
-  state.zoom_label = make_muted_label("100% Zoom");
+	state.zoom_label = make_muted_label("100% Zoom");
   gtk_box_append(GTK_BOX(metadata), state.zoom_label);
   gtk_widget_set_margin_end(metadata, 8);
 
@@ -696,13 +568,7 @@ static GtkWidget *build_metadata_group(void) {
 }
 
 static GtkWidget *build_topbar(void) {
-  /* Use a single horizontal layout instead of GtkOverlay. Overlay placement
-   * lets the centered toolbar and right metadata occupy the same pixels in
-   * narrow floating windows, while this box preserves allocation boundaries.
-   */
-  GtkWidget *topbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_size_request(topbar, -1, 46);
-  gtk_widget_set_hexpand(topbar, TRUE);
+  GtkWidget *bar = gtk_header_bar_new();
 
   GtkWidget *toolbar = build_tool_group();
   gtk_widget_set_halign(toolbar, GTK_ALIGN_CENTER);
@@ -711,29 +577,11 @@ static GtkWidget *build_topbar(void) {
   GtkWidget *right_group = build_metadata_group();
   gtk_widget_set_halign(right_group, GTK_ALIGN_END);
   gtk_widget_set_valign(right_group, GTK_ALIGN_CENTER);
-  gtk_widget_set_margin_end(right_group, 6);
 
-  GtkWidget *left_space = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_hexpand(left_space, TRUE);
+  gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), toolbar);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
 
-  /* The left spacer and right slot both expand, so the toolbar remains visually
-   * centered when there is room; the metadata is pushed to the far right inside
-   * its own slot and collapses before it can overlap the toolbar.
-   */
-  GtkWidget *right_slot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_hexpand(right_slot, TRUE);
-  gtk_widget_set_halign(right_slot, GTK_ALIGN_FILL);
-  GtkWidget *right_space = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_hexpand(right_space, TRUE);
-  gtk_box_append(GTK_BOX(right_slot), right_space);
-  gtk_box_append(GTK_BOX(right_slot), right_group);
-
-  gtk_box_append(GTK_BOX(topbar), left_space);
-  gtk_box_append(GTK_BOX(topbar), toolbar);
-  gtk_box_append(GTK_BOX(topbar), right_slot);
-  gtk_widget_add_tick_callback(topbar, on_topbar_tick, NULL, NULL);
-
-  return topbar;
+  return bar;
 }
 
 static void on_map(GtkWidget *widget, gpointer data) {
@@ -749,10 +597,9 @@ static void on_activate(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
   state.window = window;
   gtk_window_set_title(GTK_WINDOW(window), "Shaula Preview");
-  gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
-  gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_DEFAULT_W,
-                              PREVIEW_DEFAULT_H);
-  gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+	gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
+	gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_MIN_W, PREVIEW_MIN_H);
+	gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
   GtkWidget *area = gtk_drawing_area_new();
   state.area = area;
@@ -762,18 +609,10 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_set_cursor_from_name(area, "grab");
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, NULL, NULL);
 
-  /* Window structure is intentionally simple: fixed-height topbar plus one
-   * expanding canvas. There is no second preview layer or overlay placement, so
-   * all image positioning is owned by on_draw/update_fit_zoom.
-   */
   GtkWidget *topbar = build_topbar();
-  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_widget_set_hexpand(root, TRUE);
-  gtk_widget_set_vexpand(root, TRUE);
-  gtk_box_append(GTK_BOX(root), topbar);
-  gtk_box_append(GTK_BOX(root), area);
+  gtk_window_set_titlebar(GTK_WINDOW(window), topbar);
 
-  gtk_window_set_child(GTK_WINDOW(window), root);
+  gtk_window_set_child(GTK_WINDOW(window), area);
 
   GtkGesture *drag = gtk_gesture_drag_new();
   g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), NULL);
