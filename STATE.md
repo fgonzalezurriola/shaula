@@ -8,6 +8,7 @@ and the working diff.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - `pin screenshot` is a roadmap item, not a current toolbar action.
+- Undo/Redo now has a reusable preview history foundation for document edits.
 
 ## Toolbar Actions
 
@@ -15,9 +16,14 @@ and the working diff.
   preview has modifications, otherwise reuses the original PNG path.
 - `shaula-save-symbolic` Save As: implemented. Opens a file chooser and writes
   a PNG to disk.
+- `shaula-undo-symbolic` Undo: implemented. Disabled when the history stack has
+  no undo entry. Also available with `Ctrl+Z`.
+- `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
+  no redo entry. Also available with `Ctrl+Shift+Z` and `Ctrl+Y`.
 - `shaula-share-symbolic` Share: present but disabled. No backend decision yet.
-- `shaula-crop-symbolic` Crop: implemented. Destructively crops the current
-  preview image.
+- `shaula-crop-symbolic` Crop: implemented. It still mutates the current
+  preview image internally, but it is now undoable through the preview document
+  snapshot history.
 - `shaula-select-symbolic` Select: implemented. Selects and moves annotations.
   The same icon is reused in the overflow menu for Fit to screen and Actual
   size.
@@ -45,6 +51,20 @@ and the working diff.
 - Color hex label: implemented.
 - Image dimensions label: implemented.
 - Zoom label: implemented.
+
+## Preview History
+
+- `ShaulaHistoryStack` lives in `preview_state.*` and stores bounded document
+  snapshots with undo/redo arrays and a default capacity of 64.
+- History tracks state that affects copied/saved output: current image buffer,
+  annotations, annotation ids, and modified status.
+- History intentionally excludes view-only state: zoom, pan, fit mode, active
+  tool, toolbar menu visibility, hover, and transient crop/text drafts.
+- Existing wired operations: crop, annotation creation, selected annotation
+  move, selected annotation delete, and reset annotations. Annotation moves
+  capture before-state on mouse down and commit one history entry on mouse up.
+- Restoring history clears transient operations and rebuilds selection from
+  cloned annotations to avoid stale pointers.
 
 ## Icon Assets Not Wired To The Bar
 

@@ -36,3 +36,7 @@ For interactive overlay UX changes, ask the user to run:
 ./dev capture
 ./dev all
 ```
+
+## Updates after changes
+
+After making changes, update STATE.md, add relevant and compact context to upload to chatgpt.com (my prompter).

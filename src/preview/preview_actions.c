@@ -207,6 +207,14 @@ void shaula_preview_action_zoom_out(ShaulaPreviewState *state) {
   shaula_preview_zoom_by_factor(state, 1.0 / 1.12);
 }
 
+void shaula_preview_action_undo(ShaulaPreviewState *state) {
+  shaula_preview_undo(state);
+}
+
+void shaula_preview_action_redo(ShaulaPreviewState *state) {
+  shaula_preview_redo(state);
+}
+
 void shaula_preview_action_reset_annotations(ShaulaPreviewState *state) {
   shaula_preview_reset_annotations(state);
 }
@@ -235,6 +243,16 @@ void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data) {
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_action_save_as(data);
+}
+
+void shaula_preview_on_undo_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_action_undo(data);
+}
+
+void shaula_preview_on_redo_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_action_redo(data);
 }
 
 void shaula_preview_on_discard_clicked(GtkButton *button, gpointer data) {

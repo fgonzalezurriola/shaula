@@ -7,5 +7,6 @@
 
 GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state);
 void shaula_preview_toolbar_update_tool_state(ShaulaPreviewState *state);
+void shaula_preview_toolbar_update_history_state(ShaulaPreviewState *state);
 
 #endif

@@ -300,6 +300,16 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
                  make_toolbar_button(state, "shaula-save-symbolic",
                                      "Save As (Ctrl+S)",
                                      G_CALLBACK(shaula_preview_on_save_clicked)));
+  state->undo_button =
+      make_toolbar_button(state, "shaula-undo-symbolic", "Undo",
+                          G_CALLBACK(shaula_preview_on_undo_clicked));
+  state->redo_button =
+      make_toolbar_button(state, "shaula-redo-symbolic", "Redo",
+                          G_CALLBACK(shaula_preview_on_redo_clicked));
+  gtk_widget_set_sensitive(state->undo_button, FALSE);
+  gtk_widget_set_sensitive(state->redo_button, FALSE);
+  gtk_box_append(GTK_BOX(actions), state->undo_button);
+  gtk_box_append(GTK_BOX(actions), state->redo_button);
   gtk_box_append(GTK_BOX(actions),
                  make_disabled_toolbar_button(
                      state, "shaula-share-symbolic",
@@ -387,4 +397,13 @@ void shaula_preview_toolbar_update_tool_state(ShaulaPreviewState *state) {
     if (gtk_toggle_button_get_active(button) != active)
       gtk_toggle_button_set_active(button, active);
   }
+}
+
+void shaula_preview_toolbar_update_history_state(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return;
+  if (state->undo_button != NULL)
+    gtk_widget_set_sensitive(state->undo_button, shaula_preview_can_undo(state));
+  if (state->redo_button != NULL)
+    gtk_widget_set_sensitive(state->redo_button, shaula_preview_can_redo(state));
 }

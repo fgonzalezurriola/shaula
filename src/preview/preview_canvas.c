@@ -337,6 +337,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                                    : NULL;
     if (hit != NULL) {
       shaula_preview_select_annotation(state, hit);
+      shaula_preview_begin_history_gesture(state);
       start_operation(state, SHAULA_OPERATION_MOVE, image_point);
       gtk_widget_set_cursor_from_name(state->area, "grabbing");
     } else {
@@ -407,10 +408,8 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     double my = raw.y - state->drag_last_image.y;
     if (!state->operation_changed &&
         (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
-         fabs(raw.y - state->drag_start_image.y) > 0.5)) {
-      shaula_preview_push_undo(state);
+         fabs(raw.y - state->drag_start_image.y) > 0.5))
       state->operation_changed = TRUE;
-    }
     if (state->selected_annotation != NULL && state->operation_changed) {
       shaula_annotation_move(state->selected_annotation, mx, my);
       state->modified = TRUE;
@@ -506,6 +505,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   ShaulaPreviewState *state = data;
   if (state->operation == SHAULA_OPERATION_PAN ||
       state->operation == SHAULA_OPERATION_MOVE) {
+    if (state->operation == SHAULA_OPERATION_MOVE)
+      shaula_preview_commit_history_gesture(state, state->operation_changed);
     gtk_widget_set_cursor_from_name(
         state->area, state->active_tool == SHAULA_TOOL_SELECT ? "grab"
                                                               : "crosshair");
@@ -562,6 +563,8 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     shaula_preview_delete_selected(state);
     return TRUE;
   }
+  if (state->text_entry != NULL)
+    return FALSE;
   if (ctrl && keyval == GDK_KEY_c) {
     shaula_preview_action_copy(state);
     return TRUE;

@@ -12,7 +12,7 @@ enum {
   PREVIEW_MIN_H = 650,
   PREVIEW_DEFAULT_W = 960,
   PREVIEW_DEFAULT_H = 680,
-  PREVIEW_TOOLBAR_BASE_VISIBLE_W = 860,
+  PREVIEW_TOOLBAR_BASE_VISIBLE_W = 940,
   PREVIEW_TOOLBAR_REVEAL_STEP_W = 48,
 };
 
@@ -44,6 +44,12 @@ typedef enum {
 typedef struct ShaulaPreviewSnapshot ShaulaPreviewSnapshot;
 
 typedef struct {
+  GPtrArray *undo;
+  GPtrArray *redo;
+  guint capacity;
+} ShaulaHistoryStack;
+
+typedef struct {
   GtkApplication *app;
   GtkWidget *window;
   GtkWidget *canvas_overlay;
@@ -55,6 +61,8 @@ typedef struct {
   GtkWidget *toolbar_secondary[6];
   ShaulaTool toolbar_secondary_tools[6];
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];
+  GtkWidget *undo_button;
+  GtkWidget *redo_button;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -88,8 +96,8 @@ typedef struct {
   GPtrArray *annotations;
   ShaulaAnnotation *selected_annotation;
   int next_annotation_id;
-  GPtrArray *undo_stack;
-  GPtrArray *redo_stack;
+  ShaulaHistoryStack history;
+  ShaulaPreviewSnapshot *pending_history_snapshot;
 
   ShaulaColor current_color;
   gboolean modified;
@@ -133,6 +141,12 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_reset_annotations(ShaulaPreviewState *state);
 
 void shaula_preview_push_undo(ShaulaPreviewState *state);
+void shaula_preview_begin_history_gesture(ShaulaPreviewState *state);
+void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
+                                           gboolean changed);
+void shaula_preview_cancel_history_gesture(ShaulaPreviewState *state);
+gboolean shaula_preview_can_undo(ShaulaPreviewState *state);
+gboolean shaula_preview_can_redo(ShaulaPreviewState *state);
 gboolean shaula_preview_undo(ShaulaPreviewState *state);
 gboolean shaula_preview_redo(ShaulaPreviewState *state);
 
