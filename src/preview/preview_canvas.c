@@ -509,8 +509,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
         state->area, state->active_tool == SHAULA_TOOL_SELECT ? "grab"
                                                               : "crosshair");
   } else if (state->operation == SHAULA_OPERATION_CROP) {
-    state->has_crop_draft =
-        !shaula_rect_is_empty(shaula_rect_normalized(state->crop_draft));
+    if (!shaula_preview_apply_crop(state))
+      shaula_preview_cancel_operation(state);
   } else {
     finish_shape_annotation(state);
   }

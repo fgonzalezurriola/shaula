@@ -73,6 +73,9 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
 void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) {
   if (state == NULL)
     return;
+  if (tool == SHAULA_TOOL_CROP && state->active_tool == SHAULA_TOOL_SELECT &&
+      shaula_preview_apply_crop_to_selected_rect(state))
+    return;
   shaula_preview_cancel_operation(state);
   state->active_tool = tool;
   shaula_preview_toolbar_update_tool_state(state);

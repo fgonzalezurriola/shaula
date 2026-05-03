@@ -152,6 +152,9 @@ gboolean shaula_preview_redo(ShaulaPreviewState *state);
 
 void shaula_preview_cancel_operation(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop(ShaulaPreviewState *state);
+gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
+                                           ShaulaRect rect);
+gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

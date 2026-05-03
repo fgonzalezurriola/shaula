@@ -23,7 +23,8 @@ and the working diff.
 - `shaula-share-symbolic` Share: hidden until a backend decision exists.
 - `shaula-crop-symbolic` Crop: implemented. It still mutates the current
   preview image internally, but it is now undoable through the preview document
-  snapshot history.
+  snapshot history. Direct Crop tool drags apply immediately on mouse release
+  and then return to Select mode.
 - `shaula-select-symbolic` Select: implemented. Selects and moves annotations.
   The same icon is reused in the overflow menu for Fit to screen and Actual
   size.
@@ -67,6 +68,11 @@ and the working diff.
 - Reset annotations cancels transient drafts, pushes exactly one pre-clear undo
   snapshot, clears annotations, and relies on the standard edit push to clear
   redo when a new annotation is created after undoing the reset.
+- Crop pushes one undo snapshot only after the crop rect validates and a cropped
+  pixbuf exists. Remaining annotations are translated to the new image origin;
+  annotations outside the crop are removed. In Select mode, clicking Crop with
+  a selected rectangle/highlight annotation crops to that rect and removes that
+  selected guide annotation from the committed cropped document.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 
@@ -77,6 +83,6 @@ and the working diff.
 
 ## Gaps
 
-- Share is still a disabled placeholder.
+- Share is hidden until a backend decision exists.
 - Pinning is not exposed in the current preview toolbar.
 - Redaction and deeper object editing are still future work.

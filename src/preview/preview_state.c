@@ -6,6 +6,7 @@
 #include "preview_toolbar.h"
 
 #define SHAULA_HISTORY_DEFAULT_CAPACITY 24
+#define SHAULA_CROP_MIN_SIZE_PX 4
 
 /* History tracks the editable document that affects exported/copied pixels:
  * the current image buffer while crop remains destructive, annotation objects,
@@ -475,24 +476,66 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
   shaula_preview_queue_draw(state);
 }
 
-gboolean shaula_preview_apply_crop(ShaulaPreviewState *state) {
-  if (state == NULL || state->image == NULL || !state->has_crop_draft)
+static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
+                                    int *x, int *y, int *w, int *h) {
+  if (state == NULL || state->image == NULL)
     return FALSE;
 
   ShaulaRect crop = shaula_rect_clamped(
-      state->crop_draft, shaula_preview_image_width(state),
+      shaula_rect_normalized(rect), shaula_preview_image_width(state),
       shaula_preview_image_height(state));
-  if (crop.width < 1.0 || crop.height < 1.0)
+  if (crop.width < SHAULA_CROP_MIN_SIZE_PX ||
+      crop.height < SHAULA_CROP_MIN_SIZE_PX)
     return FALSE;
 
-  int x = (int)floor(crop.x);
-  int y = (int)floor(crop.y);
-  int w = MAX(1, (int)ceil(crop.width));
-  int h = MAX(1, (int)ceil(crop.height));
-  w = MIN(w, shaula_preview_image_width(state) - x);
-  h = MIN(h, shaula_preview_image_height(state) - y);
+  *x = (int)floor(crop.x);
+  *y = (int)floor(crop.y);
+  *w = MAX(1, (int)ceil(crop.x + crop.width) - *x);
+  *h = MAX(1, (int)ceil(crop.y + crop.height) - *y);
+  *w = MIN(*w, shaula_preview_image_width(state) - *x);
+  *h = MIN(*h, shaula_preview_image_height(state) - *y);
+  return *w >= SHAULA_CROP_MIN_SIZE_PX && *h >= SHAULA_CROP_MIN_SIZE_PX;
+}
+
+static void remap_annotations_after_crop(ShaulaPreviewState *state,
+                                         ShaulaRect crop,
+                                         ShaulaAnnotation *remove_annotation) {
+  if (state == NULL || state->annotations == NULL)
+    return;
+
+  state->selected_annotation = NULL;
+  for (gint i = (gint)state->annotations->len - 1; i >= 0; i--) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->annotations, (guint)i);
+    if (annotation == remove_annotation || annotation == NULL ||
+        !shaula_rect_intersects(annotation->bounds, crop)) {
+      g_ptr_array_remove_index(state->annotations, (guint)i);
+      continue;
+    }
+    annotation->selected = FALSE;
+    shaula_annotation_move(annotation, -crop.x, -crop.y);
+  }
+}
+
+/* Commits a crop as one document edit.
+ *
+ * The snapshot is pushed only after a valid output pixbuf exists, so failed or
+ * tiny crops leave undo/redo untouched. Annotations outside the crop are
+ * discarded and remaining annotations are translated into the new image
+ * coordinate space.
+ */
+static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
+                                   ShaulaAnnotation *remove_annotation) {
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+  if (!crop_rect_to_pixels(state, rect, &x, &y, &w, &h))
+    return FALSE;
 
   GdkPixbuf *sub = gdk_pixbuf_new_subpixbuf(state->image, x, y, w, h);
+  if (sub == NULL)
+    return FALSE;
   GdkPixbuf *copy = gdk_pixbuf_copy(sub);
   g_object_unref(sub);
   if (copy == NULL)
@@ -501,16 +544,47 @@ gboolean shaula_preview_apply_crop(ShaulaPreviewState *state) {
   shaula_preview_push_undo(state);
   g_object_unref(state->image);
   state->image = copy;
-  for (guint i = 0; i < state->annotations->len; i++) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
-    shaula_annotation_move(annotation, -(double)x, -(double)y);
-  }
-  state->selected_annotation = NULL;
+  remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
+                               remove_annotation);
   state->has_crop_draft = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
+  state->active_tool = SHAULA_TOOL_SELECT;
   state->modified = TRUE;
   shaula_preview_update_dimensions_label(state);
   shaula_preview_set_fit_mode(state, TRUE);
+  shaula_preview_toolbar_update_tool_state(state);
   shaula_preview_toolbar_update_history_state(state);
   return TRUE;
+}
+
+gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
+                                           ShaulaRect rect) {
+  return apply_crop_to_rect(state, rect, NULL);
+}
+
+gboolean shaula_preview_apply_crop(ShaulaPreviewState *state) {
+  if (state == NULL || !state->has_crop_draft)
+    return FALSE;
+  return shaula_preview_apply_crop_to_rect(state, state->crop_draft);
+}
+
+gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state) {
+  if (state == NULL || state->selected_annotation == NULL)
+    return FALSE;
+
+  ShaulaAnnotation *annotation = state->selected_annotation;
+  switch (annotation->type) {
+  case SHAULA_ANNOTATION_RECTANGLE:
+    return apply_crop_to_rect(state, annotation->data.rectangle.rect,
+                              annotation);
+  case SHAULA_ANNOTATION_HIGHLIGHT:
+    return apply_crop_to_rect(state, annotation->data.highlight.rect,
+                              annotation);
+  case SHAULA_ANNOTATION_ARROW:
+  case SHAULA_ANNOTATION_TEXT:
+  case SHAULA_ANNOTATION_MEASURE:
+  case SHAULA_ANNOTATION_PEN:
+    return FALSE;
+  }
+  return FALSE;
 }
