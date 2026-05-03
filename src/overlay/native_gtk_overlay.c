@@ -21,6 +21,7 @@ enum {
   DROPDOWN_PADDING = 6,
   DROPDOWN_RADIUS = 10,
   RESIZE_HIT_RADIUS = 10,
+  CAPTURE_ON_RELEASE = 1,
 };
 
 typedef enum {
@@ -486,8 +487,8 @@ static int dropdown_item_at(ShaulaPoint point) {
 }
 
 static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
-  if (state.dropdown_open && dropdown_item_at(p) >= 0) return CURSOR_POINTER;
-  if (state.has_toolbar &&
+  if (!CAPTURE_ON_RELEASE && state.dropdown_open && dropdown_item_at(p) >= 0) return CURSOR_POINTER;
+  if (!CAPTURE_ON_RELEASE && state.has_toolbar &&
       (toolbar_aspect_hit(p) ||
        (state.has_selection && toolbar_capture_hit(p)) ||
        toolbar_cancel_hit(p))) {
@@ -775,11 +776,13 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gp
     draw_badge(cr, s, width, height);
   }
 
-  ShaulaPoint t = state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING };
-  draw_toolbar(cr, t, state.has_selection);
+  if (!CAPTURE_ON_RELEASE) {
+    ShaulaPoint t = state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING };
+    draw_toolbar(cr, t, state.has_selection);
 
-  if (state.dropdown_open) {
-    draw_dropdown(cr, t);
+    if (state.dropdown_open) {
+      draw_dropdown(cr, t);
+    }
   }
 }
 
@@ -807,31 +810,33 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
   (void)data;
   ShaulaPoint p = { .x = (int)x, .y = (int)y };
 
-  if (state.suppress_pointer_drag) {
-    state.drag_mode = DRAG_TOOLBAR;
-    apply_cursor(resolve_hover_cursor(p));
-    return;
-  }
+  if (!CAPTURE_ON_RELEASE) {
+    if (state.suppress_pointer_drag) {
+      state.drag_mode = DRAG_TOOLBAR;
+      apply_cursor(resolve_hover_cursor(p));
+      return;
+    }
 
-  if (state.dropdown_open) {
-    state.drag_mode = DRAG_TOOLBAR;
-    apply_cursor(resolve_hover_cursor(p));
-    return;
-  }
+    if (state.dropdown_open) {
+      state.drag_mode = DRAG_TOOLBAR;
+      apply_cursor(resolve_hover_cursor(p));
+      return;
+    }
 
-  if (state.has_toolbar && toolbar_aspect_hit(p)) {
-    state.drag_mode = DRAG_TOOLBAR;
-    apply_cursor(CURSOR_POINTER);
-    return;
-  }
+    if (state.has_toolbar && toolbar_aspect_hit(p)) {
+      state.drag_mode = DRAG_TOOLBAR;
+      apply_cursor(CURSOR_POINTER);
+      return;
+    }
 
-  if (state.has_selection && toolbar_capture_hit(p)) {
-    state.drag_mode = DRAG_TOOLBAR;
-    return;
-  }
-  if (toolbar_cancel_hit(p)) {
-    state.drag_mode = DRAG_TOOLBAR;
-    return;
+    if (state.has_selection && toolbar_capture_hit(p)) {
+      state.drag_mode = DRAG_TOOLBAR;
+      return;
+    }
+    if (toolbar_cancel_hit(p)) {
+      state.drag_mode = DRAG_TOOLBAR;
+      return;
+    }
   }
   state.drag_start = p;
   state.drag_origin = state.selection;
@@ -891,7 +896,16 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpoint
 }
 
 static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer data) {
+    ShaulaDragMode completed_mode = state.drag_mode;
     on_drag_update(gesture, dx, dy, data);
+    gboolean should_confirm =
+        CAPTURE_ON_RELEASE &&
+        (completed_mode == DRAG_CREATE ||
+         completed_mode == DRAG_MOVE ||
+         completed_mode == DRAG_RESIZE) &&
+        state.has_selection &&
+        state.selection.width > 0 &&
+        state.selection.height > 0;
     state.drag_mode = DRAG_NONE;
     state.active_handle = HANDLE_NONE;
     state.suppress_pointer_drag = FALSE;
@@ -899,6 +913,9 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer 
     state.hover_handle = state.has_selection ? resize_handle_at(state.selection, p) : HANDLE_NONE;
     apply_cursor(resolve_hover_cursor(p));
     queue_draw();
+    if (should_confirm) {
+        confirm();
+    }
 }
 
 static void on_motion(GtkEventControllerMotion *controller, double x, double y, gpointer data) {
@@ -931,6 +948,12 @@ static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, 
   (void)n_press;
   (void)data;
   ShaulaPoint p = { .x = (int)x, .y = (int)y };
+
+  if (CAPTURE_ON_RELEASE) {
+    state.suppress_pointer_drag = FALSE;
+    state.dropdown_open = FALSE;
+    return;
+  }
 
   if (state.dropdown_open) {
     int idx = dropdown_item_at(p);

@@ -12,6 +12,16 @@ and the working diff.
 - Preview commands now provide the shared dispatch path for toolbar callbacks,
   keyboard shortcuts, and future menus/configurable shortcuts.
 
+## Overlay Capture
+
+- The native GTK overlay used by `./dev capture` is now capture-on-release.
+  It no longer draws or requires the floating Capture/Esc/aspect button strip:
+  a valid create, move, or resize drag confirms the selection on release.
+  Escape/Q still cancel and Enter still confirms as a keyboard fallback.
+- Aspect-constrained capture remains available through
+  `SHAULA_OVERLAY_ASPECT`; the removed button strip is no longer the interactive
+  path for changing it during capture.
+
 ## Toolbar Actions
 
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
