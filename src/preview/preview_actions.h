@@ -34,6 +34,10 @@ void shaula_preview_on_reset_annotations_clicked(GtkButton *button,
 void shaula_preview_on_duplicate_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_blur_region_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_erase_region_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
+                                                gpointer data);
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data);

@@ -310,6 +310,23 @@ void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data) {
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_CROP_SELECTED);
 }
 
+void shaula_preview_on_blur_region_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_BLUR_REGION);
+}
+
+void shaula_preview_on_erase_region_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_ERASE_REGION);
+}
+
+void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
+                                                gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
+}
+
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_COPY_PATH);

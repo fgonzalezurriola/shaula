@@ -37,7 +37,8 @@ and the working diff.
   that appears only while Select is active and an annotation is selected.
 - Region selection actions: implemented as temporary Select-mode UI state.
   Region selections are not annotations, are not saved/exported, do not enter
-  undo history by themselves, and expose only the contextual Crop action.
+  undo history by themselves, and expose contextual Crop, Blur, Erase, and
+  Spotlight actions.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
   new id, offsets it by 12 px on both axes, selects the duplicate, and commits
@@ -95,6 +96,13 @@ and the working diff.
   selected guide annotation from the committed cropped document. Clicking Crop
   with a temporary region selection crops to that region and clears the region
   selection.
+- Blur/Erase/Spotlight region actions are document edits dispatched through
+  preview commands. Each validates/clamps the temporary region, prepares a new
+  image pixbuf, then pushes exactly one undo snapshot before replacing the
+  current image. Blur uses strong pixelation, Erase fills with the average
+  one-pixel border color around the region with a neutral fallback, and
+  Spotlight darkens pixels outside the region. These actions keep the region
+  selection active for repeat actions.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 

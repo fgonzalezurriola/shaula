@@ -67,6 +67,9 @@ typedef struct {
   GtkWidget *selection_actions_box;
   GtkWidget *duplicate_button;
   GtkWidget *crop_selected_button;
+  GtkWidget *blur_region_button;
+  GtkWidget *erase_region_button;
+  GtkWidget *spotlight_region_button;
   GtkWidget *delete_button;
   GtkWidget *more_button;
   GtkWidget *more_popover;
@@ -168,6 +171,9 @@ gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
 gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop_to_region_selection(
     ShaulaPreviewState *state);
+gboolean shaula_preview_blur_region_selection(ShaulaPreviewState *state);
+gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state);
+gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

@@ -238,6 +238,16 @@ static GtkWidget *build_selection_actions_group(ShaulaPreviewState *state) {
       make_toolbar_button(state, "shaula-crop-symbolic",
                           "Crop to selected annotation",
                           G_CALLBACK(shaula_preview_on_crop_selected_clicked));
+  state->blur_region_button =
+      make_toolbar_button(state, "shaula-blur-symbolic", "Blur selected region",
+                          G_CALLBACK(shaula_preview_on_blur_region_clicked));
+  state->erase_region_button =
+      make_toolbar_button(state, "shaula-erase-symbolic",
+                          "Erase selected region",
+                          G_CALLBACK(shaula_preview_on_erase_region_clicked));
+  state->spotlight_region_button = make_toolbar_button(
+      state, "shaula-spotlight-symbolic", "Spotlight selected region",
+      G_CALLBACK(shaula_preview_on_spotlight_region_clicked));
   state->delete_button =
       make_toolbar_button(state, "shaula-trash-symbolic",
                           "Delete selected annotation (Delete)",
@@ -245,6 +255,9 @@ static GtkWidget *build_selection_actions_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(group), state->duplicate_button);
   gtk_box_append(GTK_BOX(group), state->crop_selected_button);
+  gtk_box_append(GTK_BOX(group), state->blur_region_button);
+  gtk_box_append(GTK_BOX(group), state->erase_region_button);
+  gtk_box_append(GTK_BOX(group), state->spotlight_region_button);
   gtk_box_append(GTK_BOX(group), state->delete_button);
   state->selection_actions_box = group;
   shaula_preview_toolbar_update_selection_state(state);
@@ -432,12 +445,20 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state, SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED);
   gboolean can_crop = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_CROP_SELECTED);
+  gboolean can_blur = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_BLUR_REGION);
+  gboolean can_erase = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_ERASE_REGION);
+  gboolean can_spotlight = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
   gboolean can_delete = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
   gboolean has_object_selection = state->selected_annotation != NULL;
+  gboolean has_region_selection = state->has_region_selection;
   gboolean show_group =
       state->active_tool == SHAULA_TOOL_SELECT &&
-      (can_duplicate || can_crop || can_delete);
+      (can_duplicate || can_crop || can_blur || can_erase || can_spotlight ||
+       can_delete);
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
@@ -452,6 +473,19 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
         state->crop_selected_button,
         state->has_region_selection ? "Crop to selected region"
                                     : "Crop to selected annotation");
+  }
+  if (state->blur_region_button != NULL) {
+    gtk_widget_set_visible(state->blur_region_button, has_region_selection);
+    gtk_widget_set_sensitive(state->blur_region_button, can_blur);
+  }
+  if (state->erase_region_button != NULL) {
+    gtk_widget_set_visible(state->erase_region_button, has_region_selection);
+    gtk_widget_set_sensitive(state->erase_region_button, can_erase);
+  }
+  if (state->spotlight_region_button != NULL) {
+    gtk_widget_set_visible(state->spotlight_region_button,
+                           has_region_selection);
+    gtk_widget_set_sensitive(state->spotlight_region_button, can_spotlight);
   }
   if (state->delete_button != NULL) {
     gtk_widget_set_visible(state->delete_button, has_object_selection);

@@ -46,6 +46,9 @@ static ShaulaTool tool_for_command(ShaulaPreviewCommand command,
   case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
+  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
+  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
+  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
@@ -84,6 +87,11 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
              annotation->type == SHAULA_ANNOTATION_HIGHLIGHT;
     }
     return FALSE;
+  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
+  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
+  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
+    return state->active_tool == SHAULA_TOOL_SELECT &&
+           state->has_region_selection && state->image != NULL;
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP:
     return state->image != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY:
@@ -141,6 +149,12 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     if (state->has_region_selection)
       return shaula_preview_apply_crop_to_region_selection(state);
     return shaula_preview_apply_crop_to_selected_rect(state);
+  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
+    return shaula_preview_blur_region_selection(state);
+  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
+    return shaula_preview_erase_region_selection(state);
+  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
+    return shaula_preview_spotlight_region_selection(state);
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
     shaula_preview_reset_annotations(state);
     return TRUE;
@@ -208,6 +222,9 @@ const char *shaula_preview_command_shortcut_label(
     return "0";
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
+  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
+  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
+  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
   case SHAULA_PREVIEW_COMMAND_DISCARD:

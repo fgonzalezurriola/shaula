@@ -548,6 +548,215 @@ static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
   return *w >= SHAULA_CROP_MIN_SIZE_PX && *h >= SHAULA_CROP_MIN_SIZE_PX;
 }
 
+typedef enum {
+  SHAULA_REGION_EDIT_BLUR,
+  SHAULA_REGION_EDIT_ERASE,
+  SHAULA_REGION_EDIT_SPOTLIGHT
+} ShaulaRegionEdit;
+
+static guint8 clamp_channel(int value) {
+  return (guint8)CLAMP(value, 0, 255);
+}
+
+static gboolean pixbuf_require_rgb8(GdkPixbuf *pixbuf, guchar **pixels,
+                                    int *width, int *height, int *rowstride,
+                                    int *channels) {
+  if (pixbuf == NULL || gdk_pixbuf_get_bits_per_sample(pixbuf) != 8)
+    return FALSE;
+  *pixels = gdk_pixbuf_get_pixels(pixbuf);
+  *width = gdk_pixbuf_get_width(pixbuf);
+  *height = gdk_pixbuf_get_height(pixbuf);
+  *rowstride = gdk_pixbuf_get_rowstride(pixbuf);
+  *channels = gdk_pixbuf_get_n_channels(pixbuf);
+  return *pixels != NULL && (*channels == 3 || *channels == 4);
+}
+
+static void pixelate_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
+  guchar *pixels = NULL;
+  int width = 0;
+  int height = 0;
+  int rowstride = 0;
+  int channels = 0;
+  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
+                           &channels))
+    return;
+
+  const int block = 12;
+  for (int by = y; by < y + h; by += block) {
+    int bh = MIN(block, y + h - by);
+    for (int bx = x; bx < x + w; bx += block) {
+      int bw = MIN(block, x + w - bx);
+      guint64 r = 0;
+      guint64 g = 0;
+      guint64 b = 0;
+      guint64 a = 0;
+      int count = 0;
+      for (int py = by; py < by + bh; py++) {
+        guchar *row = pixels + py * rowstride;
+        for (int px = bx; px < bx + bw; px++) {
+          guchar *p = row + px * channels;
+          r += p[0];
+          g += p[1];
+          b += p[2];
+          if (channels == 4)
+            a += p[3];
+          count++;
+        }
+      }
+      if (count == 0)
+        continue;
+      guint8 ar = (guint8)(r / count);
+      guint8 ag = (guint8)(g / count);
+      guint8 ab = (guint8)(b / count);
+      guint8 aa = channels == 4 ? (guint8)(a / count) : 255;
+      for (int py = by; py < by + bh; py++) {
+        guchar *row = pixels + py * rowstride;
+        for (int px = bx; px < bx + bw; px++) {
+          guchar *p = row + px * channels;
+          p[0] = ar;
+          p[1] = ag;
+          p[2] = ab;
+          if (channels == 4)
+            p[3] = aa;
+        }
+      }
+    }
+  }
+}
+
+static void average_region_border(GdkPixbuf *pixbuf, int x, int y, int w, int h,
+                                  guint8 fill[3]) {
+  fill[0] = 245;
+  fill[1] = 245;
+  fill[2] = 245;
+
+  guchar *pixels = NULL;
+  int width = 0;
+  int height = 0;
+  int rowstride = 0;
+  int channels = 0;
+  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
+                           &channels))
+    return;
+
+  int left = MAX(0, x - 1);
+  int top = MAX(0, y - 1);
+  int right = MIN(width - 1, x + w);
+  int bottom = MIN(height - 1, y + h);
+  guint64 r = 0;
+  guint64 g = 0;
+  guint64 b = 0;
+  int count = 0;
+  for (int py = top; py <= bottom; py++) {
+    guchar *row = pixels + py * rowstride;
+    for (int px = left; px <= right; px++) {
+      if (px >= x && px < x + w && py >= y && py < y + h)
+        continue;
+      guchar *p = row + px * channels;
+      r += p[0];
+      g += p[1];
+      b += p[2];
+      count++;
+    }
+  }
+  if (count == 0)
+    return;
+  fill[0] = (guint8)(r / count);
+  fill[1] = (guint8)(g / count);
+  fill[2] = (guint8)(b / count);
+}
+
+static void erase_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
+  guchar *pixels = NULL;
+  int width = 0;
+  int height = 0;
+  int rowstride = 0;
+  int channels = 0;
+  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
+                           &channels))
+    return;
+
+  guint8 fill[3];
+  average_region_border(pixbuf, x, y, w, h, fill);
+  for (int py = y; py < y + h; py++) {
+    guchar *row = pixels + py * rowstride;
+    for (int px = x; px < x + w; px++) {
+      guchar *p = row + px * channels;
+      p[0] = fill[0];
+      p[1] = fill[1];
+      p[2] = fill[2];
+      if (channels == 4)
+        p[3] = 255;
+    }
+  }
+}
+
+static void spotlight_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
+  guchar *pixels = NULL;
+  int width = 0;
+  int height = 0;
+  int rowstride = 0;
+  int channels = 0;
+  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
+                           &channels))
+    return;
+
+  for (int py = 0; py < height; py++) {
+    guchar *row = pixels + py * rowstride;
+    for (int px = 0; px < width; px++) {
+      if (px >= x && px < x + w && py >= y && py < y + h)
+        continue;
+      guchar *p = row + px * channels;
+      p[0] = clamp_channel((int)(p[0] * 0.55));
+      p[1] = clamp_channel((int)(p[1] * 0.55));
+      p[2] = clamp_channel((int)(p[2] * 0.55));
+    }
+  }
+}
+
+/* Commits region pixel edits as one document edit after the output pixbuf is
+ * ready. The temporary region selection is view/UI state, so it remains active
+ * for repeat actions and is still excluded from history snapshots.
+ */
+static gboolean apply_region_edit(ShaulaPreviewState *state,
+                                  ShaulaRegionEdit edit) {
+  if (state == NULL || !state->has_region_selection)
+    return FALSE;
+
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+  if (!crop_rect_to_pixels(state, state->region_selection_rect, &x, &y, &w,
+                           &h))
+    return FALSE;
+
+  GdkPixbuf *copy = gdk_pixbuf_copy(state->image);
+  if (copy == NULL)
+    return FALSE;
+
+  switch (edit) {
+  case SHAULA_REGION_EDIT_BLUR:
+    pixelate_region(copy, x, y, w, h);
+    break;
+  case SHAULA_REGION_EDIT_ERASE:
+    erase_region(copy, x, y, w, h);
+    break;
+  case SHAULA_REGION_EDIT_SPOTLIGHT:
+    spotlight_region(copy, x, y, w, h);
+    break;
+  }
+
+  shaula_preview_push_undo(state);
+  g_object_unref(state->image);
+  state->image = copy;
+  state->modified = TRUE;
+  shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+  return TRUE;
+}
+
 static void remap_annotations_after_crop(ShaulaPreviewState *state,
                                          ShaulaRect crop,
                                          ShaulaAnnotation *remove_annotation) {
@@ -651,4 +860,16 @@ gboolean shaula_preview_apply_crop_to_region_selection(
   if (applied)
     state->has_region_selection = FALSE;
   return applied;
+}
+
+gboolean shaula_preview_blur_region_selection(ShaulaPreviewState *state) {
+  return apply_region_edit(state, SHAULA_REGION_EDIT_BLUR);
+}
+
+gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state) {
+  return apply_region_edit(state, SHAULA_REGION_EDIT_ERASE);
+}
+
+gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state) {
+  return apply_region_edit(state, SHAULA_REGION_EDIT_SPOTLIGHT);
 }
