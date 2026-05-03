@@ -5,6 +5,7 @@
 
 #include "preview_actions.h"
 #include "preview_commands.h"
+#include "preview_properties_panel.h"
 #include "preview_spotlight.h"
 #include "preview_toolbar.h"
 
@@ -172,6 +173,8 @@ static void draw_crop_overlay(cairo_t *cr, ShaulaPreviewState *state) {
 }
 
 static void draw_region_selection(cairo_t *cr, ShaulaPreviewState *state) {
+  if (state->active_properties_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT)
+    return;
   if (!state->has_region_selection &&
       state->operation != SHAULA_OPERATION_SELECT_REGION)
     return;
@@ -239,6 +242,12 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
     break;
   case SHAULA_OPERATION_PEN:
     draw_pen_draft(cr, state);
+    break;
+  case SHAULA_OPERATION_SPOTLIGHT:
+    draw_draft_rect(cr,
+                    shaula_rect_from_points(state->drag_start_image,
+                                            state->drag_current_image),
+                    state->spotlight_border_color, FALSE);
     break;
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_NONE:
@@ -350,7 +359,8 @@ static void start_operation(ShaulaPreviewState *state,
     state->has_crop_draft = TRUE;
     state->crop_draft = (ShaulaRect){point.x, point.y, 0, 0};
   }
-  if (operation == SHAULA_OPERATION_SELECT_REGION) {
+  if (operation == SHAULA_OPERATION_SELECT_REGION ||
+      operation == SHAULA_OPERATION_SPOTLIGHT) {
     state->has_region_selection = FALSE;
     state->region_selection_rect = (ShaulaRect){point.x, point.y, 0, 0};
   }
@@ -429,6 +439,13 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     if (inside)
       start_operation(state, SHAULA_OPERATION_PEN, clamped);
     break;
+  case SHAULA_TOOL_SPOTLIGHT:
+    if (inside) {
+      shaula_preview_clear_selection(state);
+      shaula_preview_clear_region_selection(state);
+      start_operation(state, SHAULA_OPERATION_SPOTLIGHT, clamped);
+    }
+    break;
   case SHAULA_TOOL_COUNT:
     break;
   }
@@ -480,6 +497,14 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
     state->region_selection_rect = rect;
     state->has_region_selection = state->operation_changed;
+    break;
+  }
+  case SHAULA_OPERATION_SPOTLIGHT: {
+    state->drag_current_image = image_point;
+    ShaulaRect rect =
+        shaula_rect_from_points(state->drag_start_image, image_point);
+    state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
+    state->region_selection_rect = rect;
     break;
   }
   case SHAULA_OPERATION_CROP:
@@ -551,6 +576,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_MOVE:
   case SHAULA_OPERATION_SELECT_REGION:
+  case SHAULA_OPERATION_SPOTLIGHT:
   case SHAULA_OPERATION_NONE:
   case SHAULA_OPERATION_PAN:
   case SHAULA_OPERATION_TEXT:
@@ -570,7 +596,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   ShaulaPreviewState *state = data;
   if (state->operation == SHAULA_OPERATION_PAN ||
       state->operation == SHAULA_OPERATION_MOVE ||
-      state->operation == SHAULA_OPERATION_SELECT_REGION) {
+      state->operation == SHAULA_OPERATION_SELECT_REGION ||
+      state->operation == SHAULA_OPERATION_SPOTLIGHT) {
     if (state->operation == SHAULA_OPERATION_MOVE)
       shaula_preview_commit_history_gesture(state, state->operation_changed);
     if (state->operation == SHAULA_OPERATION_SELECT_REGION) {
@@ -578,6 +605,11 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
         shaula_preview_clear_region_selection(state);
       else
         shaula_preview_toolbar_update_selection_state(state);
+    }
+    if (state->operation == SHAULA_OPERATION_SPOTLIGHT) {
+      if (state->operation_changed)
+        shaula_preview_spotlight_rect(state, state->region_selection_rect);
+      state->has_region_selection = FALSE;
     }
     gtk_widget_set_cursor_from_name(
         state->area, state->active_tool == SHAULA_TOOL_SELECT ? "default"
@@ -668,6 +700,8 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   gtk_widget_set_cursor_from_name(area, "default");
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, state, NULL);
   gtk_overlay_set_child(GTK_OVERLAY(overlay), area);
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);

@@ -320,11 +320,45 @@ void shaula_preview_on_erase_region_clicked(GtkButton *button, gpointer data) {
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_ERASE_REGION);
 }
 
+void shaula_preview_on_spotlight_toolbar_clicked(GtkButton *button,
+                                                 gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT);
+}
+
 void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
                                                 gpointer data) {
   (void)button;
   shaula_preview_execute_command(data,
                                  SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
+}
+
+void shaula_preview_on_properties_back_clicked(GtkButton *button,
+                                               gpointer data) {
+  (void)button;
+  shaula_preview_set_properties_panel(data, SHAULA_PROPERTIES_PANEL_NONE);
+}
+
+void shaula_preview_on_spotlight_color_set(GtkColorButton *button,
+                                           gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_spotlight_border_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_spotlight_width_changed(GtkRange *range,
+                                               gpointer data) {
+  shaula_preview_set_spotlight_border_width(data,
+                                            gtk_range_get_value(range));
+}
+
+void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
+                                               gpointer data) {
+  ShaulaSpotlightShape shape = (ShaulaSpotlightShape)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "spotlight-shape"));
+  shaula_preview_set_spotlight_shape(data, shape);
 }
 
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data) {
@@ -366,6 +400,9 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
     break;
   case SHAULA_TOOL_PEN:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN;
+    break;
+  case SHAULA_TOOL_SPOTLIGHT:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT;
     break;
   case SHAULA_TOOL_COUNT:
     return;

@@ -39,6 +39,8 @@ static ShaulaTool tool_for_command(ShaulaPreviewCommand command,
     return SHAULA_TOOL_HIGHLIGHT;
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
     return SHAULA_TOOL_PEN;
+  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
+    return SHAULA_TOOL_SPOTLIGHT;
   case SHAULA_PREVIEW_COMMAND_COPY:
   case SHAULA_PREVIEW_COMMAND_SAVE_AS:
   case SHAULA_PREVIEW_COMMAND_UNDO:
@@ -112,6 +114,7 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
+  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
     return TRUE;
   }
   return FALSE;
@@ -181,6 +184,7 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
+  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
     return FALSE;
   }
   return FALSE;
@@ -236,6 +240,7 @@ const char *shaula_preview_command_shortcut_label(
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
+  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
     return NULL;
   }
   return NULL;

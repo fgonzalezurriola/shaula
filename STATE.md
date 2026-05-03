@@ -33,12 +33,36 @@ and the working diff.
   empty space outside the image clears selection without panning. Canvas panning
   is now an explicit middle-button drag gesture. The same icon is reused in the
   overflow menu for Fit to screen and Actual size.
+- `shaula-spotlight-symbolic` Spotlight: implemented as an independent primary
+  toolbar tool outside Select-mode-only contextual actions. Activating it does
+  not reuse the Select contextual toolbar; it lets the user drag a new area
+  directly on the canvas, applies Spotlight on mouse release, and then opens
+  the floating properties HUD. The existing Select-mode contextual Spotlight
+  action still works for an already selected temporary region.
 - Selected annotation actions: implemented as a small contextual toolbar group
   that appears only while Select is active and an annotation is selected.
 - Region selection actions: implemented as temporary Select-mode UI state.
   Region selections are not annotations, are not saved/exported, do not enter
   undo history by themselves, and expose contextual Crop, Blur, Erase, and
   Spotlight actions.
+- Spotlight contextual properties: implemented as a floating top-right
+  properties HUD built by `preview_properties_panel.*`, attached to the preview
+  `GtkOverlay`, and driven by `active_properties_panel`. Applying Spotlight
+  shows Back, color, border width, pointed-corner rectangle, and rounded-corner
+  rectangle controls over the canvas without resizing the main toolbar. The HUD
+  targets the just-created Spotlight entry through `active_spotlight_index`, so
+  color, width, and corner style update that last applied Spotlight
+  reactively while also becoming the defaults for the next Spotlight. Back uses
+  a dedicated drawn chevron, hides the floating panel, clears the active
+  Spotlight target, and returns to the normal toolbar state. While the HUD is
+  open, the transient region-selection overlay is hidden so the stored
+  Spotlight border remains visible. This panel/target state is UI/config state
+  only and is excluded from undo/redo snapshots.
+- The Spotlight properties HUD uses GTK symbolic theme colors for widget
+  chrome: `@theme_bg_color`, `@theme_fg_color`, and `@borders`. Its custom
+  Cairo-drawn back/shape icons read the widget foreground from the active GTK
+  style context, so the HUD follows light/dark GTK themes instead of fixed
+  dark-panel colors.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
   new id, offsets it by 12 px on both axes, selects the duplicate, and commits
@@ -79,7 +103,7 @@ and the working diff.
   snapshots with undo/redo arrays and a default capacity of 24 while snapshots
   include full image buffers.
 - History tracks state that affects copied/saved output: current image buffer,
-  annotations, annotation ids, and modified status.
+  annotations, spotlight regions, annotation ids, and modified status.
 - History intentionally excludes view-only state: zoom, pan, fit mode, active
   tool, toolbar menu visibility, hover, and transient crop/text drafts.
 - Existing wired operations: crop, annotation creation, selected annotation
@@ -101,11 +125,14 @@ and the working diff.
   edit, then pushes exactly one undo snapshot before committing. Blur uses
   strong pixelation and Erase fills with the average one-pixel border color
   around the region with a neutral fallback; both are destructive image pixel
-  edits. Spotlight stores document effect rects in `spotlight_regions` instead
-  of darkening pixels. Preview and export render one overlay outside the union
-  of all spotlight regions so multiple spotlights stay bright and darkness does
-  not compound. These actions keep the region selection active for repeat
-  actions.
+  edits. Spotlight stores document effect entries in `spotlight_regions`
+  instead of darkening pixels; each entry preserves rect, pointed/rounded
+  corner style, border color, and border width. Preview and export render one
+  overlay and clear all spotlight shapes from it, so multiple spotlights stay
+  bright and darkness does not compound. Width `0` means no border. Changing
+  Spotlight properties while the HUD is targeting the just-created entry edits
+  that entry in place and does not push extra undo entries; after the HUD is
+  closed, property changes are defaults for future applications.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 
@@ -124,6 +151,10 @@ and the working diff.
 
 - `shaula-pin-symbolic` exists in the theme, but there is no current toolbar
   button or callback wired to it.
+- Preview toolbar icons are rendered from Shaula's SVG assets instead of using
+  GTK symbolic-mask recoloring, because these assets are stroke/outline icons.
+  The loader replaces `currentColor` with a theme-appropriate foreground color
+  before rasterizing, preserving stroke geometry in dark themes such as Nord.
 
 ## Gaps
 

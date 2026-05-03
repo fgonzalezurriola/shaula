@@ -4,6 +4,8 @@
 #include "preview_commands.h"
 #include "preview_icons.h"
 
+#include <math.h>
+
 typedef struct {
   const char *icon_name;
   const char *label;
@@ -343,6 +345,9 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-select-symbolic", "Select",
                                   SHAULA_TOOL_SELECT));
+  gtk_box_append(GTK_BOX(actions),
+                 make_tool_toggle(state, "shaula-spotlight-symbolic",
+                                  "Spotlight", SHAULA_TOOL_SPOTLIGHT));
 
   gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
 
@@ -457,11 +462,37 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   gboolean has_region_selection = state->has_region_selection;
   gboolean show_group =
       state->active_tool == SHAULA_TOOL_SELECT &&
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_NONE &&
       (can_duplicate || can_crop || can_blur || can_erase || can_spotlight ||
        can_delete);
+  gboolean show_spotlight_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
+  if (state->properties_box != NULL)
+    gtk_widget_set_visible(state->properties_box, show_spotlight_properties);
+  if (state->spotlight_color_button != NULL) {
+    GdkRGBA rgba = {state->spotlight_border_color.r,
+                    state->spotlight_border_color.g,
+                    state->spotlight_border_color.b,
+                    state->spotlight_border_color.a};
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->spotlight_color_button),
+                               &rgba);
+  }
+  if (state->spotlight_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->spotlight_width_scale)) -
+           state->spotlight_border_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->spotlight_width_scale),
+                        state->spotlight_border_width);
+  if (state->spotlight_sharp_button != NULL)
+    gtk_toggle_button_set_active(
+        GTK_TOGGLE_BUTTON(state->spotlight_sharp_button),
+        state->spotlight_shape == SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE);
+  if (state->spotlight_rounded_button != NULL)
+    gtk_toggle_button_set_active(
+        GTK_TOGGLE_BUTTON(state->spotlight_rounded_button),
+        state->spotlight_shape == SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
   if (state->duplicate_button != NULL) {
     gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);

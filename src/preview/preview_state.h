@@ -25,6 +25,7 @@ typedef enum {
   SHAULA_TOOL_RECTANGLE,
   SHAULA_TOOL_HIGHLIGHT,
   SHAULA_TOOL_PEN,
+  SHAULA_TOOL_SPOTLIGHT,
   SHAULA_TOOL_COUNT
 } ShaulaTool;
 
@@ -38,9 +39,36 @@ typedef enum {
   SHAULA_OPERATION_RECTANGLE,
   SHAULA_OPERATION_HIGHLIGHT,
   SHAULA_OPERATION_PEN,
+  SHAULA_OPERATION_SPOTLIGHT,
   SHAULA_OPERATION_MEASURE,
   SHAULA_OPERATION_TEXT
 } ShaulaPreviewOperation;
+
+typedef enum {
+  SHAULA_PROPERTIES_PANEL_NONE,
+  SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
+  SHAULA_PROPERTIES_PANEL_ARROW,
+  SHAULA_PROPERTIES_PANEL_RECTANGLE,
+  SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
+  SHAULA_PROPERTIES_PANEL_BLUR,
+  SHAULA_PROPERTIES_PANEL_ERASE,
+  SHAULA_PROPERTIES_PANEL_PEN
+} ShaulaPropertiesPanel;
+
+typedef enum {
+  SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE,
+  SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE
+} ShaulaSpotlightShape;
+
+typedef struct {
+  /* Document effect entry: copied/saved output must use these stored values,
+   * not the current Spotlight toolbar settings.
+   */
+  ShaulaRect rect;
+  ShaulaSpotlightShape shape;
+  ShaulaColor border_color;
+  double border_width;
+} ShaulaSpotlightRegion;
 
 typedef struct ShaulaPreviewSnapshot ShaulaPreviewSnapshot;
 
@@ -71,6 +99,11 @@ typedef struct {
   GtkWidget *erase_region_button;
   GtkWidget *spotlight_region_button;
   GtkWidget *delete_button;
+  GtkWidget *properties_box;
+  GtkWidget *spotlight_color_button;
+  GtkWidget *spotlight_width_scale;
+  GtkWidget *spotlight_sharp_button;
+  GtkWidget *spotlight_rounded_button;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -111,6 +144,14 @@ typedef struct {
   ShaulaPreviewSnapshot *pending_history_snapshot;
 
   ShaulaColor current_color;
+  /* UI/config state only. Must stay out of undo history snapshots. The active
+   * Spotlight index only points the HUD at the just-created document entry.
+   */
+  ShaulaPropertiesPanel active_properties_panel;
+  int active_spotlight_index;
+  ShaulaColor spotlight_border_color;
+  double spotlight_border_width;
+  ShaulaSpotlightShape spotlight_shape;
   gboolean modified;
   gboolean copied;
   gboolean saved;
@@ -175,6 +216,16 @@ gboolean shaula_preview_apply_crop_to_region_selection(
 gboolean shaula_preview_blur_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state);
+gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
+                                       ShaulaRect rect);
+void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
+                                         ShaulaPropertiesPanel panel);
+void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
+                                               ShaulaColor color);
+void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
+                                               double width);
+void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
+                                        ShaulaSpotlightShape shape);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

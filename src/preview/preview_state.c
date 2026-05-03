@@ -25,7 +25,7 @@ struct ShaulaPreviewSnapshot {
 };
 
 static GArray *spotlight_regions_clone(GArray *regions) {
-  GArray *clone = g_array_new(FALSE, FALSE, sizeof(ShaulaRect));
+  GArray *clone = g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
   if (regions != NULL && regions->len > 0)
     g_array_append_vals(clone, regions->data, regions->len);
   return clone;
@@ -155,8 +155,14 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->last_action = "close";
   state->is_dark = TRUE;
   state->current_color = shaula_color_default();
+  state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
+  state->active_spotlight_index = -1;
+  state->spotlight_border_color = state->current_color;
+  state->spotlight_border_width = 3.0;
+  state->spotlight_shape = SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE;
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
-  state->spotlight_regions = g_array_new(FALSE, FALSE, sizeof(ShaulaRect));
+  state->spotlight_regions =
+      g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
   history_stack_init(&state->history, SHAULA_HISTORY_DEFAULT_CAPACITY);
   state->pending_history_snapshot = NULL;
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
@@ -488,6 +494,8 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
+  state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
+  state->active_spotlight_index = -1;
   if (state->text_entry != NULL) {
     if (state->canvas_overlay != NULL)
       gtk_overlay_remove_overlay(GTK_OVERLAY(state->canvas_overlay),
@@ -533,6 +541,8 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
   shaula_preview_cancel_history_gesture(state);
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
+  state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
+  state->active_spotlight_index = -1;
   if (state->draft_pen_points != NULL)
     g_array_set_size(state->draft_pen_points, 0);
   if (state->text_entry != NULL) {
@@ -768,17 +778,18 @@ static void remap_spotlight_regions_after_crop(ShaulaPreviewState *state,
     return;
 
   for (gint i = (gint)state->spotlight_regions->len - 1; i >= 0; i--) {
-    ShaulaRect *region =
-        &g_array_index(state->spotlight_regions, ShaulaRect, (guint)i);
+    ShaulaSpotlightRegion *region =
+        &g_array_index(state->spotlight_regions, ShaulaSpotlightRegion,
+                       (guint)i);
     ShaulaRect clamped = shaula_rect_clamped(
-        (ShaulaRect){region->x - crop.x, region->y - crop.y, region->width,
-                     region->height},
+        (ShaulaRect){region->rect.x - crop.x, region->rect.y - crop.y,
+                     region->rect.width, region->rect.height},
         crop.width, crop.height);
     if (shaula_rect_is_empty(clamped)) {
       g_array_remove_index(state->spotlight_regions, (guint)i);
       continue;
     }
-    *region = clamped;
+    region->rect = clamped;
   }
 }
 
@@ -876,24 +887,100 @@ gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state) {
   return apply_region_edit(state, SHAULA_REGION_EDIT_ERASE);
 }
 
-gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state) {
-  if (state == NULL || !state->has_region_selection)
+gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
+                                       ShaulaRect rect) {
+  if (state == NULL)
     return FALSE;
 
   int x = 0;
   int y = 0;
   int w = 0;
   int h = 0;
-  if (!crop_rect_to_pixels(state, state->region_selection_rect, &x, &y, &w,
-                           &h))
+  if (!crop_rect_to_pixels(state, rect, &x, &y, &w, &h))
     return FALSE;
 
-  ShaulaRect region = (ShaulaRect){x, y, w, h};
+  ShaulaSpotlightRegion region = {
+      .rect = (ShaulaRect){x, y, w, h},
+      .shape = state->spotlight_shape,
+      .border_color = state->spotlight_border_color,
+      .border_width = MAX(0.0, state->spotlight_border_width),
+  };
   shaula_preview_push_undo(state);
   g_array_append_val(state->spotlight_regions, region);
+  state->active_spotlight_index = (int)state->spotlight_regions->len - 1;
+  state->active_properties_panel = SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
   state->modified = TRUE;
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
   return TRUE;
+}
+
+gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state) {
+  if (state == NULL || !state->has_region_selection)
+    return FALSE;
+  return shaula_preview_spotlight_rect(state, state->region_selection_rect);
+}
+
+void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
+                                         ShaulaPropertiesPanel panel) {
+  if (state == NULL || state->active_properties_panel == panel)
+    return;
+  state->active_properties_panel = panel;
+  if (panel == SHAULA_PROPERTIES_PANEL_NONE)
+    state->active_spotlight_index = -1;
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+static ShaulaSpotlightRegion *active_spotlight_region(
+    ShaulaPreviewState *state) {
+  if (state == NULL || state->spotlight_regions == NULL ||
+      state->active_spotlight_index < 0 ||
+      (guint)state->active_spotlight_index >= state->spotlight_regions->len)
+    return NULL;
+  return &g_array_index(state->spotlight_regions, ShaulaSpotlightRegion,
+                        (guint)state->active_spotlight_index);
+}
+
+void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
+                                               ShaulaColor color) {
+  if (state == NULL)
+    return;
+  state->spotlight_border_color = color;
+  ShaulaSpotlightRegion *region = active_spotlight_region(state);
+  if (region != NULL) {
+    region->border_color = color;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
+                                               double width) {
+  if (state == NULL)
+    return;
+  state->spotlight_border_width = CLAMP(width, 0.0, 16.0);
+  ShaulaSpotlightRegion *region = active_spotlight_region(state);
+  if (region != NULL) {
+    region->border_width = state->spotlight_border_width;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
+                                        ShaulaSpotlightShape shape) {
+  if (state == NULL)
+    return;
+  state->spotlight_shape = shape;
+  ShaulaSpotlightRegion *region = active_spotlight_region(state);
+  if (region != NULL) {
+    region->shape = shape;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
 }

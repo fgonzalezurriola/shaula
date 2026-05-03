@@ -36,8 +36,18 @@ void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_blur_region_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_erase_region_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_spotlight_toolbar_clicked(GtkButton *button,
+                                                 gpointer data);
 void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
                                                 gpointer data);
+void shaula_preview_on_properties_back_clicked(GtkButton *button,
+                                               gpointer data);
+void shaula_preview_on_spotlight_color_set(GtkColorButton *button,
+                                           gpointer data);
+void shaula_preview_on_spotlight_width_changed(GtkRange *range,
+                                               gpointer data);
+void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
+                                               gpointer data);
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data);
