@@ -98,11 +98,14 @@ and the working diff.
   selection.
 - Blur/Erase/Spotlight region actions are document edits dispatched through
   preview commands. Each validates/clamps the temporary region, prepares a new
-  image pixbuf, then pushes exactly one undo snapshot before replacing the
-  current image. Blur uses strong pixelation, Erase fills with the average
-  one-pixel border color around the region with a neutral fallback, and
-  Spotlight darkens pixels outside the region. These actions keep the region
-  selection active for repeat actions.
+  edit, then pushes exactly one undo snapshot before committing. Blur uses
+  strong pixelation and Erase fills with the average one-pixel border color
+  around the region with a neutral fallback; both are destructive image pixel
+  edits. Spotlight stores document effect rects in `spotlight_regions` instead
+  of darkening pixels. Preview and export render one overlay outside the union
+  of all spotlight regions so multiple spotlights stay bright and darkness does
+  not compound. These actions keep the region selection active for repeat
+  actions.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 

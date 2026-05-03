@@ -5,13 +5,15 @@
 #include <glib/gstdio.h>
 #include <unistd.h>
 
+#include "preview_spotlight.h"
+
 static GQuark render_error_quark(void) {
   return g_quark_from_static_string("shaula-preview-render");
 }
 
 /* Runtime boundary: render the current preview state into a temporary PNG used
  * by both copy and save. The output is the base image currently visible in the
- * canvas plus vector annotations in image coordinates.
+ * canvas plus vector annotations and document effects in image coordinates.
  */
 char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
                                         GError **error) {
@@ -47,6 +49,7 @@ char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
     shaula_annotation_draw(cr, annotation);
     annotation->selected = selected;
   }
+  shaula_preview_draw_spotlight_effect(state, cr);
   cairo_restore(cr);
 
   cairo_destroy(cr);

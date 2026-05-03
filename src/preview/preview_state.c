@@ -19,14 +19,24 @@
 struct ShaulaPreviewSnapshot {
   GdkPixbuf *image;
   GPtrArray *annotations;
+  GArray *spotlight_regions;
   int next_annotation_id;
   gboolean modified;
 };
+
+static GArray *spotlight_regions_clone(GArray *regions) {
+  GArray *clone = g_array_new(FALSE, FALSE, sizeof(ShaulaRect));
+  if (regions != NULL && regions->len > 0)
+    g_array_append_vals(clone, regions->data, regions->len);
+  return clone;
+}
 
 static ShaulaPreviewSnapshot *snapshot_new(ShaulaPreviewState *state) {
   ShaulaPreviewSnapshot *snapshot = g_new0(ShaulaPreviewSnapshot, 1);
   snapshot->image = state->image != NULL ? gdk_pixbuf_copy(state->image) : NULL;
   snapshot->annotations = shaula_annotations_clone_array(state->annotations);
+  snapshot->spotlight_regions =
+      spotlight_regions_clone(state->spotlight_regions);
   snapshot->next_annotation_id = state->next_annotation_id;
   snapshot->modified = state->modified;
   return snapshot;
@@ -40,6 +50,8 @@ static void snapshot_free(gpointer data) {
     g_object_unref(snapshot->image);
   if (snapshot->annotations != NULL)
     g_ptr_array_unref(snapshot->annotations);
+  if (snapshot->spotlight_regions != NULL)
+    g_array_unref(snapshot->spotlight_regions);
   g_free(snapshot);
 }
 
@@ -144,6 +156,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->is_dark = TRUE;
   state->current_color = shaula_color_default();
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
+  state->spotlight_regions = g_array_new(FALSE, FALSE, sizeof(ShaulaRect));
   history_stack_init(&state->history, SHAULA_HISTORY_DEFAULT_CAPACITY);
   state->pending_history_snapshot = NULL;
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
@@ -158,6 +171,8 @@ void shaula_preview_state_free(ShaulaPreviewState *state) {
     g_object_unref(state->image);
   if (state->annotations != NULL)
     g_ptr_array_unref(state->annotations);
+  if (state->spotlight_regions != NULL)
+    g_array_unref(state->spotlight_regions);
   if (state->pending_history_snapshot != NULL)
     snapshot_free(state->pending_history_snapshot);
   history_stack_free(&state->history);
@@ -464,6 +479,10 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->image = snapshot->image != NULL ? gdk_pixbuf_copy(snapshot->image) : NULL;
   shaula_preview_replace_annotations(
       state, shaula_annotations_clone_array(snapshot->annotations));
+  if (state->spotlight_regions != NULL)
+    g_array_unref(state->spotlight_regions);
+  state->spotlight_regions =
+      spotlight_regions_clone(snapshot->spotlight_regions);
   state->next_annotation_id = snapshot->next_annotation_id;
   state->modified = snapshot->modified;
   state->has_crop_draft = FALSE;
@@ -548,15 +567,7 @@ static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
   return *w >= SHAULA_CROP_MIN_SIZE_PX && *h >= SHAULA_CROP_MIN_SIZE_PX;
 }
 
-typedef enum {
-  SHAULA_REGION_EDIT_BLUR,
-  SHAULA_REGION_EDIT_ERASE,
-  SHAULA_REGION_EDIT_SPOTLIGHT
-} ShaulaRegionEdit;
-
-static guint8 clamp_channel(int value) {
-  return (guint8)CLAMP(value, 0, 255);
-}
+typedef enum { SHAULA_REGION_EDIT_BLUR, SHAULA_REGION_EDIT_ERASE } ShaulaRegionEdit;
 
 static gboolean pixbuf_require_rgb8(GdkPixbuf *pixbuf, guchar **pixels,
                                     int *width, int *height, int *rowstride,
@@ -691,29 +702,6 @@ static void erase_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
   }
 }
 
-static void spotlight_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
-  guchar *pixels = NULL;
-  int width = 0;
-  int height = 0;
-  int rowstride = 0;
-  int channels = 0;
-  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
-                           &channels))
-    return;
-
-  for (int py = 0; py < height; py++) {
-    guchar *row = pixels + py * rowstride;
-    for (int px = 0; px < width; px++) {
-      if (px >= x && px < x + w && py >= y && py < y + h)
-        continue;
-      guchar *p = row + px * channels;
-      p[0] = clamp_channel((int)(p[0] * 0.55));
-      p[1] = clamp_channel((int)(p[1] * 0.55));
-      p[2] = clamp_channel((int)(p[2] * 0.55));
-    }
-  }
-}
-
 /* Commits region pixel edits as one document edit after the output pixbuf is
  * ready. The temporary region selection is view/UI state, so it remains active
  * for repeat actions and is still excluded from history snapshots.
@@ -741,9 +729,6 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
     break;
   case SHAULA_REGION_EDIT_ERASE:
     erase_region(copy, x, y, w, h);
-    break;
-  case SHAULA_REGION_EDIT_SPOTLIGHT:
-    spotlight_region(copy, x, y, w, h);
     break;
   }
 
@@ -777,6 +762,26 @@ static void remap_annotations_after_crop(ShaulaPreviewState *state,
   }
 }
 
+static void remap_spotlight_regions_after_crop(ShaulaPreviewState *state,
+                                               ShaulaRect crop) {
+  if (state == NULL || state->spotlight_regions == NULL)
+    return;
+
+  for (gint i = (gint)state->spotlight_regions->len - 1; i >= 0; i--) {
+    ShaulaRect *region =
+        &g_array_index(state->spotlight_regions, ShaulaRect, (guint)i);
+    ShaulaRect clamped = shaula_rect_clamped(
+        (ShaulaRect){region->x - crop.x, region->y - crop.y, region->width,
+                     region->height},
+        crop.width, crop.height);
+    if (shaula_rect_is_empty(clamped)) {
+      g_array_remove_index(state->spotlight_regions, (guint)i);
+      continue;
+    }
+    *region = clamped;
+  }
+}
+
 /* Commits a crop as one document edit.
  *
  * The snapshot is pushed only after a valid output pixbuf exists, so failed or
@@ -806,6 +811,7 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   state->image = copy;
   remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
                                remove_annotation);
+  remap_spotlight_regions_after_crop(state, (ShaulaRect){x, y, w, h});
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
@@ -871,5 +877,23 @@ gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state) {
 }
 
 gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state) {
-  return apply_region_edit(state, SHAULA_REGION_EDIT_SPOTLIGHT);
+  if (state == NULL || !state->has_region_selection)
+    return FALSE;
+
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
+  if (!crop_rect_to_pixels(state, state->region_selection_rect, &x, &y, &w,
+                           &h))
+    return FALSE;
+
+  ShaulaRect region = (ShaulaRect){x, y, w, h};
+  shaula_preview_push_undo(state);
+  g_array_append_val(state->spotlight_regions, region);
+  state->modified = TRUE;
+  shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+  return TRUE;
 }

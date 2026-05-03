@@ -5,6 +5,7 @@
 
 #include "preview_actions.h"
 #include "preview_commands.h"
+#include "preview_spotlight.h"
 #include "preview_toolbar.h"
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
@@ -86,6 +87,7 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
        i++)
     shaula_annotation_draw(cr, g_ptr_array_index(state->annotations, i));
+  shaula_preview_draw_spotlight_effect(state, cr);
   cairo_restore(cr);
 
   if (state->is_dark) {

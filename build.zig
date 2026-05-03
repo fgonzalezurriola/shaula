@@ -110,6 +110,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
     command.addFileArg(b.path("src/preview/preview_icons.c"));
     command.addFileArg(b.path("src/preview/preview_image_io.c"));
     command.addFileArg(b.path("src/preview/preview_render.c"));
+    command.addFileArg(b.path("src/preview/preview_spotlight.c"));
     command.addFileArg(b.path("src/preview/preview_state.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
     return output;

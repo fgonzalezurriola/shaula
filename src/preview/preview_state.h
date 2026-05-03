@@ -105,6 +105,7 @@ typedef struct {
 
   GPtrArray *annotations;
   ShaulaAnnotation *selected_annotation;
+  GArray *spotlight_regions;
   int next_annotation_id;
   ShaulaHistoryStack history;
   ShaulaPreviewSnapshot *pending_history_snapshot;
