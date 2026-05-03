@@ -25,6 +25,9 @@ or invalid values maps to `ERR_CONFIG_INVALID`.
 Initial supported schema:
 
 ```toml
+[capture]
+region_capture_mode = "live"
+
 [preview.window]
 mode = "floating"
 focused = true
@@ -41,6 +44,9 @@ relative_to = "top-left"
 Defaults:
 
 ```toml
+[capture]
+region_capture_mode = "live"
+
 [preview.window]
 mode = "floating"
 focused = true
@@ -51,6 +57,11 @@ default_column_display = "normal"
 [preview.window.floating_position]
 relative_to = "top-left"
 ```
+
+Supported `capture.region_capture_mode` values:
+
+- `live`: default. The desktop keeps updating while selecting the region.
+- `frozen`: selection happens against a still background for transient states.
 
 Supported `preview.window.mode` values:
 
@@ -164,6 +175,7 @@ The initial parser supports only Shaula's public config subset:
 
 - `[preview.window]`
 - `[preview.window.floating_position]`
+- `[capture]`
 - double-quoted strings
 - booleans
 - decimal integers

@@ -249,6 +249,8 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
     defer allocator.free(app_id_json);
     const title_json = try jsonStringAlloc(allocator, config_types.preview_title);
     defer allocator.free(title_json);
+    const region_capture_mode_json = try jsonStringAlloc(allocator, config.capture.region_capture_mode.asString());
+    defer allocator.free(region_capture_mode_json);
     const mode_json = try jsonStringAlloc(allocator, config.preview.window.mode.asString());
     defer allocator.free(mode_json);
     const display_json = try jsonStringAlloc(allocator, config.preview.window.default_column_display.asString());
@@ -266,8 +268,9 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
 
     return std.fmt.allocPrint(
         allocator,
-        "{{\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
+        "{{\"capture\":{{\"region_capture_mode\":{s}}},\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
         .{
+            region_capture_mode_json,
             app_id_json,
             title_json,
             mode_json,

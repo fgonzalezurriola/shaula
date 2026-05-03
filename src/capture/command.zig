@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const core_capture_mode = @import("../core/capture_mode.zig");
+const config_loader = @import("../config/loader.zig");
 const overlay = @import("../overlay/overlay.zig");
 const selection = @import("../selection/selection.zig");
 const capture_types = @import("types.zig");
@@ -67,6 +68,7 @@ fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
 
     const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
     const use_overlay_dry_run = parsed.dry_run or force_noninteractive_selection;
+    const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const selection_result = try overlay.runSelection(
         allocator,
         io,
@@ -74,6 +76,7 @@ fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         selection.SelectionMode.freeform,
         .all_in_one,
         .{ .aspect = parsed.aspect },
+        region_capture_mode,
         use_overlay_dry_run,
         parsed.simulate_cancel,
     );
@@ -101,6 +104,7 @@ fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
+    settleAfterLiveOverlay(io, environ, region_capture_mode);
 
     var outcome = try capture_backend.execute(allocator, io, environ, .{
         .mode = .area,
@@ -142,6 +146,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 
     const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
     const use_overlay_dry_run = parsed.dry_run or force_noninteractive_selection;
+    const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const selection_result = try overlay.runSelection(
         allocator,
         io,
@@ -149,6 +154,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         selection.SelectionMode.freeform,
         .area,
         .{ .aspect = parsed.aspect },
+        region_capture_mode,
         use_overlay_dry_run,
         parsed.simulate_cancel,
     );
@@ -176,6 +182,7 @@ fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
+    settleAfterLiveOverlay(io, environ, region_capture_mode);
 
     var outcome = try capture_backend.execute(allocator, io, environ, .{
         .mode = .area,
@@ -410,4 +417,46 @@ fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
         return std.mem.eql(u8, raw, "1") or std.ascii.eqlIgnoreCase(raw, "true") or std.ascii.eqlIgnoreCase(raw, "yes");
     }
     return false;
+}
+
+fn resolveRegionCaptureMode(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    explicit: ?[]const u8,
+) core_capture_mode.RegionCaptureMode {
+    if (explicit) |token| {
+        return core_capture_mode.parseRegionCaptureMode(token) orelse .live;
+    }
+    if (environ.getPosix("SHAULA_REGION_CAPTURE_MODE")) |raw_z| {
+        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+        if (core_capture_mode.parseRegionCaptureMode(raw)) |mode| return mode;
+    }
+
+    var loaded = config_loader.load(allocator, io, environ) catch return .live;
+    defer loaded.deinit(allocator);
+    return loaded.config.capture.region_capture_mode;
+}
+
+/// Gives Wayland/Niri one redraw opportunity after the overlay process exits.
+///
+/// Live region capture must not include Shaula's layer surface. The helper
+/// already quits before backend execution; this settle barrier covers the
+/// compositor frame between layer-surface removal and screencopy.
+fn settleAfterLiveOverlay(
+    io: std.Io,
+    environ: std.process.Environ,
+    region_capture_mode: core_capture_mode.RegionCaptureMode,
+) void {
+    if (region_capture_mode != .live) return;
+
+    const default_ms: u64 = 50;
+    const settle_ms = if (environ.getPosix("SHAULA_LIVE_REGION_SETTLE_MS")) |raw_z| blk: {
+        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+        break :blk std.fmt.parseInt(u64, raw, 10) catch default_ms;
+    } else default_ms;
+    if (settle_ms == 0) return;
+    const millis_i64: i64 = @intCast(settle_ms);
+    const duration: std.Io.Clock.Duration = .{ .raw = std.Io.Duration.fromMilliseconds(millis_i64), .clock = .real };
+    duration.sleep(io) catch {};
 }

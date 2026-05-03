@@ -6,6 +6,7 @@ const previous_area_store = @import("../runtime/previous_area_store.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
+pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
 
 const OverlayHelperStatus = enum {
     ok,
@@ -64,6 +65,7 @@ pub fn runSelection(
     mode: selection.SelectionMode,
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
+    region_capture_mode: RegionCaptureMode,
     is_dry_run: bool,
     simulate_cancel: bool,
 ) !selection.SelectionResult {
@@ -93,7 +95,7 @@ pub fn runSelection(
         return result;
     }
 
-    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, draft_mode, constraint);
+    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, draft_mode, constraint, region_capture_mode);
     switch (helper_attempt) {
         .selection => |result| {
             persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
@@ -160,12 +162,16 @@ fn runHelperSelectionAttempt(
     mode: selection.SelectionMode,
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
+    region_capture_mode: RegionCaptureMode,
 ) !HelperSelectionAttempt {
     const helper_bin = try resolveHelperBinary(allocator, io, environ);
     defer allocator.free(helper_bin);
     const output_name = try resolveOverlayOutputName(allocator, io, environ);
     defer if (output_name) |name| allocator.free(name);
-    const background = try prepareOverlayBackground(allocator, io, environ, output_name);
+    const background = if (region_capture_mode == .frozen)
+        try prepareOverlayBackground(allocator, io, environ, output_name)
+    else
+        null;
     defer if (background) |prepared| prepared.deinit(allocator, io);
 
     var helper_env = try std.process.Environ.createMap(environ, allocator);
@@ -670,6 +676,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         .freeform,
         .area,
         .{ .aspect = null },
+        .live,
         false,
         false,
     );
@@ -697,6 +704,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
         .freeform,
         .area,
         .{ .aspect = null },
+        .live,
     );
     try std.testing.expect(attempt == .unavailable);
 }

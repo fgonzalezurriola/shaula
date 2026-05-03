@@ -1,4 +1,5 @@
 const std = @import("std");
+const core_capture_mode = @import("../core/capture_mode.zig");
 const command_json = @import("command_json.zig");
 
 pub const AreaFlags = struct {
@@ -10,6 +11,7 @@ pub const AreaFlags = struct {
     preview: ?bool = null,
     aspect: ?[]const u8 = null,
     output: ?[]const u8 = null,
+    region_capture_mode: ?[]const u8 = null,
 };
 
 pub const FullscreenFlags = struct {
@@ -72,6 +74,23 @@ pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
             }
             i += 1;
             flags.aspect = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--region-mode")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--region-mode requires live or frozen", false, "area", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.region_capture_mode = argToSlice(argv[i]);
+            if (core_capture_mode.parseRegionCaptureMode(flags.region_capture_mode.?) == null) {
+                try command_json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--region-mode requires live or frozen", false, "area", null, false, &.{});
+                return error.CliUsage;
+            }
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--frozen-region")) {
+            flags.region_capture_mode = "frozen";
             continue;
         }
         if (std.mem.eql(u8, arg, "--output")) {
@@ -304,6 +323,23 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
             }
             i += 1;
             flags.aspect = argToSlice(argv[i]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--region-mode")) {
+            if (i + 1 >= argv.len) {
+                try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--region-mode requires live or frozen", false, "all-in-one", null, false, &.{});
+                return error.CliUsage;
+            }
+            i += 1;
+            flags.region_capture_mode = argToSlice(argv[i]);
+            if (core_capture_mode.parseRegionCaptureMode(flags.region_capture_mode.?) == null) {
+                try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--region-mode requires live or frozen", false, "all-in-one", null, false, &.{});
+                return error.CliUsage;
+            }
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--frozen-region")) {
+            flags.region_capture_mode = "frozen";
             continue;
         }
         if (std.mem.eql(u8, arg, "--output")) {

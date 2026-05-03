@@ -27,13 +27,14 @@ Core:
 
 App:
   preflight      Build, then run preflight + capabilities
- capture Build, then run capture area --json
+ capture Build, then run live capture area --json
+ frozen Build, then run frozen capture area --json
  fullscreen Build, then run capture fullscreen --json --copy
  focused Build, then run capture focused --json --copy
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
-  state          Copy minimal state, last 3 commits, and working diff to clipboard
+  state          Copy state snapshot, capture-mode note, last 3 commits, and diff to clipboard
   config         Build, then show resolved Shaula config
   config-init    Build, then create Shaula config.toml if missing
   niri-rule      Build, then print Shaula's managed Niri preview rule
@@ -164,6 +165,21 @@ state() {
         cat STATE.md
         printf '\n'
       fi
+      cat <<'EOF'
+## Dev State Script Capture Mode Note
+
+- Region capture has an explicit foundation with `live` and `frozen` modes.
+- `live` is the default for normal `capture area` / `./dev capture`: the overlay
+  skips the frozen background so the desktop continues updating while selecting.
+- `frozen` is preserved for transient states through `--region-mode frozen`,
+  `--frozen-region`, `SHAULA_REGION_CAPTURE_MODE=frozen`, config
+  `region_capture_mode = "frozen"`, and `./dev frozen`.
+- Live mode waits briefly after the overlay helper exits before backend capture
+  so the compositor can redraw without Shaula's layer surface. This timing is a
+  best-effort Wayland/Niri settle barrier and remains the key limitation to
+  verify interactively when checking for overlay contamination.
+
+EOF
       printf '## Last 3 commits\n'
       git log --format='- %h %s' -3
       printf '\n## Diff\n'
@@ -273,6 +289,9 @@ release-arm)
     ;;
 capture)
 	run_shaula capture area --json "$@"
+	;;
+frozen)
+	run_shaula capture area --json --frozen-region "$@"
 	;;
 fullscreen)
 	run_shaula capture fullscreen --json --copy "$@"

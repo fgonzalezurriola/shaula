@@ -3,6 +3,11 @@ const std = @import("std");
 const loader = @import("loader.zig");
 
 pub const default_config_toml =
+    \\[capture]
+    \\# live keeps the desktop updating while selecting. frozen shows a still
+    \\# screen while selecting for transient states.
+    \\region_capture_mode = "live"
+    \\
     \\[preview.window]
     \\mode = "floating"
     \\focused = true

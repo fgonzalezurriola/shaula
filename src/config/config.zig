@@ -1,10 +1,16 @@
 const std = @import("std");
+const core_capture_mode = @import("../core/capture_mode.zig");
 
 pub const preview_app_id = "dev.shaula.preview";
 pub const preview_title = "Shaula Preview";
 
 pub const Config = struct {
+    capture: CaptureConfig = .{},
     preview: PreviewConfig = .{},
+};
+
+pub const CaptureConfig = struct {
+    region_capture_mode: core_capture_mode.RegionCaptureMode = .live,
 };
 
 pub const PreviewConfig = struct {
@@ -84,6 +90,10 @@ pub fn parsePreviewWindowMode(value: []const u8) ?PreviewWindowMode {
     if (std.mem.eql(u8, value, "maximized-to-edges")) return .maximized_to_edges;
     if (std.mem.eql(u8, value, "fullscreen")) return .fullscreen;
     return null;
+}
+
+pub fn parseRegionCaptureMode(value: []const u8) ?core_capture_mode.RegionCaptureMode {
+    return core_capture_mode.parseRegionCaptureMode(value);
 }
 
 pub fn parseColumnDisplay(value: []const u8) ?ColumnDisplay {

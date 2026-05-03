@@ -14,6 +14,19 @@ and the working diff.
 
 ## Overlay Capture
 
+- Region capture now has an explicit mode foundation:
+  - `live`: default normal Region path. The GTK layer-shell overlay draws only
+    dimming/selection chrome and skips the frozen background so the desktop can
+    keep updating while the user drags.
+  - `frozen`: preserved intentional path for transient states. The overlay
+    prepares and displays the best-effort still background while selecting.
+- Mode selection plumbing: CLI `--region-mode live|frozen`, convenience
+  `--frozen-region`, env `SHAULA_REGION_CAPTURE_MODE`, config
+  `[capture] region_capture_mode = "live"|"frozen"`, and `./dev frozen`.
+- Live final capture happens only after the overlay helper exits. Shaula waits a
+  short compositor settle barrier (`SHAULA_LIVE_REGION_SETTLE_MS`, default 50ms)
+  before backend capture to avoid including its own layer surface; this remains
+  the main interactive Wayland/Niri timing point to verify.
 - The native GTK overlay used by `./dev capture` is now capture-on-release.
   It no longer draws or requires the floating Capture/Esc/aspect button strip:
   a valid create, move, or resize drag confirms the selection on release.

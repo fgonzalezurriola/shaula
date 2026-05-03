@@ -15,6 +15,7 @@ pub const ConfigLoadResult = struct {
 
 const Section = enum {
     root,
+    capture,
     preview_window,
     preview_window_floating_position,
 };
@@ -101,7 +102,9 @@ pub fn parseTomlSubset(allocator: std.mem.Allocator, bytes: []const u8) !config_
         if (line[0] == '[') {
             if (line[line.len - 1] != ']') return error.ConfigInvalid;
             const name = std.mem.trim(u8, line[1 .. line.len - 1], " \t");
-            if (std.mem.eql(u8, name, "preview.window")) {
+            if (std.mem.eql(u8, name, "capture")) {
+                section = .capture;
+            } else if (std.mem.eql(u8, name, "preview.window")) {
                 section = .preview_window;
             } else if (std.mem.eql(u8, name, "preview.window.floating_position")) {
                 section = .preview_window_floating_position;
@@ -118,6 +121,7 @@ pub fn parseTomlSubset(allocator: std.mem.Allocator, bytes: []const u8) !config_
 
         switch (section) {
             .root => return error.ConfigInvalid,
+            .capture => try parseCaptureField(&parsed, key, value),
             .preview_window => try parsePreviewWindowField(&parsed, key, value),
             .preview_window_floating_position => try parseFloatingPositionField(&parsed, key, value),
         }
@@ -145,6 +149,15 @@ fn stripComment(line: []const u8) []const u8 {
         if (ch == '#' and !in_string) return line[0..index];
     }
     return line;
+}
+
+fn parseCaptureField(parsed: *config_types.Config, key: []const u8, value: []const u8) !void {
+    if (std.mem.eql(u8, key, "region_capture_mode")) {
+        const text = try parseString(value);
+        parsed.capture.region_capture_mode = config_types.parseRegionCaptureMode(text) orelse return error.ConfigInvalid;
+        return;
+    }
+    return error.ConfigInvalid;
 }
 
 fn parsePreviewWindowField(parsed: *config_types.Config, key: []const u8, value: []const u8) !void {

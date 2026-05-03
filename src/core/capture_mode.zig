@@ -9,6 +9,24 @@ pub const CaptureMode = enum {
     all_in_one,
 };
 
+pub const RegionCaptureMode = enum {
+    live,
+    frozen,
+
+    pub fn asString(mode: RegionCaptureMode) []const u8 {
+        return switch (mode) {
+            .live => "live",
+            .frozen => "frozen",
+        };
+    }
+};
+
+pub fn parseRegionCaptureMode(token: []const u8) ?RegionCaptureMode {
+    if (std.mem.eql(u8, token, "live")) return .live;
+    if (std.mem.eql(u8, token, "frozen")) return .frozen;
+    return null;
+}
+
 /// Central user-facing capture mode model.
 ///
 /// Contract constraints:

@@ -116,6 +116,22 @@ typedef struct {
 
 static ShaulaOverlayState state;
 
+static void install_transparent_overlay_css(void) {
+    GtkCssProvider *provider = gtk_css_provider_new();
+    const char *css =
+        ".shaula-overlay-window, .shaula-overlay-area {"
+        "  background: transparent;"
+        "  background-color: transparent;"
+        "}";
+    gtk_css_provider_load_from_data(provider, css, -1);
+    GdkDisplay *display = gdk_display_get_default();
+    if (display != NULL) {
+        gtk_style_context_add_provider_for_display(
+            display, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    }
+    g_object_unref(provider);
+}
+
 static int clamp_int(int value, int low, int high) {
   if (high < low) return low;
   if (value < low) return low;
@@ -753,6 +769,11 @@ static void draw_dropdown(cairo_t *cr, ShaulaPoint t) {
 static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer data) {
   (void)area;
   (void)data;
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+  cairo_paint(cr);
+  cairo_restore(cr);
+
   draw_background(cr, width, height);
   cairo_set_source_rgba(cr, 0, 0, 0, 0.42);
   cairo_rectangle(cr, 0, 0, width, height);
@@ -1136,6 +1157,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
     gtk_window_set_title(GTK_WINDOW(window), "shaula-overlay");
     gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
     gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
+    gtk_widget_add_css_class(window, "shaula-overlay-window");
 
     gtk_layer_init_for_window(GTK_WINDOW(window));
     gtk_layer_set_namespace(GTK_WINDOW(window), "shaula-overlay");
@@ -1157,6 +1179,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
     GtkWidget *area = gtk_drawing_area_new();
     state.area = area;
+    gtk_widget_add_css_class(area, "shaula-overlay-area");
     gtk_widget_set_focusable(area, TRUE);
     gtk_widget_set_hexpand(area, TRUE);
     gtk_widget_set_vexpand(area, TRUE);
@@ -1218,6 +1241,7 @@ int shaula_native_gtk_overlay_run(void) {
     state.toolbar = (ShaulaPoint){ .x = PADDING, .y = PADDING };
     state.has_toolbar = TRUE;
     state.cursor_shape = CURSOR_UNSET;
+    install_transparent_overlay_css();
     load_aspect();
     load_background();
 
