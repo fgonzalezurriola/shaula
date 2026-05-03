@@ -27,9 +27,11 @@ and the working diff.
   preview image internally, but it is now undoable through the preview document
   snapshot history. Direct Crop tool drags apply immediately on mouse release
   and then return to Select mode.
-- `shaula-select-symbolic` Select: implemented. Selects and moves annotations.
-  The same icon is reused in the overflow menu for Fit to screen and Actual
-  size.
+- `shaula-select-symbolic` Select: implemented. Left-click selects
+  annotations, left-drag on a selected annotation moves it, and left-click/drag
+  on empty canvas clears selection without panning. Canvas panning is now an
+  explicit middle-button drag gesture. The same icon is reused in the overflow
+  menu for Fit to screen and Actual size.
 - Selected annotation actions: implemented as a small contextual toolbar group
   that appears only while Select is active and an annotation is selected.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from

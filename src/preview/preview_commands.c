@@ -75,6 +75,9 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return shaula_preview_can_delete_selected(state);
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
     if (state->active_tool == SHAULA_TOOL_SELECT &&
+        state->has_region_selection)
+      return TRUE;
+    if (state->active_tool == SHAULA_TOOL_SELECT &&
         state->selected_annotation != NULL) {
       ShaulaAnnotation *annotation = state->selected_annotation;
       return annotation->type == SHAULA_ANNOTATION_RECTANGLE ||
@@ -135,6 +138,8 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     shaula_preview_delete_selected(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
+    if (state->has_region_selection)
+      return shaula_preview_apply_crop_to_region_selection(state);
     return shaula_preview_apply_crop_to_selected_rect(state);
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
     shaula_preview_reset_annotations(state);

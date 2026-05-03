@@ -285,14 +285,24 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
     }
   }
   state->selected_annotation = annotation;
-  if (annotation != NULL)
+  if (annotation != NULL) {
+    state->has_region_selection = FALSE;
     annotation->selected = TRUE;
+  }
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_clear_selection(ShaulaPreviewState *state) {
   shaula_preview_select_annotation(state, NULL);
+}
+
+void shaula_preview_clear_region_selection(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return;
+  state->has_region_selection = FALSE;
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 static void add_annotation_without_history(ShaulaPreviewState *state,
@@ -457,6 +467,7 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->next_annotation_id = snapshot->next_annotation_id;
   state->modified = snapshot->modified;
   state->has_crop_draft = FALSE;
+  state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
   if (state->text_entry != NULL) {
     if (state->canvas_overlay != NULL)
@@ -502,6 +513,7 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
   state->operation_changed = FALSE;
   shaula_preview_cancel_history_gesture(state);
   state->has_crop_draft = FALSE;
+  state->has_region_selection = FALSE;
   if (state->draft_pen_points != NULL)
     g_array_set_size(state->draft_pen_points, 0);
   if (state->text_entry != NULL) {
@@ -586,6 +598,7 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
                                remove_annotation);
   state->has_crop_draft = FALSE;
+  state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
   state->active_tool = SHAULA_TOOL_SELECT;
   state->modified = TRUE;
@@ -627,4 +640,15 @@ gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state) {
     return FALSE;
   }
   return FALSE;
+}
+
+gboolean shaula_preview_apply_crop_to_region_selection(
+    ShaulaPreviewState *state) {
+  if (state == NULL || !state->has_region_selection)
+    return FALSE;
+  ShaulaRect rect = state->region_selection_rect;
+  gboolean applied = apply_crop_to_rect(state, rect, NULL);
+  if (applied)
+    state->has_region_selection = FALSE;
+  return applied;
 }

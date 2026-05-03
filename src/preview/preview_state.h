@@ -32,6 +32,7 @@ typedef enum {
   SHAULA_OPERATION_NONE,
   SHAULA_OPERATION_PAN,
   SHAULA_OPERATION_MOVE,
+  SHAULA_OPERATION_SELECT_REGION,
   SHAULA_OPERATION_CROP,
   SHAULA_OPERATION_ARROW,
   SHAULA_OPERATION_RECTANGLE,
@@ -94,6 +95,8 @@ typedef struct {
 
   gboolean has_crop_draft;
   ShaulaRect crop_draft;
+  gboolean has_region_selection;
+  ShaulaRect region_selection_rect;
   GArray *draft_pen_points;
   ShaulaPoint text_anchor_image;
 
@@ -139,6 +142,7 @@ void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor);
 void shaula_preview_select_annotation(ShaulaPreviewState *state,
                                       ShaulaAnnotation *annotation);
 void shaula_preview_clear_selection(ShaulaPreviewState *state);
+void shaula_preview_clear_region_selection(ShaulaPreviewState *state);
 void shaula_preview_add_annotation(ShaulaPreviewState *state,
                                    ShaulaAnnotation *annotation);
 gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state);
@@ -162,6 +166,8 @@ gboolean shaula_preview_apply_crop(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
                                            ShaulaRect rect);
 gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state);
+gboolean shaula_preview_apply_crop_to_region_selection(
+    ShaulaPreviewState *state);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

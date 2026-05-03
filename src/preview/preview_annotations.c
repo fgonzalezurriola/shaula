@@ -253,8 +253,14 @@ static void set_annotation_color(cairo_t *cr, ShaulaColor color, double alpha) {
 static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   bounds = shaula_rect_normalized(bounds);
   cairo_save(cr);
-  cairo_set_source_rgba(cr, 0.12, 0.48, 1.0, 0.95);
-  cairo_set_line_width(cr, 1.0);
+  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.68);
+  cairo_set_line_width(cr, 3.0);
+  cairo_rectangle(cr, bounds.x - 3.0, bounds.y - 3.0,
+                  bounds.width + 6.0, bounds.height + 6.0);
+  cairo_stroke(cr);
+
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
+  cairo_set_line_width(cr, 1.5);
   double dashes[] = {4.0, 3.0};
   cairo_set_dash(cr, dashes, 2, 0);
   cairo_rectangle(cr, bounds.x - 2.0, bounds.y - 2.0,

@@ -434,17 +434,27 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state, SHAULA_PREVIEW_COMMAND_CROP_SELECTED);
   gboolean can_delete = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
+  gboolean has_object_selection = state->selected_annotation != NULL;
   gboolean show_group =
-      state->active_tool == SHAULA_TOOL_SELECT && (can_duplicate || can_delete);
+      state->active_tool == SHAULA_TOOL_SELECT &&
+      (can_duplicate || can_crop || can_delete);
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
-  if (state->duplicate_button != NULL)
+  if (state->duplicate_button != NULL) {
+    gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
+  }
   if (state->crop_selected_button != NULL) {
     gtk_widget_set_visible(state->crop_selected_button, can_crop);
     gtk_widget_set_sensitive(state->crop_selected_button, can_crop);
+    gtk_widget_set_tooltip_text(
+        state->crop_selected_button,
+        state->has_region_selection ? "Crop to selected region"
+                                    : "Crop to selected annotation");
   }
-  if (state->delete_button != NULL)
+  if (state->delete_button != NULL) {
+    gtk_widget_set_visible(state->delete_button, has_object_selection);
     gtk_widget_set_sensitive(state->delete_button, can_delete);
+  }
 }

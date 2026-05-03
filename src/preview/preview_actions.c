@@ -83,7 +83,7 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
   if (state->area != NULL) {
     const char *cursor = "crosshair";
     if (tool == SHAULA_TOOL_SELECT)
-      cursor = "grab";
+      cursor = "default";
     else if (tool == SHAULA_TOOL_TEXT)
       cursor = "text";
     gtk_widget_set_cursor_from_name(state->area, cursor);

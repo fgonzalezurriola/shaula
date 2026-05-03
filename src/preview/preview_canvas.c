@@ -324,10 +324,13 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   gboolean inside = image_point_is_inside(state, image_point);
   ShaulaPoint clamped = clamped_image_point(state, image_point);
 
-  if (button != 1) {
+  if (button == 2) {
     start_pan(state, x, y);
     return;
   }
+
+  if (button != 1)
+    return;
 
   switch (state->active_tool) {
   case SHAULA_TOOL_SELECT: {
@@ -342,7 +345,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
       gtk_widget_set_cursor_from_name(state->area, "grabbing");
     } else {
       shaula_preview_clear_selection(state);
-      start_pan(state, x, y);
+      state->operation = SHAULA_OPERATION_NONE;
     }
     break;
   }
@@ -507,7 +510,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
     if (state->operation == SHAULA_OPERATION_MOVE)
       shaula_preview_commit_history_gesture(state, state->operation_changed);
     gtk_widget_set_cursor_from_name(
-        state->area, state->active_tool == SHAULA_TOOL_SELECT ? "grab"
+        state->area, state->active_tool == SHAULA_TOOL_SELECT ? "default"
                                                               : "crosshair");
   } else if (state->operation == SHAULA_OPERATION_CROP) {
     if (!shaula_preview_apply_crop(state))
@@ -592,11 +595,12 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   gtk_widget_set_focusable(area, TRUE);
   gtk_widget_set_hexpand(area, TRUE);
   gtk_widget_set_vexpand(area, TRUE);
-  gtk_widget_set_cursor_from_name(area, "grab");
+  gtk_widget_set_cursor_from_name(area, "default");
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, state, NULL);
   gtk_overlay_set_child(GTK_OVERLAY(overlay), area);
 
   GtkGesture *drag = gtk_gesture_drag_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);
   g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), state);
   g_signal_connect(drag, "drag-update", G_CALLBACK(on_drag_update), state);
   g_signal_connect(drag, "drag-end", G_CALLBACK(on_drag_end), state);
