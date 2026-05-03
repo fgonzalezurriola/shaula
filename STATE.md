@@ -20,7 +20,7 @@ and the working diff.
   no undo entry. Also available with `Ctrl+Z`.
 - `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
   no redo entry. Also available with `Ctrl+Shift+Z` and `Ctrl+Y`.
-- `shaula-share-symbolic` Share: present but disabled. No backend decision yet.
+- `shaula-share-symbolic` Share: hidden until a backend decision exists.
 - `shaula-crop-symbolic` Crop: implemented. It still mutates the current
   preview image internally, but it is now undoable through the preview document
   snapshot history.
@@ -55,7 +55,8 @@ and the working diff.
 ## Preview History
 
 - `ShaulaHistoryStack` lives in `preview_state.*` and stores bounded document
-  snapshots with undo/redo arrays and a default capacity of 64.
+  snapshots with undo/redo arrays and a default capacity of 24 while snapshots
+  include full image buffers.
 - History tracks state that affects copied/saved output: current image buffer,
   annotations, annotation ids, and modified status.
 - History intentionally excludes view-only state: zoom, pan, fit mode, active
@@ -63,6 +64,9 @@ and the working diff.
 - Existing wired operations: crop, annotation creation, selected annotation
   move, selected annotation delete, and reset annotations. Annotation moves
   capture before-state on mouse down and commit one history entry on mouse up.
+- Reset annotations cancels transient drafts, pushes exactly one pre-clear undo
+  snapshot, clears annotations, and relies on the standard edit push to clear
+  redo when a new annotation is created after undoing the reset.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 

@@ -5,7 +5,7 @@
 
 #include "preview_toolbar.h"
 
-#define SHAULA_HISTORY_DEFAULT_CAPACITY 64
+#define SHAULA_HISTORY_DEFAULT_CAPACITY 24
 
 /* History tracks the editable document that affects exported/copied pixels:
  * the current image buffer while crop remains destructive, annotation objects,
@@ -143,6 +143,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->current_color = shaula_color_default();
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
   history_stack_init(&state->history, SHAULA_HISTORY_DEFAULT_CAPACITY);
+  state->pending_history_snapshot = NULL;
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
   state->next_annotation_id = 1;
   state->toolbar_overflow_visible_count = -1;
@@ -289,8 +290,8 @@ void shaula_preview_clear_selection(ShaulaPreviewState *state) {
   shaula_preview_select_annotation(state, NULL);
 }
 
-void shaula_preview_add_annotation(ShaulaPreviewState *state,
-                                   ShaulaAnnotation *annotation) {
+static void add_annotation_without_history(ShaulaPreviewState *state,
+                                           ShaulaAnnotation *annotation) {
   if (state == NULL || annotation == NULL)
     return;
   if (annotation->id <= 0)
@@ -301,13 +302,21 @@ void shaula_preview_add_annotation(ShaulaPreviewState *state,
   shaula_preview_toolbar_update_history_state(state);
 }
 
+void shaula_preview_add_annotation(ShaulaPreviewState *state,
+                                   ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL)
+    return;
+  shaula_preview_push_undo(state);
+  add_annotation_without_history(state, annotation);
+}
+
 void shaula_preview_delete_selected(ShaulaPreviewState *state) {
   if (state == NULL || state->selected_annotation == NULL)
     return;
   ShaulaAnnotation *selected = state->selected_annotation;
-  shaula_preview_push_undo(state);
   for (guint i = 0; i < state->annotations->len; i++) {
     if (g_ptr_array_index(state->annotations, i) == selected) {
+      shaula_preview_push_undo(state);
       state->selected_annotation = NULL;
       g_ptr_array_remove_index(state->annotations, i);
       state->modified = TRUE;
@@ -316,11 +325,20 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
       return;
     }
   }
+  state->selected_annotation = NULL;
+  shaula_preview_queue_draw(state);
 }
 
 void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
   if (state == NULL || state->annotations == NULL || state->annotations->len == 0)
     return;
+
+  shaula_preview_cancel_operation(state);
+
+  /* Reset is a single document edit: capture the exact pre-clear state once,
+   * and let the normal edit path clear redo so later annotation creation
+   * replaces any undone reset branch.
+   */
   shaula_preview_push_undo(state);
   state->selected_annotation = NULL;
   g_ptr_array_set_size(state->annotations, 0);
@@ -400,6 +418,16 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->modified = snapshot->modified;
   state->has_crop_draft = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
+  if (state->text_entry != NULL) {
+    if (state->canvas_overlay != NULL)
+      gtk_overlay_remove_overlay(GTK_OVERLAY(state->canvas_overlay),
+                                 state->text_entry);
+    else
+      gtk_widget_unparent(state->text_entry);
+    state->text_entry = NULL;
+  }
+  if (state->draft_pen_points != NULL)
+    g_array_set_size(state->draft_pen_points, 0);
   shaula_preview_cancel_history_gesture(state);
   shaula_preview_update_dimensions_label(state);
   shaula_preview_set_fit_mode(state, TRUE);

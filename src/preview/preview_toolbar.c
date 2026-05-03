@@ -47,20 +47,6 @@ static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
   return button;
 }
 
-static GtkWidget *make_disabled_toolbar_button(ShaulaPreviewState *state,
-                                               const char *icon_name,
-                                               const char *tooltip) {
-  GtkWidget *button = gtk_button_new();
-  gtk_button_set_child(GTK_BUTTON(button),
-                       shaula_preview_make_toolbar_icon(state, icon_name));
-  gtk_widget_set_tooltip_text(button, tooltip);
-  gtk_widget_add_css_class(button, "flat");
-  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
-  gtk_widget_set_size_request(button, 32, 32);
-  gtk_widget_set_sensitive(button, FALSE);
-  return button;
-}
-
 static GtkWidget *make_tool_toggle(ShaulaPreviewState *state,
                                    const char *icon_name, const char *tooltip,
                                    ShaulaTool tool) {
@@ -310,10 +296,6 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_widget_set_sensitive(state->redo_button, FALSE);
   gtk_box_append(GTK_BOX(actions), state->undo_button);
   gtk_box_append(GTK_BOX(actions), state->redo_button);
-  gtk_box_append(GTK_BOX(actions),
-                 make_disabled_toolbar_button(
-                     state, "shaula-share-symbolic",
-                     "Share: To-do, not decided yet"));
 
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-crop-symbolic", "Crop",

@@ -237,7 +237,6 @@ static void on_text_entry_activate(GtkEntry *entry, gpointer data) {
   ShaulaPreviewState *state = data;
   const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
   if (text != NULL && text[0] != '\0') {
-    shaula_preview_push_undo(state);
     shaula_preview_add_annotation(
         state, shaula_annotation_new_text(state->text_anchor_image, text,
                                           state->current_color, 22.0));
@@ -492,7 +491,6 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
   }
 
   if (annotation != NULL) {
-    shaula_preview_push_undo(state);
     shaula_preview_add_annotation(state, annotation);
   }
 }
@@ -534,9 +532,13 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   gboolean ctrl = (modifiers & GDK_CONTROL_MASK) != 0;
   gboolean shift = (modifiers & GDK_SHIFT_MASK) != 0;
 
+  if (state->text_entry != NULL) {
+    if (keyval == GDK_KEY_Escape)
+      shaula_preview_cancel_operation(state);
+    return TRUE;
+  }
   if (keyval == GDK_KEY_Escape) {
-    if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft ||
-        state->text_entry != NULL) {
+    if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
       shaula_preview_cancel_operation(state);
       return TRUE;
     }
@@ -563,8 +565,6 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     shaula_preview_delete_selected(state);
     return TRUE;
   }
-  if (state->text_entry != NULL)
-    return FALSE;
   if (ctrl && keyval == GDK_KEY_c) {
     shaula_preview_action_copy(state);
     return TRUE;
