@@ -16,6 +16,9 @@ void shaula_preview_action_zoom_out(ShaulaPreviewState *state);
 void shaula_preview_action_undo(ShaulaPreviewState *state);
 void shaula_preview_action_redo(ShaulaPreviewState *state);
 void shaula_preview_action_reset_annotations(ShaulaPreviewState *state);
+void shaula_preview_action_duplicate_selected(ShaulaPreviewState *state);
+void shaula_preview_action_delete_selected(ShaulaPreviewState *state);
+void shaula_preview_action_crop_selected(ShaulaPreviewState *state);
 void shaula_preview_action_copy_path(ShaulaPreviewState *state);
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state);
 
@@ -28,6 +31,9 @@ void shaula_preview_on_fit_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_actual_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_reset_annotations_clicked(GtkButton *button,
                                                 gpointer data);
+void shaula_preview_on_duplicate_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data);

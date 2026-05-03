@@ -7,6 +7,7 @@
 
 #define SHAULA_HISTORY_DEFAULT_CAPACITY 24
 #define SHAULA_CROP_MIN_SIZE_PX 4
+#define SHAULA_DUPLICATE_OFFSET_PX 12.0
 
 /* History tracks the editable document that affects exported/copied pixels:
  * the current image buffer while crop remains destructive, annotation objects,
@@ -275,6 +276,8 @@ void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor) {
 
 void shaula_preview_select_annotation(ShaulaPreviewState *state,
                                       ShaulaAnnotation *annotation) {
+  if (state == NULL)
+    return;
   if (state->annotations != NULL) {
     for (guint i = 0; i < state->annotations->len; i++) {
       ShaulaAnnotation *item = g_ptr_array_index(state->annotations, i);
@@ -285,6 +288,7 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
   if (annotation != NULL)
     annotation->selected = TRUE;
   shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_clear_selection(ShaulaPreviewState *state) {
@@ -311,6 +315,37 @@ void shaula_preview_add_annotation(ShaulaPreviewState *state,
   add_annotation_without_history(state, annotation);
 }
 
+gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state) {
+  return state != NULL && state->selected_annotation != NULL;
+}
+
+gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state) {
+  return state != NULL && state->selected_annotation != NULL;
+}
+
+gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
+  if (!shaula_preview_can_duplicate_selected(state))
+    return FALSE;
+
+  ShaulaAnnotation *duplicate =
+      shaula_annotation_clone(state->selected_annotation);
+  if (duplicate == NULL)
+    return FALSE;
+
+  shaula_preview_push_undo(state);
+  duplicate->id = state->next_annotation_id++;
+  duplicate->selected = FALSE;
+  shaula_annotation_move(duplicate, SHAULA_DUPLICATE_OFFSET_PX,
+                         SHAULA_DUPLICATE_OFFSET_PX);
+  g_ptr_array_add(state->annotations, duplicate);
+  shaula_preview_select_annotation(state, duplicate);
+  state->modified = TRUE;
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  return TRUE;
+}
+
 void shaula_preview_delete_selected(ShaulaPreviewState *state) {
   if (state == NULL || state->selected_annotation == NULL)
     return;
@@ -323,11 +358,13 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
       state->modified = TRUE;
       shaula_preview_queue_draw(state);
       shaula_preview_toolbar_update_history_state(state);
+      shaula_preview_toolbar_update_selection_state(state);
       return;
     }
   }
   state->selected_annotation = NULL;
   shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
@@ -346,6 +383,7 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
   state->modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_push_undo(ShaulaPreviewState *state) {
@@ -406,6 +444,7 @@ void shaula_preview_replace_annotations(ShaulaPreviewState *state,
       }
     }
   }
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 static void restore_snapshot(ShaulaPreviewState *state,
@@ -554,6 +593,7 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   shaula_preview_set_fit_mode(state, TRUE);
   shaula_preview_toolbar_update_tool_state(state);
   shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
   return TRUE;
 }
 

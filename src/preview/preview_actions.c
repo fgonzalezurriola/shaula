@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "preview_clipboard.h"
+#include "preview_commands.h"
 #include "preview_image_io.h"
 #include "preview_render.h"
 #include "preview_toolbar.h"
@@ -222,6 +223,18 @@ void shaula_preview_action_reset_annotations(ShaulaPreviewState *state) {
   shaula_preview_reset_annotations(state);
 }
 
+void shaula_preview_action_duplicate_selected(ShaulaPreviewState *state) {
+  shaula_preview_duplicate_selected(state);
+}
+
+void shaula_preview_action_delete_selected(ShaulaPreviewState *state) {
+  shaula_preview_delete_selected(state);
+}
+
+void shaula_preview_action_crop_selected(ShaulaPreviewState *state) {
+  shaula_preview_apply_crop_to_selected_rect(state);
+}
+
 void shaula_preview_action_copy_path(ShaulaPreviewState *state) {
   if (state == NULL || state->path == NULL)
     return;
@@ -240,57 +253,105 @@ void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state) {
 
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_copy(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_COPY);
 }
 
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_save_as(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SAVE_AS);
 }
 
 void shaula_preview_on_undo_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_undo(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_UNDO);
 }
 
 void shaula_preview_on_redo_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_redo(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_REDO);
 }
 
 void shaula_preview_on_discard_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_discard(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_DISCARD);
 }
 
 void shaula_preview_on_fit_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_fit(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN);
 }
 
 void shaula_preview_on_actual_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_actual_size(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE);
 }
 
 void shaula_preview_on_reset_annotations_clicked(GtkButton *button,
                                                 gpointer data) {
   (void)button;
-  shaula_preview_action_reset_annotations(data);
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS);
+}
+
+void shaula_preview_on_duplicate_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED);
+}
+
+void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
+}
+
+void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_CROP_SELECTED);
 }
 
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_copy_path(data);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_COPY_PATH);
 }
 
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_action_open_containing_folder(data);
+  shaula_preview_execute_command(data,
+                                 SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER);
 }
 
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
   ShaulaTool tool =
       (ShaulaTool)GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "tool"));
-  shaula_preview_action_set_tool(data, tool);
+  ShaulaPreviewCommand command = SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT;
+  switch (tool) {
+  case SHAULA_TOOL_SELECT:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT;
+    break;
+  case SHAULA_TOOL_CROP:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP;
+    break;
+  case SHAULA_TOOL_ARROW:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW;
+    break;
+  case SHAULA_TOOL_TEXT:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_TEXT;
+    break;
+  case SHAULA_TOOL_MEASURE:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_MEASURE;
+    break;
+  case SHAULA_TOOL_RECTANGLE:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE;
+    break;
+  case SHAULA_TOOL_HIGHLIGHT:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT;
+    break;
+  case SHAULA_TOOL_PEN:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN;
+    break;
+  case SHAULA_TOOL_COUNT:
+    return;
+  }
+  shaula_preview_execute_command(data, command);
 }

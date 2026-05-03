@@ -63,6 +63,10 @@ typedef struct {
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];
   GtkWidget *undo_button;
   GtkWidget *redo_button;
+  GtkWidget *selection_actions_box;
+  GtkWidget *duplicate_button;
+  GtkWidget *crop_selected_button;
+  GtkWidget *delete_button;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -137,6 +141,9 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
 void shaula_preview_clear_selection(ShaulaPreviewState *state);
 void shaula_preview_add_annotation(ShaulaPreviewState *state,
                                    ShaulaAnnotation *annotation);
+gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state);
+gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state);
+gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state);
 void shaula_preview_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_reset_annotations(ShaulaPreviewState *state);
 

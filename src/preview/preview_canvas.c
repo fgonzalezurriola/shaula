@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "preview_actions.h"
+#include "preview_commands.h"
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -530,7 +531,6 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   (void)keycode;
   ShaulaPreviewState *state = data;
   gboolean ctrl = (modifiers & GDK_CONTROL_MASK) != 0;
-  gboolean shift = (modifiers & GDK_SHIFT_MASK) != 0;
 
   if (state->text_entry != NULL) {
     if (keyval == GDK_KEY_Escape)
@@ -560,39 +560,11 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     shaula_preview_apply_crop(state);
     return TRUE;
   }
-  if ((keyval == GDK_KEY_Delete || keyval == GDK_KEY_BackSpace) &&
-      state->selected_annotation != NULL) {
-    shaula_preview_delete_selected(state);
-    return TRUE;
-  }
-  if (ctrl && keyval == GDK_KEY_c) {
-    shaula_preview_action_copy(state);
-    return TRUE;
-  }
-  if (ctrl && keyval == GDK_KEY_s) {
-    shaula_preview_action_save_as(state);
-    return TRUE;
-  }
-  if (ctrl && keyval == GDK_KEY_z && shift) {
-    shaula_preview_redo(state);
-    return TRUE;
-  }
-  if (ctrl && keyval == GDK_KEY_z) {
-    shaula_preview_undo(state);
-    return TRUE;
-  }
-  if (ctrl && keyval == GDK_KEY_y) {
-    shaula_preview_redo(state);
-    return TRUE;
-  }
-  if (!ctrl && keyval == GDK_KEY_0) {
-    shaula_preview_action_actual_size(state);
-    return TRUE;
-  }
-  if (!ctrl && keyval == GDK_KEY_f) {
-    shaula_preview_action_fit(state);
-    return TRUE;
-  }
+
+  ShaulaPreviewCommand command;
+  if (shaula_preview_shortcut_command(keyval, modifiers, &command))
+    return shaula_preview_execute_command(state, command);
+
   if (!ctrl && (keyval == GDK_KEY_plus || keyval == GDK_KEY_equal)) {
     shaula_preview_action_zoom_in(state);
     return TRUE;

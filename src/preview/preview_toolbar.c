@@ -1,6 +1,7 @@
 #include "preview_toolbar.h"
 
 #include "preview_actions.h"
+#include "preview_commands.h"
 #include "preview_icons.h"
 
 typedef struct {
@@ -224,6 +225,32 @@ static void append_secondary_toolbar_button(ShaulaPreviewState *state,
   state->toolbar_secondary_count++;
 }
 
+static GtkWidget *build_selection_actions_group(ShaulaPreviewState *state) {
+  GtkWidget *group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+  gtk_widget_set_valign(group, GTK_ALIGN_CENTER);
+  gtk_widget_add_css_class(group, "linked");
+
+  state->duplicate_button =
+      make_toolbar_button(state, "shaula-duplicate-symbolic",
+                          "Duplicate selected annotation (Ctrl+D)",
+                          G_CALLBACK(shaula_preview_on_duplicate_clicked));
+  state->crop_selected_button =
+      make_toolbar_button(state, "shaula-crop-symbolic",
+                          "Crop to selected annotation",
+                          G_CALLBACK(shaula_preview_on_crop_selected_clicked));
+  state->delete_button =
+      make_toolbar_button(state, "shaula-trash-symbolic",
+                          "Delete selected annotation (Delete)",
+                          G_CALLBACK(shaula_preview_on_delete_clicked));
+
+  gtk_box_append(GTK_BOX(group), state->duplicate_button);
+  gtk_box_append(GTK_BOX(group), state->crop_selected_button);
+  gtk_box_append(GTK_BOX(group), state->delete_button);
+  state->selection_actions_box = group;
+  shaula_preview_toolbar_update_selection_state(state);
+  return group;
+}
+
 static GtkWidget *make_muted_label(const char *text) {
   GtkWidget *label = gtk_label_new(text);
   gtk_widget_add_css_class(label, "dim-label");
@@ -304,6 +331,8 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
                  make_tool_toggle(state, "shaula-select-symbolic", "Select",
                                   SHAULA_TOOL_SELECT));
 
+  gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
+
   for (int i = 0; i < (int)G_N_ELEMENTS(secondary_tools); i++)
     append_secondary_toolbar_button(state, actions, i);
 
@@ -379,13 +408,43 @@ void shaula_preview_toolbar_update_tool_state(ShaulaPreviewState *state) {
     if (gtk_toggle_button_get_active(button) != active)
       gtk_toggle_button_set_active(button, active);
   }
+  shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_toolbar_update_history_state(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
   if (state->undo_button != NULL)
-    gtk_widget_set_sensitive(state->undo_button, shaula_preview_can_undo(state));
+    gtk_widget_set_sensitive(
+        state->undo_button,
+        shaula_preview_command_available(state, SHAULA_PREVIEW_COMMAND_UNDO));
   if (state->redo_button != NULL)
-    gtk_widget_set_sensitive(state->redo_button, shaula_preview_can_redo(state));
+    gtk_widget_set_sensitive(
+        state->redo_button,
+        shaula_preview_command_available(state, SHAULA_PREVIEW_COMMAND_REDO));
+}
+
+void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return;
+
+  gboolean can_duplicate = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED);
+  gboolean can_crop = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_CROP_SELECTED);
+  gboolean can_delete = shaula_preview_command_available(
+      state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
+  gboolean show_group =
+      state->active_tool == SHAULA_TOOL_SELECT && (can_duplicate || can_delete);
+
+  if (state->selection_actions_box != NULL)
+    gtk_widget_set_visible(state->selection_actions_box, show_group);
+  if (state->duplicate_button != NULL)
+    gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
+  if (state->crop_selected_button != NULL) {
+    gtk_widget_set_visible(state->crop_selected_button, can_crop);
+    gtk_widget_set_sensitive(state->crop_selected_button, can_crop);
+  }
+  if (state->delete_button != NULL)
+    gtk_widget_set_sensitive(state->delete_button, can_delete);
 }
