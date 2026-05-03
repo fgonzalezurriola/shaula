@@ -29,11 +29,15 @@ and the working diff.
   and then return to Select mode.
 - `shaula-select-symbolic` Select: implemented. Left-click selects
   annotations, left-drag on a selected annotation moves it, and left-click/drag
-  on empty canvas clears selection without panning. Canvas panning is now an
-  explicit middle-button drag gesture. The same icon is reused in the overflow
-  menu for Fit to screen and Actual size.
+  from empty image space creates a temporary region selection. Clicking/dragging
+  empty space outside the image clears selection without panning. Canvas panning
+  is now an explicit middle-button drag gesture. The same icon is reused in the
+  overflow menu for Fit to screen and Actual size.
 - Selected annotation actions: implemented as a small contextual toolbar group
   that appears only while Select is active and an annotation is selected.
+- Region selection actions: implemented as temporary Select-mode UI state.
+  Region selections are not annotations, are not saved/exported, do not enter
+  undo history by themselves, and expose only the contextual Crop action.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
   new id, offsets it by 12 px on both axes, selects the duplicate, and commits
@@ -88,7 +92,9 @@ and the working diff.
   pixbuf exists. Remaining annotations are translated to the new image origin;
   annotations outside the crop are removed. In Select mode, clicking Crop with
   a selected rectangle/highlight annotation crops to that rect and removes that
-  selected guide annotation from the committed cropped document.
+  selected guide annotation from the committed cropped document. Clicking Crop
+  with a temporary region selection crops to that region and clears the region
+  selection.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 

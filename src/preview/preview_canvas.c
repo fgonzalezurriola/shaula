@@ -5,6 +5,7 @@
 
 #include "preview_actions.h"
 #include "preview_commands.h"
+#include "preview_toolbar.h"
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -168,6 +169,45 @@ static void draw_crop_overlay(cairo_t *cr, ShaulaPreviewState *state) {
   cairo_restore(cr);
 }
 
+static void draw_region_selection(cairo_t *cr, ShaulaPreviewState *state) {
+  if (!state->has_region_selection &&
+      state->operation != SHAULA_OPERATION_SELECT_REGION)
+    return;
+
+  ShaulaRect rect = state->operation == SHAULA_OPERATION_SELECT_REGION
+                        ? shaula_rect_from_points(state->drag_start_image,
+                                                  state->drag_current_image)
+                        : state->region_selection_rect;
+  rect = shaula_rect_clamped(shaula_rect_normalized(rect),
+                             shaula_preview_image_width(state),
+                             shaula_preview_image_height(state));
+  if (shaula_rect_is_empty(rect))
+    return;
+
+  cairo_save(cr);
+  cairo_set_source_rgba(cr, 0.04, 0.05, 0.06, 0.16);
+  cairo_rectangle(cr, 0, 0, shaula_preview_image_width(state),
+                  shaula_preview_image_height(state));
+  cairo_rectangle(cr, rect.x, rect.y, rect.width, rect.height);
+  cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
+  cairo_fill(cr);
+  cairo_set_fill_rule(cr, CAIRO_FILL_RULE_WINDING);
+
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.96);
+  cairo_set_line_width(cr, 1.5);
+  double dashes[] = {6.0, 4.0};
+  cairo_set_dash(cr, dashes, 2, 0);
+  cairo_rectangle(cr, rect.x + 0.5, rect.y + 0.5, rect.width, rect.height);
+  cairo_stroke(cr);
+
+  cairo_set_dash(cr, NULL, 0, 0);
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.55);
+  cairo_set_line_width(cr, 3.0);
+  cairo_rectangle(cr, rect.x, rect.y, rect.width, rect.height);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
 static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_save(cr);
   cairo_translate(cr, state->pan_x, state->pan_y);
@@ -202,9 +242,11 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   case SHAULA_OPERATION_NONE:
   case SHAULA_OPERATION_PAN:
   case SHAULA_OPERATION_MOVE:
+  case SHAULA_OPERATION_SELECT_REGION:
   case SHAULA_OPERATION_TEXT:
     break;
   }
+  draw_region_selection(cr, state);
   draw_crop_overlay(cr, state);
   cairo_restore(cr);
 }
@@ -306,6 +348,10 @@ static void start_operation(ShaulaPreviewState *state,
     state->has_crop_draft = TRUE;
     state->crop_draft = (ShaulaRect){point.x, point.y, 0, 0};
   }
+  if (operation == SHAULA_OPERATION_SELECT_REGION) {
+    state->has_region_selection = FALSE;
+    state->region_selection_rect = (ShaulaRect){point.x, point.y, 0, 0};
+  }
   if (operation == SHAULA_OPERATION_PEN && state->draft_pen_points != NULL) {
     g_array_set_size(state->draft_pen_points, 0);
     g_array_append_val(state->draft_pen_points, point);
@@ -343,8 +389,13 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
       shaula_preview_begin_history_gesture(state);
       start_operation(state, SHAULA_OPERATION_MOVE, image_point);
       gtk_widget_set_cursor_from_name(state->area, "grabbing");
+    } else if (inside) {
+      shaula_preview_clear_selection(state);
+      shaula_preview_clear_region_selection(state);
+      start_operation(state, SHAULA_OPERATION_SELECT_REGION, clamped);
     } else {
       shaula_preview_clear_selection(state);
+      shaula_preview_clear_region_selection(state);
       state->operation = SHAULA_OPERATION_NONE;
     }
     break;
@@ -420,6 +471,15 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     state->drag_last_image = raw;
     break;
   }
+  case SHAULA_OPERATION_SELECT_REGION: {
+    state->drag_current_image = image_point;
+    ShaulaRect rect =
+        shaula_rect_from_points(state->drag_start_image, image_point);
+    state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
+    state->region_selection_rect = rect;
+    state->has_region_selection = state->operation_changed;
+    break;
+  }
   case SHAULA_OPERATION_CROP:
     state->drag_current_image = image_point;
     state->crop_draft =
@@ -488,6 +548,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     break;
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_MOVE:
+  case SHAULA_OPERATION_SELECT_REGION:
   case SHAULA_OPERATION_NONE:
   case SHAULA_OPERATION_PAN:
   case SHAULA_OPERATION_TEXT:
@@ -506,9 +567,16 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   (void)dy;
   ShaulaPreviewState *state = data;
   if (state->operation == SHAULA_OPERATION_PAN ||
-      state->operation == SHAULA_OPERATION_MOVE) {
+      state->operation == SHAULA_OPERATION_MOVE ||
+      state->operation == SHAULA_OPERATION_SELECT_REGION) {
     if (state->operation == SHAULA_OPERATION_MOVE)
       shaula_preview_commit_history_gesture(state, state->operation_changed);
+    if (state->operation == SHAULA_OPERATION_SELECT_REGION) {
+      if (!state->operation_changed)
+        shaula_preview_clear_region_selection(state);
+      else
+        shaula_preview_toolbar_update_selection_state(state);
+    }
     gtk_widget_set_cursor_from_name(
         state->area, state->active_tool == SHAULA_TOOL_SELECT ? "default"
                                                               : "crosshair");
