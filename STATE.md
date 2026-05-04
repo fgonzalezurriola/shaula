@@ -146,9 +146,12 @@ and the working diff.
 - Blur/Erase/Spotlight region actions are document edits dispatched through
   preview commands. Each validates/clamps the temporary region, prepares a new
   edit, then pushes exactly one undo snapshot before committing. Blur uses
-  strong pixelation and Erase fills with the average one-pixel border color
-  around the region with a neutral fallback; both are destructive image pixel
-  edits. Spotlight stores document effect entries in `spotlight_regions`
+  strong pixelation and Erase fills with the dominant quantized one-pixel border
+  color around the region, averaging only the winning bucket so flat UI
+  backgrounds beat antialiased text/shadow samples. If no dominant sample can be
+  found, Erase falls back to the border average and then a neutral fallback; both
+  Blur and Erase are destructive image pixel edits. Spotlight stores document
+  effect entries in `spotlight_regions`
   instead of darkening pixels; each entry preserves rect, pointed/rounded
   corner style, border color, and border width. Preview and export render one
   overlay and clear all spotlight shapes from it, so multiple spotlights stay

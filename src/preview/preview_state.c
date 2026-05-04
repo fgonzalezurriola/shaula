@@ -8,6 +8,11 @@
 #define SHAULA_HISTORY_DEFAULT_CAPACITY 24
 #define SHAULA_CROP_MIN_SIZE_PX 4
 #define SHAULA_DUPLICATE_OFFSET_PX 12.0
+#define SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL 16
+#define SHAULA_ERASE_COLOR_BUCKET_COUNT                                        \
+  (SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                   \
+   SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                   \
+   SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL)
 
 /* History tracks the editable document that affects exported/copied pixels:
  * the current image buffer while crop remains destructive, annotation objects,
@@ -645,8 +650,8 @@ static void pixelate_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
   }
 }
 
-static void average_region_border(GdkPixbuf *pixbuf, int x, int y, int w, int h,
-                                  guint8 fill[3]) {
+static gboolean average_region_border(GdkPixbuf *pixbuf, int x, int y, int w,
+                                      int h, guint8 fill[3]) {
   fill[0] = 245;
   fill[1] = 245;
   fill[2] = 245;
@@ -658,7 +663,7 @@ static void average_region_border(GdkPixbuf *pixbuf, int x, int y, int w, int h,
   int channels = 0;
   if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
                            &channels))
-    return;
+    return FALSE;
 
   int left = MAX(0, x - 1);
   int top = MAX(0, y - 1);
@@ -681,10 +686,82 @@ static void average_region_border(GdkPixbuf *pixbuf, int x, int y, int w, int h,
     }
   }
   if (count == 0)
-    return;
+    return FALSE;
   fill[0] = (guint8)(r / count);
   fill[1] = (guint8)(g / count);
   fill[2] = (guint8)(b / count);
+  return TRUE;
+}
+
+static int erase_color_bucket_index(guchar r, guchar g, guchar b) {
+  int rb = r >> 4;
+  int gb = g >> 4;
+  int bb = b >> 4;
+  return (rb << 8) | (gb << 4) | bb;
+}
+
+/* Erase prefers the dominant quantized border color so flat UI backgrounds do
+ * not get muddied by antialiased text, shadows, or mixed edge samples. The
+ * chosen bucket is averaged to preserve the local shade instead of snapping to
+ * the bucket center.
+ */
+static gboolean dominant_region_border_color(GdkPixbuf *pixbuf, int x, int y,
+                                             int w, int h, guint8 fill[3]) {
+  fill[0] = 245;
+  fill[1] = 245;
+  fill[2] = 245;
+
+  guchar *pixels = NULL;
+  int width = 0;
+  int height = 0;
+  int rowstride = 0;
+  int channels = 0;
+  if (!pixbuf_require_rgb8(pixbuf, &pixels, &width, &height, &rowstride,
+                           &channels))
+    return FALSE;
+
+  guint32 *counts = g_new0(guint32, SHAULA_ERASE_COLOR_BUCKET_COUNT);
+  guint64 *sum_r = g_new0(guint64, SHAULA_ERASE_COLOR_BUCKET_COUNT);
+  guint64 *sum_g = g_new0(guint64, SHAULA_ERASE_COLOR_BUCKET_COUNT);
+  guint64 *sum_b = g_new0(guint64, SHAULA_ERASE_COLOR_BUCKET_COUNT);
+
+  int left = MAX(0, x - 1);
+  int top = MAX(0, y - 1);
+  int right = MIN(width - 1, x + w);
+  int bottom = MIN(height - 1, y + h);
+  int best_bucket = -1;
+  guint32 best_count = 0;
+
+  for (int py = top; py <= bottom; py++) {
+    guchar *row = pixels + py * rowstride;
+    for (int px = left; px <= right; px++) {
+      if (px >= x && px < x + w && py >= y && py < y + h)
+        continue;
+      guchar *p = row + px * channels;
+      int bucket = erase_color_bucket_index(p[0], p[1], p[2]);
+      counts[bucket]++;
+      sum_r[bucket] += p[0];
+      sum_g[bucket] += p[1];
+      sum_b[bucket] += p[2];
+      if (counts[bucket] > best_count) {
+        best_count = counts[bucket];
+        best_bucket = bucket;
+      }
+    }
+  }
+
+  gboolean found = best_bucket >= 0 && best_count > 0;
+  if (found) {
+    fill[0] = (guint8)(sum_r[best_bucket] / best_count);
+    fill[1] = (guint8)(sum_g[best_bucket] / best_count);
+    fill[2] = (guint8)(sum_b[best_bucket] / best_count);
+  }
+
+  g_free(counts);
+  g_free(sum_r);
+  g_free(sum_g);
+  g_free(sum_b);
+  return found;
 }
 
 static void erase_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
@@ -698,7 +775,8 @@ static void erase_region(GdkPixbuf *pixbuf, int x, int y, int w, int h) {
     return;
 
   guint8 fill[3];
-  average_region_border(pixbuf, x, y, w, h, fill);
+  if (!dominant_region_border_color(pixbuf, x, y, w, h, fill))
+    average_region_border(pixbuf, x, y, w, h, fill);
   for (int py = y; py < y + h; py++) {
     guchar *row = pixels + py * rowstride;
     for (int px = x; px < x + w; px++) {
