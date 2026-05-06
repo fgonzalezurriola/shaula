@@ -1,6 +1,7 @@
 const std = @import("std");
 const selection = @import("../selection/selection.zig");
 const all_in_one_session = @import("all_in_one_session.zig");
+const helper_protocol = @import("helper_protocol.zig");
 const ui_state_store = @import("ui_state_store.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
@@ -8,36 +9,7 @@ const selection_draft_store = @import("selection_draft_store.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
-
-const OverlayHelperStatus = enum {
-    ok,
-    cancel,
-    @"error",
-};
-
-const OverlayHelperAction = enum {
-    capture,
-    cancel,
-};
-
-const OverlayHelperGeometry = struct {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-};
-
-const OverlayHelperError = struct {
-    code: []const u8,
-    message: []const u8,
-};
-
-const OverlayHelperEnvelope = struct {
-    status: OverlayHelperStatus,
-    geometry: ?OverlayHelperGeometry = null,
-    action: ?OverlayHelperAction = null,
-    @"error": ?OverlayHelperError = null,
-};
+pub const deterministicFailureCode = helper_protocol.deterministicFailureCode;
 
 const NiriFocusedOutput = struct {
     name: []const u8,
@@ -74,13 +46,13 @@ pub fn runSelection(
         return cancelledSelection(mode, constraint);
     }
 
-    if (try deterministicInteractionScenarioPayload(allocator, environ, constraint)) |payload| {
+    if (try helper_protocol.deterministicInteractionScenarioPayload(allocator, environ, constraint)) |payload| {
         defer allocator.free(payload);
-        return parseHelperSelectionEnvelope(allocator, payload, mode, constraint);
+        return helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint);
     }
 
-    if (helperTestPayload(environ)) |payload| {
-        return parseHelperSelectionEnvelope(allocator, payload, mode, constraint);
+    if (helper_protocol.testPayload(environ)) |payload| {
+        return helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint);
     }
 
     if (is_dry_run) {
@@ -153,7 +125,7 @@ const HelperSelectionAttempt = union(enum) {
 /// Executes overlay helper first and decides deterministic fallback behavior.
 ///
 /// Contract constraints:
-/// - helper output mapping must pass through `parseHelperSelectionEnvelope`.
+/// - helper output mapping must pass through `helper_protocol.parseSelectionEnvelope`.
 /// - productive runtime never falls back to another selector UI. Helper
 ///   unavailability maps to deterministic overlay cancellation taxonomy.
 fn runHelperSelectionAttempt(
@@ -204,13 +176,13 @@ fn runHelperSelectionAttempt(
     };
     defer helper.deinit(allocator);
 
-    if (helperEnvelopeReportsUnavailable(allocator, helper.stdout) catch false) {
+    if (helper_protocol.reportsUnavailable(allocator, helper.stdout) catch false) {
         return .unavailable;
     }
 
     if (!helper.exitedZero()) return .unavailable;
 
-    return .{ .selection = parseHelperSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
+    return .{ .selection = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
 }
 
 /// Prepares the optional frozen-screen visual background for the helper.
@@ -230,7 +202,7 @@ fn prepareOverlayBackground(
         }
     }
 
-    if (envFlagEnabled(environ, "SHAULA_OVERLAY_DISABLE_BACKGROUND")) {
+    if (helper_protocol.envFlagEnabled(environ, "SHAULA_OVERLAY_DISABLE_BACKGROUND")) {
         return null;
     }
 
@@ -301,19 +273,6 @@ fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ)
     return allocator.dupe(u8, "/tmp/shaula/overlay");
 }
 
-fn helperEnvelopeReportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {
-    const parsed = std.json.parseFromSlice(OverlayHelperEnvelope, allocator, payload, .{}) catch return false;
-    defer parsed.deinit();
-
-    const envelope = parsed.value;
-    if (envelope.status != .@"error") return false;
-
-    const helper_error = envelope.@"error" orelse return false;
-    if (std.mem.eql(u8, helper_error.code, "ERR_OVERLAY_UNAVAILABLE")) return true;
-    if (std.mem.eql(u8, helper_error.code, "ERR_OVERLAY_TIMEOUT")) return true;
-    return false;
-}
-
 /// Resolves the overlay helper executable used by local builds and installs.
 ///
 /// Contract constraint: local `zig build` output must use the sibling
@@ -337,105 +296,6 @@ fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     }
 }
 
-/// Resolve deterministic overlay helper failure taxonomy for cancelled selections.
-///
-/// Contract constraint: this mapper only emits overlay-specific `ERR_*` codes for
-/// helper/runtime boundary failures. Explicit user cancellation must keep mapping
-/// to `ERR_SELECTION_CANCELLED` in caller boundaries.
-pub fn deterministicFailureCode(
-    environ: std.process.Environ,
-    simulate_cancel: bool,
-    selection_cancelled: bool,
-) ?[]const u8 {
-    if (!selection_cancelled or simulate_cancel) return null;
-
-    if (environ.getPosix("SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE")) |raw_mode_z| {
-        const raw_mode = std.mem.sliceTo(raw_mode_z, 0);
-        if (std.mem.eql(u8, raw_mode, "malformed")) return "ERR_OVERLAY_PROTOCOL_INVALID";
-        if (std.mem.eql(u8, raw_mode, "timeout")) return "ERR_OVERLAY_TIMEOUT";
-        if (std.mem.eql(u8, raw_mode, "unavailable")) return "ERR_OVERLAY_UNAVAILABLE";
-    }
-
-    if (envFlagEnabled(environ, "SHAULA_OVERLAY_HELPER_FORCE_TIMEOUT")) {
-        return "ERR_OVERLAY_TIMEOUT";
-    }
-    if (envFlagEnabled(environ, "SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE")) {
-        return "ERR_OVERLAY_UNAVAILABLE";
-    }
-    if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |_| {
-        return "ERR_OVERLAY_UNAVAILABLE";
-    }
-
-    return null;
-}
-
-/// Parses helper stdio envelope v1 and deterministically maps it to SelectionResult.
-///
-/// Contract constraints:
-/// - `status:"ok"` requires `action:"capture"` and valid non-zero geometry.
-/// - `status:"cancel"` and `status:"error"` map to `cancelled=true`.
-/// - Malformed payloads are treated as cancelled to preserve deterministic
-///   `ERR_SELECTION_CANCELLED` propagation in caller boundaries.
-fn parseHelperSelectionEnvelope(
-    allocator: std.mem.Allocator,
-    payload: []const u8,
-    mode: selection.SelectionMode,
-    constraint: selection.SelectionConstraint,
-) selection.SelectionResult {
-    const parsed = std.json.parseFromSlice(OverlayHelperEnvelope, allocator, payload, .{}) catch {
-        return cancelledSelection(mode, constraint);
-    };
-    defer parsed.deinit();
-
-    const envelope = parsed.value;
-    switch (envelope.status) {
-        .ok => {
-            if (envelope.action == null or envelope.action.? != .capture) {
-                return cancelledSelection(mode, constraint);
-            }
-
-            const geometry = envelope.geometry orelse return cancelledSelection(mode, constraint);
-            if (geometry.width == 0 or geometry.height == 0) {
-                return cancelledSelection(mode, constraint);
-            }
-
-            return selection.SelectionResult{
-                .mode = mode,
-                .aspect = constraint.aspect,
-                .geometry = .{
-                    .x = geometry.x,
-                    .y = geometry.y,
-                    .width = geometry.width,
-                    .height = geometry.height,
-                },
-                .cancelled = false,
-            };
-        },
-        .cancel, .@"error" => {
-            if (validEnvelopeGeometry(envelope.geometry)) |geometry| {
-                return selection.SelectionResult{
-                    .mode = mode,
-                    .aspect = constraint.aspect,
-                    .geometry = .{
-                        .x = geometry.x,
-                        .y = geometry.y,
-                        .width = geometry.width,
-                        .height = geometry.height,
-                    },
-                    .cancelled = true,
-                };
-            }
-            return cancelledSelection(mode, constraint);
-        },
-    }
-}
-
-fn validEnvelopeGeometry(geometry: ?OverlayHelperGeometry) ?OverlayHelperGeometry {
-    const value = geometry orelse return null;
-    if (value.width == 0 or value.height == 0) return null;
-    return value;
-}
-
 fn captureAreaGeometryFromSelection(geometry: ?selection.Geometry) ?@import("../capture/types.zig").AreaGeometry {
     const value = geometry orelse return null;
     if (value.width == 0 or value.height == 0) return null;
@@ -456,82 +316,8 @@ fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.Selec
     };
 }
 
-fn helperTestPayload(environ: std.process.Environ) ?[]const u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE")) |raw_mode_z| {
-        const raw_mode = std.mem.sliceTo(raw_mode_z, 0);
-        if (std.mem.eql(u8, raw_mode, "ok")) {
-            return "{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":320,\"y\":180,\"width\":640,\"height\":360},\"error\":null}";
-        }
-        if (std.mem.eql(u8, raw_mode, "cancel")) {
-            return "{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}";
-        }
-        if (std.mem.eql(u8, raw_mode, "malformed")) {
-            return "{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":\"bad\",\"y\":1,\"width\":2,\"height\":3},\"error\":null}";
-        }
-        if (std.mem.eql(u8, raw_mode, "timeout") or std.mem.eql(u8, raw_mode, "unavailable")) {
-            return "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_HELPER_TEST\",\"message\":\"forced helper failure\"}}";
-        }
-    }
-    return null;
-}
-
-/// Builds deterministic helper-envelope payloads from scripted interaction scenarios.
-///
-/// Contract constraint: this function only emits stdio envelope v1 payloads so
-/// runSelection continues to validate outputs via the parser boundary.
-fn deterministicInteractionScenarioPayload(
-    allocator: std.mem.Allocator,
-    environ: std.process.Environ,
-    constraint: selection.SelectionConstraint,
-) !?[]u8 {
-    const raw_mode_z = environ.getPosix("SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE") orelse return null;
-    const raw_mode = std.mem.sliceTo(raw_mode_z, 0);
-
-    const scenario: selection.DeterministicScenario = blk: {
-        if (std.mem.eql(u8, raw_mode, "interaction_drag")) break :blk .drag_confirm;
-        if (std.mem.eql(u8, raw_mode, "interaction_cancel")) break :blk .drag_cancel_escape;
-        if (std.mem.eql(u8, raw_mode, "interaction_resize")) break :blk .drag_then_resize_confirm;
-        if (std.mem.eql(u8, raw_mode, "interaction_move")) break :blk .drag_then_move_confirm;
-        if (std.mem.eql(u8, raw_mode, "interaction_edge_resize")) break :blk .drag_then_edge_resize_confirm;
-        if (std.mem.eql(u8, raw_mode, "interaction_nudge")) break :blk .drag_then_nudge_confirm;
-        if (std.mem.eql(u8, raw_mode, "interaction_large_nudge")) break :blk .drag_then_large_nudge_confirm;
-        return null;
-    };
-
-    const simulated = selection.simulateDeterministicScenario(.freeform, constraint, scenario);
-    if (simulated.cancelled) {
-        return try std.fmt.allocPrint(
-            allocator,
-            "{{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}}",
-            .{},
-        );
-    }
-
-    const geometry = simulated.geometry orelse {
-        return try std.fmt.allocPrint(
-            allocator,
-            "{{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}}",
-            .{},
-        );
-    };
-
-    return try std.fmt.allocPrint(
-        allocator,
-        "{{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{{\"x\":{d},\"y\":{d},\"width\":{d},\"height\":{d}}},\"error\":null}}",
-        .{ geometry.x, geometry.y, geometry.width, geometry.height },
-    );
-}
-
-fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
-    if (environ.getPosix(key)) |raw_z| {
-        const raw = std.mem.sliceTo(raw_z, 0);
-        return std.mem.eql(u8, raw, "1") or std.ascii.eqlIgnoreCase(raw, "true") or std.ascii.eqlIgnoreCase(raw, "yes");
-    }
-    return false;
-}
-
 test "helper envelope maps ok capture to geometry" {
-    const result = parseHelperSelectionEnvelope(
+    const result = helper_protocol.parseSelectionEnvelope(
         std.testing.allocator,
         "{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":11,\"y\":22,\"width\":333,\"height\":444},\"error\":null}",
         .freeform,
@@ -547,7 +333,7 @@ test "helper envelope maps ok capture to geometry" {
 }
 
 test "helper envelope maps cancel status to cancelled result" {
-    const result = parseHelperSelectionEnvelope(
+    const result = helper_protocol.parseSelectionEnvelope(
         std.testing.allocator,
         "{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}",
         .freeform,
@@ -560,7 +346,7 @@ test "helper envelope maps cancel status to cancelled result" {
 }
 
 test "helper envelope preserves cancelled draft geometry" {
-    const result = parseHelperSelectionEnvelope(
+    const result = helper_protocol.parseSelectionEnvelope(
         std.testing.allocator,
         "{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":40,\"y\":50,\"width\":600,\"height\":400},\"error\":null}",
         .freeform,
@@ -576,7 +362,7 @@ test "helper envelope preserves cancelled draft geometry" {
 }
 
 test "helper envelope maps malformed payload to cancelled result" {
-    const result = parseHelperSelectionEnvelope(
+    const result = helper_protocol.parseSelectionEnvelope(
         std.testing.allocator,
         "{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":\"bad\",\"y\":2,\"width\":320,\"height\":200},\"error\":null}",
         .freeform,
@@ -675,13 +461,13 @@ test "helper runner marks unavailable when helper process is unavailable" {
 }
 
 test "helper runner marks unavailable on configured helper error class" {
-    const should_be_unavailable = try helperEnvelopeReportsUnavailable(
+    const should_be_unavailable = try helper_protocol.reportsUnavailable(
         std.testing.allocator,
         "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"helper missing\"}}",
     );
     try std.testing.expect(should_be_unavailable);
 
-    const should_not_be_unavailable = try helperEnvelopeReportsUnavailable(
+    const should_not_be_unavailable = try helper_protocol.reportsUnavailable(
         std.testing.allocator,
         "{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,\"error\":{\"code\":\"ERR_OVERLAY_PROTOCOL_INVALID\",\"message\":\"bad payload\"}}",
     );

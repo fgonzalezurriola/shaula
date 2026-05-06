@@ -5,65 +5,77 @@
 static const GdkModifierType shortcut_modifiers =
     GDK_CONTROL_MASK | GDK_SHIFT_MASK | GDK_ALT_MASK | GDK_SUPER_MASK;
 
-static const ShaulaPreviewShortcut shortcuts[] = {
-    {GDK_KEY_c, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_COPY},
-    {GDK_KEY_s, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_SAVE_AS},
-    {GDK_KEY_z, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_UNDO},
-    {GDK_KEY_z, GDK_CONTROL_MASK | GDK_SHIFT_MASK,
-     SHAULA_PREVIEW_COMMAND_REDO},
-    {GDK_KEY_y, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_REDO},
-    {GDK_KEY_d, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED},
-    {GDK_KEY_Delete, 0, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED},
-    {GDK_KEY_BackSpace, 0, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED},
-    {GDK_KEY_Tab, 0, SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR},
-    {GDK_KEY_f, 0, SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN},
-    {GDK_KEY_0, 0, SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE},
+typedef struct {
+  ShaulaPreviewCommand command;
+  gboolean is_tool_command;
+  ShaulaTool tool;
+  guint keyval;
+  GdkModifierType modifiers;
+  const char *shortcut_label;
+} ShaulaPreviewCommandSpec;
+
+static const ShaulaPreviewCommandSpec command_specs[] = {
+    {SHAULA_PREVIEW_COMMAND_COPY, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_c,
+     GDK_CONTROL_MASK, "Ctrl+C"},
+    {SHAULA_PREVIEW_COMMAND_SAVE_AS, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_s,
+     GDK_CONTROL_MASK, "Ctrl+S"},
+    {SHAULA_PREVIEW_COMMAND_UNDO, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_z,
+     GDK_CONTROL_MASK, "Ctrl+Z"},
+    {SHAULA_PREVIEW_COMMAND_REDO, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_z,
+     GDK_CONTROL_MASK | GDK_SHIFT_MASK, "Ctrl+Shift+Z"},
+    {SHAULA_PREVIEW_COMMAND_REDO, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_y,
+     GDK_CONTROL_MASK, "Ctrl+Shift+Z"},
+    {SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_d, GDK_CONTROL_MASK, "Ctrl+D"},
+    {SHAULA_PREVIEW_COMMAND_DELETE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_Delete, 0, "Delete"},
+    {SHAULA_PREVIEW_COMMAND_DELETE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_BackSpace, 0, "Delete"},
+    {SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_Tab, 0, "Tab"},
+    {SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_f, 0, "f"},
+    {SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_0,
+     0, "0"},
+    {SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_CROP_SELECTED, FALSE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_BLUR_REGION, FALSE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_ERASE_REGION, FALSE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION, FALSE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_COPY_PATH, FALSE, SHAULA_TOOL_SELECT, 0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER, FALSE, SHAULA_TOOL_SELECT,
+     0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_DISCARD, FALSE, SHAULA_TOOL_SELECT, 0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT, TRUE, SHAULA_TOOL_SELECT, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP, TRUE, SHAULA_TOOL_CROP, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW, TRUE, SHAULA_TOOL_ARROW, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_TEXT, TRUE, SHAULA_TOOL_TEXT, 0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_MEASURE, TRUE, SHAULA_TOOL_MEASURE, 0, 0,
+     NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE, TRUE, SHAULA_TOOL_RECTANGLE, 0,
+     0, NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT, TRUE, SHAULA_TOOL_HIGHLIGHT, 0,
+     0, NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN, TRUE, SHAULA_TOOL_PEN, 0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT, TRUE, SHAULA_TOOL_SPOTLIGHT, 0,
+     0, NULL},
 };
 
-static ShaulaTool tool_for_command(ShaulaPreviewCommand command,
-                                   gboolean *is_tool_command) {
-  *is_tool_command = TRUE;
-  switch (command) {
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
-    return SHAULA_TOOL_SELECT;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP:
-    return SHAULA_TOOL_CROP;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW:
-    return SHAULA_TOOL_ARROW;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_TEXT:
-    return SHAULA_TOOL_TEXT;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_MEASURE:
-    return SHAULA_TOOL_MEASURE;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE:
-    return SHAULA_TOOL_RECTANGLE;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT:
-    return SHAULA_TOOL_HIGHLIGHT;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
-    return SHAULA_TOOL_PEN;
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
-    return SHAULA_TOOL_SPOTLIGHT;
-  case SHAULA_PREVIEW_COMMAND_COPY:
-  case SHAULA_PREVIEW_COMMAND_SAVE_AS:
-  case SHAULA_PREVIEW_COMMAND_UNDO:
-  case SHAULA_PREVIEW_COMMAND_REDO:
-  case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
-  case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
-  case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
-  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
-  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
-  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
-  case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
-  case SHAULA_PREVIEW_COMMAND_COPY_PATH:
-  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
-  case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
-  case SHAULA_PREVIEW_COMMAND_DISCARD:
-  case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
-  case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:
-    *is_tool_command = FALSE;
-    return SHAULA_TOOL_SELECT;
+static const ShaulaPreviewCommandSpec *
+find_command_spec(ShaulaPreviewCommand command) {
+  for (guint i = 0; i < G_N_ELEMENTS(command_specs); i++) {
+    if (command_specs[i].command == command)
+      return &command_specs[i];
   }
-  *is_tool_command = FALSE;
-  return SHAULA_TOOL_SELECT;
+  return NULL;
 }
 
 gboolean shaula_preview_command_available(ShaulaPreviewState *state,
@@ -129,10 +141,9 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   if (!shaula_preview_command_available(state, command))
     return FALSE;
 
-  gboolean is_tool_command = FALSE;
-  ShaulaTool tool = tool_for_command(command, &is_tool_command);
-  if (is_tool_command) {
-    shaula_preview_action_set_tool(state, tool);
+  const ShaulaPreviewCommandSpec *spec = find_command_spec(command);
+  if (spec != NULL && spec->is_tool_command) {
+    shaula_preview_action_set_tool(state, spec->tool);
     return TRUE;
   }
 
@@ -201,11 +212,12 @@ gboolean shaula_preview_shortcut_command(guint keyval,
                                          GdkModifierType modifiers,
                                          ShaulaPreviewCommand *command) {
   GdkModifierType normalized = modifiers & shortcut_modifiers;
-  for (guint i = 0; i < G_N_ELEMENTS(shortcuts); i++) {
-    if (shortcuts[i].keyval == keyval &&
-        shortcuts[i].modifiers == normalized) {
+  for (guint i = 0; i < G_N_ELEMENTS(command_specs); i++) {
+    const ShaulaPreviewCommandSpec *spec = &command_specs[i];
+    if (spec->keyval != 0 && spec->keyval == keyval &&
+        spec->modifiers == normalized) {
       if (command != NULL)
-        *command = shortcuts[i].command;
+        *command = spec->command;
       return TRUE;
     }
   }
@@ -214,43 +226,6 @@ gboolean shaula_preview_shortcut_command(guint keyval,
 
 const char *shaula_preview_command_shortcut_label(
     ShaulaPreviewCommand command) {
-  switch (command) {
-  case SHAULA_PREVIEW_COMMAND_COPY:
-    return "Ctrl+C";
-  case SHAULA_PREVIEW_COMMAND_SAVE_AS:
-    return "Ctrl+S";
-  case SHAULA_PREVIEW_COMMAND_UNDO:
-    return "Ctrl+Z";
-  case SHAULA_PREVIEW_COMMAND_REDO:
-    return "Ctrl+Shift+Z";
-  case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
-    return "Ctrl+D";
-  case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
-    return "Delete";
-  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
-    return "Tab";
-  case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
-    return "f";
-  case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:
-    return "0";
-  case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
-  case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
-  case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
-  case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
-  case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
-  case SHAULA_PREVIEW_COMMAND_COPY_PATH:
-  case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
-  case SHAULA_PREVIEW_COMMAND_DISCARD:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_TEXT:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_MEASURE:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_RECTANGLE:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_HIGHLIGHT:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_PEN:
-  case SHAULA_PREVIEW_COMMAND_SET_TOOL_SPOTLIGHT:
-    return NULL;
-  }
-  return NULL;
+  const ShaulaPreviewCommandSpec *spec = find_command_spec(command);
+  return spec != NULL ? spec->shortcut_label : NULL;
 }

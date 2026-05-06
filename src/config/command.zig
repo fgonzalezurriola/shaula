@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const cli_json = @import("../cli/json.zig");
 const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const config_types = @import("config.zig");
@@ -286,13 +287,11 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
 }
 
 fn nullableU32Json(allocator: std.mem.Allocator, value: ?u32) ![]u8 {
-    if (value) |resolved| return std.fmt.allocPrint(allocator, "{d}", .{resolved});
-    return allocator.dupe(u8, "null");
+    return cli_json.nullableU32Alloc(allocator, value);
 }
 
 fn nullableI32Json(allocator: std.mem.Allocator, value: ?i32) ![]u8 {
-    if (value) |resolved| return std.fmt.allocPrint(allocator, "{d}", .{resolved});
-    return allocator.dupe(u8, "null");
+    return cli_json.nullableI32Alloc(allocator, value);
 }
 
 fn writeErrorJson(
@@ -309,14 +308,6 @@ fn writeErrorJson(
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const ts = try nowIso8601(allocator, io);
-    defer allocator.free(ts);
-    const command_json = try jsonStringAlloc(allocator, command);
-    defer allocator.free(command_json);
-    const code_json = try jsonStringAlloc(allocator, code);
-    defer allocator.free(code_json);
-    const message_json = try jsonStringAlloc(allocator, message);
-    defer allocator.free(message_json);
     const path_json = try jsonNullableStringAlloc(allocator, path);
     defer allocator.free(path_json);
     const field_json = try jsonNullableStringAlloc(allocator, field);
@@ -324,70 +315,29 @@ fn writeErrorJson(
     const line_json = if (line) |value| try std.fmt.allocPrint(allocator, "{d}", .{value}) else try allocator.dupe(u8, "null");
     defer allocator.free(line_json);
 
-    var stdout_buffer: [4096]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
-    try stdout.interface.print(
-        "{{\"ok\":false,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":\"{s}\",\"error\":{{\"code\":{s},\"message\":{s},\"retryable\":{s},\"details\":{{\"path\":{s},\"line\":{s},\"field\":{s}}}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_json, ts, code_json, message_json, if (retryable) "true" else "false", path_json, line_json, field_json },
+    const details_json = try std.fmt.allocPrint(
+        allocator,
+        "{{\"path\":{s},\"line\":{s},\"field\":{s}}}",
+        .{ path_json, line_json, field_json },
     );
-    try stdout.interface.flush();
+    defer allocator.free(details_json);
+    try cli_json.writeErrorWithDetails(io, command, code, message, retryable, details_json);
 }
 
 fn warningsJson(allocator: std.mem.Allocator, warnings: []const []const u8) ![]u8 {
-    if (warnings.len == 0) return allocator.dupe(u8, "[]");
-    var list = std.ArrayList(u8).empty;
-    defer list.deinit(allocator);
-    try list.append(allocator, '[');
-    for (warnings, 0..) |warning, index| {
-        if (index != 0) try list.append(allocator, ',');
-        const warning_json = try jsonStringAlloc(allocator, warning);
-        defer allocator.free(warning_json);
-        try list.appendSlice(allocator, warning_json);
-    }
-    try list.append(allocator, ']');
-    return list.toOwnedSlice(allocator);
+    return cli_json.warningsAlloc(allocator, warnings);
 }
 
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    return std.json.Stringify.valueAlloc(allocator, value, .{});
+    return cli_json.stringAlloc(allocator, value);
 }
 
 fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
-    if (value) |text| return jsonStringAlloc(allocator, text);
-    return allocator.dupe(u8, "null");
+    return cli_json.nullableStringAlloc(allocator, value);
 }
 
 fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    const ts = std.Io.Timestamp.now(io, .real);
-    const epoch_seconds: i64 = ts.toSeconds();
-
-    const days: i64 = @divFloor(epoch_seconds, 86400);
-    const secs_of_day: i64 = @mod(epoch_seconds, 86400);
-
-    const z = days + 719468;
-    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
-    const doe = z - era * 146097;
-    const yoe = @divFloor(doe - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096), 365);
-    var y = yoe + era * 400;
-    const doy = doe - (365 * yoe + @divFloor(yoe, 4) - @divFloor(yoe, 100));
-    const mp = @divFloor(5 * doy + 2, 153);
-    const d = doy - @divFloor(153 * mp + 2, 5) + 1;
-    var m: i64 = mp + (if (mp < 10) @as(i64, 3) else @as(i64, -9));
-    y += if (m <= 2) 1 else 0;
-    if (m <= 0) m += 12;
-
-    const hh = @divFloor(secs_of_day, 3600);
-    const mm = @divFloor(@mod(secs_of_day, 3600), 60);
-    const ss = @mod(secs_of_day, 60);
-
-    return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}Z", .{
-        @as(u64, @intCast(y)),
-        @as(u64, @intCast(m)),
-        @as(u64, @intCast(d)),
-        @as(u64, @intCast(hh)),
-        @as(u64, @intCast(mm)),
-        @as(u64, @intCast(ss)),
-    });
+    return cli_json.nowIso8601(allocator, io);
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {

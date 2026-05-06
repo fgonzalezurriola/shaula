@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "preview_document_edit.h"
 #include "preview_toolbar.h"
 
 #define SHAULA_HISTORY_DEFAULT_CAPACITY 24
@@ -823,13 +824,10 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
     break;
   }
 
-  shaula_preview_push_undo(state);
-  g_object_unref(state->image);
-  state->image = copy;
-  state->modified = TRUE;
-  shaula_preview_toolbar_update_history_state(state);
-  shaula_preview_toolbar_update_selection_state(state);
-  shaula_preview_queue_draw(state);
+  shaula_preview_document_begin_edit(state);
+  shaula_preview_document_replace_image(state, copy);
+  shaula_preview_document_finish_edit(
+      state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});
   return TRUE;
 }
 
@@ -898,22 +896,17 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   if (copy == NULL)
     return FALSE;
 
-  shaula_preview_push_undo(state);
-  g_object_unref(state->image);
-  state->image = copy;
+  shaula_preview_document_begin_edit(state);
+  shaula_preview_document_replace_image(state, copy);
   remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
                                remove_annotation);
   remap_spotlight_regions_after_crop(state, (ShaulaRect){x, y, w, h});
-  state->has_crop_draft = FALSE;
-  state->has_region_selection = FALSE;
-  state->operation = SHAULA_OPERATION_NONE;
-  state->active_tool = SHAULA_TOOL_SELECT;
-  state->modified = TRUE;
-  shaula_preview_update_dimensions_label(state);
-  shaula_preview_set_fit_mode(state, TRUE);
-  shaula_preview_toolbar_update_tool_state(state);
-  shaula_preview_toolbar_update_history_state(state);
-  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_document_finish_edit(
+      state, (ShaulaPreviewDocumentFinish){.clear_crop_draft = TRUE,
+                                           .clear_region_selection = TRUE,
+                                           .reset_tool_to_select = TRUE,
+                                           .update_dimensions = TRUE,
+                                           .fit_to_screen = TRUE});
   return TRUE;
 }
 
@@ -986,14 +979,12 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
       .border_color = state->spotlight_border_color,
       .border_width = MAX(0.0, state->spotlight_border_width),
   };
-  shaula_preview_push_undo(state);
+  shaula_preview_document_begin_edit(state);
   g_array_append_val(state->spotlight_regions, region);
   state->active_spotlight_index = (int)state->spotlight_regions->len - 1;
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
-  state->modified = TRUE;
-  shaula_preview_toolbar_update_history_state(state);
-  shaula_preview_toolbar_update_selection_state(state);
-  shaula_preview_queue_draw(state);
+  shaula_preview_document_finish_edit(
+      state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});
   return TRUE;
 }
 
