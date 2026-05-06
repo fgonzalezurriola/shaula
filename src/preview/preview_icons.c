@@ -30,10 +30,25 @@ static gboolean dark_theme_preferred(void) {
   gchar *theme = NULL;
   g_object_get(settings, "gtk-theme-name", &theme, NULL);
   if (theme != NULL) {
-    gboolean dark =
-        g_str_has_suffix(theme, "-dark") || g_str_has_suffix(theme, "-Dark") ||
-        g_strrstr(theme, "Nord") != NULL || g_strrstr(theme, "nord") != NULL;
+    gboolean light = g_str_has_suffix(theme, "-light") ||
+                     g_str_has_suffix(theme, "-Light") ||
+                     g_strrstr(theme, "Latte") != NULL ||
+                     g_strrstr(theme, "latte") != NULL ||
+                     g_strrstr(theme, "Light") != NULL ||
+                     g_strrstr(theme, "light") != NULL;
+    gboolean dark = g_str_has_suffix(theme, "-dark") ||
+                    g_str_has_suffix(theme, "-Dark") ||
+                    g_strrstr(theme, "Mocha") != NULL ||
+                    g_strrstr(theme, "mocha") != NULL ||
+                    g_strrstr(theme, "Macchiato") != NULL ||
+                    g_strrstr(theme, "macchiato") != NULL ||
+                    g_strrstr(theme, "Frappe") != NULL ||
+                    g_strrstr(theme, "frappe") != NULL ||
+                    g_strrstr(theme, "Nord") != NULL ||
+                    g_strrstr(theme, "nord") != NULL;
     g_free(theme);
+    if (light)
+      return FALSE;
     if (dark)
       return TRUE;
   }

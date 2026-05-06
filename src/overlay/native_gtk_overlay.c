@@ -96,6 +96,7 @@ typedef struct {
   GtkWidget *window;
   GtkWidget *area;
   GdkPixbuf *background;
+  ShaulaPoint output_origin;
   gboolean has_selection;
   ShaulaRect selection;
   gboolean has_toolbar;
@@ -115,6 +116,19 @@ typedef struct {
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
+
+static GdkMonitor *monitor_for_output(void);
+
+static ShaulaPoint current_output_origin(void) {
+    GdkMonitor *monitor = monitor_for_output();
+    if (monitor != NULL) {
+        GdkRectangle rect;
+        gdk_monitor_get_geometry(monitor, &rect);
+        g_object_unref(monitor);
+        return (ShaulaPoint){ .x = rect.x, .y = rect.y };
+    }
+    return (ShaulaPoint){ .x = 0, .y = 0 };
+}
 
 static void install_transparent_overlay_css(void) {
     GtkCssProvider *provider = gtk_css_provider_new();
@@ -810,7 +824,10 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gp
 static void confirm(void) {
     if (!state.has_selection || state.selection.width <= 0 || state.selection.height <= 0) return;
     printf("{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
-        state.selection.x, state.selection.y, state.selection.width, state.selection.height);
+        state.selection.x + state.output_origin.x,
+        state.selection.y + state.output_origin.y,
+        state.selection.width,
+        state.selection.height);
     fflush(stdout);
     if (state.app != NULL) g_application_quit(G_APPLICATION(state.app));
 }
@@ -818,7 +835,10 @@ static void confirm(void) {
 static void cancel(void) {
     if (state.has_selection && state.selection.width > 0 && state.selection.height > 0) {
         printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
-            state.selection.x, state.selection.y, state.selection.width, state.selection.height);
+            state.selection.x + state.output_origin.x,
+            state.selection.y + state.output_origin.y,
+            state.selection.width,
+            state.selection.height);
     } else {
         printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,\"error\":null}\n");
     }
@@ -1109,7 +1129,12 @@ static void load_initial_geometry(void) {
   }
 
   ShaulaRect rect;
-  if (!clamp_selection((ShaulaRect){ .x = x, .y = y, .width = width, .height = height }, output_size(), &rect)) {
+  if (!clamp_selection((ShaulaRect){
+      .x = x - state.output_origin.x,
+      .y = y - state.output_origin.y,
+      .width = width,
+      .height = height,
+  }, output_size(), &rect)) {
     return;
   }
 
@@ -1174,6 +1199,11 @@ static void on_activate(GtkApplication *app, gpointer data) {
     gtk_layer_set_anchor(GTK_WINDOW(window), GTK_LAYER_SHELL_EDGE_RIGHT, TRUE);
     gtk_layer_set_exclusive_zone(GTK_WINDOW(window), -1);
 
+    /* Runtime boundary: selection is edited in output-local surface
+     * coordinates, but helper JSON must emit compositor-layout coordinates for
+     * grim `-g`. This makes monitor-origin changes idempotent after hotplug.
+     */
+    state.output_origin = current_output_origin();
     ShaulaPoint size = initial_surface_size();
     gtk_window_set_default_size(GTK_WINDOW(window), size.x, size.y);
 

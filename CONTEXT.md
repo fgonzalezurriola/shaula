@@ -92,6 +92,12 @@ and the working diff.
   It no longer draws or requires the floating Capture/Esc/aspect button strip:
   a valid create, move, or resize drag confirms the selection on release.
   Escape/Q still cancel and Enter still confirms as a keyboard fallback.
+- Overlay selection stays output-local while the GTK layer-shell helper is
+  interactive, then adds the selected monitor origin when emitting helper JSON
+  for backend capture. Persisted initial geometry subtracts that origin before
+  clamping back into the local surface. This keeps capture idempotent after Niri
+  monitor hotplug/restart layouts where a single output may not sit at `0,0`,
+  without adding retry sleeps to the hot path.
 - Aspect-constrained capture remains available through
   `SHAULA_OVERLAY_ASPECT`; the removed button strip is no longer the interactive
   path for changing it during capture.
@@ -147,6 +153,10 @@ and the working diff.
   Cairo-drawn back/shape icons read the widget foreground from the active GTK
   style context, so the HUD follows light/dark GTK themes instead of fixed
   dark-panel colors.
+- Theme contrast policy: toolbar, overflow popover, properties HUDs, and
+  custom SVG icon recoloring should follow GTK theme colors with explicit
+  contrast reinforcement. Catppuccin Latte/light themes must prefer dark icon
+  foregrounds even if `gtk-application-prefer-dark-theme` is set.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
   new id, offsets it by 12 px on both axes, selects the duplicate, and commits
@@ -181,6 +191,14 @@ and the working diff.
 - `shaula-rectangle-symbolic` Rectangle: implemented.
 - `shaula-highlight-symbolic` Highlight: implemented.
 - `shaula-pen-symbolic` Pen: implemented.
+- Pen secondary HUD decision: use the same floating contextual HUD family as
+  Arrow. Pen v1 should expose color, stroke width, and opacity for defaults and
+  selected Pen annotations. Additional Pen styles are desired future work and
+  should fit into this same HUD rather than expanding the primary toolbar.
+- Highlight highlighter decision: Highlight should become a highlighter brush,
+  not a rectangle tool. V1 should use a separate Highlight button/HUD from Pen,
+  expose only color, width, and opacity, render a wide low-opacity freehand path
+  with round caps, and avoid inheriting future Pen brush styles.
 - `shaula-more-symbolic` More: implemented overflow menu.
 - `shaula-discard-symbolic` Discard: implemented. Closes the preview and
   reports `discard`.

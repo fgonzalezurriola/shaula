@@ -35,6 +35,54 @@ static GtkWidget *make_muted_label(const char *text);
 static GtkWidget *make_fixed_width_muted_label(const char *text, int chars,
                                                float xalign);
 
+static void install_toolbar_css(void) {
+  static gboolean installed = FALSE;
+  if (installed)
+    return;
+
+  GtkCssProvider *provider = gtk_css_provider_new();
+  const char *css =
+      "headerbar.shaula-preview-toolbar {"
+      "  background: alpha(@theme_bg_color, 0.98);"
+      "  color: @theme_fg_color;"
+      "  border-bottom: 1px solid @borders;"
+      "  box-shadow: 0 1px 0 alpha(@theme_fg_color, 0.06);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat,"
+      "popover.shaula-preview-popover button.flat {"
+      "  color: @theme_fg_color;"
+      "  border: 1px solid transparent;"
+      "  border-radius: 7px;"
+      "  background: transparent;"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:hover,"
+      "popover.shaula-preview-popover button.flat:hover {"
+      "  background: alpha(@theme_fg_color, 0.08);"
+      "  border-color: alpha(@theme_fg_color, 0.12);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:checked,"
+      "headerbar.shaula-preview-toolbar button.flat:active,"
+      "popover.shaula-preview-popover button.flat:active {"
+      "  background: alpha(@theme_fg_color, 0.14);"
+      "  border-color: alpha(@theme_fg_color, 0.20);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:disabled {"
+      "  opacity: 0.42;"
+      "}"
+      "popover.shaula-preview-popover contents {"
+      "  background: alpha(@theme_bg_color, 0.98);"
+      "  color: @theme_fg_color;"
+      "  border: 1px solid @borders;"
+      "  border-radius: 8px;"
+      "}";
+  gtk_css_provider_load_from_data(provider, css, -1);
+  gtk_style_context_add_provider_for_display(
+      gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_object_unref(provider);
+  installed = TRUE;
+}
+
 static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
                                       const char *icon_name,
                                       const char *tooltip,
@@ -194,6 +242,7 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
   GtkWidget *button = gtk_menu_button_new();
   GtkWidget *icon = shaula_preview_make_toolbar_icon(state, "shaula-more-symbolic");
   GtkWidget *popover = gtk_popover_new();
+  gtk_widget_add_css_class(popover, "shaula-preview-popover");
   GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
 
   gtk_menu_button_set_child(GTK_MENU_BUTTON(button), icon);
@@ -437,7 +486,9 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
 }
 
 GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
+  install_toolbar_css();
   GtkWidget *bar = gtk_header_bar_new();
+  gtk_widget_add_css_class(bar, "shaula-preview-toolbar");
 
   GtkWidget *toolbar = build_tool_group(state);
   gtk_widget_set_halign(toolbar, GTK_ALIGN_CENTER);
