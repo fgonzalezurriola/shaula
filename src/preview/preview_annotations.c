@@ -269,15 +269,48 @@ static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   cairo_restore(cr);
 }
 
-static void draw_arrow_head(cairo_t *cr, ShaulaPoint start, ShaulaPoint end,
-                            double size) {
+/* Draws a filled triangular arrowhead that scales with stroke width. The
+ * head size is proportional to the shaft width so thicker arrows get larger
+ * heads, matching Shottr-like proportions.
+ */
+static void draw_filled_arrow_head(cairo_t *cr, ShaulaPoint start,
+                                   ShaulaPoint end, double stroke_width) {
+  double head_len = MAX(12.0, stroke_width * 4.5);
+  double head_half = MAX(5.0, stroke_width * 2.0);
   double angle = atan2(end.y - start.y, end.x - start.x);
-  double a1 = angle + G_PI * 0.82;
-  double a2 = angle - G_PI * 0.82;
+  double a1 = angle + G_PI - 0.42;
+  double a2 = angle + G_PI + 0.42;
+  double bx = end.x + cos(angle + G_PI) * head_len;
+  double by = end.y + sin(angle + G_PI) * head_len;
+  (void)bx;
+  (void)by;
   cairo_move_to(cr, end.x, end.y);
-  cairo_line_to(cr, end.x + cos(a1) * size, end.y + sin(a1) * size);
-  cairo_move_to(cr, end.x, end.y);
-  cairo_line_to(cr, end.x + cos(a2) * size, end.y + sin(a2) * size);
+  cairo_line_to(cr, end.x + cos(a1) * head_len,
+                end.y + sin(a1) * head_len);
+  cairo_line_to(cr, end.x + cos(angle + G_PI) * head_len * 0.65,
+                end.y + sin(angle + G_PI) * head_len * 0.65);
+  cairo_line_to(cr, end.x + cos(a2) * head_len,
+                end.y + sin(a2) * head_len);
+  cairo_close_path(cr);
+  cairo_fill(cr);
+  (void)head_half;
+}
+
+/* Computes the point on the shaft where it should stop before the arrowhead.
+ * This avoids overlap artifacts between the rounded cap and the filled head.
+ */
+static ShaulaPoint arrow_shaft_end(ShaulaPoint start, ShaulaPoint end,
+                                   double stroke_width) {
+  double head_len = MAX(12.0, stroke_width * 4.5);
+  double dist = shaula_point_distance(start, end);
+  if (dist < 0.001)
+    return end;
+  double shorten = head_len * 0.55;
+  if (shorten >= dist)
+    return start;
+  double t = (dist - shorten) / dist;
+  return (ShaulaPoint){start.x + (end.x - start.x) * t,
+                       start.y + (end.y - start.y) * t};
 }
 
 static void draw_measure_label(cairo_t *cr, const ShaulaAnnotation *annotation) {
@@ -316,16 +349,19 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
   set_annotation_color(cr, annotation->color, 1.0);
 
   switch (annotation->type) {
-  case SHAULA_ANNOTATION_ARROW:
+  case SHAULA_ANNOTATION_ARROW: {
+    ShaulaPoint shaft_end_pt = arrow_shaft_end(
+        annotation->data.arrow.start, annotation->data.arrow.end,
+        annotation->stroke_width);
     cairo_move_to(cr, annotation->data.arrow.start.x,
                   annotation->data.arrow.start.y);
-    cairo_line_to(cr, annotation->data.arrow.end.x,
-                  annotation->data.arrow.end.y);
-    draw_arrow_head(cr, annotation->data.arrow.start,
-                    annotation->data.arrow.end,
-                    MAX(10.0, annotation->stroke_width * 4.0));
+    cairo_line_to(cr, shaft_end_pt.x, shaft_end_pt.y);
     cairo_stroke(cr);
+    draw_filled_arrow_head(cr, annotation->data.arrow.start,
+                           annotation->data.arrow.end,
+                           annotation->stroke_width);
     break;
+  }
   case SHAULA_ANNOTATION_TEXT:
     cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
                            CAIRO_FONT_WEIGHT_BOLD);

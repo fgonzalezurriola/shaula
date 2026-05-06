@@ -182,3 +182,51 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   gtk_widget_set_visible(panel, FALSE);
   return panel;
 }
+
+/* Arrow properties HUD — mirrors the Spotlight HUD but targets a just-created
+ * or currently selected Arrow annotation. Controls: Back, Color, Stroke width.
+ */
+GtkWidget *shaula_preview_arrow_properties_panel_build(
+    ShaulaPreviewState *state) {
+  install_properties_panel_css();
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
+
+  GtkWidget *back = make_panel_button(
+      state, draw_back_icon, "Back",
+      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  gtk_box_append(GTK_BOX(panel), back);
+
+  GtkWidget *color = gtk_color_button_new();
+  state->arrow_color_button = color;
+  GdkRGBA rgba = {state->arrow_color.r, state->arrow_color.g,
+                   state->arrow_color.b, state->arrow_color.a};
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
+  gtk_widget_set_tooltip_text(color, "Arrow color");
+  gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(color, 30, 28);
+  g_signal_connect(color, "color-set",
+                   G_CALLBACK(shaula_preview_on_arrow_color_set), state);
+  gtk_box_append(GTK_BOX(panel), color);
+
+  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
+                                              12.0, 0.5);
+  state->arrow_width_scale = width;
+  gtk_range_set_value(GTK_RANGE(width), state->arrow_stroke_width);
+  gtk_widget_set_tooltip_text(width, "Arrow stroke width");
+  gtk_widget_set_size_request(width, 120, -1);
+  gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
+  gtk_widget_set_valign(width, GTK_ALIGN_CENTER);
+  g_signal_connect(width, "value-changed",
+                   G_CALLBACK(shaula_preview_on_arrow_width_changed), state);
+  gtk_box_append(GTK_BOX(panel), width);
+
+  state->arrow_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
+}

@@ -169,6 +169,11 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->spotlight_border_color = state->current_color;
   state->spotlight_border_width = 3.0;
   state->spotlight_shape = SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE;
+  /* Shottr-like arrow defaults: strong orange, thick rounded shaft. */
+  state->active_arrow_index = -1;
+  state->arrow_color =
+      (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
+  state->arrow_stroke_width = 3.5;
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
   state->spotlight_regions =
       g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
@@ -505,6 +510,7 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->operation = SHAULA_OPERATION_NONE;
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
   state->active_spotlight_index = -1;
+  state->active_arrow_index = -1;
   if (state->text_entry != NULL) {
     if (state->canvas_overlay != NULL)
       gtk_overlay_remove_overlay(GTK_OVERLAY(state->canvas_overlay),
@@ -552,6 +558,7 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
   state->has_region_selection = FALSE;
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
   state->active_spotlight_index = -1;
+  state->active_arrow_index = -1;
   if (state->draft_pen_points != NULL)
     g_array_set_size(state->draft_pen_points, 0);
   if (state->text_entry != NULL) {
@@ -999,8 +1006,10 @@ void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
   if (state == NULL || state->active_properties_panel == panel)
     return;
   state->active_properties_panel = panel;
-  if (panel == SHAULA_PROPERTIES_PANEL_NONE)
+  if (panel == SHAULA_PROPERTIES_PANEL_NONE) {
     state->active_spotlight_index = -1;
+    state->active_arrow_index = -1;
+  }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }
@@ -1051,6 +1060,50 @@ void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
   ShaulaSpotlightRegion *region = active_spotlight_region(state);
   if (region != NULL) {
     region->shape = shape;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+/* Returns the annotation currently targeted by the Arrow properties HUD, or
+ * NULL when no valid target exists.
+ */
+static ShaulaAnnotation *active_arrow_annotation(ShaulaPreviewState *state) {
+  if (state == NULL || state->annotations == NULL ||
+      state->active_arrow_index < 0 ||
+      (guint)state->active_arrow_index >= state->annotations->len)
+    return NULL;
+  ShaulaAnnotation *annotation =
+      g_ptr_array_index(state->annotations, (guint)state->active_arrow_index);
+  if (annotation != NULL && annotation->type == SHAULA_ANNOTATION_ARROW)
+    return annotation;
+  return NULL;
+}
+
+void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
+                                    ShaulaColor color) {
+  if (state == NULL)
+    return;
+  state->arrow_color = color;
+  ShaulaAnnotation *arrow = active_arrow_annotation(state);
+  if (arrow != NULL) {
+    arrow->color = color;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
+                                           double width) {
+  if (state == NULL)
+    return;
+  state->arrow_stroke_width = CLAMP(width, 1.0, 12.0);
+  ShaulaAnnotation *arrow = active_arrow_annotation(state);
+  if (arrow != NULL) {
+    arrow->stroke_width = state->arrow_stroke_width;
+    shaula_annotation_update_bounds(arrow);
     state->modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);

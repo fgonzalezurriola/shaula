@@ -52,5 +52,7 @@ void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_arrow_color_set(GtkColorButton *button, gpointer data);
+void shaula_preview_on_arrow_width_changed(GtkRange *range, gpointer data);
 
 #endif

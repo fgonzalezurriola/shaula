@@ -261,8 +261,8 @@ static void draw_draft_rect(cairo_t *cr, ShaulaRect rect, ShaulaColor color,
 
 static void draw_arrow_draft(cairo_t *cr, ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = shaula_annotation_new_arrow(
-      state->drag_start_image, state->drag_current_image, state->current_color,
-      3.0);
+      state->drag_start_image, state->drag_current_image, state->arrow_color,
+      state->arrow_stroke_width);
   shaula_annotation_draw(cr, annotation);
   shaula_annotation_free(annotation);
 }
@@ -688,7 +688,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
                               state->drag_current_image) >= 3.0)
       annotation = shaula_annotation_new_arrow(
           state->drag_start_image, state->drag_current_image,
-          state->current_color, 3.0);
+          state->arrow_color, state->arrow_stroke_width);
     break;
   case SHAULA_OPERATION_RECTANGLE: {
     ShaulaRect rect =
@@ -733,6 +733,12 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
 
   if (annotation != NULL) {
     shaula_preview_add_annotation(state, annotation);
+    /* Open arrow HUD targeting the just-created arrow. */
+    if (annotation->type == SHAULA_ANNOTATION_ARROW) {
+      state->active_arrow_index = (int)state->annotations->len - 1;
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+      shaula_preview_toolbar_update_selection_state(state);
+    }
   }
 }
 
@@ -878,6 +884,8 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   gtk_overlay_set_child(GTK_OVERLAY(overlay), area);
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_arrow_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);

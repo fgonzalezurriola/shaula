@@ -104,6 +104,9 @@ typedef struct {
   GtkWidget *spotlight_width_scale;
   GtkWidget *spotlight_sharp_button;
   GtkWidget *spotlight_rounded_button;
+  GtkWidget *arrow_properties_box;
+  GtkWidget *arrow_color_button;
+  GtkWidget *arrow_width_scale;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -160,6 +163,9 @@ typedef struct {
   ShaulaColor spotlight_border_color;
   double spotlight_border_width;
   ShaulaSpotlightShape spotlight_shape;
+  int active_arrow_index;
+  ShaulaColor arrow_color;
+  double arrow_stroke_width;
   gboolean modified;
   gboolean copied;
   gboolean saved;
@@ -234,6 +240,10 @@ void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
                                                double width);
 void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
                                         ShaulaSpotlightShape shape);
+void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
+                                    ShaulaColor color);
+void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
+                                           double width);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

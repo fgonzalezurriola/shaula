@@ -505,11 +505,27 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
        can_delete);
   gboolean show_spotlight_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
+  gboolean show_arrow_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_ARROW;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
   if (state->properties_box != NULL)
     gtk_widget_set_visible(state->properties_box, show_spotlight_properties);
+  if (state->arrow_properties_box != NULL)
+    gtk_widget_set_visible(state->arrow_properties_box,
+                           show_arrow_properties);
+  if (state->arrow_color_button != NULL) {
+    GdkRGBA arrow_rgba = {state->arrow_color.r, state->arrow_color.g,
+                          state->arrow_color.b, state->arrow_color.a};
+    gtk_color_chooser_set_rgba(
+        GTK_COLOR_CHOOSER(state->arrow_color_button), &arrow_rgba);
+  }
+  if (state->arrow_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->arrow_width_scale)) -
+           state->arrow_stroke_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->arrow_width_scale),
+                        state->arrow_stroke_width);
   if (state->spotlight_color_button != NULL) {
     GdkRGBA rgba = {state->spotlight_border_color.r,
                     state->spotlight_border_color.g,

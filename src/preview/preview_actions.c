@@ -77,6 +77,22 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
   if (tool == SHAULA_TOOL_CROP && state->active_tool == SHAULA_TOOL_SELECT &&
       shaula_preview_apply_crop_to_selected_rect(state))
     return;
+  /* Activating the Arrow tool with a selected arrow opens its HUD. */
+  if (tool == SHAULA_TOOL_ARROW && state->selected_annotation != NULL &&
+      state->selected_annotation->type == SHAULA_ANNOTATION_ARROW) {
+    for (guint i = 0; i < state->annotations->len; i++) {
+      if (g_ptr_array_index(state->annotations, i) ==
+          state->selected_annotation) {
+        state->active_arrow_index = (int)i;
+        state->arrow_color = state->selected_annotation->color;
+        state->arrow_stroke_width = state->selected_annotation->stroke_width;
+        state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+        shaula_preview_toolbar_update_selection_state(state);
+        shaula_preview_queue_draw(state);
+        return;
+      }
+    }
+  }
   shaula_preview_cancel_operation(state);
   state->active_tool = tool;
   shaula_preview_toolbar_update_tool_state(state);
@@ -416,4 +432,15 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
     return;
   }
   shaula_preview_execute_command(data, command);
+}
+
+void shaula_preview_on_arrow_color_set(GtkColorButton *button, gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_arrow_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_arrow_width_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_arrow_stroke_width(data, gtk_range_get_value(range));
 }

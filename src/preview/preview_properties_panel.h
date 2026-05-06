@@ -6,5 +6,7 @@
 #include "preview_state.h"
 
 GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state);
+GtkWidget *shaula_preview_arrow_properties_panel_build(
+    ShaulaPreviewState *state);
 
 #endif
