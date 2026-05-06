@@ -415,16 +415,29 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
                                       ShaulaAnnotation *annotation) {
   if (state == NULL)
     return;
+  state->active_arrow_index = -1;
   if (state->annotations != NULL) {
     for (guint i = 0; i < state->annotations->len; i++) {
       ShaulaAnnotation *item = g_ptr_array_index(state->annotations, i);
       item->selected = FALSE;
+      if (item == annotation && annotation != NULL &&
+          annotation->type == SHAULA_ANNOTATION_ARROW)
+        state->active_arrow_index = (int)i;
     }
   }
   state->selected_annotation = annotation;
   if (annotation != NULL) {
     state->has_region_selection = FALSE;
     annotation->selected = TRUE;
+    if (annotation->type == SHAULA_ANNOTATION_ARROW) {
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+      state->arrow_color = annotation->color;
+      state->arrow_stroke_width = annotation->stroke_width;
+    } else {
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
+    }
+  } else {
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
   }
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -1266,6 +1279,27 @@ void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
     shaula_annotation_update_bounds(arrow);
     state->modified = TRUE;
   }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
+                                           PreviewArrowStrokeStyle style) {
+  if (state == NULL)
+    return;
+  ShaulaAnnotation *arrow = active_arrow_annotation(state);
+  if (arrow == NULL)
+    return;
+  if (style < PREVIEW_ARROW_STROKE_SOLID ||
+      style > PREVIEW_ARROW_STROKE_DOTTED)
+    return;
+  if (arrow->data.arrow.stroke_style == style)
+    return;
+
+  shaula_preview_push_undo(state);
+  arrow->data.arrow.stroke_style = style;
+  state->modified = TRUE;
+  shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }

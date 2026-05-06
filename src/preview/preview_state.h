@@ -113,6 +113,7 @@ typedef struct {
   GtkWidget *arrow_properties_box;
   GtkWidget *arrow_color_button;
   GtkWidget *arrow_width_scale;
+  GtkWidget *arrow_stroke_buttons[3];
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -259,6 +260,8 @@ void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
                                     ShaulaColor color);
 void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
                                            double width);
+void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
+                                           PreviewArrowStrokeStyle style);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

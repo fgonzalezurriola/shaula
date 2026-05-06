@@ -1,6 +1,7 @@
 #include "preview_properties_panel.h"
 
 #include "preview_actions.h"
+#include "preview_icons.h"
 
 static void install_properties_panel_css(void) {
   static gboolean installed = FALSE;
@@ -125,6 +126,25 @@ static GtkWidget *make_panel_shape_toggle(ShaulaPreviewState *state,
   return button;
 }
 
+static GtkWidget *make_arrow_stroke_style_toggle(ShaulaPreviewState *state,
+                                                 const char *icon_name,
+                                                 const char *tooltip,
+                                                 PreviewArrowStrokeStyle style) {
+  GtkWidget *button = gtk_toggle_button_new();
+  gtk_button_set_child(GTK_BUTTON(button),
+                       shaula_preview_make_toolbar_icon(state, icon_name));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 34, 28);
+  g_object_set_data(G_OBJECT(button), "arrow-stroke-style",
+                    GINT_TO_POINTER(style));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_arrow_stroke_style_clicked),
+                   state);
+  return button;
+}
+
 GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
@@ -183,8 +203,8 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   return panel;
 }
 
-/* Arrow properties HUD — mirrors the Spotlight HUD but targets a just-created
- * or currently selected Arrow annotation. Controls: Back, Color, Stroke width.
+/* Arrow properties HUD targets a just-created or currently selected Arrow
+ * annotation. Controls: Back, Color, Stroke width, and stroke style.
  */
 GtkWidget *shaula_preview_arrow_properties_panel_build(
     ShaulaPreviewState *state) {
@@ -225,6 +245,25 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
   g_signal_connect(width, "value-changed",
                    G_CALLBACK(shaula_preview_on_arrow_width_changed), state);
   gtk_box_append(GTK_BOX(panel), width);
+
+  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID] =
+      make_arrow_stroke_style_toggle(state, "shaula-line-solid-symbolic",
+                                     "Normal arrow stroke",
+                                     PREVIEW_ARROW_STROKE_SOLID);
+  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED] =
+      make_arrow_stroke_style_toggle(state, "shaula-line-dashed-symbolic",
+                                     "Dashed arrow stroke",
+                                     PREVIEW_ARROW_STROKE_DASHED);
+  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DOTTED] =
+      make_arrow_stroke_style_toggle(state, "shaula-line-dotted-symbolic",
+                                     "Dotted arrow stroke",
+                                     PREVIEW_ARROW_STROKE_DOTTED);
+  gtk_box_append(GTK_BOX(panel),
+                 state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID]);
+  gtk_box_append(GTK_BOX(panel),
+                 state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED]);
+  gtk_box_append(GTK_BOX(panel),
+                 state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DOTTED]);
 
   state->arrow_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);

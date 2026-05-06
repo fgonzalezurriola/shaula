@@ -526,6 +526,17 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
            state->arrow_stroke_width) > 0.01)
     gtk_range_set_value(GTK_RANGE(state->arrow_width_scale),
                         state->arrow_stroke_width);
+  PreviewArrowStrokeStyle arrow_stroke_style = PREVIEW_ARROW_STROKE_SOLID;
+  if (state->selected_annotation != NULL &&
+      state->selected_annotation->type == SHAULA_ANNOTATION_ARROW)
+    arrow_stroke_style = state->selected_annotation->data.arrow.stroke_style;
+  for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DOTTED;
+       i++) {
+    if (state->arrow_stroke_buttons[i] != NULL)
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->arrow_stroke_buttons[i]),
+          i == (int)arrow_stroke_style);
+  }
   if (state->spotlight_color_button != NULL) {
     GdkRGBA rgba = {state->spotlight_border_color.r,
                     state->spotlight_border_color.g,

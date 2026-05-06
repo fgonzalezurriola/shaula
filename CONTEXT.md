@@ -167,7 +167,15 @@ and the working diff.
   `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.
 - `shaula-trash-symbolic` Delete selected: implemented. Available from the
   contextual group and Delete/Backspace when text entry is not active.
-- `shaula-arrow-symbolic` Arrow: implemented.
+- `shaula-arrow-symbolic` Arrow: implemented as a one-shot creation tool.
+  After a valid arrow is drawn, preview selects the new arrow, opens the Arrow
+  properties HUD, and returns to Select mode. Moving and bend editing for
+  existing arrows belong to Select mode; clicking Arrow again always prepares a
+  new arrow instead of editing the selected one.
+- Arrow stroke style: implemented in the Arrow properties HUD. Selecting an
+  arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
+  selected arrow annotation, pushes undo before the document change, and keeps
+  copy/export rendering on the annotation draw path.
 - `shaula-text-symbolic` Text: implemented.
 - `shaula-measure-symbolic` Measure: implemented.
 - `shaula-rectangle-symbolic` Rectangle: implemented.

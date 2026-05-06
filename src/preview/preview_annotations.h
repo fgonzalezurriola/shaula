@@ -15,6 +15,12 @@ typedef enum {
   SHAULA_ANNOTATION_PEN
 } ShaulaAnnotationType;
 
+typedef enum {
+  PREVIEW_ARROW_STROKE_SOLID,
+  PREVIEW_ARROW_STROKE_DASHED,
+  PREVIEW_ARROW_STROKE_DOTTED,
+} PreviewArrowStrokeStyle;
+
 typedef struct {
   ShaulaPoint *points;
   int len;
@@ -33,6 +39,7 @@ typedef struct ShaulaAnnotation {
       ShaulaPoint start;
       ShaulaPoint end;
       ShaulaPoint control;
+      PreviewArrowStrokeStyle stroke_style;
       gboolean is_curved;
     } arrow;
     struct {
