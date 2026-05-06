@@ -3,11 +3,15 @@
 Shaula is a fast screenshot tool for Wayland/Niri, built for a Shottr-like
 workflow on Linux.
 
+It focuses on quick area capture, a native selection overlay, post-capture
+preview/editing, and scriptable JSON output.
+
 > Shaula is early software. The main target is CachyOS/Arch + Niri.
 
 ## Install
 
-Shaula can be installed locally without sudo:
+Shaula installs locally for the current user. The installer does not use
+`sudo`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh
@@ -19,14 +23,25 @@ Uninstall:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --uninstall
 ```
 
-The installer verifies GitHub release `SHA256SUMS`, installs into user-local
-paths under `~/.local` and `~/.config`, never uses `sudo`, and does not
-overwrite an existing `~/.config/shaula/config.toml`.
+Advanced install commands:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --version v0.1.0
+```
+
+The installer:
+
+- installs under `~/.local` and `~/.config`
+- verifies GitHub release `SHA256SUMS`
+- does not use `sudo`
+- does not overwrite an existing `~/.config/shaula/config.toml`
+- does not edit Niri config automatically
+- detects Noctalia, but does not modify `plugins.json` yet
 
 If Niri is detected, the installer generates
-`~/.config/shaula/generated/niri-shaula.kdl` for manual inclusion. It does not
-edit your Niri config automatically. It also detects Noctalia, but does not
-modify `plugins.json` or install a Bar Widget yet.
+`~/.config/shaula/generated/niri-shaula.kdl` for manual inclusion in your active
+Niri config.
 
 ## Features
 
@@ -46,25 +61,33 @@ Not implemented yet:
 - pin screenshot
 - Noctalia Bar Widget
 
-## Requirements
+## Runtime Requirements
 
-Shaula currently expects a Wayland desktop and is tested mainly on Niri.
+Shaula currently expects a Wayland compositor and is tested mainly on Niri.
 
-Recommended runtime tools on Arch/CachyOS:
+Recommended runtime tools:
 
-```bash
-sudo pacman -S grim wl-clipboard
-```
+- `grim`
+- `wl-clipboard` / `wl-copy`
+- GTK4 / gtk4-layer-shell runtime libraries
 
 Optional integration tools:
 
+- `slurp`, only if needed as a fallback selection helper
+- `niri`, recommended for the best integration
+- `quickshell`, only for future Noctalia integration
+
+On Arch/CachyOS:
+
 ```bash
-sudo pacman -S slurp niri
+sudo pacman -S grim wl-clipboard gtk4 gtk4-layer-shell
 ```
 
-## CLI Usage
+## Usage
 
 ```bash
+shaula doctor
+shaula doctor --json
 shaula capture area --json
 shaula capture area --json --no-preview
 shaula capture fullscreen --json --preview
@@ -72,7 +95,12 @@ shaula capture previous-area --json
 shaula preview ~/Pictures/Shaula/example.png --json
 ```
 
-## Development
+## Development Requirements
+
+- Zig 0.16.0
+- `jq`
+- GTK4 / gtk4-layer-shell development packages
+- Wayland development packages
 
 Build from source:
 
@@ -91,16 +119,13 @@ Useful development commands:
 ```bash
 ./dev capture
 ./dev frozen
-./dev state
+./dev context
 ```
 
-Development requirements:
+## Project Docs
 
-```bash
-sudo pacman -S zig jq gtk4 gtk4-layer-shell wayland
-```
-
-- Zig 0.16.0
-- `jq`
-- GTK4 / gtk4-layer-shell development packages
-- Wayland development packages
+- `DEV.md`: development workflow and integration notes
+- `CONTEXT.md`: current implementation snapshot
+- `docs/roadmap.md`: planned features
+- `spec/`: contracts and architecture notes
+- `scripts/qa/`: QA checks

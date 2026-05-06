@@ -14,7 +14,7 @@ Useful commands:
 ```bash
 ./dev capture
 ./dev frozen
-./dev state
+./dev context
 ./dev doctor
 ./dev strategies
 ./dev bench

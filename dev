@@ -34,7 +34,7 @@ App:
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
-  state          Copy state snapshot, capture-mode note, last 3 commits, and diff to clipboard
+  context        Copy context snapshot, capture-mode note, last 3 commits, and diff to clipboard
   config         Build, then show resolved Shaula config
   config-init    Build, then create Shaula config.toml if missing
   niri-rule      Build, then print Shaula's managed Niri preview rule
@@ -145,8 +145,8 @@ clean() {
   echo "ok clean"
 }
 
-# Copy the prompt snapshot without mutating the real Git index.
-state() {
+# Copy the prompt context without mutating the real Git index.
+context() {
   if ! have wl-copy; then
     echo "missing wl-copy" >&2
     exit 1
@@ -161,12 +161,12 @@ state() {
     cp "${git_index}" "${temp_index}"
 
     {
-      if [[ -f STATE.md ]]; then
-        cat STATE.md
+      if [[ -f CONTEXT.md ]]; then
+        cat CONTEXT.md
         printf '\n'
       fi
       cat <<'EOF'
-## Dev State Script Capture Mode Note
+## Dev Context Script Capture Mode Note
 
 - Region capture has an explicit foundation with `live` and `frozen` modes.
 - `live` is the default for normal `capture area` / `./dev capture`: the overlay
@@ -188,7 +188,7 @@ EOF
     }
   ) | wl-copy
 
-  echo "ok state copied to clipboard"
+  echo "ok context copied to clipboard"
 }
 
 stage() {
@@ -310,8 +310,8 @@ all)
   stage)
     stage "$@"
     ;;
-  state)
-    state
+  context)
+    context
     ;;
   config)
     run_shaula config show --json "$@"

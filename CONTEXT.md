@@ -1,10 +1,12 @@
-# State
+# Context
 
-Snapshot for prompt reuse. `./dev state` copies this file, the last 3 commits,
+Snapshot for prompt reuse. `./dev context` copies this file, the last 3 commits,
 and the working diff.
 
 ## Current focus
 
+- Prompt handoff snapshot is now `CONTEXT.md`; `./dev context` copies it with
+  the capture-mode note, last 3 commits, and working diff.
 - First installer foundation is now present in `scripts/install.sh` and
   `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
   `SHA256SUMS`, detects `x86_64`/`aarch64`, warns about missing runtime tools,
@@ -17,6 +19,9 @@ and the working diff.
   fullscreen, and focused capture binds using the installed absolute
   `shaula` path. It detects Noctalia paths without modifying `plugins.json` or
   installing a real Noctalia Bar Widget.
+- `shaula doctor` and `shaula doctor --json` now provide read-only diagnostics
+  for installed paths, config/generated files, Wayland env, Niri candidates,
+  Noctalia detection paths, runtime tools, and actionable warnings.
 - Public docs have been split: `README.md` is now the shorter product-facing
   install/usage/dev-basics page, `DEV.md` holds internal workflow and
   integration notes, and `docs/roadmap.md` tracks future features.
