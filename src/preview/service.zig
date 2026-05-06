@@ -11,7 +11,6 @@ pub const PreviewRunResult = struct {
     action: PreviewAction = .close,
     copied: bool = false,
     saved: bool = false,
-    /// Mirrors the helper contract so the Zig service can suppress duplicates.
     notified: bool = false,
     saved_path: ?[]u8 = null,
 

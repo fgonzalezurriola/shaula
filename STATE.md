@@ -5,6 +5,21 @@ and the working diff.
 
 ## Current focus
 
+- First installer foundation is now present in `scripts/install.sh` and
+  `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
+  `SHA256SUMS`, detects `x86_64`/`aarch64`, warns about missing runtime tools,
+  installs desktop/icon/config/generated paths, never uses sudo, and preserves
+  an existing `~/.config/shaula/config.toml`.
+- Installer integration behavior is intentionally conservative: it detects Niri
+  config candidates and generates
+  `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The
+  snippet includes the preview floating window-rule and recommended area,
+  fullscreen, and focused capture binds using the installed absolute
+  `shaula` path. It detects Noctalia paths without modifying `plugins.json` or
+  installing a real Noctalia Bar Widget.
+- Public docs have been split: `README.md` is now the shorter product-facing
+  install/usage/dev-basics page, `DEV.md` holds internal workflow and
+  integration notes, and `docs/roadmap.md` tracks future features.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - `pin screenshot` is a roadmap item, not a current toolbar action.

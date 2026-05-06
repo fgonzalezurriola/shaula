@@ -1,89 +1,106 @@
 # Shaula
 
-Shaula es una herramienta de captura para Niri/Wayland con salida JSON determinística. El objetivo actual es simple: captura rápida, overlay de selección preciso y post-capture mínimo sobre una base Linux/Niri-first.
+Shaula is a fast screenshot tool for Wayland/Niri, built for a Shottr-like
+workflow on Linux.
 
-## Alcance actual
+> Shaula is early software. The main target is CachyOS/Arch + Niri.
 
-- Captura `all-in-one`, `area`, `fullscreen`, `window` y `previous-area`.
-- Historial local de capturas.
-- Integración de portapapeles para copiar o importar imágenes.
-- Preview post-capture explícita con `shaula preview <file> --json`.
-- Auto-preview post-capture para `capture area` y `capture all-in-one`, con
-  `--preview`/`--no-preview` disponible en todos los modos de captura.
-- Daemon e IPC versionados.
-- Overlay de selección como línea de trabajo activa:
-  - selección de área,
-  - modo `all-in-one` inicial con toolbar flotante persistida,
-  - confirm/cancel,
-  - constraint por aspecto vía `--aspect`,
-  - flujo honesto para `previous-area`,
-  - helper nativo GTK/layer-shell.
-- Dirección de producto:
-  - captura por Niri IPC/Wayland,
-  - overlay pulido,
-  - una UX de selección y post-captura a la altura de Shottr,
-  - mejoras incrementales primero, antes de rediseñar la UI,
-  - pin screenshots,
-  - pixelate/redaction,
-  - ruler/color picker,
-  - configuración file-first.
+## Install
 
-Fuera de alcance por ahora:
+Shaula can be installed locally without sudo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh
+```
+
+Uninstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --uninstall
+```
+
+The installer verifies GitHub release `SHA256SUMS`, installs into user-local
+paths under `~/.local` and `~/.config`, never uses `sudo`, and does not
+overwrite an existing `~/.config/shaula/config.toml`.
+
+If Niri is detected, the installer generates
+`~/.config/shaula/generated/niri-shaula.kdl` for manual inclusion. It does not
+edit your Niri config automatically. It also detects Noctalia, but does not
+modify `plugins.json` or install a Bar Widget yet.
+
+## Features
+
+- Area, fullscreen, focused-output, window, all-in-one, and previous-area capture
+- Native GTK/layer-shell selection overlay
+- Post-capture preview/editor
+- Copy, Save As, Crop, Blur, Erase, Spotlight, annotations, undo/redo
+- Live hover color sampling and Tab-to-copy color
+- JSON output for automation
+- Niri-first behavior with conservative integration helpers
+
+Not implemented yet:
 
 - OCR
-- grabación de pantalla
+- screen recording
 - scrolling capture
-- placeholders de features futuras en la UI pública
+- pin screenshot
+- Noctalia Bar Widget
 
-## Requisitos
+## Requirements
 
-- Zig 0.16.0
-- Niri
-- `grim`
-- `wl-copy` y `wl-paste`
-- `jq` para QA y depuración
+Shaula currently expects a Wayland desktop and is tested mainly on Niri.
 
-## Arranque rápido
+Recommended runtime tools on Arch/CachyOS:
+
+```bash
+sudo pacman -S grim wl-clipboard
+```
+
+Optional integration tools:
+
+```bash
+sudo pacman -S slurp niri
+```
+
+## CLI Usage
+
+```bash
+shaula capture area --json
+shaula capture area --json --no-preview
+shaula capture fullscreen --json --preview
+shaula capture previous-area --json
+shaula preview ~/Pictures/Shaula/example.png --json
+```
+
+## Development
+
+Build from source:
 
 ```bash
 zig build
-
-export SHAULA_COMPOSITOR=niri
-export NIRI_SOCKET=/run/user/1000/niri-0.sock
-
-./zig-out/bin/shaula preflight --json
-./zig-out/bin/shaula capture area --json
-./zig-out/bin/shaula capture area --json --no-preview
-./zig-out/bin/shaula capture all-in-one --json
-./zig-out/bin/shaula capture fullscreen --json --preview
-./zig-out/bin/shaula capture previous-area --json
-./zig-out/bin/shaula preview ~/Pictures/Shaula/example.png --json
 ```
 
-## Archivos clave
-
-- `src/`: implementación Zig
-- `scripts/qa/`: suites y checks automatizados
-- `spec/`: contratos y decisiones de arquitectura
-- `DEV.md`: guía práctica de uso y desarrollo
-
-## Configuración
-
-Shaula lee configuración desde `SHAULA_CONFIG_FILE`,
-`$XDG_CONFIG_HOME/shaula/config.toml` o `$HOME/.config/shaula/config.toml`.
-La primera superficie soportada es cómo Niri debería abrir la ventana de preview.
+Run checks:
 
 ```bash
-./zig-out/bin/shaula config show --json
-./zig-out/bin/shaula config init --json
-./zig-out/bin/shaula config niri-window-rule --json | jq -r '.result.kdl'
-./zig-out/bin/shaula config niri-install --json
-./dev stage floating
-./dev stage tiling
+./dev check
 ```
 
-`config niri-install` edita sólo un bloque marcado de Shaula dentro de
-`~/.config/niri/config.kdl` y crea un backup antes de modificar el archivo. La
-lógica está separada del CLI para que una UI/watcher pueda reutilizarla después.
-`./dev stage <mode>` agrupa el flujo de desarrollo: crea el TOML si falta,
-actualiza `preview.window.mode` y reinstala el bloque administrado de Niri.
+Useful development commands:
+
+```bash
+./dev capture
+./dev frozen
+./dev state
+```
+
+Development requirements:
+
+```bash
+sudo pacman -S zig jq gtk4 gtk4-layer-shell wayland
+```
+
+- Zig 0.16.0
+- `jq`
+- GTK4 / gtk4-layer-shell development packages
+- Wayland development packages
