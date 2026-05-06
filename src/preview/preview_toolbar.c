@@ -287,6 +287,19 @@ static GtkWidget *make_fixed_width_muted_label(const char *text, int chars,
   return label;
 }
 
+static void apply_fixed_code_width(GtkWidget *label, int chars, int px_width,
+                                   float xalign) {
+  gtk_label_set_width_chars(GTK_LABEL(label), chars);
+  gtk_label_set_max_width_chars(GTK_LABEL(label), chars);
+  gtk_label_set_xalign(GTK_LABEL(label), xalign);
+  gtk_widget_set_size_request(label, px_width, -1);
+
+  PangoAttrList *attrs = pango_attr_list_new();
+  pango_attr_list_insert(attrs, pango_attr_family_new("monospace"));
+  gtk_label_set_attributes(GTK_LABEL(label), attrs);
+  pango_attr_list_unref(attrs);
+}
+
 static GtkWidget *make_normal_label(const char *text) {
   GtkWidget *label = gtk_label_new(text);
   gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
@@ -295,7 +308,6 @@ static GtkWidget *make_normal_label(const char *text) {
 
 static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
                         gpointer data) {
-  (void)area;
   ShaulaPreviewState *state = data;
   double rw = (double)w;
   double rh = (double)h;
@@ -306,10 +318,16 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
   cairo_arc(cr, rw - r, rh - r, r, 0, 0.5 * G_PI);
   cairo_arc(cr, r, rh - r, r, 0.5 * G_PI, G_PI);
   cairo_close_path(cr);
-  cairo_set_source_rgba(cr, state->current_color.r, state->current_color.g,
-                        state->current_color.b, state->current_color.a);
+  ShaulaColor color =
+      state->hover_color_valid ? state->hover_color : state->current_color;
+  cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
   cairo_fill_preserve(cr);
-  cairo_set_source_rgba(cr, 0, 0, 0, 0.15);
+
+  /* Border matches the SVG icon foreground resolved from the GTK theme. */
+  GdkRGBA fg;
+  gtk_style_context_get_color(
+      gtk_widget_get_style_context(GTK_WIDGET(area)), &fg);
+  cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.55);
   cairo_set_line_width(cr, 1);
   cairo_stroke(cr);
 }
@@ -363,19 +381,39 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   GtkWidget *metadata = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
   gtk_widget_set_valign(metadata, GTK_ALIGN_CENTER);
 
+  /* Color readout: swatch + hex on top, hint below. */
+  GtkWidget *color_stack = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_valign(color_stack, GTK_ALIGN_CENTER);
+
+  GtkWidget *color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_widget_set_halign(color_row, GTK_ALIGN_CENTER);
+
   GtkWidget *swatch = gtk_drawing_area_new();
   state->color_swatch = swatch;
   gtk_widget_set_size_request(swatch, 16, 16);
   gtk_widget_set_valign(swatch, GTK_ALIGN_CENTER);
-  gtk_widget_set_margin_end(swatch, 4);
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(swatch), draw_swatch, state,
                                  NULL);
-  gtk_box_append(GTK_BOX(metadata), swatch);
+  gtk_box_append(GTK_BOX(color_row), swatch);
 
   char hex[8];
   shaula_color_to_hex(state->current_color, hex);
-  state->color_hex_label = make_normal_label(hex);
-  gtk_box_append(GTK_BOX(metadata), state->color_hex_label);
+  state->color_hex_label =
+      make_normal_label(state->hover_color_valid ? state->hover_hex : hex);
+  apply_fixed_code_width(state->color_hex_label, 7, 72, 0.0f);
+  gtk_widget_set_tooltip_text(state->color_hex_label, "Tab to copy color");
+  gtk_box_append(GTK_BOX(color_row), state->color_hex_label);
+
+  gtk_box_append(GTK_BOX(color_stack), color_row);
+
+  GtkWidget *hint = make_muted_label("[Tab to copy]");
+  PangoAttrList *hint_attrs = pango_attr_list_new();
+  pango_attr_list_insert(hint_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
+  gtk_label_set_attributes(GTK_LABEL(hint), hint_attrs);
+  pango_attr_list_unref(hint_attrs);
+  gtk_box_append(GTK_BOX(color_stack), hint);
+
+  gtk_box_append(GTK_BOX(metadata), color_stack);
 
   if (state->image != NULL) {
     char size_buf[32];

@@ -1,4 +1,5 @@
 const std = @import("std");
+const process_exec = @import("../runtime/process_exec.zig");
 
 /// Dispatch runtime capture to helper or grim and map failures to
 /// `error.BackendUnavailable` for deterministic taxonomy handling.
@@ -40,8 +41,7 @@ fn writeRuntimeCaptureWithHelper(
         try std.Io.Dir.cwd().createDirPath(io, parent);
     }
 
-    const result = if (area_geometry) |region| std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{
+    const result = if (area_geometry) |region| process_exec.run(std.heap.smp_allocator, io, &.{
             helper_path,
             "--backend",
             backend_label,
@@ -52,13 +52,12 @@ fn writeRuntimeCaptureWithHelper(
             "--output",
             output_path,
         },
-        .stdout_limit = .limited(0),
-        .stderr_limit = .limited(8192),
-    }) catch |err| switch (err) {
+        0,
+        8192,
+    ) catch |err| switch (err) {
         error.FileNotFound => return error.BackendUnavailable,
         else => return err,
-    } else std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{
+    } else process_exec.run(std.heap.smp_allocator, io, &.{
             helper_path,
             "--backend",
             backend_label,
@@ -67,26 +66,19 @@ fn writeRuntimeCaptureWithHelper(
             "--output",
             output_path,
         },
-        .stdout_limit = .limited(0),
-        .stderr_limit = .limited(8192),
-    }) catch |err| switch (err) {
+        0,
+        8192,
+    ) catch |err| switch (err) {
         error.FileNotFound => return error.BackendUnavailable,
         else => return err,
     };
-    defer std.heap.smp_allocator.free(result.stdout);
-    defer std.heap.smp_allocator.free(result.stderr);
+    defer result.deinit(std.heap.smp_allocator);
 
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 0) return;
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-        else => {
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
+    if (result.exitedZero()) {
+        return;
     }
+    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
+    return error.BackendUnavailable;
 }
 
 fn writeRuntimeCaptureWithGrim(
@@ -104,47 +96,28 @@ fn writeRuntimeCaptureWithGrim(
 
     const result = if (mode_is_area) blk: {
         const geometry = area_geometry orelse return error.BackendUnavailable;
-        break :blk std.process.run(std.heap.smp_allocator, io, .{
-            .argv = &.{ grim_path, "-g", geometry, output_path },
-            .stdout_limit = .limited(0),
-            .stderr_limit = .limited(8192),
-        }) catch |err| switch (err) {
+        break :blk process_exec.run(std.heap.smp_allocator, io, &.{ grim_path, "-g", geometry, output_path }, 0, 8192) catch |err| switch (err) {
             error.FileNotFound => return error.BackendUnavailable,
             else => return err,
         };
     } else if (mode_is_focused) blk: {
         var focused_output_storage: [128]u8 = undefined;
         const focused_output = resolveFocusedOutput(io, &focused_output_storage) orelse return error.BackendUnavailable;
-        break :blk std.process.run(std.heap.smp_allocator, io, .{
-            .argv = &.{ grim_path, "-o", focused_output, output_path },
-            .stdout_limit = .limited(0),
-            .stderr_limit = .limited(8192),
-        }) catch |err| switch (err) {
+        break :blk process_exec.run(std.heap.smp_allocator, io, &.{ grim_path, "-o", focused_output, output_path }, 0, 8192) catch |err| switch (err) {
             error.FileNotFound => return error.BackendUnavailable,
             else => return err,
         };
-    } else std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{grim_path, output_path},
-        .stdout_limit = .limited(0),
-        .stderr_limit = .limited(8192),
-    }) catch |err| switch (err) {
+    } else process_exec.run(std.heap.smp_allocator, io, &.{ grim_path, output_path }, 0, 8192) catch |err| switch (err) {
         error.FileNotFound => return error.BackendUnavailable,
         else => return err,
     };
-    defer std.heap.smp_allocator.free(result.stdout);
-    defer std.heap.smp_allocator.free(result.stderr);
+    defer result.deinit(std.heap.smp_allocator);
 
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 0) return;
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
-        else => {
-            std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-            return error.BackendUnavailable;
-        },
+    if (result.exitedZero()) {
+        return;
     }
+    std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
+    return error.BackendUnavailable;
 }
 
 /// Resolve focused output name into the caller buffer.
@@ -152,18 +125,9 @@ fn writeRuntimeCaptureWithGrim(
 /// Returns null when the focused output cannot be resolved; callers map this
 /// to deterministic `ERR_CAPTURE_BACKEND_UNAVAILABLE` handling.
 fn resolveFocusedOutput(io: std.Io, buffer: []u8) ?[]const u8 {
-    const niri_msg_result = std.process.run(std.heap.smp_allocator, io, .{
-        .argv = &.{ "niri", "msg", "--json", "focused-output" },
-        .stdout_limit = .limited(65536),
-        .stderr_limit = .limited(0),
-    }) catch return null;
-    defer std.heap.smp_allocator.free(niri_msg_result.stdout);
-    defer std.heap.smp_allocator.free(niri_msg_result.stderr);
-
-    switch (niri_msg_result.term) {
-        .exited => |code| if (code != 0) return null,
-        else => return null,
-    }
+    const niri_msg_result = process_exec.run(std.heap.smp_allocator, io, &.{ "niri", "msg", "--json", "focused-output" }, 65536, 0) catch return null;
+    defer niri_msg_result.deinit(std.heap.smp_allocator);
+    if (!niri_msg_result.exitedZero()) return null;
 
     const stdout = niri_msg_result.stdout;
     const name_key = "\"name\":\"";

@@ -36,6 +36,147 @@ static ShaulaPoint clamped_image_point(ShaulaPreviewState *state,
                               shaula_preview_image_height(state));
 }
 
+static gboolean image_point_to_pixel(ShaulaPreviewState *state,
+                                     ShaulaPoint point, int *px, int *py) {
+  int width = shaula_preview_image_width(state);
+  int height = shaula_preview_image_height(state);
+  if (width <= 0 || height <= 0 || point.x < 0.0 || point.y < 0.0 ||
+      point.x >= (double)width || point.y >= (double)height)
+    return FALSE;
+  *px = CLAMP((int)floor(point.x), 0, width - 1);
+  *py = CLAMP((int)floor(point.y), 0, height - 1);
+  return TRUE;
+}
+
+/* The hover readout samples document pixels in image coordinates, not GTK
+ * chrome or transient editor UI. Rendering only a translated 1x1 surface keeps
+ * motion updates cheap while matching export composition for stored
+ * annotations and document effects.
+ */
+static gboolean sample_composited_pixel(ShaulaPreviewState *state, int px,
+                                        int py, ShaulaColor *color) {
+  cairo_surface_t *surface =
+      cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+  if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+    cairo_surface_destroy(surface);
+    return FALSE;
+  }
+
+  cairo_t *cr = cairo_create(surface);
+  cairo_translate(cr, -(double)px, -(double)py);
+  gdk_cairo_set_source_pixbuf(cr, state->image, 0, 0);
+  cairo_paint(cr);
+
+  cairo_save(cr);
+  cairo_rectangle(cr, px, py, 1, 1);
+  cairo_clip(cr);
+  for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
+       i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
+    gboolean selected = annotation->selected;
+    annotation->selected = FALSE;
+    shaula_annotation_draw(cr, annotation);
+    annotation->selected = selected;
+  }
+  shaula_preview_draw_spotlight_effect(state, cr);
+  cairo_restore(cr);
+  cairo_destroy(cr);
+
+  cairo_surface_flush(surface);
+  unsigned char *data = cairo_image_surface_get_data(surface);
+  guint32 pixel = *(guint32 *)data;
+  guint8 b = pixel & 0xff;
+  guint8 g = (pixel >> 8) & 0xff;
+  guint8 r = (pixel >> 16) & 0xff;
+  guint8 a = (pixel >> 24) & 0xff;
+  if (a > 0) {
+    color->r = CLAMP(((double)r * 255.0) / ((double)a * 255.0), 0.0, 1.0);
+    color->g = CLAMP(((double)g * 255.0) / ((double)a * 255.0), 0.0, 1.0);
+    color->b = CLAMP(((double)b * 255.0) / ((double)a * 255.0), 0.0, 1.0);
+  } else {
+    color->r = 0.0;
+    color->g = 0.0;
+    color->b = 0.0;
+  }
+  color->a = (double)a / 255.0;
+  cairo_surface_destroy(surface);
+  return TRUE;
+}
+
+static gboolean update_hover_color(ShaulaPreviewState *state, double x,
+                                   double y) {
+  if (state == NULL || state->image == NULL)
+    return FALSE;
+  ShaulaPoint image_point =
+      shaula_preview_canvas_screen_to_image(state, x, y);
+  int px = 0;
+  int py = 0;
+  if (!image_point_to_pixel(state, image_point, &px, &py))
+    return FALSE;
+
+  ShaulaColor color;
+  if (!sample_composited_pixel(state, px, py, &color))
+    return FALSE;
+
+  gboolean changed =
+      !state->hover_color_valid || (int)floor(state->hover_image_point.x) != px ||
+      (int)floor(state->hover_image_point.y) != py ||
+      fabs(state->hover_color.r - color.r) > 0.0001 ||
+      fabs(state->hover_color.g - color.g) > 0.0001 ||
+      fabs(state->hover_color.b - color.b) > 0.0001 ||
+      fabs(state->hover_color.a - color.a) > 0.0001;
+  if (!changed)
+    return TRUE;
+
+  state->hover_color_valid = TRUE;
+  state->hover_image_point = (ShaulaPoint){(double)px, (double)py};
+  state->hover_color = color;
+  shaula_color_to_hex(color, state->hover_hex);
+  if (state->color_hex_label != NULL)
+    gtk_label_set_text(GTK_LABEL(state->color_hex_label), state->hover_hex);
+  if (state->color_swatch != NULL)
+    gtk_widget_queue_draw(state->color_swatch);
+  return TRUE;
+}
+
+static gboolean update_hover_color_from_pointer(ShaulaPreviewState *state) {
+  if (state == NULL || state->area == NULL)
+    return FALSE;
+
+  /* Tab copy must not depend on a prior motion event. Query the current GDK
+   * pointer position on the preview surface, then translate it into drawing
+   * area coordinates before using the normal canvas-to-image mapping.
+   */
+  GtkNative *native = gtk_widget_get_native(state->area);
+  if (native == NULL)
+    return FALSE;
+  GdkSurface *surface = gtk_native_get_surface(native);
+  if (surface == NULL)
+    return FALSE;
+  GdkSeat *seat = gdk_display_get_default_seat(gdk_surface_get_display(surface));
+  GdkDevice *pointer = seat != NULL ? gdk_seat_get_pointer(seat) : NULL;
+  if (pointer == NULL)
+    return FALSE;
+
+  double surface_x = 0.0;
+  double surface_y = 0.0;
+  if (!gdk_surface_get_device_position(surface, pointer, &surface_x, &surface_y,
+                                       NULL))
+    return FALSE;
+
+  double native_x = 0.0;
+  double native_y = 0.0;
+  double area_x = 0.0;
+  double area_y = 0.0;
+  gtk_native_get_surface_transform(native, &native_x, &native_y);
+  if (!gtk_widget_translate_coordinates(GTK_WIDGET(native), state->area,
+                                        surface_x - native_x,
+                                        surface_y - native_y, &area_x,
+                                        &area_y))
+    return FALSE;
+  return update_hover_color(state, area_x, area_y);
+}
+
 static void draw_checker_background(ShaulaPreviewState *state, cairo_t *cr,
                                     int width, int height) {
   if (state->is_dark) {
@@ -375,6 +516,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   ShaulaPreviewState *state = data;
   if (state->image == NULL)
     return;
+  update_hover_color(state, x, y);
 
   guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture));
   ShaulaPoint image_point =
@@ -532,6 +674,12 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
   shaula_preview_queue_draw(state);
 }
 
+static void on_motion(GtkEventControllerMotion *controller, double x, double y,
+                      gpointer data) {
+  (void)controller;
+  update_hover_color(data, x, y);
+}
+
 static void finish_shape_annotation(ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = NULL;
   switch (state->operation) {
@@ -637,10 +785,15 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   ShaulaPreviewState *state = data;
   gboolean ctrl = (modifiers & GDK_CONTROL_MASK) != 0;
 
-  if (state->text_entry != NULL) {
-    if (keyval == GDK_KEY_Escape)
+  GtkWidget *focus = state->window != NULL
+                         ? gtk_window_get_focus(GTK_WINDOW(state->window))
+                         : NULL;
+  if (focus != NULL && GTK_IS_EDITABLE(focus)) {
+    if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
       shaula_preview_cancel_operation(state);
-    return TRUE;
+      return TRUE;
+    }
+    return FALSE;
   }
   if (keyval == GDK_KEY_Escape) {
     if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
@@ -667,8 +820,12 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   }
 
   ShaulaPreviewCommand command;
-  if (shaula_preview_shortcut_command(keyval, modifiers, &command))
-    return shaula_preview_execute_command(state, command);
+  if (shaula_preview_shortcut_command(keyval, modifiers, &command)) {
+    if (command == SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR)
+      update_hover_color_from_pointer(state);
+    gboolean executed = shaula_preview_execute_command(state, command);
+    return executed || command == SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR;
+  }
 
   if (!ctrl && (keyval == GDK_KEY_plus || keyval == GDK_KEY_equal)) {
     shaula_preview_action_zoom_in(state);
@@ -679,6 +836,25 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     return TRUE;
   }
   return FALSE;
+}
+
+static gboolean on_copy_hover_color_shortcut(GtkWidget *widget,
+                                             GVariant *args, gpointer data) {
+  (void)widget;
+  (void)args;
+  ShaulaPreviewState *state = data;
+  GtkWidget *focus = state->window != NULL
+                         ? gtk_window_get_focus(GTK_WINDOW(state->window))
+                         : NULL;
+  if (focus != NULL && GTK_IS_EDITABLE(focus))
+    return FALSE;
+
+  ShaulaPreviewCommand command;
+  if (!shaula_preview_shortcut_command(GDK_KEY_Tab, 0, &command))
+    return FALSE;
+  update_hover_color_from_pointer(state);
+  gboolean executed = shaula_preview_execute_command(state, command);
+  return executed || command == SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR;
 }
 
 static void on_map(GtkWidget *widget, gpointer data) {
@@ -715,9 +891,24 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   g_signal_connect(scroll, "scroll", G_CALLBACK(on_scroll), state);
   gtk_widget_add_controller(area, scroll);
 
+  GtkEventController *motion = gtk_event_controller_motion_new();
+  g_signal_connect(motion, "motion", G_CALLBACK(on_motion), state);
+  gtk_widget_add_controller(area, motion);
+
   GtkEventController *keys = gtk_event_controller_key_new();
+  gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), state);
   gtk_widget_add_controller(state->window, keys);
+
+  GtkEventController *shortcut_controller = gtk_shortcut_controller_new();
+  gtk_shortcut_controller_set_scope(GTK_SHORTCUT_CONTROLLER(shortcut_controller),
+                                    GTK_SHORTCUT_SCOPE_GLOBAL);
+  gtk_shortcut_controller_add_shortcut(
+      GTK_SHORTCUT_CONTROLLER(shortcut_controller),
+      gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Tab, 0),
+                       gtk_callback_action_new(on_copy_hover_color_shortcut,
+                                               state, NULL)));
+  gtk_widget_add_controller(state->window, shortcut_controller);
 
   g_signal_connect(state->window, "map", G_CALLBACK(on_map), state);
 

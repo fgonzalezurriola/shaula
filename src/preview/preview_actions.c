@@ -243,6 +243,14 @@ void shaula_preview_action_copy_path(ShaulaPreviewState *state) {
     report_error("copy path", error);
 }
 
+void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state) {
+  if (state == NULL || !state->hover_color_valid)
+    return;
+  GError *error = NULL;
+  if (!shaula_clipboard_copy_text(state->hover_hex, &error))
+    report_error("copy hover color", error);
+}
+
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state) {
   if (state == NULL || state->path == NULL)
     return;

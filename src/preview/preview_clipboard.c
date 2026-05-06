@@ -55,13 +55,19 @@ gboolean shaula_clipboard_copy_png_file(const char *path, GError **error) {
   return TRUE;
 }
 
+/* Runtime boundary: delegate text clipboard writes to wl-copy.
+ * g_spawn_command_line_sync does not interpret shell pipe operators, so the
+ * pipeline must be passed through /bin/sh -c.
+ */
 gboolean shaula_clipboard_copy_text(const char *text, GError **error) {
   gchar *quoted = g_shell_quote(text != NULL ? text : "");
-  gchar *command =
+  gchar *shell_cmd =
       g_strdup_printf("printf %%s %s | wl-copy --type text/plain", quoted);
+  gchar *argv[] = {"/bin/sh", "-c", shell_cmd, NULL};
   int status = 1;
-  gboolean ok = g_spawn_command_line_sync(command, NULL, NULL, &status, error);
-  g_free(command);
+  gboolean ok = g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
+                              NULL, NULL, &status, error);
+  g_free(shell_cmd);
   g_free(quoted);
   if (!ok)
     return FALSE;

@@ -55,10 +55,7 @@ pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
+        if (try parseCommonFlag(io, "capture area", "area", argv, &i, arg, &flags)) continue;
         if (std.mem.eql(u8, arg, "--dry-run")) {
             flags.dry_run = true;
             continue;
@@ -93,32 +90,6 @@ pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
             flags.region_capture_mode = "frozen";
             continue;
         }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--output requires a path", false, "area", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
         try command_json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "unsupported flag", false, "area", null, false, &.{});
         return error.CliUsage;
     }
@@ -130,36 +101,7 @@ pub fn parseFullscreenFlags(io: std.Io, argv: []const [*:0]const u8) !Fullscreen
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "--output requires a path", false, "fullscreen", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
+        if (try parseCommonFlag(io, "capture fullscreen", "fullscreen", argv, &i, arg, &flags)) continue;
         try command_json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "unsupported flag", false, "fullscreen", null, false, &.{});
         return error.CliUsage;
     }
@@ -172,36 +114,7 @@ pub fn parseFocusedFlags(io: std.Io, argv: []const [*:0]const u8) !FocusedFlags 
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "--output requires a path", false, "focused", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
+        if (try parseCommonFlag(io, "capture focused", "focused", argv, &i, arg, &flags)) continue;
         try command_json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "unsupported flag", false, "focused", null, false, &.{});
         return error.CliUsage;
     }
@@ -213,19 +126,7 @@ pub fn parseWindowFlags(io: std.Io, argv: []const [*:0]const u8) !WindowFlags {
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "--output requires a path", false, "window", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
+        if (try parseCommonFlag(io, "capture window", "window", argv, &i, arg, &flags)) continue;
         if (std.mem.eql(u8, arg, "--window-id")) {
             if (i + 1 >= argv.len) {
                 try command_json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "--window-id requires a value", false, "window", null, false, &.{});
@@ -235,23 +136,6 @@ pub fn parseWindowFlags(io: std.Io, argv: []const [*:0]const u8) !WindowFlags {
             flags.window_id = argToSlice(argv[i]);
             continue;
         }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
         try command_json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "unsupported flag", false, "window", null, false, &.{});
         return error.CliUsage;
     }
@@ -263,36 +147,7 @@ pub fn parsePreviousAreaFlags(io: std.Io, argv: []const [*:0]const u8) !Previous
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "--output requires a path", false, "previous-area", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
+        if (try parseCommonFlag(io, "capture previous-area", "previous-area", argv, &i, arg, &flags)) continue;
         try command_json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "unsupported flag", false, "previous-area", null, false, &.{});
         return error.CliUsage;
     }
@@ -304,10 +159,7 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
     var i: usize = 3;
     while (i < argv.len) : (i += 1) {
         const arg = argToSlice(argv[i]);
-        if (std.mem.eql(u8, arg, "--json")) {
-            flags.json_mode = true;
-            continue;
-        }
+        if (try parseCommonFlag(io, "capture all-in-one", "all-in-one", argv, &i, arg, &flags)) continue;
         if (std.mem.eql(u8, arg, "--dry-run")) {
             flags.dry_run = true;
             continue;
@@ -342,32 +194,6 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
             flags.region_capture_mode = "frozen";
             continue;
         }
-        if (std.mem.eql(u8, arg, "--output")) {
-            if (i + 1 >= argv.len) {
-                try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--output requires a path", false, "all-in-one", null, false, &.{});
-                return error.CliUsage;
-            }
-            i += 1;
-            flags.output = argToSlice(argv[i]);
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save")) {
-            flags.save = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--copy")) {
-            flags.copy = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview")) {
-            flags.preview = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--no-preview")) {
-            flags.preview = false;
-            continue;
-        }
-
         try command_json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "unsupported flag", false, "all-in-one", null, false, &.{});
         return error.CliUsage;
     }
@@ -376,6 +202,51 @@ pub fn parseAllInOneFlags(io: std.Io, argv: []const [*:0]const u8) !AllInOneFlag
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
+}
+
+/// Parse capture flags shared by every capture subcommand.
+///
+/// Contract constraint: unsupported flags stay with each mode parser so the
+/// existing command-specific `ERR_CLI_USAGE` messages remain unchanged.
+fn parseCommonFlag(
+    io: std.Io,
+    command: []const u8,
+    mode: []const u8,
+    argv: []const [*:0]const u8,
+    index: *usize,
+    arg: []const u8,
+    parsed: anytype,
+) !bool {
+    if (std.mem.eql(u8, arg, "--json")) {
+        parsed.json_mode = true;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--output")) {
+        if (index.* + 1 >= argv.len) {
+            try command_json.writeErrorJson(io, command, "ERR_CLI_USAGE", "--output requires a path", false, mode, null, false, &.{});
+            return error.CliUsage;
+        }
+        index.* += 1;
+        parsed.output = argToSlice(argv[index.*]);
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--save")) {
+        parsed.save = true;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--copy")) {
+        parsed.copy = true;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--preview")) {
+        parsed.preview = true;
+        return true;
+    }
+    if (std.mem.eql(u8, arg, "--no-preview")) {
+        parsed.preview = false;
+        return true;
+    }
+    return false;
 }
 
 pub fn resolvePreviewDefault(mode: []const u8, explicit: ?bool) bool {

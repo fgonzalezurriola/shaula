@@ -11,6 +11,26 @@ and the working diff.
 - Undo/Redo now has a reusable preview history foundation for document edits.
 - Preview commands now provide the shared dispatch path for toolbar callbacks,
   keyboard shortcuts, and future menus/configurable shortcuts.
+- Capture/runtime foundation now has a shared process execution adapter and a
+  single capture lifecycle module for capability guards, pre-capture guards,
+  backend execution, previous-area persistence, and final JSON/`ERR_*`
+  emission. Preview document/history and UI behavior were intentionally left
+  unchanged.
+
+## Capture Runtime Foundation
+
+- `runtime/process_exec.zig` is the shared process execution adapter for
+  capture/overlay runtime boundaries. Callers still own stdout/stderr limits,
+  output cleanup, and deterministic failure mapping.
+- `capture/lifecycle.zig` owns the common capture lifecycle after mode-specific
+  inputs are resolved: enforce capability support, enforce pre-capture guard,
+  optionally settle after live overlay, execute the backend, persist previous
+  area only on success, and emit the existing success/error JSON contract.
+- `capture/command.zig` is now a strict dispatcher into the lifecycle module.
+- `capture/command_flags.zig` has a small common parser for shared capture
+  flags: `--json`, `--output`, `--save`, `--copy`, `--preview`, and
+  `--no-preview`. Mode-specific flags remain in their existing parsers so
+  command-specific `ERR_CLI_USAGE` messages stay stable.
 
 ## Overlay Capture
 
@@ -117,6 +137,26 @@ and the working diff.
 
 - Color swatch: implemented.
 - Color hex label: implemented.
+- Color swatch/hex are now live hover samples from the preview document under
+  the cursor. The sampling path maps canvas coordinates through zoom/pan into
+  image pixels, keeps the last valid sample when the pointer leaves the image,
+  and samples the composited document pixel for the base image, stored
+  annotations, and Spotlight effects while excluding GTK chrome, selection
+  handles, temporary drafts, and floating HUDs.
+- `Tab to copy` is exposed beside the hex readout. `Tab` is routed through the
+  shared preview shortcut map as
+  `SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR`; it copies `#RRGGBB` only when a
+  valid hover sample exists and lets focused editable widgets keep normal text
+  navigation. The preview key controller uses GTK capture phase and a global
+  `GtkShortcutController` fallback so `Tab` reaches the shared dispatcher
+  before normal focus traversal outside editable widgets. `Tab` also refreshes
+  the hover sample from the current GDK pointer position before dispatch, so
+  copying does not depend on a prior motion event.
+- `shaula_clipboard_copy_text` delegates to `/bin/sh -c` so the
+  `printf … | wl-copy` pipeline is properly interpreted as a shell pipe.
+  `g_spawn_command_line_sync` / `g_shell_parse_argv` do not interpret `|`.
+- The live hex label has a fixed pixel width and monospace glyphs so changing
+  sampled colors does not shift the metadata group.
 - Image dimensions label: implemented.
 - Zoom label: implemented.
 
@@ -168,7 +208,7 @@ and the working diff.
   `shaula_preview_execute_command`, command availability, and the static
   shortcut map.
 - Routed shortcuts: Ctrl+C, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D,
-  Delete, Backspace, `f`, and `0`.
+  Delete, Backspace, `Tab`, `f`, and `0`.
 - Toolbar/menu callbacks now dispatch through preview commands while existing
   low-level action helpers still own runtime work such as copy, save, discard,
   open folder, and tool cursor updates.

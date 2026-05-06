@@ -15,6 +15,7 @@ static const ShaulaPreviewShortcut shortcuts[] = {
     {GDK_KEY_d, GDK_CONTROL_MASK, SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED},
     {GDK_KEY_Delete, 0, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED},
     {GDK_KEY_BackSpace, 0, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED},
+    {GDK_KEY_Tab, 0, SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR},
     {GDK_KEY_f, 0, SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN},
     {GDK_KEY_0, 0, SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE},
 };
@@ -53,6 +54,7 @@ static ShaulaTool tool_for_command(ShaulaPreviewCommand command,
   case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
+  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
   case SHAULA_PREVIEW_COMMAND_DISCARD:
   case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
@@ -106,6 +108,8 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
     return state->path != NULL;
+  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
+    return state->image != NULL;
   case SHAULA_PREVIEW_COMMAND_DISCARD:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW:
@@ -164,6 +168,9 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
     shaula_preview_action_copy_path(state);
     return TRUE;
+  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
+    shaula_preview_action_copy_hover_color(state);
+    return TRUE;
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
     shaula_preview_action_open_containing_folder(state);
     return TRUE;
@@ -220,6 +227,8 @@ const char *shaula_preview_command_shortcut_label(
     return "Ctrl+D";
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     return "Delete";
+  case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
+    return "Tab";
   case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
     return "f";
   case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:

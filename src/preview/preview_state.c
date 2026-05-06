@@ -160,6 +160,9 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->last_action = "close";
   state->is_dark = TRUE;
   state->current_color = shaula_color_default();
+  state->hover_color_valid = FALSE;
+  state->hover_color = state->current_color;
+  shaula_color_to_hex(state->hover_color, state->hover_hex);
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
   state->active_spotlight_index = -1;
   state->spotlight_border_color = state->current_color;

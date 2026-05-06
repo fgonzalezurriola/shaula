@@ -144,6 +144,14 @@ typedef struct {
   ShaulaPreviewSnapshot *pending_history_snapshot;
 
   ShaulaColor current_color;
+  /* Hover sampling is view state for the metadata readout and Tab copy. It is
+   * intentionally separate from current_color, which remains the annotation
+   * tool color and part of the user's editing defaults.
+   */
+  gboolean hover_color_valid;
+  ShaulaPoint hover_image_point;
+  ShaulaColor hover_color;
+  char hover_hex[8];
   /* UI/config state only. Must stay out of undo history snapshots. The active
    * Spotlight index only points the HUD at the just-created document entry.
    */

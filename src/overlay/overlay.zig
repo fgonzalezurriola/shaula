@@ -3,6 +3,7 @@ const selection = @import("../selection/selection.zig");
 const all_in_one_session = @import("all_in_one_session.zig");
 const ui_state_store = @import("ui_state_store.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
+const process_exec = @import("../runtime/process_exec.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
@@ -198,29 +199,16 @@ fn runHelperSelectionAttempt(
         try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY", initial_geometry);
     }
 
-    const helper = std.process.run(allocator, io, .{
-        .argv = &.{helper_bin},
-        .stdout_limit = .limited(2048),
-        .stderr_limit = .limited(2048),
-        .environ_map = &helper_env,
-    }) catch {
+    const helper = process_exec.runWithEnv(allocator, io, &.{helper_bin}, 2048, 2048, &helper_env) catch {
         return .unavailable;
     };
-    defer allocator.free(helper.stdout);
-    defer allocator.free(helper.stderr);
+    defer helper.deinit(allocator);
 
     if (helperEnvelopeReportsUnavailable(allocator, helper.stdout) catch false) {
         return .unavailable;
     }
 
-    switch (helper.term) {
-        .exited => |code| {
-            if (code != 0) {
-                return .unavailable;
-            }
-        },
-        else => return .unavailable,
-    }
+    if (!helper.exitedZero()) return .unavailable;
 
     return .{ .selection = parseHelperSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
 }
@@ -260,29 +248,15 @@ fn prepareOverlayBackground(
     else
         &.{ "grim", path };
 
-    const result = std.process.run(allocator, io, .{
-        .argv = argv,
-        .stdout_limit = .limited(1024),
-        .stderr_limit = .limited(1024),
-    }) catch {
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch {
         return null;
     };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
+    defer result.deinit(allocator);
 
-    switch (result.term) {
-        .exited => |code| {
-            if (code != 0) {
-                std.Io.Dir.deleteFileAbsolute(io, path) catch {};
-                allocator.free(path);
-                return null;
-            }
-        },
-        else => {
-            std.Io.Dir.deleteFileAbsolute(io, path) catch {};
-            allocator.free(path);
-            return null;
-        },
+    if (!result.exitedZero()) {
+        std.Io.Dir.deleteFileAbsolute(io, path) catch {};
+        allocator.free(path);
+        return null;
     }
 
     return .{ .path = path, .cleanup = true };
@@ -304,18 +278,9 @@ fn resolveOverlayOutputName(
 
     if (environ.getPosix("NIRI_SOCKET") == null) return null;
 
-    const result = std.process.run(allocator, io, .{
-        .argv = &.{ "niri", "msg", "-j", "focused-output" },
-        .stdout_limit = .limited(8192),
-        .stderr_limit = .limited(1024),
-    }) catch return null;
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
-
-    switch (result.term) {
-        .exited => |code| if (code != 0) return null,
-        else => return null,
-    }
+    const result = process_exec.run(allocator, io, &.{ "niri", "msg", "-j", "focused-output" }, 8192, 1024) catch return null;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return null;
 
     const parsed = std.json.parseFromSlice(NiriFocusedOutput, allocator, result.stdout, .{
         .ignore_unknown_fields = true,

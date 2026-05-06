@@ -20,6 +20,7 @@ void shaula_preview_action_duplicate_selected(ShaulaPreviewState *state);
 void shaula_preview_action_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_action_crop_selected(ShaulaPreviewState *state);
 void shaula_preview_action_copy_path(ShaulaPreviewState *state);
+void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state);
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state);
 
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data);
