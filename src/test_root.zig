@@ -3,8 +3,10 @@ pub const preflight_probe_module = @import("preflight/probe.zig");
 pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 
 const _capture_backend_test = @import("backends/capture_backend_test.zig");
+const _capture_backend_failure = @import("backends/capture_backend_failure.zig");
 const _capture_command_test = @import("capture/command_test.zig");
 const _capture_command_flags_test = @import("capture/command_flags_test.zig");
+const _capture_invocation = @import("capture/invocation.zig");
 const _capture_lifecycle = @import("capture/lifecycle.zig");
 const _capture_types_test = @import("capture/types_test.zig");
 const _config_loader = @import("config/loader.zig");
@@ -23,8 +25,10 @@ const _runtime_process_exec = @import("runtime/process_exec.zig");
 
 test {
     _ = _capture_backend_test;
+    _ = _capture_backend_failure;
     _ = _capture_command_test;
     _ = _capture_command_flags_test;
+    _ = _capture_invocation;
     _ = _capture_lifecycle;
     _ = _capture_types_test;
     _ = _config_loader;

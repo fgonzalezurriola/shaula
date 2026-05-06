@@ -6,6 +6,7 @@ const ui_state_store = @import("ui_state_store.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
+const overlay_runtime = @import("runtime.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
@@ -137,8 +138,6 @@ fn runHelperSelectionAttempt(
     constraint: selection.SelectionConstraint,
     region_capture_mode: RegionCaptureMode,
 ) !HelperSelectionAttempt {
-    const helper_bin = try resolveHelperBinary(allocator, io, environ);
-    defer allocator.free(helper_bin);
     const output_name = try resolveOverlayOutputName(allocator, io, environ);
     defer if (output_name) |name| allocator.free(name);
     const background = if (region_capture_mode == .frozen)
@@ -171,7 +170,7 @@ fn runHelperSelectionAttempt(
         try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY", initial_geometry);
     }
 
-    const helper = process_exec.runWithEnv(allocator, io, &.{helper_bin}, 2048, 2048, &helper_env) catch {
+    const helper = overlay_runtime.runSelectionHelper(allocator, io, environ, &helper_env) catch {
         return .unavailable;
     };
     defer helper.deinit(allocator);
@@ -179,8 +178,6 @@ fn runHelperSelectionAttempt(
     if (helper_protocol.reportsUnavailable(allocator, helper.stdout) catch false) {
         return .unavailable;
     }
-
-    if (!helper.exitedZero()) return .unavailable;
 
     return .{ .selection = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
 }
@@ -271,29 +268,6 @@ fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ)
         }
     }
     return allocator.dupe(u8, "/tmp/shaula/overlay");
-}
-
-/// Resolves the overlay helper executable used by local builds and installs.
-///
-/// Contract constraint: local `zig build` output must use the sibling
-/// `shaula-overlay` binary before falling back to PATH, otherwise users silently
-/// lose the Shaula overlay and only see deterministic overlay unavailability.
-fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
-    }
-
-    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-overlay");
-    defer allocator.free(exe_dir);
-
-    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-overlay", .{exe_dir});
-    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
-        return sibling;
-    } else |_| {
-        allocator.free(sibling);
-        return allocator.dupe(u8, "shaula-overlay");
-    }
 }
 
 fn captureAreaGeometryFromSelection(geometry: ?selection.Geometry) ?@import("../capture/types.zig").AreaGeometry {

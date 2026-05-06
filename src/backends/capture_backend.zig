@@ -4,6 +4,7 @@ const root = @import("root");
 const runtime_exec = @import("capture_backend_runtime_exec.zig");
 const output_path = @import("capture_backend_output_path.zig");
 const png_meta = @import("capture_backend_png_meta.zig");
+const failure = @import("capture_backend_failure.zig");
 
 const standalone_capture_types = struct {
     pub const CaptureMode = enum {
@@ -159,30 +160,12 @@ pub fn execute(
     request: capture_types.CaptureRequest,
 ) !capture_types.CaptureOutcome {
     if (environ.getPosix("SHAULA_INJECT_UNKNOWN_FAILURE") != null) {
-        return .{
-            .failure = .{
-                .mode = request.mode,
-                .code = "ERR_UNKNOWN_UNMAPPED",
-                .message = "injected unknown failure",
-                .retryable = false,
-                .degraded = false,
-                .backend_used = null,
-            },
-        };
+        return failure.unknown(capture_types, request.mode, null, "injected unknown failure");
     }
 
     const compositor = preflight.detectCompositor(environ);
     if (!std.mem.eql(u8, compositor, "niri")) {
-        return .{
-            .failure = .{
-                .mode = request.mode,
-                .code = "ERR_UNSUPPORTED_COMPOSITOR",
-                .message = "unsupported compositor for shaula v1",
-                .retryable = false,
-                .degraded = false,
-                .backend_used = null,
-            },
-        };
+        return failure.outcome(capture_types, request.mode, "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, false, null);
     }
 
     const backend = resolveBackend(environ);
@@ -190,29 +173,11 @@ pub fn execute(
     const degraded_backend = backend == .portal_screenshot;
 
     if (backend == .stub) {
-        return .{
-            .failure = .{
-                .mode = request.mode,
-                .code = "ERR_CAPTURE_BACKEND_UNAVAILABLE",
-                .message = "capture backend unavailable",
-                .retryable = true,
-                .degraded = false,
-                .backend_used = backend_used,
-            },
-        };
+        return failure.backendUnavailable(capture_types, request.mode, backend_used);
     }
 
     if (request.mode == .window and resolveWindowTarget(request, environ) == null) {
-        return .{
-            .failure = .{
-                .mode = .window,
-                .code = "ERR_WINDOW_TARGET_UNRESOLVED",
-                .message = "window target could not be resolved",
-                .retryable = false,
-                .degraded = true,
-                .backend_used = backend_used,
-            },
-        };
+        return failure.outcome(capture_types, .window, "ERR_WINDOW_TARGET_UNRESOLVED", "window target could not be resolved", false, true, backend_used);
     }
 
     const mode_string = capture_types.modeString(request.mode);
@@ -224,28 +189,10 @@ pub fn execute(
         request.output_path,
     ) catch |err| switch (err) {
         error.OutputPathInvalid => {
-            return .{
-                .failure = .{
-                    .mode = request.mode,
-                    .code = "ERR_OUTPUT_PATH_INVALID",
-                    .message = "output path is not writable",
-                    .retryable = false,
-                    .degraded = false,
-                    .backend_used = backend_used,
-                },
-            };
+            return failure.outcome(capture_types, request.mode, "ERR_OUTPUT_PATH_INVALID", "output path is not writable", false, false, backend_used);
         },
         else => {
-            return .{
-                .failure = .{
-                    .mode = request.mode,
-                    .code = "ERR_UNKNOWN_UNMAPPED",
-                    .message = "capture backend failed with unmapped error",
-                    .retryable = false,
-                    .degraded = false,
-                    .backend_used = backend_used,
-                },
-            };
+            return failure.unknown(capture_types, request.mode, backend_used, "capture backend failed with unmapped error");
         },
     };
     errdefer allocator.free(resolved_output_path);
@@ -268,44 +215,17 @@ pub fn execute(
     ) catch |err| switch (err) {
         error.BackendUnavailable => {
             allocator.free(resolved_output_path);
-            return .{
-                .failure = .{
-                    .mode = request.mode,
-                    .code = "ERR_CAPTURE_BACKEND_UNAVAILABLE",
-                    .message = "capture backend unavailable",
-                    .retryable = true,
-                    .degraded = false,
-                    .backend_used = backend_used,
-                },
-            };
+            return failure.backendUnavailable(capture_types, request.mode, backend_used);
         },
         else => {
             allocator.free(resolved_output_path);
-            return .{
-                .failure = .{
-                    .mode = request.mode,
-                    .code = "ERR_UNKNOWN_UNMAPPED",
-                    .message = "capture backend failed with unmapped error",
-                    .retryable = false,
-                    .degraded = false,
-                    .backend_used = backend_used,
-                },
-            };
+            return failure.unknown(capture_types, request.mode, backend_used, "capture backend failed with unmapped error");
         },
     };
 
     const dimensions_meta = png_meta.resolveCaptureDimensions(allocator, io, resolved_output_path) catch {
         allocator.free(resolved_output_path);
-        return .{
-            .failure = .{
-                .mode = request.mode,
-                .code = "ERR_CAPTURE_BACKEND_UNAVAILABLE",
-                .message = "capture backend unavailable",
-                .retryable = true,
-                .degraded = false,
-                .backend_used = backend_used,
-            },
-        };
+        return failure.backendUnavailable(capture_types, request.mode, backend_used);
     };
     const latency_ms = defaultLatencyMs(request.mode, degraded_backend);
 

@@ -36,21 +36,38 @@ and the working diff.
   backend execution, previous-area persistence, and final JSON/`ERR_*`
   emission. Preview document/history and UI behavior were intentionally left
   unchanged.
+- Architecture deepening pass: capture invocation assembly now lives in
+  `capture/invocation.zig`; backend failure construction lives in
+  `backends/capture_backend_failure.zig`; overlay helper process execution now
+  runs through `overlay/runtime.zig`; and post-capture work in
+  `pipeline/post_capture.zig` is separated into typed degraded outcomes before
+  JSON rendering. No public CLI contract changes were intended.
 
 ## Capture Runtime Foundation
 
 - `runtime/process_exec.zig` is the shared process execution adapter for
   capture/overlay runtime boundaries. Callers still own stdout/stderr limits,
   output cleanup, and deterministic failure mapping.
+- `backends/capture_backend_failure.zig` centralizes backend `CaptureOutcome`
+  failure construction so `capture_backend.execute` keeps one external seam
+  while preserving deterministic `ERR_*` attributes at each failure site.
 - `capture/lifecycle.zig` owns the common capture lifecycle after mode-specific
   inputs are resolved: enforce capability support, enforce pre-capture guard,
   optionally settle after live overlay, execute the backend, persist previous
   area only on success, and emit the existing success/error JSON contract.
 - `capture/command.zig` is now a strict dispatcher into the lifecycle module.
+- `capture/invocation.zig` converts parsed capture flags and resolved geometry
+  into the lifecycle invocation contract: public command token, backend mode,
+  request mode, output/window/area fields, post-capture flags, previous-area
+  persistence, and optional live-overlay settle mode.
 - `capture/command_flags.zig` has a small common parser for shared capture
   flags: `--json`, `--output`, `--save`, `--copy`, `--preview`, and
   `--no-preview`. Mode-specific flags remain in their existing parsers so
   command-specific `ERR_CLI_USAGE` messages stay stable.
+- `pipeline/post_capture.zig` now first gathers `PostCaptureOutcome` state for
+  history, clipboard, and preview. Rendering consumes that outcome, reusing
+  `cli/json.zig` timestamp/string/warnings helpers so degraded post-capture
+  behavior and JSON formatting stay separate.
 
 ## Overlay Capture
 
@@ -67,6 +84,10 @@ and the working diff.
   short compositor settle barrier (`SHAULA_LIVE_REGION_SETTLE_MS`, default 50ms)
   before backend capture to avoid including its own layer surface; this remains
   the main interactive Wayland/Niri timing point to verify.
+- The production overlay helper stdio run now goes through
+  `overlay/runtime.zig`, which owns helper binary resolution, stdout/stderr
+  limits, and process failure mapping before `overlay/helper_protocol.zig`
+  parses the helper envelope.
 - The native GTK overlay used by `./dev capture` is now capture-on-release.
   It no longer draws or requires the floating Capture/Esc/aspect button strip:
   a valid create, move, or resize drag confirms the selection on release.

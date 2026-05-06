@@ -6,31 +6,13 @@ const config_loader = @import("../config/loader.zig");
 const core_capture_mode = @import("../core/capture_mode.zig");
 const flags = @import("command_flags.zig");
 const guards = @import("command_guards.zig");
+const invocation = @import("invocation.zig");
 const json = @import("command_json.zig");
 const overlay = @import("../overlay/overlay.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const selection = @import("../selection/selection.zig");
-
-const PostCaptureFlags = struct {
-    save: bool,
-    copy: bool,
-    preview: bool,
-};
-
-const LifecycleOptions = struct {
-    command: []const u8,
-    reported_mode: []const u8,
-    backend_mode: []const u8,
-    request_mode: capture_types.CaptureMode,
-    output_path: ?[]const u8 = null,
-    window_id: ?[]const u8 = null,
-    area_geometry: ?capture_types.AreaGeometry = null,
-    post_flags: PostCaptureFlags,
-    persist_previous_area: ?capture_types.AreaGeometry = null,
-    settle_region_mode: ?core_capture_mode.RegionCaptureMode = null,
-};
 
 /// Execute the shared capture lifecycle after mode-specific inputs are resolved.
 ///
@@ -43,7 +25,7 @@ fn executeLifecycle(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
-    options: LifecycleOptions,
+    options: invocation.Invocation,
 ) !u8 {
     const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
@@ -95,21 +77,8 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     }
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture all-in-one",
-        .reported_mode = reported_mode,
-        .backend_mode = backend_mode,
-        .request_mode = .area,
-        .output_path = parsed.output,
-        .area_geometry = geometry,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(reported_mode, parsed.preview),
-        },
-        .persist_previous_area = geometry,
-        .settle_region_mode = region_capture_mode,
-    });
+    _ = backend_mode;
+    return executeLifecycle(allocator, io, environ, invocation.allInOne(parsed, region_capture_mode, geometry));
 }
 
 /// Execute `capture area` through the shared capture lifecycle.
@@ -132,21 +101,7 @@ pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     }
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture area",
-        .reported_mode = mode,
-        .backend_mode = mode,
-        .request_mode = .area,
-        .output_path = parsed.output,
-        .area_geometry = geometry,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(mode, parsed.preview),
-        },
-        .persist_previous_area = geometry,
-        .settle_region_mode = region_capture_mode,
-    });
+    return executeLifecycle(allocator, io, environ, invocation.area(parsed, region_capture_mode, geometry));
 }
 
 pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -157,18 +112,7 @@ pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.proc
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture fullscreen",
-        .reported_mode = mode,
-        .backend_mode = mode,
-        .request_mode = .fullscreen,
-        .output_path = parsed.output,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(mode, parsed.preview),
-        },
-    });
+    return executeLifecycle(allocator, io, environ, invocation.fullscreen(parsed));
 }
 
 pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -179,18 +123,7 @@ pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture focused",
-        .reported_mode = mode,
-        .backend_mode = mode,
-        .request_mode = .focused,
-        .output_path = parsed.output,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(mode, parsed.preview),
-        },
-    });
+    return executeLifecycle(allocator, io, environ, invocation.focused(parsed));
 }
 
 pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -201,19 +134,7 @@ pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture window",
-        .reported_mode = mode,
-        .backend_mode = mode,
-        .request_mode = .window,
-        .output_path = parsed.output,
-        .window_id = parsed.window_id,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(mode, parsed.preview),
-        },
-    });
+    return executeLifecycle(allocator, io, environ, invocation.window(parsed));
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
@@ -234,20 +155,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
         return recovery_policy.exitCodeFor("ERR_PREVIOUS_AREA_UNAVAILABLE");
     };
 
-    return executeLifecycle(allocator, io, environ, .{
-        .command = "capture previous-area",
-        .reported_mode = reported_mode,
-        .backend_mode = backend_mode,
-        .request_mode = .area,
-        .output_path = parsed.output,
-        .area_geometry = geometry,
-        .post_flags = .{
-            .save = parsed.save,
-            .copy = parsed.copy,
-            .preview = flags.resolvePreviewDefault(reported_mode, parsed.preview),
-        },
-        .persist_previous_area = geometry,
-    });
+    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry));
 }
 
 const OverlaySelectionOutcome = struct {
@@ -300,7 +208,7 @@ fn writeCaptureOutcome(
     command: []const u8,
     reported_mode: []const u8,
     outcome: *capture_types.CaptureOutcome,
-    post_flags: PostCaptureFlags,
+    post_flags: invocation.PostCaptureFlags,
     precondition_warning: ?[]const u8,
 ) !u8 {
     switch (outcome.*) {

@@ -5,7 +5,7 @@ const capture_types = @import("../capture/types.zig");
 const history_store = @import("../history/store.zig");
 const clipboard_service = @import("../clipboard/service.zig");
 const preview_service = @import("../preview/service.zig");
-const capture_command_json = @import("../capture/command_json.zig");
+const cli_json = @import("../cli/json.zig");
 
 pub const PipelineFlags = struct {
     save: bool,
@@ -29,6 +29,25 @@ const PreviewPipelineResult = struct {
     }
 };
 
+const DegradedActionResult = struct {
+    ok: bool = true,
+    code: ?[]const u8 = null,
+    message: ?[]const u8 = null,
+};
+
+const PostCaptureOutcome = struct {
+    timestamp: []u8,
+    saved: DegradedActionResult = .{},
+    clipboard: DegradedActionResult = .{},
+    preview: PreviewPipelineResult = .{},
+
+    fn deinit(self: *PostCaptureOutcome, allocator: std.mem.Allocator) void {
+        allocator.free(self.timestamp);
+        self.preview.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
 /// Emit the post-capture JSON envelope after optional save/copy/preview work.
 ///
 /// Contract constraints:
@@ -47,12 +66,27 @@ pub fn writeCapturePipelineJson(
     flags: PipelineFlags,
     warnings: []const []const u8,
 ) !void {
-    const ts = try nowIso8601(allocator, io);
-    defer allocator.free(ts);
+    var outcome = try runPostCaptureWork(allocator, io, environ, success, flags);
+    defer outcome.deinit(allocator);
 
-    var saved_ok = true;
-    var saved_error_code: ?[]const u8 = null;
-    var saved_error_message: ?[]const u8 = null;
+    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, outcome, warnings);
+}
+
+/// Runs degraded post-capture work after the artifact is already available.
+///
+/// Contract constraint: history, clipboard, and preview failures are captured as
+/// typed degraded outcomes so rendering cannot change hot-path side effects.
+fn runPostCaptureWork(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    success: capture_types.CaptureSuccess,
+    flags: PipelineFlags,
+) !PostCaptureOutcome {
+    var outcome = PostCaptureOutcome{
+        .timestamp = try cli_json.nowIso8601(allocator, io),
+    };
+    errdefer outcome.deinit(allocator);
 
     if (flags.save) {
         history_store.storeLatest(io, .{
@@ -61,55 +95,55 @@ pub fn writeCapturePipelineJson(
             .width = success.dimensions.width,
             .height = success.dimensions.height,
             .backend_used = success.backend_used,
-            .timestamp = ts,
+            .timestamp = outcome.timestamp,
         }) catch {
-            saved_ok = false;
-            saved_error_code = "ERR_HISTORY_STORE_UNAVAILABLE";
-            saved_error_message = "history store unavailable";
+            outcome.saved = .{
+                .ok = false,
+                .code = "ERR_HISTORY_STORE_UNAVAILABLE",
+                .message = "history store unavailable",
+            };
         };
     }
 
-    var clipboard_ok = true;
-    var clipboard_error_code: ?[]const u8 = null;
-    var clipboard_error_message: ?[]const u8 = null;
-
     if (flags.copy) {
         if (clipboard_service.copyImage(io, environ, success.path)) |copy_result| {
-            clipboard_ok = copy_result.ok;
-            clipboard_error_code = copy_result.code;
-            clipboard_error_message = copy_result.message;
+            outcome.clipboard = .{
+                .ok = copy_result.ok,
+                .code = copy_result.code,
+                .message = copy_result.message,
+            };
         } else |_| {
-            clipboard_ok = false;
-            clipboard_error_code = "ERR_UNKNOWN_UNMAPPED";
-            clipboard_error_message = "clipboard copy failed with unmapped error";
+            outcome.clipboard = .{
+                .ok = false,
+                .code = "ERR_UNKNOWN_UNMAPPED",
+                .message = "clipboard copy failed with unmapped error",
+            };
         }
     }
 
-    var preview_result: PreviewPipelineResult = .{};
-    defer preview_result.deinit(allocator);
     if (flags.preview) {
-        preview_result.attempted = true;
+        outcome.preview.attempted = true;
         var preview_outcome = try preview_service.runPreview(allocator, io, environ, success.path);
         switch (preview_outcome) {
             .success => |*preview_success| {
                 defer preview_success.deinit(allocator);
-                preview_result.ok = true;
-                preview_result.action = preview_success.action;
-                preview_result.copied = preview_success.copied;
-                preview_result.saved = preview_success.saved;
+                outcome.preview.ok = true;
+                outcome.preview.action = preview_success.action;
+                outcome.preview.copied = preview_success.copied;
+                outcome.preview.saved = preview_success.saved;
                 if (preview_success.saved_path) |saved_path| {
-                    preview_result.saved_path = try allocator.dupe(u8, saved_path);
+                    outcome.preview.saved_path = try allocator.dupe(u8, saved_path);
                 }
             },
             .failure => |failure| {
-                preview_result.ok = false;
-                preview_result.code = failure.code;
-                preview_result.message = failure.message;
+                outcome.preview.ok = false;
+                outcome.preview.code = failure.code;
+                outcome.preview.message = failure.message;
             },
         }
     }
 
-    return writeCapturePipelineJsonWithResolvedFields(allocator, io, command, reported_mode, success, flags, ts, saved_ok, saved_error_code, saved_error_message, clipboard_ok, clipboard_error_code, clipboard_error_message, preview_result, warnings);
+    return outcome;
 }
 
 fn writeCapturePipelineJsonWithResolvedFields(
@@ -119,45 +153,37 @@ fn writeCapturePipelineJsonWithResolvedFields(
     reported_mode: []const u8,
     success: capture_types.CaptureSuccess,
     flags: PipelineFlags,
-    ts: []const u8,
-    saved_ok: bool,
-    saved_error_code: ?[]const u8,
-    saved_error_message: ?[]const u8,
-    clipboard_ok: bool,
-    clipboard_error_code: ?[]const u8,
-    clipboard_error_message: ?[]const u8,
-    preview_result: PreviewPipelineResult,
+    outcome: PostCaptureOutcome,
     warnings: []const []const u8,
 ) !void {
+    const partial = (flags.save and outcome.saved.ok) and (flags.copy and !outcome.clipboard.ok);
+    const overall_ok = partial or ((!flags.save or outcome.saved.ok) and (!flags.copy or outcome.clipboard.ok));
 
-    const partial = (flags.save and saved_ok) and (flags.copy and !clipboard_ok);
-    const overall_ok = partial or ((!flags.save or saved_ok) and (!flags.copy or clipboard_ok));
-
-    const command_json = try jsonStringAlloc(allocator, command);
+    const command_json = try cli_json.stringAlloc(allocator, command);
     defer allocator.free(command_json);
-    const ts_json = try jsonStringAlloc(allocator, ts);
+    const ts_json = try cli_json.stringAlloc(allocator, outcome.timestamp);
     defer allocator.free(ts_json);
-    const mode_json = try jsonStringAlloc(allocator, reported_mode);
+    const mode_json = try cli_json.stringAlloc(allocator, reported_mode);
     defer allocator.free(mode_json);
-    const path_json = try jsonStringAlloc(allocator, success.path);
+    const path_json = try cli_json.stringAlloc(allocator, success.path);
     defer allocator.free(path_json);
-    const mime_json = try jsonStringAlloc(allocator, success.mime);
+    const mime_json = try cli_json.stringAlloc(allocator, success.mime);
     defer allocator.free(mime_json);
-    const backend_json = try jsonStringAlloc(allocator, success.backend_used);
+    const backend_json = try cli_json.stringAlloc(allocator, success.backend_used);
     defer allocator.free(backend_json);
 
-    const saved_error_json = try errorJsonField(allocator, saved_error_code, saved_error_message);
+    const saved_error_json = try errorJsonField(allocator, outcome.saved.code, outcome.saved.message);
     defer allocator.free(saved_error_json);
 
-    const clipboard_error_json = try errorJsonField(allocator, clipboard_error_code, clipboard_error_message);
+    const clipboard_error_json = try errorJsonField(allocator, outcome.clipboard.code, outcome.clipboard.message);
     defer allocator.free(clipboard_error_json);
-    const preview_json = try previewJsonField(allocator, preview_result);
+    const preview_json = try previewJsonField(allocator, outcome.preview);
     defer allocator.free(preview_json);
-    const warnings_json = try capture_command_json.warningsJson(allocator, warnings);
+    const warnings_json = try cli_json.warningsAlloc(allocator, warnings);
     defer allocator.free(warnings_json);
 
-    const saved_report_ok = flags.save and saved_ok;
-    const clipboard_report_ok = flags.copy and clipboard_ok;
+    const saved_report_ok = flags.save and outcome.saved.ok;
+    const clipboard_report_ok = flags.copy and outcome.clipboard.ok;
     const saved_report_path_json = if (flags.save) try allocator.dupe(u8, path_json) else try allocator.dupe(u8, "null");
     defer allocator.free(saved_report_path_json);
 
@@ -206,9 +232,9 @@ fn errorJsonField(allocator: std.mem.Allocator, code: ?[]const u8, message: ?[]c
     if (code == null or message == null) {
         return allocator.dupe(u8, "null");
     }
-    const code_json = try jsonStringAlloc(allocator, code.?);
+    const code_json = try cli_json.stringAlloc(allocator, code.?);
     defer allocator.free(code_json);
-    const message_json = try jsonStringAlloc(allocator, message.?);
+    const message_json = try cli_json.stringAlloc(allocator, message.?);
     defer allocator.free(message_json);
     return std.fmt.allocPrint(allocator, "{{\"code\":{s},\"message\":{s}}}", .{ code_json, message_json });
 }
@@ -223,7 +249,7 @@ fn previewJsonField(allocator: std.mem.Allocator, result: PreviewPipelineResult)
         try allocator.dupe(u8, "null");
     defer allocator.free(action_json);
 
-    const saved_path_json = try jsonNullableStringAlloc(allocator, result.saved_path);
+    const saved_path_json = try cli_json.nullableStringAlloc(allocator, result.saved_path);
     defer allocator.free(saved_path_json);
 
     return std.fmt.allocPrint(
@@ -242,46 +268,7 @@ fn previewJsonField(allocator: std.mem.Allocator, result: PreviewPipelineResult)
 }
 
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    return std.json.Stringify.valueAlloc(allocator, value, .{});
-}
-
-fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
-    if (value) |text| return jsonStringAlloc(allocator, text);
-    return allocator.dupe(u8, "null");
-}
-
-fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    const ts = std.Io.Timestamp.now(io, .real);
-    const epoch_seconds: i64 = ts.toSeconds();
-
-    const days: i64 = @divFloor(epoch_seconds, 86400);
-    const secs_of_day: i64 = @mod(epoch_seconds, 86400);
-
-    const z = days + 719468;
-    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
-    const doe = z - era * 146097;
-    const yoe = @divFloor(doe - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096), 365);
-    var y = yoe + era * 400;
-    const doy = doe - (365 * yoe + @divFloor(yoe, 4) - @divFloor(yoe, 100));
-    const mp = @divFloor(5 * doy + 2, 153);
-    const d = doy - @divFloor(153 * mp + 2, 5) + 1;
-    var m: i64 = mp + (if (mp < 10) @as(i64, 3) else @as(i64, -9));
-    y += if (m <= 2) 1 else 0;
-
-    const hh = @divFloor(secs_of_day, 3600);
-    const mm = @divFloor(@mod(secs_of_day, 3600), 60);
-    const ss = @mod(secs_of_day, 60);
-
-    if (m <= 0) m += 12;
-
-    return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}Z", .{
-        @as(u64, @intCast(y)),
-        @as(u64, @intCast(m)),
-        @as(u64, @intCast(d)),
-        @as(u64, @intCast(hh)),
-        @as(u64, @intCast(mm)),
-        @as(u64, @intCast(ss)),
-    });
+    return cli_json.stringAlloc(allocator, value);
 }
 
 test "pipeline error json field escapes quotes" {
