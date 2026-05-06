@@ -394,6 +394,7 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   case SHAULA_OPERATION_NONE:
   case SHAULA_OPERATION_PAN:
   case SHAULA_OPERATION_MOVE:
+  case SHAULA_OPERATION_BEND_ARROW:
   case SHAULA_OPERATION_SELECT_REGION:
   case SHAULA_OPERATION_TEXT:
     break;
@@ -541,7 +542,19 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     if (hit != NULL) {
       shaula_preview_select_annotation(state, hit);
       shaula_preview_begin_history_gesture(state);
-      start_operation(state, SHAULA_OPERATION_MOVE, image_point);
+
+      gboolean is_bend = FALSE;
+      if (hit->type == SHAULA_ANNOTATION_ARROW) {
+        ShaulaPoint p0 = hit->data.arrow.start;
+        ShaulaPoint p2 = hit->data.arrow.end;
+        ShaulaPoint p1 = hit->data.arrow.is_curved ? hit->data.arrow.control : (ShaulaPoint){(p0.x+p2.x)/2.0, (p0.y+p2.y)/2.0};
+        ShaulaPoint mid = { 0.25*p0.x + 0.5*p1.x + 0.25*p2.x, 0.25*p0.y + 0.5*p1.y + 0.25*p2.y };
+        if (shaula_point_distance(image_point, mid) <= MAX(8.0, 16.0 / state->zoom)) {
+          is_bend = TRUE;
+        }
+      }
+
+      start_operation(state, is_bend ? SHAULA_OPERATION_BEND_ARROW : SHAULA_OPERATION_MOVE, image_point);
       gtk_widget_set_cursor_from_name(state->area, "grabbing");
     } else if (inside) {
       shaula_preview_clear_selection(state);
@@ -558,8 +571,25 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     start_operation(state, SHAULA_OPERATION_CROP, clamped);
     break;
   case SHAULA_TOOL_ARROW:
-    if (inside)
-      start_operation(state, SHAULA_OPERATION_ARROW, clamped);
+    if (inside) {
+      gboolean is_bend = FALSE;
+      if (state->selected_annotation != NULL && state->selected_annotation->type == SHAULA_ANNOTATION_ARROW) {
+        ShaulaPoint p0 = state->selected_annotation->data.arrow.start;
+        ShaulaPoint p2 = state->selected_annotation->data.arrow.end;
+        ShaulaPoint p1 = state->selected_annotation->data.arrow.is_curved ? state->selected_annotation->data.arrow.control : (ShaulaPoint){(p0.x+p2.x)/2.0, (p0.y+p2.y)/2.0};
+        ShaulaPoint mid = { 0.25*p0.x + 0.5*p1.x + 0.25*p2.x, 0.25*p0.y + 0.5*p1.y + 0.25*p2.y };
+        if (shaula_point_distance(image_point, mid) <= MAX(8.0, 16.0 / state->zoom)) {
+          is_bend = TRUE;
+        }
+      }
+      if (is_bend) {
+        shaula_preview_begin_history_gesture(state);
+        start_operation(state, SHAULA_OPERATION_BEND_ARROW, image_point);
+      } else {
+        shaula_preview_clear_selection(state);
+        start_operation(state, SHAULA_OPERATION_ARROW, clamped);
+      }
+    }
     break;
   case SHAULA_TOOL_TEXT:
     if (inside)
@@ -627,6 +657,24 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
       state->operation_changed = TRUE;
     if (state->selected_annotation != NULL && state->operation_changed) {
       shaula_annotation_move(state->selected_annotation, mx, my);
+      state->modified = TRUE;
+    }
+    state->drag_last_image = raw;
+    break;
+  }
+  case SHAULA_OPERATION_BEND_ARROW: {
+    ShaulaPoint raw = shaula_preview_canvas_screen_to_image(state, x, y);
+    if (!state->operation_changed &&
+        (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
+         fabs(raw.y - state->drag_start_image.y) > 0.5))
+      state->operation_changed = TRUE;
+    if (state->selected_annotation != NULL && state->operation_changed && state->selected_annotation->type == SHAULA_ANNOTATION_ARROW) {
+      ShaulaPoint p0 = state->selected_annotation->data.arrow.start;
+      ShaulaPoint p2 = state->selected_annotation->data.arrow.end;
+      state->selected_annotation->data.arrow.is_curved = TRUE;
+      state->selected_annotation->data.arrow.control.x = 2.0 * raw.x - 0.5 * p0.x - 0.5 * p2.x;
+      state->selected_annotation->data.arrow.control.y = 2.0 * raw.y - 0.5 * p0.y - 0.5 * p2.y;
+      shaula_annotation_update_bounds(state->selected_annotation);
       state->modified = TRUE;
     }
     state->drag_last_image = raw;
@@ -723,6 +771,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     break;
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_MOVE:
+  case SHAULA_OPERATION_BEND_ARROW:
   case SHAULA_OPERATION_SELECT_REGION:
   case SHAULA_OPERATION_SPOTLIGHT:
   case SHAULA_OPERATION_NONE:
@@ -735,6 +784,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     shaula_preview_add_annotation(state, annotation);
     /* Open arrow HUD targeting the just-created arrow. */
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
+      shaula_preview_select_annotation(state, annotation);
       state->active_arrow_index = (int)state->annotations->len - 1;
       state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
       shaula_preview_toolbar_update_selection_state(state);
@@ -750,9 +800,10 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   ShaulaPreviewState *state = data;
   if (state->operation == SHAULA_OPERATION_PAN ||
       state->operation == SHAULA_OPERATION_MOVE ||
+      state->operation == SHAULA_OPERATION_BEND_ARROW ||
       state->operation == SHAULA_OPERATION_SELECT_REGION ||
       state->operation == SHAULA_OPERATION_SPOTLIGHT) {
-    if (state->operation == SHAULA_OPERATION_MOVE)
+    if (state->operation == SHAULA_OPERATION_MOVE || state->operation == SHAULA_OPERATION_BEND_ARROW)
       shaula_preview_commit_history_gesture(state, state->operation_changed);
     if (state->operation == SHAULA_OPERATION_SELECT_REGION) {
       if (!state->operation_changed)

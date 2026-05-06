@@ -33,6 +33,7 @@ typedef enum {
   SHAULA_OPERATION_NONE,
   SHAULA_OPERATION_PAN,
   SHAULA_OPERATION_MOVE,
+  SHAULA_OPERATION_BEND_ARROW,
   SHAULA_OPERATION_SELECT_REGION,
   SHAULA_OPERATION_CROP,
   SHAULA_OPERATION_ARROW,
@@ -77,6 +78,11 @@ typedef struct {
   GPtrArray *redo;
   guint capacity;
 } ShaulaHistoryStack;
+
+typedef struct {
+  GPtrArray *annotations;
+  int last_pasted_id;
+} ShaulaAnnotationClipboard;
 
 typedef struct {
   GtkApplication *app;
@@ -141,6 +147,11 @@ typedef struct {
 
   GPtrArray *annotations;
   ShaulaAnnotation *selected_annotation;
+  /* Preview-local edit clipboard. It intentionally stays out of undo/redo and
+   * never publishes to the system clipboard; v1 copies one annotation while
+   * keeping list ownership ready for future multi-selection paste.
+   */
+  ShaulaAnnotationClipboard annotation_clipboard;
   GArray *spotlight_regions;
   int next_annotation_id;
   ShaulaHistoryStack history;
@@ -207,6 +218,10 @@ void shaula_preview_add_annotation(ShaulaPreviewState *state,
 gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state);
 gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state);
 gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state);
+gboolean shaula_preview_can_copy_selected_annotation(ShaulaPreviewState *state);
+gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state);
+gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state);
+gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state);
 void shaula_preview_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_reset_annotations(ShaulaPreviewState *state);
 

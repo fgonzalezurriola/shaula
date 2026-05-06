@@ -9,6 +9,7 @@
 #define SHAULA_HISTORY_DEFAULT_CAPACITY 24
 #define SHAULA_CROP_MIN_SIZE_PX 4
 #define SHAULA_DUPLICATE_OFFSET_PX 12.0
+#define SHAULA_PASTE_OFFSET_PX 12.0
 #define SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL 16
 #define SHAULA_ERASE_COLOR_BUCKET_COUNT                                        \
   (SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                   \
@@ -128,6 +129,105 @@ static void history_stack_push_redo(ShaulaHistoryStack *history,
   g_ptr_array_add(history->redo, snapshot);
 }
 
+static void annotation_clipboard_init(ShaulaAnnotationClipboard *clipboard) {
+  clipboard->annotations =
+      g_ptr_array_new_with_free_func(shaula_annotation_free);
+  clipboard->last_pasted_id = 0;
+}
+
+static void annotation_clipboard_clear(ShaulaAnnotationClipboard *clipboard) {
+  if (clipboard == NULL)
+    return;
+  if (clipboard->annotations != NULL)
+    g_ptr_array_set_size(clipboard->annotations, 0);
+  clipboard->last_pasted_id = 0;
+}
+
+static void annotation_clipboard_free(ShaulaAnnotationClipboard *clipboard) {
+  if (clipboard == NULL)
+    return;
+  if (clipboard->annotations != NULL)
+    g_ptr_array_unref(clipboard->annotations);
+  clipboard->annotations = NULL;
+  clipboard->last_pasted_id = 0;
+}
+
+static gboolean rect_fits_image(ShaulaRect rect, double image_width,
+                                double image_height) {
+  rect = shaula_rect_normalized(rect);
+  return rect.x >= 0.0 && rect.y >= 0.0 &&
+         rect.x + rect.width <= image_width &&
+         rect.y + rect.height <= image_height;
+}
+
+static ShaulaAnnotation *annotation_clone_with_offset(
+    const ShaulaAnnotation *base, double dx, double dy) {
+  ShaulaAnnotation *clone = shaula_annotation_clone(base);
+  if (clone == NULL)
+    return NULL;
+  clone->id = 0;
+  clone->selected = FALSE;
+  shaula_annotation_move(clone, dx, dy);
+  return clone;
+}
+
+static void move_annotation_inside_image(ShaulaAnnotation *annotation,
+                                         double image_width,
+                                         double image_height) {
+  if (annotation == NULL)
+    return;
+  ShaulaRect bounds = shaula_rect_normalized(annotation->bounds);
+  double dx = 0.0;
+  double dy = 0.0;
+
+  if (bounds.width <= image_width) {
+    if (bounds.x < 0.0)
+      dx = -bounds.x;
+    else if (bounds.x + bounds.width > image_width)
+      dx = image_width - (bounds.x + bounds.width);
+  } else {
+    dx = -bounds.x;
+  }
+
+  if (bounds.height <= image_height) {
+    if (bounds.y < 0.0)
+      dy = -bounds.y;
+    else if (bounds.y + bounds.height > image_height)
+      dy = image_height - (bounds.y + bounds.height);
+  } else {
+    dy = -bounds.y;
+  }
+
+  if (dx != 0.0 || dy != 0.0)
+    shaula_annotation_move(annotation, dx, dy);
+}
+
+static ShaulaAnnotation *annotation_clone_for_paste(
+    const ShaulaAnnotation *base, double image_width, double image_height) {
+  static const ShaulaPoint offsets[] = {
+      {SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
+      {-SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
+      {SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX},
+      {-SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX},
+  };
+
+  for (guint i = 0; i < G_N_ELEMENTS(offsets); i++) {
+    ShaulaAnnotation *candidate =
+        annotation_clone_with_offset(base, offsets[i].x, offsets[i].y);
+    if (candidate == NULL)
+      return NULL;
+    if (rect_fits_image(candidate->bounds, image_width, image_height))
+      return candidate;
+    shaula_annotation_free(candidate);
+  }
+
+  ShaulaAnnotation *candidate = annotation_clone_with_offset(
+      base, SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX);
+  if (candidate != NULL)
+    move_annotation_inside_image(candidate, image_width, image_height);
+  return candidate;
+}
+
 static gboolean detect_dark_theme(void) {
   GtkSettings *settings = gtk_settings_get_default();
   if (settings == NULL)
@@ -175,6 +275,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
       (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
   state->arrow_stroke_width = 3.5;
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
+  annotation_clipboard_init(&state->annotation_clipboard);
   state->spotlight_regions =
       g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
   history_stack_init(&state->history, SHAULA_HISTORY_DEFAULT_CAPACITY);
@@ -191,6 +292,7 @@ void shaula_preview_state_free(ShaulaPreviewState *state) {
     g_object_unref(state->image);
   if (state->annotations != NULL)
     g_ptr_array_unref(state->annotations);
+  annotation_clipboard_free(&state->annotation_clipboard);
   if (state->spotlight_regions != NULL)
     g_array_unref(state->spotlight_regions);
   if (state->pending_history_snapshot != NULL)
@@ -368,6 +470,31 @@ gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state) {
   return state != NULL && state->selected_annotation != NULL;
 }
 
+gboolean shaula_preview_can_copy_selected_annotation(
+    ShaulaPreviewState *state) {
+  return state != NULL && state->selected_annotation != NULL;
+}
+
+gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state) {
+  if (!shaula_preview_can_copy_selected_annotation(state))
+    return FALSE;
+
+  ShaulaAnnotation *copy = shaula_annotation_clone(state->selected_annotation);
+  if (copy == NULL)
+    return FALSE;
+
+  annotation_clipboard_clear(&state->annotation_clipboard);
+  copy->selected = FALSE;
+  g_ptr_array_add(state->annotation_clipboard.annotations, copy);
+  return TRUE;
+}
+
+gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state) {
+  return state != NULL && state->image != NULL &&
+         state->annotation_clipboard.annotations != NULL &&
+         state->annotation_clipboard.annotations->len > 0;
+}
+
 gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
   if (!shaula_preview_can_duplicate_selected(state))
     return FALSE;
@@ -384,6 +511,39 @@ gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
                          SHAULA_DUPLICATE_OFFSET_PX);
   g_ptr_array_add(state->annotations, duplicate);
   shaula_preview_select_annotation(state, duplicate);
+  state->modified = TRUE;
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  return TRUE;
+}
+
+gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
+  if (!shaula_preview_can_paste_annotation(state))
+    return FALSE;
+
+  const ShaulaAnnotation *base = NULL;
+  if (state->selected_annotation != NULL &&
+      state->selected_annotation->id ==
+          state->annotation_clipboard.last_pasted_id)
+    base = state->selected_annotation;
+  if (base == NULL)
+    base = g_ptr_array_index(state->annotation_clipboard.annotations, 0);
+  if (base == NULL)
+    return FALSE;
+
+  ShaulaAnnotation *pasted =
+      annotation_clone_for_paste(base, shaula_preview_image_width(state),
+                                 shaula_preview_image_height(state));
+  if (pasted == NULL)
+    return FALSE;
+
+  shaula_preview_push_undo(state);
+  pasted->id = state->next_annotation_id++;
+  pasted->selected = FALSE;
+  g_ptr_array_add(state->annotations, pasted);
+  shaula_preview_select_annotation(state, pasted);
+  state->annotation_clipboard.last_pasted_id = pasted->id;
   state->modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);

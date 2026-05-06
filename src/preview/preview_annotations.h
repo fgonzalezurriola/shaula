@@ -32,6 +32,8 @@ typedef struct ShaulaAnnotation {
     struct {
       ShaulaPoint start;
       ShaulaPoint end;
+      ShaulaPoint control;
+      gboolean is_curved;
     } arrow;
     struct {
       ShaulaPoint position;

@@ -151,6 +151,17 @@ and the working diff.
   the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
   new id, offsets it by 12 px on both axes, selects the duplicate, and commits
   one undo entry.
+- Annotation copy/paste v1: implemented as an in-memory clipboard scoped to
+  the current preview window only. `Ctrl+C` copies the selected annotation
+  without touching the system clipboard; `Ctrl+V` pastes that internal
+  annotation through clone/new-id/offset/undo. The clipboard lives in
+  `ShaulaPreviewState`, stays out of undo/redo snapshots, uses a list-shaped
+  structure for future multi-selection, and currently stores one annotation.
+  Paste prefers a 12 px up-right offset, falls back around the source if needed,
+  clamps best-effort inside the current image, selects the pasted object, and
+  repeats from the last pasted object when it remains selected. Pasting external
+  `text/plain` as a text annotation is future work and should stay out of v1 so
+  paste does not read the system clipboard yet.
 - `shaula-crop-symbolic` Crop selected: implemented in the contextual group
   for selected rectangle/highlight annotations only. It dispatches through
   `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.
@@ -248,8 +259,8 @@ and the working diff.
 - `preview_commands.*` owns `ShaulaPreviewCommand`,
   `shaula_preview_execute_command`, command availability, and the static
   shortcut map.
-- Routed shortcuts: Ctrl+C, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D,
-  Delete, Backspace, `Tab`, `f`, and `0`.
+- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+Z,
+  Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`, and `0`.
 - Toolbar/menu callbacks now dispatch through preview commands while existing
   low-level action helpers still own runtime work such as copy, save, discard,
   open folder, and tool cursor updates.

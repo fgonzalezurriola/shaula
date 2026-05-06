@@ -16,7 +16,11 @@ typedef struct {
 
 static const ShaulaPreviewCommandSpec command_specs[] = {
     {SHAULA_PREVIEW_COMMAND_COPY, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_c,
-     GDK_CONTROL_MASK, "Ctrl+C"},
+     GDK_CONTROL_MASK | GDK_SHIFT_MASK, "Ctrl+Shift+C"},
+    {SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION, FALSE,
+     SHAULA_TOOL_SELECT, GDK_KEY_c, GDK_CONTROL_MASK, "Ctrl+C"},
+    {SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_v, GDK_CONTROL_MASK, "Ctrl+V"},
     {SHAULA_PREVIEW_COMMAND_SAVE_AS, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_s,
      GDK_CONTROL_MASK, "Ctrl+S"},
     {SHAULA_PREVIEW_COMMAND_UNDO, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_z,
@@ -90,6 +94,10 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return shaula_preview_can_redo(state);
   case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
     return shaula_preview_can_duplicate_selected(state);
+  case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
+    return shaula_preview_can_copy_selected_annotation(state);
+  case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
+    return shaula_preview_can_paste_annotation(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     return shaula_preview_can_delete_selected(state);
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
@@ -151,6 +159,10 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_COPY:
     shaula_preview_action_copy(state);
     return TRUE;
+  case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
+    return shaula_preview_copy_selected_annotation(state);
+  case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
+    return shaula_preview_paste_annotation(state);
   case SHAULA_PREVIEW_COMMAND_SAVE_AS:
     shaula_preview_action_save_as(state);
     return TRUE;

@@ -340,7 +340,7 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(actions),
                  make_toolbar_button(state, "shaula-copy-symbolic",
-                                     "Copy (Ctrl+C)",
+                                     "Copy (Ctrl+Shift+C)",
                                      G_CALLBACK(shaula_preview_on_copy_clicked)));
   gtk_box_append(GTK_BOX(actions),
                  make_toolbar_button(state, "shaula-save-symbolic",
