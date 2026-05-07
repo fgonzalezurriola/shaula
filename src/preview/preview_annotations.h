@@ -55,9 +55,7 @@ typedef struct ShaulaAnnotation {
     struct {
       ShaulaRect rect;
     } rectangle;
-    struct {
-      ShaulaRect rect;
-    } highlight;
+    ShaulaPenPath highlight;
     ShaulaPenPath pen;
   } data;
 } ShaulaAnnotation;
@@ -77,8 +75,9 @@ ShaulaAnnotation *shaula_annotation_new_measure(ShaulaPoint start,
 ShaulaAnnotation *shaula_annotation_new_rectangle(ShaulaRect rect,
                                                   ShaulaColor color,
                                                   double stroke_width);
-ShaulaAnnotation *shaula_annotation_new_highlight(ShaulaRect rect,
-                                                  ShaulaColor color);
+ShaulaAnnotation *shaula_annotation_new_highlight(const ShaulaPoint *points,
+                                                  int len, ShaulaColor color,
+                                                  double stroke_width);
 ShaulaAnnotation *shaula_annotation_new_pen(const ShaulaPoint *points, int len,
                                             ShaulaColor color,
                                             double stroke_width);

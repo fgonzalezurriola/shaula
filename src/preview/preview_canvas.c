@@ -275,14 +275,14 @@ static void draw_measure_draft(cairo_t *cr, ShaulaPreviewState *state) {
   shaula_annotation_free(annotation);
 }
 
-static void draw_pen_draft(cairo_t *cr, ShaulaPreviewState *state) {
+static void draw_path_draft(cairo_t *cr, ShaulaPreviewState *state,
+                            ShaulaColor color, double stroke_width) {
   if (state->draft_pen_points == NULL || state->draft_pen_points->len < 2)
     return;
   ShaulaPoint *points = (ShaulaPoint *)state->draft_pen_points->data;
   cairo_save(cr);
-  cairo_set_source_rgba(cr, state->current_color.r, state->current_color.g,
-                        state->current_color.b, state->current_color.a);
-  cairo_set_line_width(cr, 3.0);
+  cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a);
+  cairo_set_line_width(cr, stroke_width);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
   cairo_move_to(cr, points[0].x, points[0].y);
@@ -373,16 +373,14 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
                     state->current_color, FALSE);
     break;
   case SHAULA_OPERATION_HIGHLIGHT:
-    draw_draft_rect(cr,
-                    shaula_rect_from_points(state->drag_start_image,
-                                            state->drag_current_image),
-                    state->current_color, TRUE);
+    draw_path_draft(cr, state, state->highlight_color,
+                    state->highlight_stroke_width);
     break;
   case SHAULA_OPERATION_MEASURE:
     draw_measure_draft(cr, state);
     break;
   case SHAULA_OPERATION_PEN:
-    draw_pen_draft(cr, state);
+    draw_path_draft(cr, state, state->pen_color, state->pen_stroke_width);
     break;
   case SHAULA_OPERATION_SPOTLIGHT:
     draw_draft_rect(cr,
@@ -506,7 +504,9 @@ static void start_operation(ShaulaPreviewState *state,
     state->has_region_selection = FALSE;
     state->region_selection_rect = (ShaulaRect){point.x, point.y, 0, 0};
   }
-  if (operation == SHAULA_OPERATION_PEN && state->draft_pen_points != NULL) {
+  if ((operation == SHAULA_OPERATION_PEN ||
+       operation == SHAULA_OPERATION_HIGHLIGHT) &&
+      state->draft_pen_points != NULL) {
     g_array_set_size(state->draft_pen_points, 0);
     g_array_append_val(state->draft_pen_points, point);
   }
@@ -689,10 +689,10 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     break;
   case SHAULA_OPERATION_ARROW:
   case SHAULA_OPERATION_RECTANGLE:
-  case SHAULA_OPERATION_HIGHLIGHT:
   case SHAULA_OPERATION_MEASURE:
     state->drag_current_image = image_point;
     break;
+  case SHAULA_OPERATION_HIGHLIGHT:
   case SHAULA_OPERATION_PEN:
     if (state->draft_pen_points != NULL &&
         shaula_point_distance(state->drag_current_image, image_point) > 0.75) {
@@ -732,14 +732,14 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
           shaula_annotation_new_rectangle(rect, state->current_color, 3.0);
     break;
   }
-  case SHAULA_OPERATION_HIGHLIGHT: {
-    ShaulaRect rect =
-        shaula_rect_from_points(state->drag_start_image,
-                                state->drag_current_image);
-    if (rect.width >= 3.0 && rect.height >= 3.0)
-      annotation = shaula_annotation_new_highlight(rect, state->current_color);
+  case SHAULA_OPERATION_HIGHLIGHT:
+    if (state->draft_pen_points != NULL && state->draft_pen_points->len >= 2) {
+      annotation = shaula_annotation_new_highlight(
+          (ShaulaPoint *)state->draft_pen_points->data,
+          (int)state->draft_pen_points->len, state->highlight_color,
+          state->highlight_stroke_width);
+    }
     break;
-  }
   case SHAULA_OPERATION_MEASURE:
     if (shaula_point_distance(state->drag_start_image,
                               state->drag_current_image) >= 3.0)
@@ -751,7 +751,8 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     if (state->draft_pen_points != NULL && state->draft_pen_points->len >= 2) {
       annotation = shaula_annotation_new_pen(
           (ShaulaPoint *)state->draft_pen_points->data,
-          (int)state->draft_pen_points->len, state->current_color, 3.0);
+          (int)state->draft_pen_points->len, state->pen_color,
+          state->pen_stroke_width);
     }
     break;
   case SHAULA_OPERATION_CROP:
@@ -777,6 +778,12 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
       if (state->area != NULL)
         gtk_widget_set_cursor_from_name(state->area, "default");
       shaula_preview_toolbar_update_selection_state(state);
+    } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
+      shaula_preview_select_annotation(state, annotation);
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_PEN;
+    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
+      shaula_preview_select_annotation(state, annotation);
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
     }
   }
 }
@@ -926,6 +933,10 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
                           shaula_preview_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_arrow_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_pen_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_highlight_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);

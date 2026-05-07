@@ -290,6 +290,13 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->arrow_color =
       (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
   state->arrow_stroke_width = 3.5;
+  state->pen_color = state->current_color;
+  state->pen_stroke_width = 3.0;
+  state->pen_opacity = 1.0;
+  state->highlight_color =
+      (ShaulaColor){0xFF / 255.0, 0xD7 / 255.0, 0x5A / 255.0, 0.30};
+  state->highlight_stroke_width = 18.0;
+  state->highlight_opacity = 0.30;
   state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
   annotation_clipboard_init(&state->annotation_clipboard);
   state->spotlight_regions =
@@ -449,6 +456,16 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
       state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
       state->arrow_color = annotation->color;
       state->arrow_stroke_width = annotation->stroke_width;
+    } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_PEN;
+      state->pen_color = annotation->color;
+      state->pen_opacity = annotation->color.a;
+      state->pen_stroke_width = annotation->stroke_width;
+    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+      state->highlight_color = annotation->color;
+      state->highlight_opacity = annotation->color.a;
+      state->highlight_stroke_width = annotation->stroke_width;
     } else {
       state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
     }
@@ -1127,8 +1144,6 @@ gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state) {
     return apply_crop_to_rect(state, annotation->data.rectangle.rect,
                               annotation);
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    return apply_crop_to_rect(state, annotation->data.highlight.rect,
-                              annotation);
   case SHAULA_ANNOTATION_ARROW:
   case SHAULA_ANNOTATION_TEXT:
   case SHAULA_ANNOTATION_MEASURE:
@@ -1316,6 +1331,107 @@ void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
   arrow->data.arrow.stroke_style = style;
   state->modified = TRUE;
   shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+static ShaulaAnnotation *selected_annotation_of_type(
+    ShaulaPreviewState *state, ShaulaAnnotationType type) {
+  if (state == NULL || state->selected_annotation == NULL ||
+      state->selected_annotation->type != type)
+    return NULL;
+  return state->selected_annotation;
+}
+
+void shaula_preview_set_pen_color(ShaulaPreviewState *state,
+                                  ShaulaColor color) {
+  if (state == NULL)
+    return;
+  color.a = CLAMP(state->pen_opacity, 0.1, 1.0);
+  state->pen_color = color;
+  ShaulaAnnotation *pen = selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
+  if (pen != NULL) {
+    pen->color = color;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
+                                         double width) {
+  if (state == NULL)
+    return;
+  state->pen_stroke_width = CLAMP(width, 1.0, 24.0);
+  ShaulaAnnotation *pen = selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
+  if (pen != NULL) {
+    pen->stroke_width = state->pen_stroke_width;
+    shaula_annotation_update_bounds(pen);
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_pen_opacity(ShaulaPreviewState *state,
+                                    double opacity) {
+  if (state == NULL)
+    return;
+  state->pen_opacity = CLAMP(opacity, 0.1, 1.0);
+  state->pen_color.a = state->pen_opacity;
+  ShaulaAnnotation *pen = selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
+  if (pen != NULL) {
+    pen->color.a = state->pen_opacity;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
+                                        ShaulaColor color) {
+  if (state == NULL)
+    return;
+  color.a = CLAMP(state->highlight_opacity, 0.05, 1.0);
+  state->highlight_color = color;
+  ShaulaAnnotation *highlight =
+      selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
+  if (highlight != NULL) {
+    highlight->color = color;
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
+                                               double width) {
+  if (state == NULL)
+    return;
+  state->highlight_stroke_width = CLAMP(width, 4.0, 48.0);
+  ShaulaAnnotation *highlight =
+      selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
+  if (highlight != NULL) {
+    highlight->stroke_width = state->highlight_stroke_width;
+    shaula_annotation_update_bounds(highlight);
+    state->modified = TRUE;
+  }
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
+void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
+                                          double opacity) {
+  if (state == NULL)
+    return;
+  state->highlight_opacity = CLAMP(opacity, 0.05, 1.0);
+  state->highlight_color.a = state->highlight_opacity;
+  ShaulaAnnotation *highlight =
+      selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
+  if (highlight != NULL) {
+    highlight->color.a = state->highlight_opacity;
+    state->modified = TRUE;
+  }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }

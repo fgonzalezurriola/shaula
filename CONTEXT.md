@@ -173,7 +173,7 @@ and the working diff.
   `text/plain` as a text annotation is future work and should stay out of v1 so
   paste does not read the system clipboard yet.
 - `shaula-crop-symbolic` Crop selected: implemented in the contextual group
-  for selected rectangle/highlight annotations only. It dispatches through
+  for selected rectangle annotations only. It dispatches through
   `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.
 - `shaula-trash-symbolic` Delete selected: implemented. Available from the
   contextual group and Delete/Backspace when text entry is not active.
@@ -191,14 +191,14 @@ and the working diff.
 - `shaula-rectangle-symbolic` Rectangle: implemented.
 - `shaula-highlight-symbolic` Highlight: implemented.
 - `shaula-pen-symbolic` Pen: implemented.
-- Pen secondary HUD decision: use the same floating contextual HUD family as
-  Arrow. Pen v1 should expose color, stroke width, and opacity for defaults and
-  selected Pen annotations. Additional Pen styles are desired future work and
-  should fit into this same HUD rather than expanding the primary toolbar.
-- Highlight highlighter decision: Highlight should become a highlighter brush,
-  not a rectangle tool. V1 should use a separate Highlight button/HUD from Pen,
-  expose only color, width, and opacity, render a wide low-opacity freehand path
-  with round caps, and avoid inheriting future Pen brush styles.
+- Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes
+  color, stroke width, and opacity for defaults and selected Pen annotations.
+  Additional Pen styles are desired future work and should fit into this HUD
+  rather than expanding the primary toolbar.
+- Highlight highlighter: implemented as a separate Highlight button/HUD from
+  Pen. Highlight is now a wide low-opacity freehand path with round caps, not a
+  rectangle tool. Its HUD exposes only color, width, and opacity, and it avoids
+  inheriting future Pen brush styles.
 - `shaula-more-symbolic` More: implemented overflow menu.
 - `shaula-discard-symbolic` Discard: implemented. Closes the preview and
   reports `discard`.
@@ -257,8 +257,8 @@ and the working diff.
 - Crop pushes one undo snapshot only after the crop rect validates and a cropped
   pixbuf exists. Remaining annotations are translated to the new image origin;
   annotations outside the crop are removed. In Select mode, clicking Crop with
-  a selected rectangle/highlight annotation crops to that rect and removes that
-  selected guide annotation from the committed cropped document. Clicking Crop
+  a selected rectangle annotation crops to that rect and removes that selected
+  guide annotation from the committed cropped document. Clicking Crop
   with a temporary region selection crops to that region and clears the region
   selection.
 - Blur/Erase/Spotlight region actions are document edits dispatched through

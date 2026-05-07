@@ -558,6 +558,10 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
   gboolean show_arrow_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_ARROW;
+  gboolean show_pen_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_PEN;
+  gboolean show_highlight_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
@@ -566,6 +570,11 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->arrow_properties_box != NULL)
     gtk_widget_set_visible(state->arrow_properties_box,
                            show_arrow_properties);
+  if (state->pen_properties_box != NULL)
+    gtk_widget_set_visible(state->pen_properties_box, show_pen_properties);
+  if (state->highlight_properties_box != NULL)
+    gtk_widget_set_visible(state->highlight_properties_box,
+                           show_highlight_properties);
   if (state->arrow_color_button != NULL) {
     GdkRGBA arrow_rgba = {state->arrow_color.r, state->arrow_color.g,
                           state->arrow_color.b, state->arrow_color.a};
@@ -609,6 +618,38 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_toggle_button_set_active(
         GTK_TOGGLE_BUTTON(state->spotlight_rounded_button),
         state->spotlight_shape == SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
+  if (state->pen_color_button != NULL) {
+    GdkRGBA rgba = {state->pen_color.r, state->pen_color.g,
+                    state->pen_color.b, state->pen_color.a};
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->pen_color_button),
+                               &rgba);
+  }
+  if (state->pen_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->pen_width_scale)) -
+           state->pen_stroke_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->pen_width_scale),
+                        state->pen_stroke_width);
+  if (state->pen_opacity_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->pen_opacity_scale)) -
+           state->pen_opacity) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->pen_opacity_scale),
+                        state->pen_opacity);
+  if (state->highlight_color_button != NULL) {
+    GdkRGBA rgba = {state->highlight_color.r, state->highlight_color.g,
+                    state->highlight_color.b, state->highlight_color.a};
+    gtk_color_chooser_set_rgba(
+        GTK_COLOR_CHOOSER(state->highlight_color_button), &rgba);
+  }
+  if (state->highlight_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->highlight_width_scale)) -
+           state->highlight_stroke_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->highlight_width_scale),
+                        state->highlight_stroke_width);
+  if (state->highlight_opacity_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->highlight_opacity_scale)) -
+           state->highlight_opacity) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->highlight_opacity_scale),
+                        state->highlight_opacity);
   if (state->duplicate_button != NULL) {
     gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);

@@ -107,8 +107,7 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     if (state->active_tool == SHAULA_TOOL_SELECT &&
         state->selected_annotation != NULL) {
       ShaulaAnnotation *annotation = state->selected_annotation;
-      return annotation->type == SHAULA_ANNOTATION_RECTANGLE ||
-             annotation->type == SHAULA_ANNOTATION_HIGHLIGHT;
+      return annotation->type == SHAULA_ANNOTATION_RECTANGLE;
     }
     return FALSE;
   case SHAULA_PREVIEW_COMMAND_BLUR_REGION:

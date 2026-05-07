@@ -114,6 +114,14 @@ typedef struct {
   GtkWidget *arrow_color_button;
   GtkWidget *arrow_width_scale;
   GtkWidget *arrow_stroke_buttons[3];
+  GtkWidget *pen_properties_box;
+  GtkWidget *pen_color_button;
+  GtkWidget *pen_width_scale;
+  GtkWidget *pen_opacity_scale;
+  GtkWidget *highlight_properties_box;
+  GtkWidget *highlight_color_button;
+  GtkWidget *highlight_width_scale;
+  GtkWidget *highlight_opacity_scale;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -178,6 +186,12 @@ typedef struct {
   int active_arrow_index;
   ShaulaColor arrow_color;
   double arrow_stroke_width;
+  ShaulaColor pen_color;
+  double pen_stroke_width;
+  double pen_opacity;
+  ShaulaColor highlight_color;
+  double highlight_stroke_width;
+  double highlight_opacity;
   gboolean modified;
   gboolean copied;
   gboolean saved;
@@ -262,6 +276,18 @@ void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
                                            double width);
 void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
                                            PreviewArrowStrokeStyle style);
+void shaula_preview_set_pen_color(ShaulaPreviewState *state,
+                                  ShaulaColor color);
+void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
+                                         double width);
+void shaula_preview_set_pen_opacity(ShaulaPreviewState *state,
+                                    double opacity);
+void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
+                                        ShaulaColor color);
+void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
+                                               double width);
+void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
+                                          double opacity);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

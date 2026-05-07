@@ -78,11 +78,22 @@ ShaulaAnnotation *shaula_annotation_new_rectangle(ShaulaRect rect,
   return annotation;
 }
 
-ShaulaAnnotation *shaula_annotation_new_highlight(ShaulaRect rect,
-                                                  ShaulaColor color) {
+static void copy_path_to_annotation(ShaulaPenPath *path,
+                                    const ShaulaPoint *points, int len) {
+  if (len > 0) {
+    path->points = g_new(ShaulaPoint, len);
+    memcpy(path->points, points, sizeof(ShaulaPoint) * len);
+    path->len = len;
+    path->cap = len;
+  }
+}
+
+ShaulaAnnotation *shaula_annotation_new_highlight(const ShaulaPoint *points,
+                                                  int len, ShaulaColor color,
+                                                  double stroke_width) {
   ShaulaAnnotation *annotation =
-      annotation_alloc(SHAULA_ANNOTATION_HIGHLIGHT, color, 1.0);
-  annotation->data.highlight.rect = shaula_rect_normalized(rect);
+      annotation_alloc(SHAULA_ANNOTATION_HIGHLIGHT, color, stroke_width);
+  copy_path_to_annotation(&annotation->data.highlight, points, len);
   shaula_annotation_update_bounds(annotation);
   return annotation;
 }
@@ -92,12 +103,7 @@ ShaulaAnnotation *shaula_annotation_new_pen(const ShaulaPoint *points, int len,
                                             double stroke_width) {
   ShaulaAnnotation *annotation =
       annotation_alloc(SHAULA_ANNOTATION_PEN, color, stroke_width);
-  if (len > 0) {
-    annotation->data.pen.points = g_new(ShaulaPoint, len);
-    memcpy(annotation->data.pen.points, points, sizeof(ShaulaPoint) * len);
-    annotation->data.pen.len = len;
-    annotation->data.pen.cap = len;
-  }
+  copy_path_to_annotation(&annotation->data.pen, points, len);
   shaula_annotation_update_bounds(annotation);
   return annotation;
 }
@@ -127,7 +133,14 @@ ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation) {
     clone->data.rectangle = annotation->data.rectangle;
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    clone->data.highlight = annotation->data.highlight;
+    clone->data.highlight.len = annotation->data.highlight.len;
+    clone->data.highlight.cap = annotation->data.highlight.len;
+    if (annotation->data.highlight.len > 0) {
+      clone->data.highlight.points =
+          g_new(ShaulaPoint, annotation->data.highlight.len);
+      memcpy(clone->data.highlight.points, annotation->data.highlight.points,
+             sizeof(ShaulaPoint) * annotation->data.highlight.len);
+    }
     break;
   case SHAULA_ANNOTATION_PEN:
     clone->data.pen.len = annotation->data.pen.len;
@@ -148,6 +161,8 @@ void shaula_annotation_free(gpointer data) {
     return;
   if (annotation->type == SHAULA_ANNOTATION_TEXT)
     g_free(annotation->data.text.text);
+  if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT)
+    g_free(annotation->data.highlight.points);
   if (annotation->type == SHAULA_ANNOTATION_PEN)
     g_free(annotation->data.pen.points);
   g_free(annotation);
@@ -196,23 +211,24 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
                              annotation->stroke_width + 4.0);
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    annotation->bounds = annotation->data.highlight.rect;
-    break;
   case SHAULA_ANNOTATION_PEN:
-    if (annotation->data.pen.len <= 0) {
+    {
+    ShaulaPenPath path = annotation->type == SHAULA_ANNOTATION_HIGHLIGHT
+                             ? annotation->data.highlight
+                             : annotation->data.pen;
+    if (path.len <= 0) {
       annotation->bounds = (ShaulaRect){0, 0, 0, 0};
       break;
     }
-    ShaulaRect bounds = {annotation->data.pen.points[0].x,
-                         annotation->data.pen.points[0].y, 0, 0};
-    for (int i = 1; i < annotation->data.pen.len; i++) {
-      ShaulaRect point_rect = {annotation->data.pen.points[i].x,
-                               annotation->data.pen.points[i].y, 0, 0};
+    ShaulaRect bounds = {path.points[0].x, path.points[0].y, 0, 0};
+    for (int i = 1; i < path.len; i++) {
+      ShaulaRect point_rect = {path.points[i].x, path.points[i].y, 0, 0};
       bounds = shaula_rect_union(bounds, point_rect);
     }
     annotation->bounds =
         shaula_rect_expanded(bounds, annotation->stroke_width + 6.0);
     break;
+    }
   }
 }
 
@@ -246,8 +262,10 @@ void shaula_annotation_move(ShaulaAnnotation *annotation, double dx,
     annotation->data.rectangle.rect.y += dy;
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    annotation->data.highlight.rect.x += dx;
-    annotation->data.highlight.rect.y += dy;
+    for (int i = 0; i < annotation->data.highlight.len; i++) {
+      annotation->data.highlight.points[i].x += dx;
+      annotation->data.highlight.points[i].y += dy;
+    }
     break;
   case SHAULA_ANNOTATION_PEN:
     for (int i = 0; i < annotation->data.pen.len; i++) {
@@ -456,15 +474,16 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
     cairo_stroke(cr);
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    set_annotation_color(cr, annotation->color, 0.24);
-    cairo_rectangle(cr, annotation->data.highlight.rect.x,
-                    annotation->data.highlight.rect.y,
-                    annotation->data.highlight.rect.width,
-                    annotation->data.highlight.rect.height);
-    cairo_fill_preserve(cr);
-    set_annotation_color(cr, annotation->color, 0.65);
-    cairo_set_line_width(cr, 1.0);
-    cairo_stroke(cr);
+    if (annotation->data.highlight.len > 0) {
+      set_annotation_color(cr, annotation->color, 1.0);
+      cairo_set_line_width(cr, annotation->stroke_width);
+      cairo_move_to(cr, annotation->data.highlight.points[0].x,
+                    annotation->data.highlight.points[0].y);
+      for (int i = 1; i < annotation->data.highlight.len; i++)
+        cairo_line_to(cr, annotation->data.highlight.points[i].x,
+                      annotation->data.highlight.points[i].y);
+      cairo_stroke(cr);
+    }
     break;
   case SHAULA_ANNOTATION_PEN:
     if (annotation->data.pen.len > 0) {
@@ -531,8 +550,8 @@ ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
         return annotation;
       break;
     case SHAULA_ANNOTATION_RECTANGLE:
-    case SHAULA_ANNOTATION_HIGHLIGHT:
     case SHAULA_ANNOTATION_TEXT:
+    case SHAULA_ANNOTATION_HIGHLIGHT:
     case SHAULA_ANNOTATION_PEN:
       if (shaula_rect_contains_point(
               shaula_rect_expanded(annotation->bounds, tolerance), point))

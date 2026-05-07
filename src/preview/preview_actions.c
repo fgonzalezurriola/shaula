@@ -79,6 +79,10 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
     return;
   shaula_preview_cancel_operation(state);
   state->active_tool = tool;
+  if (tool == SHAULA_TOOL_PEN)
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_PEN;
+  else if (tool == SHAULA_TOOL_HIGHLIGHT)
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
   shaula_preview_toolbar_update_tool_state(state);
   if (state->area != NULL) {
     const char *cursor = "crosshair";
@@ -436,4 +440,37 @@ void shaula_preview_on_arrow_stroke_style_clicked(GtkButton *button,
           g_object_get_data(G_OBJECT(button), "arrow-stroke-style"));
   shaula_preview_set_arrow_stroke_style(data, style);
   shaula_preview_toolbar_update_selection_state(data);
+}
+
+void shaula_preview_on_pen_color_set(GtkColorButton *button, gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_pen_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_pen_width_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_pen_stroke_width(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_pen_opacity_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_pen_opacity(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_highlight_color_set(GtkColorButton *button,
+                                           gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_highlight_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_highlight_width_changed(GtkRange *range,
+                                               gpointer data) {
+  shaula_preview_set_highlight_stroke_width(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
+                                                 gpointer data) {
+  shaula_preview_set_highlight_opacity(data, gtk_range_get_value(range));
 }
