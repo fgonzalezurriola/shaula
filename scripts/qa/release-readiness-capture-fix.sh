@@ -221,7 +221,7 @@ else
 fi
 
 capabilities_json="$(./zig-out/bin/shaula capabilities list --json 2>&1 || true)"
-if printf '%s\n' "${capabilities_json}" | jq -e '.ok == true and (.capture | has("area") and has("fullscreen") and has("window"))' >/dev/null 2>&1; then
+if printf '%s\n' "${capabilities_json}" | jq -e '.ok == true and (.capture | has("area") and has("fullscreen") and has("all_screens") and has("window"))' >/dev/null 2>&1; then
   append_check "command_family.capabilities" true "pass"
 else
   append_check "command_family.capabilities" false "invalid_contract output=$(printf '%s' "${capabilities_json}" | tr '\n' ' ')"

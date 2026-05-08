@@ -35,7 +35,6 @@ Common manual commands:
 ./zig-out/bin/shaula preflight --json
 ./zig-out/bin/shaula capture area --json
 ./zig-out/bin/shaula capture area --json --no-preview
-./zig-out/bin/shaula capture all-in-one --json
 ./zig-out/bin/shaula capture fullscreen --json --preview
 ./zig-out/bin/shaula capture all-screens --json
 ./zig-out/bin/shaula capture previous-area --json

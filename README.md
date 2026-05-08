@@ -45,7 +45,7 @@ Niri config.
 
 ## Features
 
-- Area, fullscreen/current-monitor, all-screens, window, all-in-one, and previous-area capture
+- Area, fullscreen/current-monitor, all-screens, window, and previous-area capture
 - Native GTK/layer-shell selection overlay
 - Post-capture preview/editor
 - Copy, Save As, Crop, Blur, Erase, Spotlight, annotations, undo/redo

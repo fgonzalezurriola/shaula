@@ -1,7 +1,7 @@
 const std = @import("std");
 const toolbar_layout = @import("toolbar_layout.zig");
 
-/// Persists the last valid all-in-one toolbar position.
+/// Persists the last valid capture toolbar position.
 ///
 /// Contract constraints:
 /// - the format is a single deterministic `x|y` line.

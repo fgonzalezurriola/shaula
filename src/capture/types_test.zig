@@ -4,6 +4,8 @@ const capture_types = @import("types.zig");
 test "mode string mapping is deterministic" {
     try std.testing.expectEqualStrings("area", capture_types.modeString(.area));
     try std.testing.expectEqualStrings("fullscreen", capture_types.modeString(.fullscreen));
+    try std.testing.expectEqualStrings("fullscreen", capture_types.modeString(.focused));
+    try std.testing.expectEqualStrings("all-screens", capture_types.modeString(.all_screens));
     try std.testing.expectEqualStrings("window", capture_types.modeString(.window));
 }
 

@@ -16,7 +16,7 @@ pub fn run(
     argv: []const [*:0]const u8,
 ) !u8 {
     if (argv.len < 3) {
-        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|all-screens|focused|window|previous-area> --json", false, null, null, false, &.{});
+        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|all-screens|window|previous-area> --json", false, null, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 

@@ -16,7 +16,7 @@ and the working diff.
   config candidates and generates
   `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The
   snippet includes the preview floating window-rule and recommended area,
-  fullscreen, and focused capture binds using the installed absolute
+  fullscreen, and all-screens capture binds using the installed absolute
   `shaula` path. It detects Noctalia and can optionally install the minimal
   `integrations/noctalia/shaula/` Bar Widget into
   `~/.config/noctalia/plugins/shaula/`, enabling `states.shaula.enabled` and
@@ -43,12 +43,25 @@ and the working diff.
 - Capture naming update: `capture fullscreen` targets the current/focused
   monitor, `capture all-screens` preserves the old all-output fullscreen
   behavior, and `capture focused` remains as a CLI compatibility alias.
-- Architecture deepening pass: capture invocation assembly now lives in
-  `capture/invocation.zig`; backend failure construction lives in
-  `backends/capture_backend_failure.zig`; overlay helper process execution now
-  runs through `overlay/runtime.zig`; and post-capture work in
-  `pipeline/post_capture.zig` is separated into typed degraded outcomes before
-  JSON rendering. No public CLI contract changes were intended.
+- Capture surface unification: Noctalia's menu is the current naming source of
+  truth (`Capture Area`, `Capture Fullscreen`, `Capture All Screens`). Public
+  capabilities now report `area`, `fullscreen`, `all_screens`, and `window`.
+  `all-in-one` is no longer promoted in docs/scripts and remains only as a
+  legacy CLI alias for the Capture overlay flow; `focused` remains a hidden
+  compatibility alias for current-output fullscreen behavior.
+- Capture runtime terminology: internal capture planning now names
+  `current-output` and `all-outputs` lanes separately from CLI compatibility
+  tokens. Direct no-preview captures emit best-effort save/copy notifications
+  from the Zig post-capture pipeline; preview keeps owning its own banners.
+- Architecture deepening pass: capture grammar now lives in
+  `capture/command_grammar.zig`; capture invocation assembly lives in
+  `capture/invocation.zig`; backend execution planning is typed in
+  `backends/capture_execution_plan.zig`; backend failure construction lives in
+  `backends/capture_backend_failure.zig`; overlay orchestration lives behind
+  `overlay/selection_session.zig`; doctor discovery lives in
+  `doctor/diagnostics.zig`; and post-capture work separates side effects,
+  typed outcomes, and JSON rendering across `pipeline/post_capture.zig`,
+  `pipeline/post_capture_types.zig`, and `pipeline/post_capture_json.zig`.
 
 ## Capture Runtime Foundation
 
@@ -67,14 +80,15 @@ and the working diff.
   into the lifecycle invocation contract: public command token, backend mode,
   request mode, output/window/area fields, post-capture flags, previous-area
   persistence, and optional live-overlay settle mode.
-- `capture/command_flags.zig` has a small common parser for shared capture
-  flags: `--json`, `--output`, `--save`, `--copy`, `--preview`, and
-  `--no-preview`. Mode-specific flags remain in their existing parsers so
-  command-specific `ERR_CLI_USAGE` messages stay stable.
-- `pipeline/post_capture.zig` now first gathers `PostCaptureOutcome` state for
-  history, clipboard, and preview. Rendering consumes that outcome, reusing
-  `cli/json.zig` timestamp/string/warnings helpers so degraded post-capture
-  behavior and JSON formatting stay separate.
+- `capture/command_grammar.zig` owns capture flag membership and deterministic
+  command-specific `ERR_CLI_USAGE` messages. `capture/command_flags.zig` now
+  declares per-mode flag structs and delegates parsing to that grammar.
+- `backends/capture_execution_plan.zig` now receives a typed operation
+  (`area`, `current_output`, `all_outputs`, or `window`) instead of mode booleans
+  so current-output fullscreen and all-screens capture cannot drift.
+- `pipeline/post_capture.zig` gathers `PostCaptureOutcome` state for history,
+  clipboard, and preview. `pipeline/post_capture_json.zig` owns the stable JSON
+  envelope, duplicated top-level/result fields, and partial/degraded rules.
 
 ## Overlay Capture
 
@@ -95,6 +109,10 @@ and the working diff.
   `overlay/runtime.zig`, which owns helper binary resolution, stdout/stderr
   limits, and process failure mapping before `overlay/helper_protocol.zig`
   parses the helper envelope.
+- `overlay/overlay.zig` is now a facade. `overlay/selection_session.zig` owns
+  helper environment preparation, optional frozen background, deterministic
+  dry-run/test payload handling, helper protocol mapping, and accepted-selection
+  draft/UI persistence.
 - The native GTK overlay used by `./dev capture` is now capture-on-release.
   It no longer draws or requires the floating Capture/Esc/aspect button strip:
   a valid create, move, or resize drag confirms the selection on release.

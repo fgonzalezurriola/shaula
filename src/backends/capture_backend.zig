@@ -2,6 +2,7 @@ const std = @import("std");
 const root = @import("root");
 
 const runtime_exec = @import("capture_backend_runtime_exec.zig");
+const execution_plan = @import("capture_execution_plan.zig");
 const output_path = @import("capture_backend_output_path.zig");
 const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
@@ -70,7 +71,7 @@ const standalone_capture_types = struct {
             .area => "area",
             .fullscreen => "fullscreen",
             .all_screens => "all-screens",
-            .focused => "focused",
+            .focused => "fullscreen",
             .window => "window",
         };
     }
@@ -210,8 +211,7 @@ pub fn execute(
         environ,
         backend_used,
         mode_string,
-        request.mode == .area,
-        request.mode == .focused,
+        operationForMode(request.mode),
         area_geometry,
         resolved_output_path,
     ) catch |err| switch (err) {
@@ -257,6 +257,15 @@ fn resolveBackend(environ: std.process.Environ) BackendKind {
 
 fn backendString(kind: BackendKind) []const u8 {
     return runtime_capabilities.backendLabel(kind);
+}
+
+fn operationForMode(mode: capture_types.CaptureMode) execution_plan.Operation {
+    return switch (mode) {
+        .area => .area,
+        .fullscreen, .focused => .current_output,
+        .all_screens => .all_outputs,
+        .window => .window,
+    };
 }
 
 fn resolveWindowTarget(request: capture_types.CaptureRequest, environ: std.process.Environ) ?[]const u8 {

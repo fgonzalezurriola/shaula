@@ -144,7 +144,7 @@ pub fn modeString(mode: CaptureMode) []const u8 {
         .area => "area",
         .fullscreen => "fullscreen",
         .all_screens => "all-screens",
-        .focused => "focused",
+        .focused => "fullscreen",
         .window => "window",
     };
 }

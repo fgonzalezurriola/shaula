@@ -10,6 +10,13 @@ pub const CaptureMode = enum {
     all_in_one,
 };
 
+pub const RuntimeCaptureMode = enum {
+    area,
+    current_output,
+    all_outputs,
+    window,
+};
+
 pub const RegionCaptureMode = enum {
     live,
     frozen,
@@ -33,8 +40,9 @@ pub fn parseRegionCaptureMode(token: []const u8) ?RegionCaptureMode {
 /// Contract constraints:
 /// - CLI tokens stay stable even if backend execution uses a different runtime
 ///   mode (`previous-area` currently reuses area capture underneath).
-/// - `all-in-one` is a public UI mode that still executes through the area
-///   backend until the helper owns richer runtime actions.
+/// - `all-in-one` is a legacy token for the Capture overlay flow and still
+///   executes through the area lane.
+/// - `focused` is a compatibility CLI alias for the current-output runtime lane.
 pub fn parseCliToken(token: []const u8) ?CaptureMode {
     if (std.mem.eql(u8, token, "area")) return .area;
     if (std.mem.eql(u8, token, "fullscreen")) return .fullscreen;
@@ -58,15 +66,31 @@ pub fn cliToken(mode: CaptureMode) []const u8 {
     };
 }
 
-pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
+pub fn runtimeMode(mode: CaptureMode) RuntimeCaptureMode {
+    return switch (mode) {
+        .area, .previous_area, .all_in_one => .area,
+        .fullscreen, .focused => .current_output,
+        .all_screens => .all_outputs,
+        .window => .window,
+    };
+}
+
+pub fn runtimeModeToken(mode: RuntimeCaptureMode) []const u8 {
     return switch (mode) {
         .area => "area",
-        .fullscreen => "focused",
-        .all_screens => "fullscreen",
+        .current_output => "current-output",
+        .all_outputs => "all-outputs",
+        .window => "window",
+    };
+}
+
+pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
+    return switch (mode) {
+        .area, .previous_area, .all_in_one => "area",
+        .fullscreen => "fullscreen",
+        .all_screens => "all-screens",
         .focused => "focused",
         .window => "window",
-        .previous_area => "area",
-        .all_in_one => "area",
     };
 }
 
@@ -87,6 +111,6 @@ test "cli token parsing keeps dashed modes deterministic" {
 test "backend mode token keeps previous-area on area runtime lane" {
     try std.testing.expectEqualStrings("area", backendModeToken(.previous_area) orelse return error.TestExpectedEqual);
     try std.testing.expectEqualStrings("area", backendModeToken(.all_in_one) orelse return error.TestExpectedEqual);
-    try std.testing.expectEqualStrings("focused", backendModeToken(.fullscreen) orelse return error.TestExpectedEqual);
-    try std.testing.expectEqualStrings("fullscreen", backendModeToken(.all_screens) orelse return error.TestExpectedEqual);
+    try std.testing.expectEqualStrings("fullscreen", backendModeToken(.fullscreen) orelse return error.TestExpectedEqual);
+    try std.testing.expectEqualStrings("all-screens", backendModeToken(.all_screens) orelse return error.TestExpectedEqual);
 }

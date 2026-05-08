@@ -42,7 +42,7 @@ pub const LayoutResult = struct {
     placement: Placement,
 };
 
-/// Computes the floating all-in-one toolbar position from visible output bounds.
+/// Computes the floating capture toolbar position from visible output bounds.
 ///
 /// Contract constraints:
 /// - prefer below selection, then above, then nearest visible edge with padding.

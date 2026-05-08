@@ -187,7 +187,7 @@ write_desktop_file() {
 Type=Application
 Name=Shaula
 Comment=Wayland screenshot tool for Niri
-Exec=${XDG_BIN_HOME}/shaula capture all-in-one --json
+Exec=${XDG_BIN_HOME}/shaula capture area --json
 Icon=shaula
 Terminal=false
 Categories=Graphics;Utility;

@@ -4,6 +4,15 @@ const capture_types = @import("types.zig");
 const core_capture_mode = @import("../core/capture_mode.zig");
 const flags = @import("command_flags.zig");
 
+fn backendRequestMode(mode: core_capture_mode.CaptureMode) capture_types.CaptureMode {
+    return switch (core_capture_mode.runtimeMode(mode)) {
+        .area => .area,
+        .current_output => .focused,
+        .all_outputs => .all_screens,
+        .window => .window,
+    };
+}
+
 pub const PostCaptureFlags = struct {
     save: bool,
     copy: bool,
@@ -63,7 +72,7 @@ pub fn fullscreen(parsed: flags.FullscreenFlags) Invocation {
         .command = "capture fullscreen",
         .reported_mode = mode,
         .backend_mode = core_capture_mode.backendModeToken(.fullscreen) orelse mode,
-        .request_mode = .focused,
+        .request_mode = backendRequestMode(.fullscreen),
         .output_path = parsed.output,
         .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
     };
@@ -75,7 +84,7 @@ pub fn allScreens(parsed: flags.AllScreensFlags) Invocation {
         .command = "capture all-screens",
         .reported_mode = reported_mode,
         .backend_mode = core_capture_mode.backendModeToken(.all_screens) orelse reported_mode,
-        .request_mode = .all_screens,
+        .request_mode = backendRequestMode(.all_screens),
         .output_path = parsed.output,
         .post_flags = postFlags(reported_mode, parsed.save, parsed.copy, parsed.preview),
     };
@@ -87,7 +96,7 @@ pub fn focused(parsed: flags.FocusedFlags) Invocation {
         .command = "capture focused",
         .reported_mode = mode,
         .backend_mode = mode,
-        .request_mode = .focused,
+        .request_mode = backendRequestMode(.focused),
         .output_path = parsed.output,
         .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
     };

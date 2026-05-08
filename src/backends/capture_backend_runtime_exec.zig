@@ -9,8 +9,7 @@ pub fn writeRuntimeCapture(
     environ: std.process.Environ,
     backend_label: []const u8,
     mode_string: []const u8,
-    mode_is_area: bool,
-    mode_is_focused: bool,
+    operation: execution_plan.Operation,
     area_geometry: ?[]const u8,
     output_path: []const u8,
 ) !void {
@@ -21,8 +20,7 @@ pub fn writeRuntimeCapture(
     var plan = execution_plan.resolve(std.heap.smp_allocator, io, environ, .{
         .backend_label = backend_label,
         .mode_string = mode_string,
-        .mode_is_area = mode_is_area,
-        .mode_is_focused = mode_is_focused,
+        .operation = operation,
         .area_geometry = area_geometry,
         .output_path = output_path,
     }) catch |err| switch (err) {

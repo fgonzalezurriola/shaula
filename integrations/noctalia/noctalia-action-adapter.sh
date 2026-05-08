@@ -66,7 +66,6 @@ action_label() {
     capture-area) printf 'Capture Area' ;;
     capture-fullscreen) printf 'Capture Fullscreen' ;;
     capture-all-screens) printf 'Capture All Screens' ;;
-    capture-focused) printf 'Capture Focused' ;;
     capture-window) printf 'Capture Window' ;;
     open-last) printf 'Open Last' ;;
     history) printf 'History' ;;
@@ -81,7 +80,6 @@ action_command_json() {
     capture-area) printf '["capture","area","--json"]' ;;
     capture-fullscreen) printf '["capture","fullscreen","--json"]' ;;
     capture-all-screens) printf '["capture","all-screens","--json"]' ;;
-    capture-focused) printf '["capture","focused","--json"]' ;;
     capture-window) printf '["capture","window","--json"]' ;;
     open-last) printf '["history","show","--json","--id","latest"]' ;;
     history) printf '["history","list","--json"]' ;;
@@ -287,7 +285,6 @@ mapping = {
     "capture-area": ["capture", "area", "--json"],
     "capture-fullscreen": ["capture", "fullscreen", "--json"],
     "capture-all-screens": ["capture", "all-screens", "--json"],
-    "capture-focused": ["capture", "focused", "--json"],
     "capture-window": ["capture", "window", "--json"],
     "open-last": ["history", "show", "--json", "--id", "latest"],
     "history": ["history", "list", "--json"],

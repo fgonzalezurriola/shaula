@@ -3,7 +3,7 @@ const capture_types = @import("../capture/types.zig");
 
 pub const DraftMode = enum {
     area,
-    all_in_one,
+    capture,
 };
 
 /// Persists the last visual overlay selection per public overlay mode.
@@ -78,16 +78,22 @@ pub fn load(
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ, mode: DraftMode) ![]u8 {
     const override_key = switch (mode) {
         .area => "SHAULA_OVERLAY_AREA_DRAFT_FILE",
-        .all_in_one => "SHAULA_OVERLAY_ALL_IN_ONE_DRAFT_FILE",
+        .capture => "SHAULA_OVERLAY_CAPTURE_DRAFT_FILE",
     };
     if (environ.getPosix(override_key)) |path_z| {
         const path = std.mem.trim(u8, std.mem.sliceTo(path_z, 0), " \t\r\n");
         if (path.len > 0) return allocator.dupe(u8, path);
     }
+    if (mode == .capture) {
+        if (environ.getPosix("SHAULA_OVERLAY_ALL_IN_ONE_DRAFT_FILE")) |path_z| {
+            const path = std.mem.trim(u8, std.mem.sliceTo(path_z, 0), " \t\r\n");
+            if (path.len > 0) return allocator.dupe(u8, path);
+        }
+    }
 
     const filename = switch (mode) {
         .area => "area-draft.v1",
-        .all_in_one => "all-in-one-draft.v1",
+        .capture => "capture-draft.v1",
     };
 
     if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
@@ -110,9 +116,9 @@ test "selection draft paths are mode-specific" {
 
     const area_path = try resolvePath(std.testing.allocator, .{ .block = block }, .area);
     defer std.testing.allocator.free(area_path);
-    const all_path = try resolvePath(std.testing.allocator, .{ .block = block }, .all_in_one);
-    defer std.testing.allocator.free(all_path);
+    const capture_path = try resolvePath(std.testing.allocator, .{ .block = block }, .capture);
+    defer std.testing.allocator.free(capture_path);
 
     try std.testing.expectEqualStrings("/tmp/shaula-runtime/shaula/overlay/area-draft.v1", area_path);
-    try std.testing.expectEqualStrings("/tmp/shaula-runtime/shaula/overlay/all-in-one-draft.v1", all_path);
+    try std.testing.expectEqualStrings("/tmp/shaula-runtime/shaula/overlay/capture-draft.v1", capture_path);
 }

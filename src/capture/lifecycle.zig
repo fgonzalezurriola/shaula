@@ -67,7 +67,7 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     }
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .all_in_one, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
+    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .capture, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 

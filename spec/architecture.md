@@ -25,7 +25,7 @@ shaula <command-family> <command> [flags]
 
 command-family := capture | preview | config | daemon | capabilities | history | clipboard
 
-capture command := all-in-one | area | fullscreen | window | previous-area
+capture command := area | fullscreen | all-screens | window | previous-area
 preview command := <file>
 config command := show | init | niri-window-rule | niri-install
 daemon command := start | status | stop
@@ -40,9 +40,9 @@ All commands below require `--json` for contract-compliant automation.
 
 #### Capture family
 
-- `shaula capture all-in-one --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
 - `shaula capture area --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
 - `shaula capture fullscreen --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
+- `shaula capture all-screens --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
 - `shaula capture window --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--window-id <id>]`
 - `shaula capture previous-area --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
 
@@ -59,9 +59,14 @@ All commands below require `--json` for contract-compliant automation.
 
 Preview defaults:
 
-- `capture area` and `capture all-in-one` launch post-capture preview by default.
-- `capture fullscreen`, `capture focused`, `capture window`, and `capture previous-area` do not launch preview unless `--preview` is supplied.
+- `capture area` launches post-capture preview by default.
+- `capture fullscreen`, `capture all-screens`, `capture window`, and `capture previous-area` do not launch preview unless `--preview` is supplied.
 - `--no-preview` disables preview explicitly. `--dry-run` never launches preview.
+
+Copy defaults:
+
+- `capture area`, `capture fullscreen`, and `capture all-screens` copy to the clipboard by default.
+- `capture window` and `capture previous-area` copy only when `--copy` is supplied.
 
 #### Daemon family
 

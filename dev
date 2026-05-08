@@ -30,8 +30,8 @@ App:
  capture Build, then run live capture area --json
  frozen Build, then run frozen capture area --json
  fullscreen Build, then run capture fullscreen --json --copy
- focused Build, then run capture focused --json --copy
- all Build, then run capture all-in-one --json
+ all-screens Build, then run capture all-screens --json --copy
+ all Build, then run capture all-screens --json --copy
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
   noctalia-load  Build, install local Noctalia widget, and restart Noctalia
@@ -333,11 +333,11 @@ frozen)
 fullscreen)
 	run_shaula capture fullscreen --json --copy "$@"
 	;;
-focused)
-	run_shaula capture focused --json --copy "$@"
-	;;
+all-screens)
+    run_shaula capture all-screens --json --copy "$@"
+    ;;
 all)
-    run_shaula capture all-in-one --json "$@"
+    run_shaula capture all-screens --json --copy "$@"
     ;;
   overlay)
     build >/dev/null

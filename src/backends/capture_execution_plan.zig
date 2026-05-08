@@ -5,10 +5,16 @@ const process_exec = @import("../runtime/process_exec.zig");
 pub const Options = struct {
     backend_label: []const u8,
     mode_string: []const u8,
-    mode_is_area: bool,
-    mode_is_focused: bool,
+    operation: Operation,
     area_geometry: ?[]const u8,
     output_path: []const u8,
+};
+
+pub const Operation = enum {
+    area,
+    current_output,
+    all_outputs,
+    window,
 };
 
 const NiriFocusedOutput = struct {
@@ -32,9 +38,10 @@ pub const Plan = struct {
 
 /// Resolve the concrete runtime capture command before process execution.
 ///
-/// Contract constraints: this Module owns helper/grim argv shape and focused
-/// output lookup; callers retain process spawning and deterministic `ERR_*`
-/// mapping so taxonomy remains stable at the backend seam.
+/// Contract constraints: this Module owns helper/grim argv shape, all-output vs
+/// current-output selection, and focused output lookup; callers retain process
+/// spawning and deterministic `ERR_*` mapping so taxonomy remains stable at the
+/// backend seam.
 pub fn resolve(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -46,20 +53,20 @@ pub fn resolve(
     }
 
     const grim_path = findGrimBinary(io) orelse return error.BackendUnavailable;
-    if (options.mode_is_area) {
-        const geometry = options.area_geometry orelse return error.BackendUnavailable;
-        return staticPlan(&.{ grim_path, "-g", geometry, options.output_path });
-    }
-
-    if (options.mode_is_focused) {
-        const focused_output = try resolveFocusedOutput(allocator, io);
-        errdefer allocator.free(focused_output);
-        var plan = staticPlan(&.{ grim_path, "-o", focused_output, options.output_path });
-        plan.owned_focused_output = focused_output;
-        return plan;
-    }
-
-    return staticPlan(&.{ grim_path, options.output_path });
+    return switch (options.operation) {
+        .area => blk: {
+            const geometry = options.area_geometry orelse return error.BackendUnavailable;
+            break :blk staticPlan(&.{ grim_path, "-g", geometry, options.output_path });
+        },
+        .current_output => blk: {
+            const focused_output = try resolveFocusedOutput(allocator, io);
+            errdefer allocator.free(focused_output);
+            var plan = staticPlan(&.{ grim_path, "-o", focused_output, options.output_path });
+            plan.owned_focused_output = focused_output;
+            break :blk plan;
+        },
+        .all_outputs, .window => staticPlan(&.{ grim_path, options.output_path }),
+    };
 }
 
 fn helperPlan(helper_path: []const u8, options: Options) Plan {

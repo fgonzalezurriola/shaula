@@ -29,6 +29,7 @@ printf '%s\n' "${capabilities_json}" | jq -e '
   .command == "capabilities list" and
   (.capture.area == true) and
   (.capture.fullscreen == true) and
+  (.capture.all_screens == true) and
   (.capture | has("window")) and
   has("backend") and
   has("fallbacks") and

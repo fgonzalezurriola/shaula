@@ -1,59 +1,9 @@
 const std = @import("std");
 
 const command_json = @import("../capture/command_json.zig");
-const loader = @import("../config/loader.zig");
+const diagnostics = @import("diagnostics.zig");
 const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
-
-const ToolStatus = struct {
-    name: []const u8,
-    path: ?[]u8 = null,
-
-    fn found(self: ToolStatus) bool {
-        return self.path != null;
-    }
-
-    fn deinit(self: *ToolStatus, allocator: std.mem.Allocator) void {
-        if (self.path) |path| allocator.free(path);
-        self.path = null;
-    }
-};
-
-const DoctorReport = struct {
-    binary_path: ?[:0]u8,
-    xdg_config_dir: ?[]u8,
-    config_file_path: ?[]u8,
-    config_exists: bool,
-    generated_dir_path: ?[]u8,
-    niri_snippet_path: ?[]u8,
-    niri_snippet_exists: bool,
-    xdg_session_type: ?[]const u8,
-    wayland_display: ?[]const u8,
-    niri_config_env: ?[]const u8,
-    niri_config_env_exists: bool,
-    niri_user_config_exists: bool,
-    niri_cfg_dir_exists: bool,
-    niri_etc_config_exists: bool,
-    noctalia_dir_exists: bool,
-    noctalia_plugins_dir_exists: bool,
-    noctalia_plugins_json_exists: bool,
-    noctalia_settings_json_exists: bool,
-    noctalia_shaula_plugin_dir_exists: bool,
-    noctalia_shaula_plugin_enabled: ?bool,
-    tools: []ToolStatus,
-    warnings: []const []const u8,
-
-    fn deinit(self: *DoctorReport, allocator: std.mem.Allocator) void {
-        if (self.binary_path) |path| allocator.free(path);
-        if (self.xdg_config_dir) |path| allocator.free(path);
-        if (self.config_file_path) |path| allocator.free(path);
-        if (self.generated_dir_path) |path| allocator.free(path);
-        if (self.niri_snippet_path) |path| allocator.free(path);
-        for (self.tools) |*tool| tool.deinit(allocator);
-        allocator.free(self.tools);
-        allocator.free(self.warnings);
-    }
-};
 
 /// Report install and runtime diagnostics without modifying user files.
 ///
@@ -72,7 +22,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    var report = try collectReport(allocator, io, environ);
+    var report = try diagnostics.collect(allocator, io, environ);
     defer report.deinit(allocator);
 
     if (json_mode) {
@@ -83,92 +33,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     return 0;
 }
 
-fn collectReport(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !DoctorReport {
-    const binary_path = std.process.executablePathAlloc(io, allocator) catch null;
-    const xdg_config_dir = try resolveXdgConfigDir(allocator, environ);
-    const config_file_path = try loader.resolveConfigPath(allocator, environ);
-    errdefer if (config_file_path) |path| allocator.free(path);
-    const generated_dir_path = if (xdg_config_dir) |dir| try std.fmt.allocPrint(allocator, "{s}/shaula/generated", .{dir}) else null;
-    const niri_snippet_path = if (generated_dir_path) |dir| try std.fmt.allocPrint(allocator, "{s}/niri-shaula.kdl", .{dir}) else null;
-
-    var tools = try allocator.alloc(ToolStatus, tool_names.len);
-    errdefer allocator.free(tools);
-    for (tool_names, 0..) |name, index| {
-        tools[index] = .{ .name = name, .path = try findToolInPath(allocator, io, environ, name) };
-    }
-
-    const niri_config_env = envSlice(environ, "NIRI_CONFIG");
-    const wayland_display = envSlice(environ, "WAYLAND_DISPLAY");
-    const xdg_session_type = envSlice(environ, "XDG_SESSION_TYPE");
-    const niri_user_config_path = try homePath(allocator, environ, ".config/niri/config.kdl");
-    defer if (niri_user_config_path) |path| allocator.free(path);
-    const niri_cfg_dir_path = try homePath(allocator, environ, ".config/niri/cfg");
-    defer if (niri_cfg_dir_path) |path| allocator.free(path);
-    const noctalia_dir_path = try homePath(allocator, environ, ".config/noctalia");
-    defer if (noctalia_dir_path) |path| allocator.free(path);
-    const noctalia_plugins_dir_path = try homePath(allocator, environ, ".config/noctalia/plugins");
-    defer if (noctalia_plugins_dir_path) |path| allocator.free(path);
-    const noctalia_plugins_json_path = try homePath(allocator, environ, ".config/noctalia/plugins.json");
-    defer if (noctalia_plugins_json_path) |path| allocator.free(path);
-    const noctalia_settings_json_path = try homePath(allocator, environ, ".config/noctalia/settings.json");
-    defer if (noctalia_settings_json_path) |path| allocator.free(path);
-    const noctalia_shaula_plugin_dir_path = try homePath(allocator, environ, ".config/noctalia/plugins/shaula");
-    defer if (noctalia_shaula_plugin_dir_path) |path| allocator.free(path);
-
-    var warnings = std.ArrayList([]const u8).empty;
-    errdefer warnings.deinit(allocator);
-    if (!toolFound(tools, "grim")) try warnings.append(allocator, "missing grim");
-    if (!toolFound(tools, "wl-copy")) try warnings.append(allocator, "missing wl-copy");
-    if (wayland_display == null or wayland_display.?.len == 0) try warnings.append(allocator, "missing WAYLAND_DISPLAY");
-    if (xdg_session_type == null or !std.mem.eql(u8, xdg_session_type.?, "wayland")) try warnings.append(allocator, "XDG_SESSION_TYPE is not wayland");
-
-    const niri_detected =
-        toolFound(tools, "niri") or
-        (niri_config_env != null and niri_config_env.?.len > 0) or
-        (niri_user_config_path != null and fileExists(io, niri_user_config_path.?)) or
-        (niri_cfg_dir_path != null and fileExists(io, niri_cfg_dir_path.?)) or
-        fileExists(io, "/etc/niri/config.kdl");
-    const niri_snippet_exists = niri_snippet_path != null and fileExists(io, niri_snippet_path.?);
-    if (niri_detected and !niri_snippet_exists) try warnings.append(allocator, "Niri detected but generated snippet is missing");
-
-    const noctalia_detected =
-        (noctalia_dir_path != null and fileExists(io, noctalia_dir_path.?)) or
-        (noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?)) or
-        (noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?)) or
-        (noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?));
-    const noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_path != null and fileExists(io, noctalia_shaula_plugin_dir_path.?);
-    const noctalia_shaula_plugin_enabled = if (noctalia_plugins_json_path) |path| try detectNoctaliaPluginEnabled(allocator, io, path) else null;
-    if (noctalia_detected and !noctalia_shaula_plugin_dir_exists) try warnings.append(allocator, "Noctalia detected but Shaula plugin is not installed");
-
-    return .{
-        .binary_path = binary_path,
-        .xdg_config_dir = xdg_config_dir,
-        .config_file_path = config_file_path,
-        .config_exists = config_file_path != null and fileExists(io, config_file_path.?),
-        .generated_dir_path = generated_dir_path,
-        .niri_snippet_path = niri_snippet_path,
-        .niri_snippet_exists = niri_snippet_exists,
-        .xdg_session_type = xdg_session_type,
-        .wayland_display = wayland_display,
-        .niri_config_env = niri_config_env,
-        .niri_config_env_exists = niri_config_env != null and niri_config_env.?.len > 0 and fileExists(io, niri_config_env.?),
-        .niri_user_config_exists = niri_user_config_path != null and fileExists(io, niri_user_config_path.?),
-        .niri_cfg_dir_exists = niri_cfg_dir_path != null and fileExists(io, niri_cfg_dir_path.?),
-        .niri_etc_config_exists = fileExists(io, "/etc/niri/config.kdl"),
-        .noctalia_dir_exists = noctalia_dir_path != null and fileExists(io, noctalia_dir_path.?),
-        .noctalia_plugins_dir_exists = noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?),
-        .noctalia_plugins_json_exists = noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?),
-        .noctalia_settings_json_exists = noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?),
-        .noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_exists,
-        .noctalia_shaula_plugin_enabled = noctalia_shaula_plugin_enabled,
-        .tools = tools,
-        .warnings = try warnings.toOwnedSlice(allocator),
-    };
-}
-
-const tool_names = [_][]const u8{ "grim", "slurp", "wl-copy", "wl-paste", "niri", "quickshell" };
-
-fn writeHuman(io: std.Io, report: DoctorReport) !void {
+fn writeHuman(io: std.Io, report: diagnostics.Report) !void {
     var buffer: [8192]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &buffer);
     try stdout.interface.writeAll("Shaula doctor\n\n");
@@ -186,7 +51,7 @@ fn writeHuman(io: std.Io, report: DoctorReport) !void {
         report.wayland_display orelse "unset",
     });
     try stdout.interface.print("Niri:\n  niri in PATH: {s}\n  NIRI_CONFIG: {s} ({s})\n  ~/.config/niri/config.kdl: {s}\n  ~/.config/niri/cfg/: {s}\n  /etc/niri/config.kdl: {s}\n\n", .{
-        if (toolFound(report.tools, "niri")) "yes" else "no",
+        if (diagnostics.toolFound(report.tools, "niri")) "yes" else "no",
         report.niri_config_env orelse "unset",
         if (report.niri_config_env_exists) "exists" else "missing",
         if (report.niri_user_config_exists) "exists" else "missing",
@@ -212,7 +77,7 @@ fn writeHuman(io: std.Io, report: DoctorReport) !void {
     try stdout.interface.flush();
 }
 
-fn writeJson(allocator: std.mem.Allocator, io: std.Io, report: DoctorReport) !void {
+fn writeJson(allocator: std.mem.Allocator, io: std.Io, report: diagnostics.Report) !void {
     const ts = try command_json.nowIso8601(allocator, io);
     defer allocator.free(ts);
     const ts_json = try command_json.jsonStringAlloc(allocator, ts);
@@ -239,7 +104,7 @@ fn writeJson(allocator: std.mem.Allocator, io: std.Io, report: DoctorReport) !vo
     try stdout.interface.flush();
 }
 
-fn pathsJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
+fn pathsJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {
     const binary = try jsonNullable(allocator, report.binary_path);
     defer allocator.free(binary);
     const xdg = try jsonNullable(allocator, report.xdg_config_dir);
@@ -261,7 +126,7 @@ fn pathsJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
     });
 }
 
-fn waylandJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
+fn waylandJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {
     const session = try jsonNullable(allocator, report.xdg_session_type);
     defer allocator.free(session);
     const display = try jsonNullable(allocator, report.wayland_display);
@@ -269,11 +134,11 @@ fn waylandJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
     return std.fmt.allocPrint(allocator, "{{\"xdg_session_type\":{s},\"wayland_display\":{s}}}", .{ session, display });
 }
 
-fn niriJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
+fn niriJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {
     const niri_config = try jsonNullable(allocator, report.niri_config_env);
     defer allocator.free(niri_config);
     return std.fmt.allocPrint(allocator, "{{\"in_path\":{s},\"niri_config_env\":{s},\"niri_config_env_exists\":{s},\"user_config_exists\":{s},\"cfg_dir_exists\":{s},\"etc_config_exists\":{s}}}", .{
-        boolJson(toolFound(report.tools, "niri")),
+        boolJson(diagnostics.toolFound(report.tools, "niri")),
         niri_config,
         boolJson(report.niri_config_env_exists),
         boolJson(report.niri_user_config_exists),
@@ -282,7 +147,7 @@ fn niriJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
     });
 }
 
-fn noctaliaJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
+fn noctaliaJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {
     return std.fmt.allocPrint(allocator, "{{\"dir_exists\":{s},\"plugins_dir_exists\":{s},\"plugins_json_exists\":{s},\"settings_json_exists\":{s},\"shaula_plugin_dir_exists\":{s},\"shaula_plugin_enabled\":{s},\"plugin_installed\":{s}}}", .{
         boolJson(report.noctalia_dir_exists),
         boolJson(report.noctalia_plugins_dir_exists),
@@ -294,7 +159,7 @@ fn noctaliaJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
     });
 }
 
-fn toolsJson(allocator: std.mem.Allocator, tools: []const ToolStatus) ![]u8 {
+fn toolsJson(allocator: std.mem.Allocator, tools: []const diagnostics.ToolStatus) ![]u8 {
     var out = std.ArrayList(u8).empty;
     errdefer out.deinit(allocator);
     try out.append(allocator, '{');
@@ -310,83 +175,6 @@ fn toolsJson(allocator: std.mem.Allocator, tools: []const ToolStatus) ![]u8 {
     }
     try out.append(allocator, '}');
     return out.toOwnedSlice(allocator);
-}
-
-fn resolveXdgConfigDir(allocator: std.mem.Allocator, environ: std.process.Environ) !?[]u8 {
-    if (envSlice(environ, "XDG_CONFIG_HOME")) |value| {
-        if (value.len > 0) return try allocator.dupe(u8, value);
-    }
-    if (envSlice(environ, "HOME")) |home| {
-        if (home.len > 0) return try std.fmt.allocPrint(allocator, "{s}/.config", .{home});
-    }
-    return null;
-}
-
-fn homePath(allocator: std.mem.Allocator, environ: std.process.Environ, suffix: []const u8) !?[]u8 {
-    if (envSlice(environ, "HOME")) |home| {
-        if (home.len > 0) return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, suffix });
-    }
-    return null;
-}
-
-fn findToolInPath(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, tool: []const u8) !?[]u8 {
-    const path_env = envSlice(environ, "PATH") orelse return null;
-    var parts = std.mem.splitScalar(u8, path_env, ':');
-    while (parts.next()) |part| {
-        if (part.len == 0) continue;
-        const candidate = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ part, tool });
-        if (fileExists(io, candidate)) return candidate;
-        allocator.free(candidate);
-    }
-    return null;
-}
-
-fn fileExists(io: std.Io, path: []const u8) bool {
-    std.Io.Dir.cwd().access(io, path, .{}) catch return false;
-    return true;
-}
-
-/// Reads Noctalia's plugin registry without mutating it.
-///
-/// The installer-owned contract is `states.shaula.enabled`; malformed or
-/// unfamiliar JSON returns null so doctor does not over-claim plugin state.
-fn detectNoctaliaPluginEnabled(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !?bool {
-    const raw = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch return null;
-    defer allocator.free(raw);
-    var parsed = std.json.parseFromSlice(std.json.Value, allocator, raw, .{}) catch return null;
-    defer parsed.deinit();
-
-    const root = switch (parsed.value) {
-        .object => |object| object,
-        else => return null,
-    };
-    const states_value = root.get("states") orelse return null;
-    const states = switch (states_value) {
-        .object => |object| object,
-        else => return null,
-    };
-    const shaula_value = states.get("shaula") orelse return false;
-    const shaula = switch (shaula_value) {
-        .object => |object| object,
-        else => return null,
-    };
-    const enabled_value = shaula.get("enabled") orelse return false;
-    return switch (enabled_value) {
-        .bool => |value| value,
-        else => null,
-    };
-}
-
-fn toolFound(tools: []const ToolStatus, name: []const u8) bool {
-    for (tools) |tool| {
-        if (std.mem.eql(u8, tool.name, name)) return tool.found();
-    }
-    return false;
-}
-
-fn envSlice(environ: std.process.Environ, key: []const u8) ?[]const u8 {
-    if (environ.getPosix(key)) |value| return std.mem.sliceTo(value, 0);
-    return null;
 }
 
 fn jsonNullable(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
