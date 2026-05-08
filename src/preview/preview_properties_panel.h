@@ -11,5 +11,7 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
 GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state);
 GtkWidget *shaula_preview_highlight_properties_panel_build(
     ShaulaPreviewState *state);
+GtkWidget *shaula_preview_text_properties_panel_build(
+    ShaulaPreviewState *state);
 
 #endif

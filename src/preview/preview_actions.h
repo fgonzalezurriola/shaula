@@ -7,6 +7,8 @@
 
 void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool);
 void shaula_preview_action_copy(ShaulaPreviewState *state);
+void shaula_preview_action_accept(ShaulaPreviewState *state,
+                                  gboolean copy_to_clipboard);
 void shaula_preview_action_save_as(ShaulaPreviewState *state);
 void shaula_preview_action_discard(ShaulaPreviewState *state);
 void shaula_preview_action_fit(ShaulaPreviewState *state);
@@ -65,5 +67,8 @@ void shaula_preview_on_highlight_width_changed(GtkRange *range,
                                                gpointer data);
 void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
                                                  gpointer data);
+void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data);
+void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data);
+void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data);
 
 #endif

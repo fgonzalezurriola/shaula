@@ -427,15 +427,41 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
   return TRUE;
 }
 
-static void on_text_entry_activate(GtkEntry *entry, gpointer data) {
-  ShaulaPreviewState *state = data;
-  const char *text = gtk_editable_get_text(GTK_EDITABLE(entry));
-  if (text != NULL && text[0] != '\0') {
-    shaula_preview_add_annotation(
-        state, shaula_annotation_new_text(state->text_anchor_image, text,
-                                          state->current_color, 22.0));
+static char *text_view_contents(GtkTextView *view) {
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
+  GtkTextIter start;
+  GtkTextIter end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  return gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+}
+
+static void finish_text_entry(ShaulaPreviewState *state) {
+  if (state == NULL || state->text_entry == NULL)
+    return;
+  char *text = text_view_contents(GTK_TEXT_VIEW(state->text_entry));
+  char *trimmed = g_strdup(text != NULL ? text : "");
+  g_strstrip(trimmed);
+  gboolean created = FALSE;
+  if (trimmed[0] != '\0') {
+    ShaulaAnnotation *annotation = shaula_annotation_new_text(
+        state->text_anchor_image, text, state->text_color,
+        state->text_font_size, state->text_align);
+    shaula_preview_add_annotation(state, annotation);
+    shaula_preview_select_annotation(state, annotation);
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    created = TRUE;
   }
+  g_free(trimmed);
+  g_free(text);
   shaula_preview_cancel_operation(state);
+  if (created) {
+    state->active_tool = SHAULA_TOOL_SELECT;
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    if (state->area != NULL)
+      gtk_widget_set_cursor_from_name(state->area, "default");
+    shaula_preview_toolbar_update_tool_state(state);
+    shaula_preview_toolbar_update_selection_state(state);
+  }
 }
 
 static gboolean on_text_entry_key(GtkEventControllerKey *controller,
@@ -443,13 +469,52 @@ static gboolean on_text_entry_key(GtkEventControllerKey *controller,
                                   GdkModifierType modifiers, gpointer data) {
   (void)controller;
   (void)keycode;
-  (void)modifiers;
   ShaulaPreviewState *state = data;
   if (keyval == GDK_KEY_Escape) {
     shaula_preview_cancel_operation(state);
     return TRUE;
   }
+  if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
+    gboolean copy_to_clipboard = (modifiers & GDK_SHIFT_MASK) != 0;
+    finish_text_entry(state);
+    shaula_preview_action_accept(state, copy_to_clipboard);
+    return TRUE;
+  }
   return FALSE;
+}
+
+static void apply_text_entry_style(ShaulaPreviewState *state,
+                                   GtkWidget *entry) {
+  GtkCssProvider *provider = gtk_css_provider_new();
+  gchar *css = g_strdup_printf(
+      ".shaula-text-editor {"
+      "  color: rgba(%d,%d,%d,%.3f);"
+      "  font-family: Sans;"
+      "  font-size: %.1fpx;"
+      "  font-weight: 700;"
+      "  background: alpha(@theme_bg_color, 0.12);"
+      "  border: 1px solid alpha(@theme_fg_color, 0.18);"
+      "  border-radius: 6px;"
+      "  padding: 0;"
+      "}"
+      ".shaula-text-editor text {"
+      "  color: rgba(%d,%d,%d,%.3f);"
+      "  background: transparent;"
+      "  padding: 0;"
+      "}",
+      (int)round(state->text_color.r * 255.0),
+      (int)round(state->text_color.g * 255.0),
+      (int)round(state->text_color.b * 255.0), state->text_color.a,
+      state->text_font_size * state->zoom,
+      (int)round(state->text_color.r * 255.0),
+      (int)round(state->text_color.g * 255.0),
+      (int)round(state->text_color.b * 255.0), state->text_color.a);
+  gtk_css_provider_load_from_data(provider, css, -1);
+  gtk_style_context_add_provider(gtk_widget_get_style_context(entry),
+                                 GTK_STYLE_PROVIDER(provider),
+                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_free(css);
+  g_object_unref(provider);
 }
 
 static void begin_text_entry(ShaulaPreviewState *state, ShaulaPoint image_point) {
@@ -457,20 +522,44 @@ static void begin_text_entry(ShaulaPreviewState *state, ShaulaPoint image_point)
     return;
   shaula_preview_cancel_operation(state);
   ShaulaPoint screen = shaula_preview_canvas_image_to_screen(state, image_point);
-  GtkWidget *entry = gtk_entry_new();
+  GtkWidget *entry = gtk_text_view_new();
   state->text_entry = entry;
   state->text_anchor_image = image_point;
   state->operation = SHAULA_OPERATION_TEXT;
 
-  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Text");
-  gtk_widget_set_size_request(entry, 220, -1);
+  gtk_text_view_set_accepts_tab(GTK_TEXT_VIEW(entry), FALSE);
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(entry), GTK_WRAP_NONE);
+  gtk_text_view_set_left_margin(GTK_TEXT_VIEW(entry), 0);
+  gtk_text_view_set_right_margin(GTK_TEXT_VIEW(entry), 0);
+  GtkJustification justification = GTK_JUSTIFY_LEFT;
+  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
+    justification = GTK_JUSTIFY_CENTER;
+  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
+    justification = GTK_JUSTIFY_RIGHT;
+  gtk_text_view_set_justification(GTK_TEXT_VIEW(entry), justification);
+  gtk_widget_add_css_class(entry, "shaula-text-editor");
+  apply_text_entry_style(state, entry);
+
+  int image_w = shaula_preview_image_width(state);
+  double available_image_width = (double)image_w - image_point.x;
+  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
+    available_image_width = 2.0 * MIN(image_point.x,
+                                      (double)image_w - image_point.x);
+  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
+    available_image_width = image_point.x;
+  int editor_width =
+      MAX(80, (int)floor(MAX(1.0, available_image_width) * state->zoom));
+  gtk_widget_set_size_request(entry, editor_width, -1);
   gtk_widget_set_halign(entry, GTK_ALIGN_START);
   gtk_widget_set_valign(entry, GTK_ALIGN_START);
-  gtk_widget_set_margin_start(entry, MAX(0, (int)screen.x));
-  gtk_widget_set_margin_top(entry, MAX(0, (int)screen.y - 18));
+  double x = screen.x;
+  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
+    x -= editor_width / 2.0;
+  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
+    x -= editor_width;
+  gtk_widget_set_margin_start(entry, MAX(0, (int)x));
+  gtk_widget_set_margin_top(entry, MAX(0, (int)screen.y));
   gtk_overlay_add_overlay(GTK_OVERLAY(state->canvas_overlay), entry);
-
-  g_signal_connect(entry, "activate", G_CALLBACK(on_text_entry_activate), state);
 
   GtkEventController *keys = gtk_event_controller_key_new();
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_text_entry_key), state);
@@ -518,6 +607,12 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   if (state->image == NULL)
     return;
   update_hover_color(state, x, y);
+
+  if (state->operation == SHAULA_OPERATION_TEXT &&
+      state->text_entry != NULL) {
+    finish_text_entry(state);
+    return;
+  }
 
   guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture));
   ShaulaPoint image_point =
@@ -841,7 +936,10 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   GtkWidget *focus = state->window != NULL
                          ? gtk_window_get_focus(GTK_WINDOW(state->window))
                          : NULL;
-  if (focus != NULL && GTK_IS_EDITABLE(focus)) {
+  if (focus != NULL &&
+      (GTK_IS_EDITABLE(focus) || focus == state->text_entry ||
+       (state->text_entry != NULL &&
+        gtk_widget_is_ancestor(focus, state->text_entry)))) {
     if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
       shaula_preview_cancel_operation(state);
       return TRUE;
@@ -866,9 +964,12 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
       g_application_quit(G_APPLICATION(state->app));
     return TRUE;
   }
-  if ((keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) &&
-      state->has_crop_draft) {
-    shaula_preview_apply_crop(state);
+  if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
+    if (state->has_crop_draft) {
+      shaula_preview_apply_crop(state);
+      return TRUE;
+    }
+    shaula_preview_action_accept(state, (modifiers & GDK_SHIFT_MASK) != 0);
     return TRUE;
   }
 
@@ -937,6 +1038,8 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
                           shaula_preview_pen_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_highlight_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_text_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);

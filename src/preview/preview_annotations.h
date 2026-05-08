@@ -21,6 +21,12 @@ typedef enum {
   PREVIEW_ARROW_STROKE_DOTTED,
 } PreviewArrowStrokeStyle;
 
+typedef enum {
+  SHAULA_TEXT_ALIGN_LEFT,
+  SHAULA_TEXT_ALIGN_CENTER,
+  SHAULA_TEXT_ALIGN_RIGHT,
+} ShaulaTextAlign;
+
 typedef struct {
   ShaulaPoint *points;
   int len;
@@ -46,6 +52,7 @@ typedef struct ShaulaAnnotation {
       ShaulaPoint position;
       char *text;
       double font_size;
+      ShaulaTextAlign align;
     } text;
     struct {
       ShaulaPoint start;
@@ -67,7 +74,8 @@ ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
 ShaulaAnnotation *shaula_annotation_new_text(ShaulaPoint position,
                                              const char *text,
                                              ShaulaColor color,
-                                             double font_size);
+                                             double font_size,
+                                             ShaulaTextAlign align);
 ShaulaAnnotation *shaula_annotation_new_measure(ShaulaPoint start,
                                                 ShaulaPoint end,
                                                 ShaulaColor color,

@@ -562,6 +562,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_PEN;
   gboolean show_highlight_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+  gboolean show_text_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_TEXT;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
@@ -575,6 +577,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->highlight_properties_box != NULL)
     gtk_widget_set_visible(state->highlight_properties_box,
                            show_highlight_properties);
+  if (state->text_properties_box != NULL)
+    gtk_widget_set_visible(state->text_properties_box, show_text_properties);
   if (state->arrow_color_button != NULL) {
     GdkRGBA arrow_rgba = {state->arrow_color.r, state->arrow_color.g,
                           state->arrow_color.b, state->arrow_color.a};
@@ -650,6 +654,23 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
            state->highlight_opacity) > 0.01)
     gtk_range_set_value(GTK_RANGE(state->highlight_opacity_scale),
                         state->highlight_opacity);
+  if (state->text_color_button != NULL) {
+    GdkRGBA rgba = {state->text_color.r, state->text_color.g,
+                    state->text_color.b, state->text_color.a};
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->text_color_button),
+                               &rgba);
+  }
+  if (state->text_size_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->text_size_scale)) -
+           state->text_font_size) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->text_size_scale),
+                        state->text_font_size);
+  for (int i = SHAULA_TEXT_ALIGN_LEFT; i <= SHAULA_TEXT_ALIGN_RIGHT; i++) {
+    if (state->text_align_buttons[i] != NULL)
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->text_align_buttons[i]),
+          i == (int)state->text_align);
+  }
   if (state->duplicate_button != NULL) {
     gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);

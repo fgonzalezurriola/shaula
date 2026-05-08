@@ -53,7 +53,8 @@ typedef enum {
   SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
   SHAULA_PROPERTIES_PANEL_BLUR,
   SHAULA_PROPERTIES_PANEL_ERASE,
-  SHAULA_PROPERTIES_PANEL_PEN
+  SHAULA_PROPERTIES_PANEL_PEN,
+  SHAULA_PROPERTIES_PANEL_TEXT
 } ShaulaPropertiesPanel;
 
 typedef enum {
@@ -122,6 +123,10 @@ typedef struct {
   GtkWidget *highlight_color_button;
   GtkWidget *highlight_width_scale;
   GtkWidget *highlight_opacity_scale;
+  GtkWidget *text_properties_box;
+  GtkWidget *text_color_button;
+  GtkWidget *text_size_scale;
+  GtkWidget *text_align_buttons[3];
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -192,6 +197,9 @@ typedef struct {
   ShaulaColor highlight_color;
   double highlight_stroke_width;
   double highlight_opacity;
+  ShaulaColor text_color;
+  double text_font_size;
+  ShaulaTextAlign text_align;
   gboolean modified;
   gboolean copied;
   gboolean saved;
@@ -288,6 +296,12 @@ void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
                                                double width);
 void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
                                           double opacity);
+void shaula_preview_set_text_color(ShaulaPreviewState *state,
+                                   ShaulaColor color);
+void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
+                                       double font_size);
+void shaula_preview_set_text_align(ShaulaPreviewState *state,
+                                   ShaulaTextAlign align);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

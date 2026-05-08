@@ -77,12 +77,19 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
   if (tool == SHAULA_TOOL_CROP && state->active_tool == SHAULA_TOOL_SELECT &&
       shaula_preview_apply_crop_to_selected_rect(state))
     return;
+  shaula_preview_commit_history_gesture(state, TRUE);
   shaula_preview_cancel_operation(state);
+  if (tool != SHAULA_TOOL_SELECT) {
+    shaula_preview_clear_selection(state);
+    shaula_preview_clear_region_selection(state);
+  }
   state->active_tool = tool;
   if (tool == SHAULA_TOOL_PEN)
     state->active_properties_panel = SHAULA_PROPERTIES_PANEL_PEN;
   else if (tool == SHAULA_TOOL_HIGHLIGHT)
     state->active_properties_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+  else if (tool == SHAULA_TOOL_TEXT)
+    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_TEXT;
   shaula_preview_toolbar_update_tool_state(state);
   if (state->area != NULL) {
     const char *cursor = "crosshair";
@@ -121,6 +128,77 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
   if (is_temp)
     g_unlink(source);
   g_free(source);
+}
+
+void shaula_preview_action_accept(ShaulaPreviewState *state,
+                                  gboolean copy_to_clipboard) {
+  if (state == NULL || state->path == NULL)
+    return;
+
+  state->last_action = copy_to_clipboard ? "copy" : "save";
+  state->saved = FALSE;
+  state->copied = FALSE;
+  state->notified = FALSE;
+
+  gboolean is_temp = FALSE;
+  GError *error = NULL;
+  char *source = render_or_original_png(state, &is_temp, &error);
+  if (source == NULL) {
+    report_error("accept render", error);
+    state->notified = shaula_preview_notify(
+        "Could not save screenshot", "Save failed", FALSE, 6000);
+    if (state->app != NULL)
+      g_application_quit(G_APPLICATION(state->app));
+    return;
+  }
+
+  char *target = shaula_image_io_with_png_extension(state->path);
+  if (target == NULL) {
+    state->notified = shaula_preview_notify(
+        "Could not save screenshot", "Save failed", FALSE, 6000);
+  } else if (g_strcmp0(source, target) == 0) {
+    state->saved = TRUE;
+    g_free(state->saved_path);
+    state->saved_path = g_strdup(target);
+  } else if (!shaula_image_io_copy_file_bytes(source, target, &error)) {
+    report_error("accept save", error);
+    state->notified = shaula_preview_notify(
+        "Could not save screenshot", "Save failed", FALSE, 6000);
+  } else {
+    state->saved = TRUE;
+    g_free(state->saved_path);
+    state->saved_path = g_strdup(target);
+  }
+
+  if (copy_to_clipboard && state->saved_path != NULL) {
+    if (!shaula_clipboard_copy_png_file(state->saved_path, &error)) {
+      report_error("accept copy", error);
+      state->notified = shaula_preview_notify(
+          "Could not copy screenshot", "Copy failed", FALSE, 5000);
+    } else {
+      state->copied = TRUE;
+    }
+  }
+
+  if (state->saved && copy_to_clipboard && state->copied) {
+    state->notified = shaula_preview_notify(
+        "Screenshot saved and copied", state->saved_path, TRUE, 2500);
+  } else if (state->saved && !copy_to_clipboard) {
+    state->notified = shaula_preview_notify(
+        "Screenshot saved", state->saved_path, TRUE, 2500);
+  } else if (state->saved && copy_to_clipboard && !state->copied &&
+             !state->notified) {
+    state->notified = shaula_preview_notify(
+        "Screenshot saved", state->saved_path, TRUE, 2500);
+  }
+
+  if (is_temp)
+    g_unlink(source);
+  g_free(source);
+  g_free(target);
+
+  if (state->app != NULL)
+    g_application_quit(G_APPLICATION(state->app));
 }
 
 static void on_save_response(GtkNativeDialog *dialog, int response,
@@ -473,4 +551,21 @@ void shaula_preview_on_highlight_width_changed(GtkRange *range,
 void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
                                                  gpointer data) {
   shaula_preview_set_highlight_opacity(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_text_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, 1.0});
+}
+
+void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_text_font_size(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data) {
+  ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "text-align"));
+  shaula_preview_set_text_align(data, align);
 }

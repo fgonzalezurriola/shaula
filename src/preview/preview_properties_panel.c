@@ -158,6 +158,23 @@ static GtkWidget *make_arrow_stroke_style_toggle(ShaulaPreviewState *state,
   return button;
 }
 
+static GtkWidget *make_text_align_toggle(ShaulaPreviewState *state,
+                                         const char *icon_name,
+                                         const char *tooltip,
+                                         ShaulaTextAlign align) {
+  GtkWidget *button = gtk_toggle_button_new();
+  gtk_button_set_child(GTK_BUTTON(button),
+                       shaula_preview_make_toolbar_icon(state, icon_name));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 34, 28);
+  g_object_set_data(G_OBJECT(button), "text-align", GINT_TO_POINTER(align));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_text_align_clicked), state);
+  return button;
+}
+
 GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
@@ -394,6 +411,73 @@ GtkWidget *shaula_preview_highlight_properties_panel_build(
   gtk_box_append(GTK_BOX(panel), opacity);
 
   state->highlight_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
+}
+
+GtkWidget *shaula_preview_text_properties_panel_build(
+    ShaulaPreviewState *state) {
+  install_properties_panel_css();
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
+
+  GtkWidget *back = make_panel_button(
+      state, draw_back_icon, "Back",
+      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  gtk_box_append(GTK_BOX(panel), back);
+
+  GtkWidget *color = gtk_color_button_new();
+  state->text_color_button = color;
+  GdkRGBA rgba = {state->text_color.r, state->text_color.g,
+                  state->text_color.b, state->text_color.a};
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
+  gtk_widget_set_tooltip_text(color, "Text color");
+  gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(color, 30, 28);
+  g_signal_connect(color, "color-set",
+                   G_CALLBACK(shaula_preview_on_text_color_set), state);
+  gtk_box_append(GTK_BOX(panel), color);
+
+  GtkWidget *size_icon =
+      shaula_preview_make_toolbar_icon(state, "shaula-text-size-symbolic");
+  gtk_widget_set_tooltip_text(size_icon, "Text size");
+  gtk_widget_set_valign(size_icon, GTK_ALIGN_CENTER);
+  gtk_box_append(GTK_BOX(panel), size_icon);
+
+  GtkWidget *size = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 12.0,
+                                             72.0, 1.0);
+  state->text_size_scale = size;
+  gtk_range_set_value(GTK_RANGE(size), state->text_font_size);
+  gtk_widget_set_tooltip_text(size, "Text size");
+  gtk_widget_set_size_request(size, 120, -1);
+  gtk_scale_set_draw_value(GTK_SCALE(size), FALSE);
+  gtk_widget_set_valign(size, GTK_ALIGN_CENTER);
+  g_signal_connect(size, "value-changed",
+                   G_CALLBACK(shaula_preview_on_text_size_changed), state);
+  gtk_box_append(GTK_BOX(panel), size);
+
+  state->text_align_buttons[SHAULA_TEXT_ALIGN_LEFT] =
+      make_text_align_toggle(state, "shaula-align-left-symbolic",
+                             "Align text left", SHAULA_TEXT_ALIGN_LEFT);
+  state->text_align_buttons[SHAULA_TEXT_ALIGN_CENTER] =
+      make_text_align_toggle(state, "shaula-align-center-symbolic",
+                             "Align text center", SHAULA_TEXT_ALIGN_CENTER);
+  state->text_align_buttons[SHAULA_TEXT_ALIGN_RIGHT] =
+      make_text_align_toggle(state, "shaula-align-right-symbolic",
+                             "Align text right", SHAULA_TEXT_ALIGN_RIGHT);
+  gtk_box_append(GTK_BOX(panel),
+                 state->text_align_buttons[SHAULA_TEXT_ALIGN_LEFT]);
+  gtk_box_append(GTK_BOX(panel),
+                 state->text_align_buttons[SHAULA_TEXT_ALIGN_CENTER]);
+  gtk_box_append(GTK_BOX(panel),
+                 state->text_align_buttons[SHAULA_TEXT_ALIGN_RIGHT]);
+
+  state->text_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);
   return panel;
 }

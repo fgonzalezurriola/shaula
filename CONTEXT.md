@@ -186,7 +186,22 @@ and the working diff.
   arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
   selected arrow annotation, pushes undo before the document change, and keeps
   copy/export rendering on the annotation draw path.
-- `shaula-text-symbolic` Text: implemented.
+- `shaula-text-symbolic` Text: implemented. Text uses the same orange default
+  as arrows, opens a floating Text HUD for color, size, and left/center/right
+  alignment, and stores alignment on the annotation. The edit preview is a
+  styled multiline `GtkTextView`; committed rendering uses the same Pango/Cairo
+  text path as export/copy so preview and final output share font weight,
+  size, color, multiline layout, and alignment semantics. The editor scales its
+  CSS font size by the current preview zoom and uses the visible image width as
+  its editing line box so typed text does not reflow or clip differently at
+  commit time. In Text editing and normal preview focus, `Enter` saves the
+  current preview output to the current image path and closes the preview;
+  `Shift+Enter` saves, copies that output to the image clipboard, and closes.
+  While editing text, both shortcuts first commit non-empty text into the
+  document. `Escape` cancels text entry, and clicking back on the canvas commits
+  non-empty text without closing. After a canvas-only text commit, Text returns
+  to Select mode with the new annotation selected so it can be moved
+  immediately.
 - `shaula-measure-symbolic` Measure: implemented.
 - `shaula-rectangle-symbolic` Rectangle: implemented.
 - `shaula-highlight-symbolic` Highlight: implemented.
@@ -247,10 +262,17 @@ and the working diff.
   annotations, spotlight regions, annotation ids, and modified status.
 - History intentionally excludes view-only state: zoom, pan, fit mode, active
   tool, toolbar menu visibility, hover, and transient crop/text drafts.
+- Switching from Select into a creation tool commits any pending properties HUD
+  transaction, cancels transient operations, clears object/region selection, and
+  then opens only that tool's default HUD when the tool has one. This prevents a
+  selected annotation from retaining an incompatible properties panel.
 - Existing wired operations: crop, annotation creation, selected annotation
-  move, selected annotation duplicate/delete, and reset annotations. Annotation
-  moves capture before-state on mouse down and commit one history entry on
-  mouse up.
+  move, selected annotation duplicate/delete, properties HUD edits, and reset
+  annotations. Annotation moves capture before-state on mouse down and commit
+  one history entry on mouse up. Arrow/Pen/Highlight/Text/Spotlight property
+  edits capture one before-state on the first real value change and commit that
+  transaction when the HUD closes, the selection/tool changes, or undo/redo is
+  requested, so slider drags do not create one undo entry per tick.
 - Reset annotations cancels transient drafts, pushes exactly one pre-clear undo
   snapshot, clears annotations, and relies on the standard edit push to clear
   redo when a new annotation is created after undoing the reset.
@@ -275,8 +297,8 @@ and the working diff.
   overlay and clear all spotlight shapes from it, so multiple spotlights stay
   bright and darkness does not compound. Width `0` means no border. Changing
   Spotlight properties while the HUD is targeting the just-created entry edits
-  that entry in place and does not push extra undo entries; after the HUD is
-  closed, property changes are defaults for future applications.
+  that entry in place through the shared property transaction path; after the
+  HUD is closed, property changes are defaults for future applications.
 - Restoring history clears transient operations and rebuilds selection from
   cloned annotations to avoid stale pointers.
 

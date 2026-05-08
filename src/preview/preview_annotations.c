@@ -1,6 +1,7 @@
 #include "preview_annotations.h"
 
 #include <math.h>
+#include <pango/pangocairo.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -20,12 +21,56 @@ static ShaulaRect line_bounds(ShaulaPoint start, ShaulaPoint end,
   return shaula_rect_expanded(rect, padding);
 }
 
+static PangoLayout *create_text_layout(cairo_t *cr, const char *text,
+                                       double font_size,
+                                       PangoFontDescription **desc_out) {
+  PangoLayout *layout = pango_cairo_create_layout(cr);
+  pango_layout_set_text(layout, text != NULL ? text : "", -1);
+  PangoFontDescription *desc = pango_font_description_from_string("Sans Bold");
+  pango_font_description_set_absolute_size(desc, font_size * PANGO_SCALE);
+  pango_layout_set_font_description(layout, desc);
+  if (desc_out != NULL)
+    *desc_out = desc;
+  else
+    pango_font_description_free(desc);
+  return layout;
+}
+
 static ShaulaRect text_bounds(ShaulaPoint position, const char *text,
-                              double font_size) {
-  double width = MAX(24.0, (double)strlen(text != NULL ? text : "") *
-                              font_size * 0.58);
-  return (ShaulaRect){position.x, position.y - font_size, width,
-                      font_size * 1.35};
+                              double font_size, ShaulaTextAlign align) {
+  cairo_surface_t *surface =
+      cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+  cairo_t *cr = cairo_create(surface);
+  PangoFontDescription *desc = NULL;
+  PangoLayout *layout = create_text_layout(cr, "", font_size, &desc);
+  char **lines = g_strsplit(text != NULL ? text : "", "\n", -1);
+  double min_x = position.x;
+  double max_x = position.x + 24.0;
+  double y = position.y;
+  for (int i = 0; lines[i] != NULL; i++) {
+    pango_layout_set_text(layout, lines[i], -1);
+    int width = 0;
+    int height = 0;
+    pango_layout_get_pixel_size(layout, &width, &height);
+    double x = position.x;
+    if (align == SHAULA_TEXT_ALIGN_CENTER)
+      x -= width / 2.0;
+    else if (align == SHAULA_TEXT_ALIGN_RIGHT)
+      x -= width;
+    min_x = MIN(min_x, x);
+    max_x = MAX(max_x, x + MAX(24.0, (double)width));
+    y += MAX(font_size * 1.25, (double)height);
+  }
+  if (lines[0] == NULL)
+    y += font_size * 1.25;
+  g_strfreev(lines);
+  pango_font_description_free(desc);
+  g_object_unref(layout);
+  cairo_destroy(cr);
+  cairo_surface_destroy(surface);
+
+  return (ShaulaRect){min_x, position.y, max_x - min_x,
+                      MAX(font_size * 1.25, y - position.y)};
 }
 
 ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
@@ -45,12 +90,14 @@ ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
 ShaulaAnnotation *shaula_annotation_new_text(ShaulaPoint position,
                                              const char *text,
                                              ShaulaColor color,
-                                             double font_size) {
+                                             double font_size,
+                                             ShaulaTextAlign align) {
   ShaulaAnnotation *annotation =
       annotation_alloc(SHAULA_ANNOTATION_TEXT, color, 1.0);
   annotation->data.text.position = position;
   annotation->data.text.text = g_strdup(text != NULL ? text : "");
   annotation->data.text.font_size = font_size;
+  annotation->data.text.align = align;
   shaula_annotation_update_bounds(annotation);
   return annotation;
 }
@@ -124,6 +171,7 @@ ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation) {
   case SHAULA_ANNOTATION_TEXT:
     clone->data.text.position = annotation->data.text.position;
     clone->data.text.font_size = annotation->data.text.font_size;
+    clone->data.text.align = annotation->data.text.align;
     clone->data.text.text = g_strdup(annotation->data.text.text);
     break;
   case SHAULA_ANNOTATION_MEASURE:
@@ -196,7 +244,8 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
   case SHAULA_ANNOTATION_TEXT:
     annotation->bounds =
         text_bounds(annotation->data.text.position, annotation->data.text.text,
-                    annotation->data.text.font_size);
+                    annotation->data.text.font_size,
+                    annotation->data.text.align);
     break;
   case SHAULA_ANNOTATION_MEASURE:
     annotation->data.measure.distance_px = shaula_point_distance(
@@ -451,13 +500,31 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
     break;
   }
   case SHAULA_ANNOTATION_TEXT:
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
-                           CAIRO_FONT_WEIGHT_BOLD);
-    cairo_set_font_size(cr, annotation->data.text.font_size);
-    cairo_move_to(cr, annotation->data.text.position.x,
-                  annotation->data.text.position.y);
-    cairo_show_text(cr, annotation->data.text.text);
+    {
+    PangoFontDescription *desc = NULL;
+    PangoLayout *layout =
+        create_text_layout(cr, "", annotation->data.text.font_size, &desc);
+    char **lines = g_strsplit(annotation->data.text.text, "\n", -1);
+    double y = annotation->data.text.position.y;
+    for (int i = 0; lines[i] != NULL; i++) {
+      pango_layout_set_text(layout, lines[i], -1);
+      int width = 0;
+      int height = 0;
+      pango_layout_get_pixel_size(layout, &width, &height);
+      double x = annotation->data.text.position.x;
+      if (annotation->data.text.align == SHAULA_TEXT_ALIGN_CENTER)
+        x -= width / 2.0;
+      else if (annotation->data.text.align == SHAULA_TEXT_ALIGN_RIGHT)
+        x -= width;
+      cairo_move_to(cr, x, y);
+      pango_cairo_show_layout(cr, layout);
+      y += MAX(annotation->data.text.font_size * 1.25, (double)height);
+    }
+    g_strfreev(lines);
+    pango_font_description_free(desc);
+    g_object_unref(layout);
     break;
+    }
   case SHAULA_ANNOTATION_MEASURE:
     cairo_move_to(cr, annotation->data.measure.start.x,
                   annotation->data.measure.start.y);
