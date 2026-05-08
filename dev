@@ -34,6 +34,7 @@ App:
  all Build, then run capture all-in-one --json
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
+  noctalia-load  Build, install local Noctalia widget, and restart Noctalia
   context        Copy context snapshot, capture-mode note, last 3 commits, and diff to clipboard
   config         Build, then show resolved Shaula config
   config-init    Build, then create Shaula config.toml if missing
@@ -250,6 +251,42 @@ stage() {
   echo "reload Niri config with your normal Niri workflow before testing preview placement"
 }
 
+noctalia_load() {
+  build >/dev/null
+
+  local tmp_dir archive sums
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+
+  archive="${tmp_dir}/shaula-linux-x86_64.tar.gz"
+  sums="${tmp_dir}/SHA256SUMS"
+
+  tar -C zig-out -czf "${archive}" .
+  (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
+
+  SHAULA_RELEASE_ASSET_URL="file://${archive}" \
+    SHAULA_SHA256SUMS_URL="file://${sums}" \
+    scripts/install.sh --yes
+
+  if systemctl --user restart noctalia.service >/dev/null 2>&1; then
+    echo "restarted noctalia.service"
+  elif have qs; then
+    pkill -f 'qs -c noctalia-shell' 2>/dev/null || true
+    nohup qs -d -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with qs -d -c noctalia-shell"
+    echo "log /tmp/shaula-noctalia.log"
+  elif have quickshell; then
+    pkill -f 'quickshell.*noctalia-shell' 2>/dev/null || true
+    nohup quickshell -d -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with quickshell -d -c noctalia-shell"
+    echo "log /tmp/shaula-noctalia.log"
+  else
+    echo "warning: could not restart Noctalia; missing noctalia.service and qs/quickshell" >&2
+  fi
+
+  echo "Noctalia widget installed at ${HOME}/.config/noctalia/plugins/shaula"
+}
+
 cmd="${1:-help}"
 if [[ $# -gt 0 ]]; then
   shift
@@ -309,6 +346,9 @@ all)
     ;;
   stage)
     stage "$@"
+    ;;
+  noctalia-load)
+    noctalia_load
     ;;
   context)
     context

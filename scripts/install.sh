@@ -2,18 +2,27 @@
 set -eu
 
 REPO_URL="https://github.com/fgonzalezurriola/shaula"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 INSTALL_VERSION=""
 ASSUME_YES=0
 INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
 INSTALL_ICON=1
 UNINSTALL=0
+RELEASE_EXTRACT_DIR=""
 
 XDG_BIN_HOME="${XDG_BIN_HOME:-${HOME}/.local/bin}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
 SHAULA_CONFIG_DIR="${XDG_CONFIG_HOME}/shaula"
 SHAULA_GENERATED_DIR="${SHAULA_CONFIG_DIR}/generated"
+NOCTALIA_CONFIG_DIR="${XDG_CONFIG_HOME}/noctalia"
+NOCTALIA_PLUGINS_DIR="${NOCTALIA_CONFIG_DIR}/plugins"
+NOCTALIA_PLUGIN_DIR="${NOCTALIA_PLUGINS_DIR}/shaula"
+NOCTALIA_PLUGINS_JSON="${NOCTALIA_CONFIG_DIR}/plugins.json"
+NOCTALIA_SETTINGS_JSON="${NOCTALIA_CONFIG_DIR}/settings.json"
+NOCTALIA_MANAGED_MARKER=".shaula-managed"
 
 usage() {
   cat <<'EOF'
@@ -63,6 +72,18 @@ confirm() {
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
     *) die "installation cancelled" ;;
+  esac
+}
+
+confirm_noctalia_widget() {
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    return 0
+  fi
+  printf 'Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
+  read answer
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -239,6 +260,223 @@ detect_noctalia() {
   return 1
 }
 
+noctalia_plugin_source_dir() {
+  for path in \
+    "${RELEASE_EXTRACT_DIR}/share/shaula/integrations/noctalia/shaula" \
+    "${RELEASE_EXTRACT_DIR}/integrations/noctalia/shaula" \
+    "${REPO_ROOT}/integrations/noctalia/shaula" \
+    "${SCRIPT_DIR}/../integrations/noctalia/shaula"
+  do
+    if [ -f "${path}/manifest.json" ] && [ -f "${path}/BarWidget.qml" ]; then
+      printf '%s' "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
+backup_file() {
+  path="$1"
+  suffix="$2"
+  timestamp="$(date +%Y%m%d%H%M%S)"
+  backup="${path}.shaula-backup-${timestamp}${suffix}"
+  cp "$path" "$backup"
+  log "backed up $path to $backup"
+}
+
+install_noctalia_plugin_files() {
+  source_dir="$(noctalia_plugin_source_dir)" || {
+    warn "Noctalia plugin source files were not found; skipped widget install."
+    return 1
+  }
+  mkdir -p "$NOCTALIA_PLUGIN_DIR"
+  for file in manifest.json BarWidget.qml README.md; do
+    install -m 0644 "${source_dir}/${file}" "${NOCTALIA_PLUGIN_DIR}/${file}"
+  done
+  printf 'installed-by=shaula\n' > "${NOCTALIA_PLUGIN_DIR}/${NOCTALIA_MANAGED_MARKER}"
+  log "installed ${NOCTALIA_PLUGIN_DIR}"
+}
+
+edit_noctalia_plugins_json_enable() {
+  [ -f "$NOCTALIA_PLUGINS_JSON" ] || {
+    warn "Noctalia plugins.json missing; copied plugin files only."
+    return 1
+  }
+  backup_file "$NOCTALIA_PLUGINS_JSON" ""
+  if ! python3 - "$NOCTALIA_PLUGINS_JSON" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    raise SystemExit(f"invalid JSON before edit: {exc}")
+if not isinstance(data, dict) or data.get("version") != 2 or not isinstance(data.get("states"), dict):
+    raise SystemExit("unsupported Noctalia plugins.json structure")
+states = data.setdefault("states", {})
+state = states.get("shaula")
+if not isinstance(state, dict):
+    state = {}
+state["enabled"] = True
+state.setdefault("sourceUrl", "local")
+states["shaula"] = state
+path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+json.loads(path.read_text(encoding="utf-8"))
+PY
+  then
+    latest_backup="$(ls -t "${NOCTALIA_PLUGINS_JSON}".shaula-backup-* 2>/dev/null | head -n 1)"
+    [ -n "$latest_backup" ] && cp "$latest_backup" "$NOCTALIA_PLUGINS_JSON"
+    warn "failed to edit Noctalia plugins.json; restored backup and left plugin files installed."
+    return 1
+  fi
+  log "enabled Shaula in $NOCTALIA_PLUGINS_JSON"
+}
+
+edit_noctalia_settings_json_add_widget() {
+  [ -f "$NOCTALIA_SETTINGS_JSON" ] || {
+    warn "Noctalia settings.json missing; enable plugin manually in Noctalia settings."
+    return 1
+  }
+  backup_file "$NOCTALIA_SETTINGS_JSON" ""
+  if ! python3 - "$NOCTALIA_SETTINGS_JSON" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    raise SystemExit(f"invalid JSON before edit: {exc}")
+if not isinstance(data, dict):
+    raise SystemExit("unsupported Noctalia settings.json structure")
+bar = data.get("bar")
+if not isinstance(bar, dict):
+    raise SystemExit("missing bar object")
+widgets = bar.get("widgets")
+if not isinstance(widgets, dict):
+    raise SystemExit("missing bar.widgets object")
+for section in ("left", "center", "right"):
+    if not isinstance(widgets.get(section), list):
+        widgets[section] = []
+widget_id = "plugin:shaula"
+for section in ("left", "center", "right"):
+    for item in widgets[section]:
+        if isinstance(item, dict) and item.get("id") == widget_id:
+            path.write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
+            json.loads(path.read_text(encoding="utf-8"))
+            raise SystemExit(0)
+widgets["right"].append({"id": widget_id})
+path.write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
+json.loads(path.read_text(encoding="utf-8"))
+PY
+  then
+    latest_backup="$(ls -t "${NOCTALIA_SETTINGS_JSON}".shaula-backup-* 2>/dev/null | head -n 1)"
+    [ -n "$latest_backup" ] && cp "$latest_backup" "$NOCTALIA_SETTINGS_JSON"
+    warn "failed to edit Noctalia settings.json; restored backup. Add plugin:shaula manually to a bar section."
+    return 1
+  fi
+  log "added plugin:shaula to $NOCTALIA_SETTINGS_JSON"
+}
+
+install_noctalia_widget() {
+  install_noctalia_plugin_files || return 1
+  plugins_edited=0
+  settings_edited=0
+  if edit_noctalia_plugins_json_enable; then
+    plugins_edited=1
+  fi
+  if edit_noctalia_settings_json_add_widget; then
+    settings_edited=1
+  fi
+  if [ "$plugins_edited" -eq 0 ] || [ "$settings_edited" -eq 0 ]; then
+    log "Manual Noctalia enable: plugin files are in ${NOCTALIA_PLUGIN_DIR}; enable shaula and add plugin:shaula to the bar in Noctalia settings."
+  fi
+}
+
+edit_noctalia_plugins_json_disable() {
+  [ -f "$NOCTALIA_PLUGINS_JSON" ] || return 1
+  if ! python3 - "$NOCTALIA_PLUGINS_JSON" >/dev/null <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+if not isinstance(data, dict) or not isinstance(data.get("states"), dict):
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+  then
+    warn "Noctalia plugins.json structure is unclear; remove shaula from states manually if needed."
+    return 1
+  fi
+  backup_file "$NOCTALIA_PLUGINS_JSON" ""
+  if ! python3 - "$NOCTALIA_PLUGINS_JSON" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+states = data.get("states")
+if not isinstance(states, dict):
+    raise SystemExit("unsupported Noctalia plugins.json structure")
+states.pop("shaula", None)
+path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+json.loads(path.read_text(encoding="utf-8"))
+PY
+  then
+    latest_backup="$(ls -t "${NOCTALIA_PLUGINS_JSON}".shaula-backup-* 2>/dev/null | head -n 1)"
+    [ -n "$latest_backup" ] && cp "$latest_backup" "$NOCTALIA_PLUGINS_JSON"
+    warn "failed to remove Shaula from plugins.json; restored backup."
+    return 1
+  fi
+  log "removed Shaula state from $NOCTALIA_PLUGINS_JSON"
+}
+
+edit_noctalia_settings_json_remove_widget() {
+  [ -f "$NOCTALIA_SETTINGS_JSON" ] || return 1
+  backup_file "$NOCTALIA_SETTINGS_JSON" ""
+  if ! python3 - "$NOCTALIA_SETTINGS_JSON" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+widgets = data.get("bar", {}).get("widgets")
+if not isinstance(widgets, dict):
+    raise SystemExit("unsupported Noctalia settings.json structure")
+for section in ("left", "center", "right"):
+    if isinstance(widgets.get(section), list):
+        widgets[section] = [
+            item for item in widgets[section]
+            if not (isinstance(item, dict) and item.get("id") == "plugin:shaula")
+        ]
+path.write_text(json.dumps(data, indent=4) + "\n", encoding="utf-8")
+json.loads(path.read_text(encoding="utf-8"))
+PY
+  then
+    latest_backup="$(ls -t "${NOCTALIA_SETTINGS_JSON}".shaula-backup-* 2>/dev/null | head -n 1)"
+    [ -n "$latest_backup" ] && cp "$latest_backup" "$NOCTALIA_SETTINGS_JSON"
+    warn "failed to remove plugin:shaula from settings.json; restored backup."
+    return 1
+  fi
+  log "removed plugin:shaula from $NOCTALIA_SETTINGS_JSON"
+}
+
+uninstall_noctalia_widget() {
+  if [ -f "${NOCTALIA_PLUGIN_DIR}/${NOCTALIA_MANAGED_MARKER}" ]; then
+    edit_noctalia_plugins_json_disable || true
+    edit_noctalia_settings_json_remove_widget || true
+    rm -rf "$NOCTALIA_PLUGIN_DIR"
+    log "removed $NOCTALIA_PLUGIN_DIR"
+  elif [ -d "$NOCTALIA_PLUGIN_DIR" ]; then
+    warn "kept $NOCTALIA_PLUGIN_DIR because it is not marked as installed by Shaula."
+    warn "Remove it manually if it belongs to this Shaula install."
+  fi
+}
+
 kdl_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -299,6 +537,7 @@ install_release() {
   verify_sha256sums "$archive" "$sums"
 
   extract_dir="${tmp_dir}/extract"
+  RELEASE_EXTRACT_DIR="$extract_dir"
   mkdir -p "$extract_dir"
   tar -xzf "$archive" -C "$extract_dir"
 
@@ -338,7 +577,11 @@ install_release() {
 
     if noctalia_path="$(detect_noctalia)"; then
       log "detected Noctalia candidate: $noctalia_path"
-      log "Noctalia plugins.json was not edited automatically."
+      if confirm_noctalia_widget; then
+        install_noctalia_widget
+      else
+        log "skipped Noctalia Bar Widget install."
+      fi
     fi
   fi
 
@@ -360,6 +603,7 @@ run_uninstall() {
   remove_path "${XDG_DATA_HOME}/applications/shaula.desktop"
   remove_path "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg"
   remove_path "${SHAULA_GENERATED_DIR}/niri-shaula.kdl"
+  uninstall_noctalia_widget
   log "kept ${SHAULA_CONFIG_DIR}/config.toml"
 }
 

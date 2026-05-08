@@ -41,6 +41,13 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install_preview_icons.step);
 
+    const install_noctalia_integration = b.addInstallDirectory(.{
+        .source_dir = b.path("integrations/noctalia/shaula"),
+        .install_dir = .{ .custom = "share" },
+        .install_subdir = "shaula/integrations/noctalia/shaula",
+    });
+    b.getInstallStep().dependOn(&install_noctalia_integration.step);
+
     const run_overlay_helper_cmd = b.addSystemCommand(&.{
         "sh",
         "-c",

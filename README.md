@@ -37,7 +37,7 @@ The installer:
 - does not use `sudo`
 - does not overwrite an existing `~/.config/shaula/config.toml`
 - does not edit Niri config automatically
-- detects Noctalia, but does not modify `plugins.json` yet
+- can optionally install the Noctalia Bar Widget with config backups
 
 If Niri is detected, the installer generates
 `~/.config/shaula/generated/niri-shaula.kdl` for manual inclusion in your active
@@ -52,6 +52,7 @@ Niri config.
 - Live hover color sampling and Tab-to-copy color
 - JSON output for automation
 - Niri-first behavior with conservative integration helpers
+- Optional Noctalia Bar Widget that calls Shaula CLI commands
 
 Not implemented yet:
 
@@ -59,7 +60,6 @@ Not implemented yet:
 - screen recording
 - scrolling capture
 - pin screenshot
-- Noctalia Bar Widget
 
 ## Runtime Requirements
 
@@ -75,7 +75,7 @@ Optional integration tools:
 
 - `slurp`, only if needed as a fallback selection helper
 - `niri`, recommended for the best integration
-- `quickshell`, only for future Noctalia integration
+- `quickshell`, only for Noctalia integration
 
 On Arch/CachyOS:
 

@@ -17,11 +17,15 @@ and the working diff.
   `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The
   snippet includes the preview floating window-rule and recommended area,
   fullscreen, and focused capture binds using the installed absolute
-  `shaula` path. It detects Noctalia paths without modifying `plugins.json` or
-  installing a real Noctalia Bar Widget.
+  `shaula` path. It detects Noctalia and can optionally install the minimal
+  `integrations/noctalia/shaula/` Bar Widget into
+  `~/.config/noctalia/plugins/shaula/`, enabling `states.shaula.enabled` and
+  adding `plugin:shaula` to the bar only after backing up and validating
+  Noctalia JSON config.
 - `shaula doctor` and `shaula doctor --json` now provide read-only diagnostics
   for installed paths, config/generated files, Wayland env, Niri candidates,
-  Noctalia detection paths, runtime tools, and actionable warnings.
+  Noctalia detection paths, Shaula Noctalia plugin install/enabled state,
+  runtime tools, and actionable warnings.
 - Public docs have been split: `README.md` is now the shorter product-facing
   install/usage/dev-basics page, `DEV.md` holds internal workflow and
   integration notes, and `docs/roadmap.md` tracks future features.

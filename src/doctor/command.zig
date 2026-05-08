@@ -38,6 +38,8 @@ const DoctorReport = struct {
     noctalia_plugins_dir_exists: bool,
     noctalia_plugins_json_exists: bool,
     noctalia_settings_json_exists: bool,
+    noctalia_shaula_plugin_dir_exists: bool,
+    noctalia_shaula_plugin_enabled: ?bool,
     tools: []ToolStatus,
     warnings: []const []const u8,
 
@@ -110,6 +112,8 @@ fn collectReport(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
     defer if (noctalia_plugins_json_path) |path| allocator.free(path);
     const noctalia_settings_json_path = try homePath(allocator, environ, ".config/noctalia/settings.json");
     defer if (noctalia_settings_json_path) |path| allocator.free(path);
+    const noctalia_shaula_plugin_dir_path = try homePath(allocator, environ, ".config/noctalia/plugins/shaula");
+    defer if (noctalia_shaula_plugin_dir_path) |path| allocator.free(path);
 
     var warnings = std.ArrayList([]const u8).empty;
     errdefer warnings.deinit(allocator);
@@ -132,7 +136,9 @@ fn collectReport(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
         (noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?)) or
         (noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?)) or
         (noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?));
-    if (noctalia_detected) try warnings.append(allocator, "Noctalia detected; plugin is not installed yet");
+    const noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_path != null and fileExists(io, noctalia_shaula_plugin_dir_path.?);
+    const noctalia_shaula_plugin_enabled = if (noctalia_plugins_json_path) |path| try detectNoctaliaPluginEnabled(allocator, io, path) else null;
+    if (noctalia_detected and !noctalia_shaula_plugin_dir_exists) try warnings.append(allocator, "Noctalia detected but Shaula plugin is not installed");
 
     return .{
         .binary_path = binary_path,
@@ -153,6 +159,8 @@ fn collectReport(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
         .noctalia_plugins_dir_exists = noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?),
         .noctalia_plugins_json_exists = noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?),
         .noctalia_settings_json_exists = noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?),
+        .noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_exists,
+        .noctalia_shaula_plugin_enabled = noctalia_shaula_plugin_enabled,
         .tools = tools,
         .warnings = try warnings.toOwnedSlice(allocator),
     };
@@ -185,11 +193,13 @@ fn writeHuman(io: std.Io, report: DoctorReport) !void {
         if (report.niri_cfg_dir_exists) "exists" else "missing",
         if (report.niri_etc_config_exists) "exists" else "missing",
     });
-    try stdout.interface.print("Noctalia:\n  ~/.config/noctalia/: {s}\n  ~/.config/noctalia/plugins/: {s}\n  ~/.config/noctalia/plugins.json: {s}\n  ~/.config/noctalia/settings.json: {s}\n\n", .{
+    try stdout.interface.print("Noctalia:\n  ~/.config/noctalia/: {s}\n  ~/.config/noctalia/plugins/: {s}\n  ~/.config/noctalia/plugins.json: {s}\n  ~/.config/noctalia/settings.json: {s}\n  ~/.config/noctalia/plugins/shaula/: {s}\n  Shaula plugin enabled: {s}\n\n", .{
         if (report.noctalia_dir_exists) "exists" else "missing",
         if (report.noctalia_plugins_dir_exists) "exists" else "missing",
         if (report.noctalia_plugins_json_exists) "exists" else "missing",
         if (report.noctalia_settings_json_exists) "exists" else "missing",
+        if (report.noctalia_shaula_plugin_dir_exists) "exists" else "missing",
+        optionalBoolText(report.noctalia_shaula_plugin_enabled),
     });
     try stdout.interface.writeAll("Runtime tools:\n");
     for (report.tools) |tool| {
@@ -273,11 +283,14 @@ fn niriJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
 }
 
 fn noctaliaJson(allocator: std.mem.Allocator, report: DoctorReport) ![]u8 {
-    return std.fmt.allocPrint(allocator, "{{\"dir_exists\":{s},\"plugins_dir_exists\":{s},\"plugins_json_exists\":{s},\"settings_json_exists\":{s},\"plugin_installed\":false}}", .{
+    return std.fmt.allocPrint(allocator, "{{\"dir_exists\":{s},\"plugins_dir_exists\":{s},\"plugins_json_exists\":{s},\"settings_json_exists\":{s},\"shaula_plugin_dir_exists\":{s},\"shaula_plugin_enabled\":{s},\"plugin_installed\":{s}}}", .{
         boolJson(report.noctalia_dir_exists),
         boolJson(report.noctalia_plugins_dir_exists),
         boolJson(report.noctalia_plugins_json_exists),
         boolJson(report.noctalia_settings_json_exists),
+        boolJson(report.noctalia_shaula_plugin_dir_exists),
+        optionalBoolJson(report.noctalia_shaula_plugin_enabled),
+        boolJson(report.noctalia_shaula_plugin_dir_exists),
     });
 }
 
@@ -333,6 +346,37 @@ fn fileExists(io: std.Io, path: []const u8) bool {
     return true;
 }
 
+/// Reads Noctalia's plugin registry without mutating it.
+///
+/// The installer-owned contract is `states.shaula.enabled`; malformed or
+/// unfamiliar JSON returns null so doctor does not over-claim plugin state.
+fn detectNoctaliaPluginEnabled(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !?bool {
+    const raw = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024)) catch return null;
+    defer allocator.free(raw);
+    var parsed = std.json.parseFromSlice(std.json.Value, allocator, raw, .{}) catch return null;
+    defer parsed.deinit();
+
+    const root = switch (parsed.value) {
+        .object => |object| object,
+        else => return null,
+    };
+    const states_value = root.get("states") orelse return null;
+    const states = switch (states_value) {
+        .object => |object| object,
+        else => return null,
+    };
+    const shaula_value = states.get("shaula") orelse return false;
+    const shaula = switch (shaula_value) {
+        .object => |object| object,
+        else => return null,
+    };
+    const enabled_value = shaula.get("enabled") orelse return false;
+    return switch (enabled_value) {
+        .bool => |value| value,
+        else => null,
+    };
+}
+
 fn toolFound(tools: []const ToolStatus, name: []const u8) bool {
     for (tools) |tool| {
         if (std.mem.eql(u8, tool.name, name)) return tool.found();
@@ -352,6 +396,16 @@ fn jsonNullable(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
 
 fn boolJson(value: bool) []const u8 {
     return if (value) "true" else "false";
+}
+
+fn optionalBoolJson(value: ?bool) []const u8 {
+    if (value) |unwrapped| return boolJson(unwrapped);
+    return "null";
+}
+
+fn optionalBoolText(value: ?bool) []const u8 {
+    if (value) |unwrapped| return if (unwrapped) "yes" else "no";
+    return "unknown";
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {

@@ -86,6 +86,59 @@ from the installer.
 
 ## Noctalia
 
-The installer detects Noctalia paths, but does not modify `plugins.json`.
+Plugin source lives in:
 
-The real Noctalia Bar Widget is not implemented yet.
+```txt
+integrations/noctalia/shaula/
+```
+
+Installed Noctalia paths:
+
+- `~/.config/noctalia/plugins/shaula/`
+- `~/.config/noctalia/plugins.json`
+- `~/.config/noctalia/settings.json`
+
+Install from the script and accept the Noctalia prompt:
+
+```bash
+scripts/install.sh --yes
+```
+
+For local development, use the dev helper. It builds the current checkout,
+installs the local widget through the checksum-verified installer path, and
+restarts the user Noctalia service:
+
+```bash
+./dev noctalia-load
+```
+
+The installer copies the plugin files, writes a `.shaula-managed` marker, backs
+up Noctalia JSON files as `*.shaula-backup-<timestamp>`, enables
+`states.shaula.enabled`, and adds `plugin:shaula` to the right bar section when
+the local JSON structure matches Noctalia's v2 registry format.
+
+If JSON validation fails, the installer leaves the copied plugin files in place
+and prints manual instructions. Manual enable is:
+
+```txt
+Enable shaula in Noctalia plugin settings.
+Add plugin:shaula to a bar section if Noctalia does not add it automatically.
+```
+
+Debug commands:
+
+```bash
+shaula doctor
+shaula doctor --json
+quickshell log
+```
+
+Uninstall:
+
+```bash
+scripts/install.sh --uninstall
+```
+
+Uninstall removes `~/.config/noctalia/plugins/shaula/` only when the
+`.shaula-managed` marker exists, and removes only Shaula's `plugins.json` state
+and `plugin:shaula` bar widget entry after creating backups.
