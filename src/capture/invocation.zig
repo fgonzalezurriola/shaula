@@ -62,10 +62,22 @@ pub fn fullscreen(parsed: flags.FullscreenFlags) Invocation {
     return .{
         .command = "capture fullscreen",
         .reported_mode = mode,
-        .backend_mode = mode,
-        .request_mode = .fullscreen,
+        .backend_mode = core_capture_mode.backendModeToken(.fullscreen) orelse mode,
+        .request_mode = .focused,
         .output_path = parsed.output,
         .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+    };
+}
+
+pub fn allScreens(parsed: flags.AllScreensFlags) Invocation {
+    const reported_mode = core_capture_mode.cliToken(.all_screens);
+    return .{
+        .command = "capture all-screens",
+        .reported_mode = reported_mode,
+        .backend_mode = core_capture_mode.backendModeToken(.all_screens) orelse reported_mode,
+        .request_mode = .all_screens,
+        .output_path = parsed.output,
+        .post_flags = postFlags(reported_mode, parsed.save, parsed.copy, parsed.preview),
     };
 }
 

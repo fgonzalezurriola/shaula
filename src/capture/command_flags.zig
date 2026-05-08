@@ -17,15 +17,17 @@ pub const AreaFlags = struct {
 pub const FullscreenFlags = struct {
     json_mode: bool = false,
     save: bool = false,
-    copy: bool = false,
+    copy: bool = true,
     preview: ?bool = null,
     output: ?[]const u8 = null,
 };
 
+pub const AllScreensFlags = FullscreenFlags;
+
 pub const FocusedFlags = struct {
     json_mode: bool = false,
     save: bool = false,
-    copy: bool = false,
+    copy: bool = true,
     preview: ?bool = null,
     output: ?[]const u8 = null,
 };
@@ -103,6 +105,18 @@ pub fn parseFullscreenFlags(io: std.Io, argv: []const [*:0]const u8) !Fullscreen
         const arg = argToSlice(argv[i]);
         if (try parseCommonFlag(io, "capture fullscreen", "fullscreen", argv, &i, arg, &flags)) continue;
         try command_json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "unsupported flag", false, "fullscreen", null, false, &.{});
+        return error.CliUsage;
+    }
+    return flags;
+}
+
+pub fn parseAllScreensFlags(io: std.Io, argv: []const [*:0]const u8) !AllScreensFlags {
+    var flags: AllScreensFlags = .{};
+    var i: usize = 3;
+    while (i < argv.len) : (i += 1) {
+        const arg = argToSlice(argv[i]);
+        if (try parseCommonFlag(io, "capture all-screens", "all-screens", argv, &i, arg, &flags)) continue;
+        try command_json.writeErrorJson(io, "capture all-screens", "ERR_CLI_USAGE", "unsupported flag", false, "all-screens", null, false, &.{});
         return error.CliUsage;
     }
     return flags;

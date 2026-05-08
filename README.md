@@ -45,7 +45,7 @@ Niri config.
 
 ## Features
 
-- Area, fullscreen, focused-output, window, all-in-one, and previous-area capture
+- Area, fullscreen/current-monitor, all-screens, window, all-in-one, and previous-area capture
 - Native GTK/layer-shell selection overlay
 - Post-capture preview/editor
 - Copy, Save As, Crop, Blur, Erase, Spotlight, annotations, undo/redo
@@ -91,6 +91,7 @@ shaula doctor --json
 shaula capture area --json
 shaula capture area --json --no-preview
 shaula capture fullscreen --json --preview
+shaula capture all-screens --json
 shaula capture previous-area --json
 shaula preview ~/Pictures/Shaula/example.png --json
 ```

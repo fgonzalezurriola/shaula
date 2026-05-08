@@ -16,7 +16,7 @@ pub fn run(
     argv: []const [*:0]const u8,
 ) !u8 {
     if (argv.len < 3) {
-        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|focused|window|previous-area> --json", false, null, null, false, &.{});
+        try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "usage: shaula capture <area|fullscreen|all-screens|focused|window|previous-area> --json", false, null, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -29,6 +29,7 @@ pub fn run(
     return switch (requested_mode) {
         .area => lifecycle.runArea(allocator, io, environ, argv),
         .fullscreen => lifecycle.runFullscreen(allocator, io, environ, argv),
+        .all_screens => lifecycle.runAllScreens(allocator, io, environ, argv),
         .focused => lifecycle.runFocused(allocator, io, environ, argv),
         .window => lifecycle.runWindow(allocator, io, environ, argv),
         .previous_area => lifecycle.runPreviousArea(allocator, io, environ, argv),

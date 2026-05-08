@@ -37,6 +37,7 @@ Common manual commands:
 ./zig-out/bin/shaula capture area --json --no-preview
 ./zig-out/bin/shaula capture all-in-one --json
 ./zig-out/bin/shaula capture fullscreen --json --preview
+./zig-out/bin/shaula capture all-screens --json
 ./zig-out/bin/shaula capture previous-area --json
 ./zig-out/bin/shaula preview ~/Pictures/Shaula/example.png --json
 ```
@@ -132,6 +133,10 @@ shaula doctor
 shaula doctor --json
 quickshell log
 ```
+
+Noctalia context menu behavior: the base menu closes almost immediately after a
+menu item is clicked, so the Shaula plugin should not add artificial capture
+delays unless a future Noctalia version regresses menu dismissal.
 
 Uninstall:
 

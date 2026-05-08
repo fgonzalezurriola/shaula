@@ -500,7 +500,7 @@ window-rule {
 binds {
     Mod+Shift+S { spawn "${shaula_path}" "capture" "area" "--json"; }
     Mod+Shift+F { spawn "${shaula_path}" "capture" "fullscreen" "--json"; }
-    Mod+Shift+W { spawn "${shaula_path}" "capture" "focused" "--json"; }
+    Mod+Shift+W { spawn "${shaula_path}" "capture" "all-screens" "--json"; }
 }
 EOF
   log "generated $dest"

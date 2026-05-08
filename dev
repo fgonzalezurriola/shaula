@@ -271,14 +271,14 @@ noctalia_load() {
   if systemctl --user restart noctalia.service >/dev/null 2>&1; then
     echo "restarted noctalia.service"
   elif have qs; then
-    pkill -f 'qs -c noctalia-shell' 2>/dev/null || true
-    nohup qs -d -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with qs -d -c noctalia-shell"
+    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
+    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with qs -d --allow-duplicate -c noctalia-shell"
     echo "log /tmp/shaula-noctalia.log"
   elif have quickshell; then
-    pkill -f 'quickshell.*noctalia-shell' 2>/dev/null || true
-    nohup quickshell -d -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with quickshell -d -c noctalia-shell"
+    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
+    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with quickshell -d --allow-duplicate -c noctalia-shell"
     echo "log /tmp/shaula-noctalia.log"
   else
     echo "warning: could not restart Noctalia; missing noctalia.service and qs/quickshell" >&2

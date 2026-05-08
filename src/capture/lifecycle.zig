@@ -115,6 +115,17 @@ pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.proc
     return executeLifecycle(allocator, io, environ, invocation.fullscreen(parsed));
 }
 
+pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.all_screens);
+    const parsed = flags.parseAllScreensFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    if (!parsed.json_mode) {
+        try json.writeErrorJson(io, "capture all-screens", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    }
+
+    return executeLifecycle(allocator, io, environ, invocation.allScreens(parsed));
+}
+
 pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     const mode = core_capture_mode.cliToken(.focused);
     const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");

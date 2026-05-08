@@ -65,6 +65,7 @@ action_label() {
     case "$1" in
     capture-area) printf 'Capture Area' ;;
     capture-fullscreen) printf 'Capture Fullscreen' ;;
+    capture-all-screens) printf 'Capture All Screens' ;;
     capture-focused) printf 'Capture Focused' ;;
     capture-window) printf 'Capture Window' ;;
     open-last) printf 'Open Last' ;;
@@ -79,6 +80,7 @@ action_command_json() {
     case "$1" in
     capture-area) printf '["capture","area","--json"]' ;;
     capture-fullscreen) printf '["capture","fullscreen","--json"]' ;;
+    capture-all-screens) printf '["capture","all-screens","--json"]' ;;
     capture-focused) printf '["capture","focused","--json"]' ;;
     capture-window) printf '["capture","window","--json"]' ;;
     open-last) printf '["history","show","--json","--id","latest"]' ;;
@@ -198,7 +200,7 @@ build_action_entry() {
 if [[ "${MODE}" == "menu" ]]; then
 a1="$(build_action_entry capture-area)"
 a2="$(build_action_entry capture-fullscreen)"
-a3="$(build_action_entry capture-focused)"
+a3="$(build_action_entry capture-all-screens)"
 a4="$(build_action_entry capture-window)"
 a5="$(build_action_entry open-last)"
 a6="$(build_action_entry history)"
@@ -281,11 +283,12 @@ import json
 import sys
 
 action = sys.argv[1]
-    mapping = {
-        "capture-area": ["capture", "area", "--json"],
-        "capture-fullscreen": ["capture", "fullscreen", "--json"],
-        "capture-focused": ["capture", "focused", "--json"],
-        "capture-window": ["capture", "window", "--json"],
+mapping = {
+    "capture-area": ["capture", "area", "--json"],
+    "capture-fullscreen": ["capture", "fullscreen", "--json"],
+    "capture-all-screens": ["capture", "all-screens", "--json"],
+    "capture-focused": ["capture", "focused", "--json"],
+    "capture-window": ["capture", "window", "--json"],
     "open-last": ["history", "show", "--json", "--id", "latest"],
     "history": ["history", "list", "--json"],
 }

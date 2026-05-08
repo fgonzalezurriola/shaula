@@ -16,7 +16,6 @@ NIconButton {
   property int sectionWidgetsCount: 0
 
   readonly property string screenName: screen ? screen.name : ""
-  readonly property int captureDelayMs: 180
 
   icon: "camera"
   tooltipText: "Shaula"
@@ -46,9 +45,15 @@ NIconButton {
         "icon": "screen-share"
       },
       {
-        "label": "Capture Focused Output",
-        "action": "capture-focused",
-        "icon": "focus"
+        "label": "Capture All Screens",
+        "action": "capture-all-screens",
+        "icon": "layout-dashboard"
+      },
+      {
+        "label": "Settings (WIP)",
+        "action": "settings-wip",
+        "icon": "settings",
+        "enabled": false
       },
       {
         "label": "Run Doctor",
@@ -59,39 +64,23 @@ NIconButton {
         "label": "Open Screenshots Folder",
         "action": "open-screenshots-folder",
         "icon": "folder"
+      },
+      {
+        "label": "Report a Bug",
+        "action": "report-bug",
+        "icon": "bug"
       }
     ]
 
     onTriggered: action => {
       contextMenu.close();
       PanelService.closeContextMenu(screen);
-      root.runShaula(action, true);
+      root.executeAction(action);
     }
   }
 
-  Timer {
-    id: delayedAction
-    repeat: false
-    property string action: ""
-    onTriggered: {
-      if (action !== "")
-        root.executeAction(action);
-      action = "";
-    }
-  }
-
-  onClicked: root.runShaula("capture-area", false)
+  onClicked: PanelService.showContextMenu(contextMenu, root, screen)
   onRightClicked: PanelService.showContextMenu(contextMenu, root, screen)
-
-  function runShaula(action, fromMenu) {
-    if (fromMenu) {
-      delayedAction.action = action;
-      delayedAction.interval = captureDelayMs;
-      delayedAction.restart();
-      return;
-    }
-    executeAction(action);
-  }
 
   function executeAction(action) {
     var command = "";
@@ -99,12 +88,14 @@ NIconButton {
       command = "shaula capture area --json";
     } else if (action === "capture-fullscreen") {
       command = "shaula capture fullscreen --json";
-    } else if (action === "capture-focused") {
-      command = "shaula capture focused --json";
+    } else if (action === "capture-all-screens") {
+      command = "shaula capture all-screens --json";
     } else if (action === "doctor") {
       command = "shaula doctor --json";
     } else if (action === "open-screenshots-folder") {
       command = "mkdir -p \"$HOME/Pictures/Shaula\" && xdg-open \"$HOME/Pictures/Shaula\"";
+    } else if (action === "report-bug") {
+      command = "xdg-open https://github.com/fgonzalezurriola/shaula/issues";
     }
 
     if (command !== "")

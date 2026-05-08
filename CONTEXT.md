@@ -40,6 +40,9 @@ and the working diff.
   backend execution, previous-area persistence, and final JSON/`ERR_*`
   emission. Preview document/history and UI behavior were intentionally left
   unchanged.
+- Capture naming update: `capture fullscreen` targets the current/focused
+  monitor, `capture all-screens` preserves the old all-output fullscreen
+  behavior, and `capture focused` remains as a CLI compatibility alias.
 - Architecture deepening pass: capture invocation assembly now lives in
   `capture/invocation.zig`; backend failure construction lives in
   `backends/capture_backend_failure.zig`; overlay helper process execution now

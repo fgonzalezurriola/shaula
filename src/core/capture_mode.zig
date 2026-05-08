@@ -3,6 +3,7 @@ const std = @import("std");
 pub const CaptureMode = enum {
     area,
     fullscreen,
+    all_screens,
     focused,
     window,
     previous_area,
@@ -37,6 +38,7 @@ pub fn parseRegionCaptureMode(token: []const u8) ?RegionCaptureMode {
 pub fn parseCliToken(token: []const u8) ?CaptureMode {
     if (std.mem.eql(u8, token, "area")) return .area;
     if (std.mem.eql(u8, token, "fullscreen")) return .fullscreen;
+    if (std.mem.eql(u8, token, "all-screens")) return .all_screens;
     if (std.mem.eql(u8, token, "focused")) return .focused;
     if (std.mem.eql(u8, token, "window")) return .window;
     if (std.mem.eql(u8, token, "previous-area")) return .previous_area;
@@ -48,6 +50,7 @@ pub fn cliToken(mode: CaptureMode) []const u8 {
     return switch (mode) {
         .area => "area",
         .fullscreen => "fullscreen",
+        .all_screens => "all-screens",
         .focused => "focused",
         .window => "window",
         .previous_area => "previous-area",
@@ -58,7 +61,8 @@ pub fn cliToken(mode: CaptureMode) []const u8 {
 pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
     return switch (mode) {
         .area => "area",
-        .fullscreen => "fullscreen",
+        .fullscreen => "focused",
+        .all_screens => "fullscreen",
         .focused => "focused",
         .window => "window",
         .previous_area => "area",
@@ -69,12 +73,13 @@ pub fn backendModeToken(mode: CaptureMode) ?[]const u8 {
 pub fn requiresInteractiveSelection(mode: CaptureMode) bool {
     return switch (mode) {
         .area, .all_in_one => true,
-        .fullscreen, .focused, .window, .previous_area => false,
+        .fullscreen, .all_screens, .focused, .window, .previous_area => false,
     };
 }
 
 test "cli token parsing keeps dashed modes deterministic" {
     try std.testing.expectEqual(CaptureMode.area, parseCliToken("area") orelse return error.TestExpectedEqual);
+    try std.testing.expectEqual(CaptureMode.all_screens, parseCliToken("all-screens") orelse return error.TestExpectedEqual);
     try std.testing.expectEqual(CaptureMode.previous_area, parseCliToken("previous-area") orelse return error.TestExpectedEqual);
     try std.testing.expectEqual(CaptureMode.all_in_one, parseCliToken("all-in-one") orelse return error.TestExpectedEqual);
 }
@@ -82,4 +87,6 @@ test "cli token parsing keeps dashed modes deterministic" {
 test "backend mode token keeps previous-area on area runtime lane" {
     try std.testing.expectEqualStrings("area", backendModeToken(.previous_area) orelse return error.TestExpectedEqual);
     try std.testing.expectEqualStrings("area", backendModeToken(.all_in_one) orelse return error.TestExpectedEqual);
+    try std.testing.expectEqualStrings("focused", backendModeToken(.fullscreen) orelse return error.TestExpectedEqual);
+    try std.testing.expectEqualStrings("fullscreen", backendModeToken(.all_screens) orelse return error.TestExpectedEqual);
 }

@@ -4,11 +4,13 @@ Minimal optional Noctalia Shell plugin for Shaula.
 
 ## Behavior
 
-- Left click runs `shaula capture area --json`.
-- Right click opens a small menu with area, fullscreen, focused output, doctor, and screenshots-folder actions.
+- Left click and right click open the Shaula menu.
+- The menu exposes area, fullscreen/current-monitor, all-screens, Settings (WIP), doctor, screenshots-folder, and bug-report actions.
 - No screenshot logic runs in Noctalia; every action calls the Shaula CLI.
 
-Fullscreen and focused-output actions close the Noctalia context menu first and wait briefly before invoking Shaula so the menu is less likely to appear in the capture.
+Noctalia's base context menu disappears almost immediately after selecting an
+action, so the widget intentionally does not add capture delays before invoking
+Shaula commands.
 
 ## Manual Enable
 
