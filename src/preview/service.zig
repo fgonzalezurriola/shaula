@@ -2,6 +2,7 @@ const std = @import("std");
 
 const notify = @import("../notify.zig");
 const preview_result = @import("../preview_result.zig");
+const process_exec = @import("../runtime/process_exec.zig");
 
 pub const PreviewAction = preview_result.PreviewAction;
 
@@ -54,19 +55,14 @@ pub fn runPreview(
     const helper_bin = try resolvePreviewBinary(allocator, io, environ);
     defer allocator.free(helper_bin);
 
-    const result = std.process.run(allocator, io, .{
-        .argv = &.{ helper_bin, path },
-        .stdout_limit = .limited(4096),
-        .stderr_limit = .limited(4096),
-    }) catch {
+    const result = process_exec.run(allocator, io, &.{ helper_bin, path }, 4096, 4096) catch {
         return .{ .failure = .{
             .code = "ERR_PREVIEW_UNAVAILABLE",
             .message = "preview helper is unavailable",
             .retryable = true,
         } };
     };
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
+    defer result.deinit(allocator);
 
     switch (result.term) {
         .exited => |code| {

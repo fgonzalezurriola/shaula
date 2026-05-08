@@ -1,6 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const cli_json = @import("../cli/json.zig");
+const compositor_runtime = @import("../compositor/runtime.zig");
 
 const standalone_protocol = struct {
     pub const contract_version = "1.0.0";
@@ -9,17 +10,7 @@ const standalone_protocol = struct {
 
 const standalone_preflight = struct {
     pub fn detectCompositor(environ: std.process.Environ) []const u8 {
-        if (environ.getPosix("SHAULA_COMPOSITOR")) |value| {
-            const explicit = std.mem.sliceTo(value, 0);
-            if (std.ascii.eqlIgnoreCase(explicit, "niri")) return "niri";
-            return "unsupported";
-        }
-
-        if (environ.getPosix("NIRI_SOCKET") != null) {
-            return "niri";
-        }
-
-        return "unsupported";
+        return compositor_runtime.detect(environ).label;
     }
 };
 
@@ -51,9 +42,9 @@ else
     standalone_recovery_policy;
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !u8 {
-    const compositor = preflight.detectCompositor(environ);
-    if (!std.mem.eql(u8, compositor, "niri")) {
-        try writeErrorJson(io, "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor);
+    const compositor = compositor_runtime.detect(environ);
+    if (!compositor_runtime.supportedInCurrentScope(compositor)) {
+        try writeErrorJson(io, "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
 
@@ -77,7 +68,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"result\":{{\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"niri\",\"ipc_version\":\"{s}\"}},\"warnings\":{s}}}\n",
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"result\":{{\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"{s}\",\"ipc_version\":\"{s}\"}},\"warnings\":{s}}}\n",
         .{
             protocol.contract_version,
             ts,
@@ -93,6 +84,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             boolToJson(runtime.capture.window),
             backend,
             fallbacks_json,
+            compositor.label,
             protocol.ipc_version,
             warnings,
         },
@@ -157,7 +149,7 @@ test "capabilities compositor guard is deterministic" {
 
     const environ: std.process.Environ = .{ .block = block };
 
-    try std.testing.expectEqualStrings("unsupported", preflight.detectCompositor(environ));
+    try std.testing.expectEqualStrings("sway", preflight.detectCompositor(environ));
 }
 
 test "runtime capabilities backend naming is canonical" {

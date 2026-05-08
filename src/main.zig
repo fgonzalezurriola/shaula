@@ -5,6 +5,7 @@ pub const preflight_probe_module = @import("preflight/probe.zig");
 pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 pub const protocol_module = @import("ipc/protocol.zig");
 pub const recovery_policy_module = @import("recovery/policy.zig");
+pub const compositor_runtime_module = @import("compositor/runtime.zig");
 
 const protocol = @import("ipc/protocol.zig");
 const daemon_server = @import("daemon/server.zig");

@@ -1,6 +1,8 @@
 const std = @import("std");
 
+const cli_json = @import("../cli/json.zig");
 const notify = @import("../notify.zig");
+const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 
 const TestKind = enum {
@@ -42,7 +44,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, argv: []const [*:0]const u8
     }
 
     const delivered = sendTestNotification(allocator, io, kind);
-    try writeResultJson(io, kind, delivered == null);
+    try writeResultJson(allocator, io, kind, delivered == null);
     return 0;
 }
 
@@ -70,24 +72,25 @@ fn kindString(kind: TestKind) []const u8 {
     };
 }
 
-fn writeResultJson(io: std.Io, kind: TestKind, ok: bool) !void {
+fn writeResultJson(allocator: std.mem.Allocator, io: std.Io, kind: TestKind, ok: bool) !void {
+    const ts = try cli_json.nowIso8601(allocator, io);
+    defer allocator.free(ts);
+    const ts_json = try cli_json.stringAlloc(allocator, ts);
+    defer allocator.free(ts_json);
+    const kind_json = try cli_json.stringAlloc(allocator, kindString(kind));
+    defer allocator.free(kind_json);
+
     var stdout_buffer: [1024]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":{s},\"command\":\"notify test\",\"kind\":\"{s}\"}}\n",
-        .{ if (ok) "true" else "false", kindString(kind) },
+        "{{\"ok\":{s},\"contract_version\":\"{s}\",\"command\":\"notify test\",\"timestamp\":{s},\"result\":{{\"kind\":{s},\"delivered\":{s}}},\"warnings\":[]}}\n",
+        .{ if (ok) "true" else "false", protocol.contract_version, ts_json, kind_json, if (ok) "true" else "false" },
     );
     try stdout.interface.flush();
 }
 
 fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
-    try stdout.interface.print(
-        "{{\"ok\":false,\"command\":\"{s}\",\"error\":{{\"code\":\"{s}\",\"message\":\"{s}\",\"retryable\":{s}}}}}\n",
-        .{ command, code, message, if (retryable) "true" else "false" },
-    );
-    try stdout.interface.flush();
+    try cli_json.writeBasicError(io, command, code, message, retryable);
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {

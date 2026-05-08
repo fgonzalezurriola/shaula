@@ -1,4 +1,5 @@
 const std = @import("std");
+const process_exec = @import("../runtime/process_exec.zig");
 
 const clipboard_dir = "/tmp/shaula/clipboard";
 const clipboard_state_file = "/tmp/shaula/clipboard/current-image.path";
@@ -51,23 +52,7 @@ fn publishWaylandImage(io: std.Io, path: []const u8) !bool {
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.smp_allocator, .unlimited) catch return false;
     defer std.heap.smp_allocator.free(bytes);
 
-    var child = std.process.spawn(io, .{
-        .argv = &.{ "wl-copy", "--type", "image/png" },
-        .stdin = .pipe,
-        .stdout = .ignore,
-        .stderr = .ignore,
-    }) catch return false;
-
-    if (child.stdin) |stdin| {
-        stdin.writeStreamingAll(io, bytes) catch {
-            child.kill(io);
-            return false;
-        };
-        stdin.close(io);
-        child.stdin = null;
-    }
-
-    const term = child.wait(io) catch return false;
+    const term = process_exec.runWithPipeInput(io, &.{ "wl-copy", "--type", "image/png" }, bytes) catch return false;
     return switch (term) {
         .exited => |code| code == 0,
         else => false,

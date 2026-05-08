@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const cli_json = @import("../cli/json.zig");
 const command_json = @import("../capture/command_json.zig");
 const diagnostics = @import("diagnostics.zig");
 const protocol = @import("../ipc/protocol.zig");
@@ -201,22 +202,5 @@ fn argToSlice(arg: [*:0]const u8) []const u8 {
 }
 
 fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8) !void {
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-    const ts = try command_json.nowIso8601(allocator, io);
-    defer allocator.free(ts);
-    const command_out = try command_json.jsonStringAlloc(allocator, command);
-    defer allocator.free(command_out);
-    const code_out = try command_json.jsonStringAlloc(allocator, code);
-    defer allocator.free(code_out);
-    const message_out = try command_json.jsonStringAlloc(allocator, message);
-    defer allocator.free(message_out);
-    var buffer: [4096]u8 = undefined;
-    var stdout = std.Io.File.stdout().writer(io, &buffer);
-    try stdout.interface.print(
-        "{{\"ok\":false,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":\"{s}\",\"error\":{{\"code\":{s},\"message\":{s},\"retryable\":false,\"details\":{{}}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_out, ts, code_out, message_out },
-    );
-    try stdout.interface.flush();
+    try cli_json.writeBasicError(io, command, code, message, false);
 }

@@ -62,6 +62,24 @@ and the working diff.
   `doctor/diagnostics.zig`; and post-capture work separates side effects,
   typed outcomes, and JSON rendering across `pipeline/post_capture.zig`,
   `pipeline/post_capture_types.zig`, and `pipeline/post_capture_json.zig`.
+- Compositor seam foundation now exists in `compositor/runtime.zig` plus
+  `compositor/focused_output.zig`. Runtime detection now distinguishes
+  `niri`, generic Wayland compositors, and unsupported environments; current
+  runtime scope still supports only `niri`, but unsupported Wayland sessions
+  now report deterministic detected compositor labels for future expansion.
+- Preflight/capabilities/output-resolution wiring now consumes the shared
+  compositor seam. `preflight` and `capabilities list` error details include
+  detected compositor labels, and focused-output resolution is adapter-backed
+  (`niri msg -j focused-output` for Niri, no fabricated output for others).
+- Runtime process seam was deepened: `runtime/process_exec.zig` now also owns
+  stdin-pipe execution (`runWithPipeInput`), and preview/notify/clipboard
+  command execution now routes through runtime process adapters.
+- Overlay runtime cleanup: legacy unused `OverlayRuntime` lifecycle scaffolding
+  was removed from `overlay/runtime.zig`; production overlay execution keeps a
+  single helper stdio seam via `runSelectionHelper`.
+- CLI contract drift reduction: preview/history/errors/doctor/notify command
+  families now reuse shared `cli/json.zig` envelope helpers for timestamps,
+  escaping, and deterministic `ERR_*` error JSON.
 
 ## Capture Runtime Foundation
 

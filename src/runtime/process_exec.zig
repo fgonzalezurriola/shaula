@@ -55,3 +55,29 @@ pub fn runWithEnv(
     });
     return .{ .stdout = result.stdout, .stderr = result.stderr, .term = result.term };
 }
+
+/// Runtime process adapter for commands that consume stdin bytes.
+///
+/// Contract constraints: this helper owns stdin write/close ordering; callers
+/// keep deterministic `ERR_*` mapping based on the returned termination status.
+pub fn runWithPipeInput(
+    io: std.Io,
+    argv: []const []const u8,
+    input: []const u8,
+) !std.process.Child.Term {
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
+
+    errdefer if (child.id != null) child.kill(io);
+    if (child.stdin) |stdin| {
+        try stdin.writeStreamingAll(io, input);
+        stdin.close(io);
+        child.stdin = null;
+    }
+
+    return child.wait(io);
+}

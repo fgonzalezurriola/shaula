@@ -1,26 +1,5 @@
 const std = @import("std");
-const root = @import("root");
-
-const standalone_preflight_probe = struct {
-    pub fn detectCompositor(environ: std.process.Environ) []const u8 {
-        if (environ.getPosix("SHAULA_COMPOSITOR")) |value| {
-            const explicit = std.mem.sliceTo(value, 0);
-            if (std.ascii.eqlIgnoreCase(explicit, "niri")) return "niri";
-            return "unsupported";
-        }
-
-        if (environ.getPosix("NIRI_SOCKET") != null) {
-            return "niri";
-        }
-
-        return "unsupported";
-    }
-};
-
-const preflight = if (@hasDecl(root, "preflight_probe_module"))
-    root.preflight_probe_module
-else
-    standalone_preflight_probe;
+const compositor_runtime = @import("../compositor/runtime.zig");
 
 pub const BackendKind = enum {
     niri_wayland_direct,
@@ -53,7 +32,7 @@ pub const RuntimeDecision = struct {
 
 /// Resolve runtime decision from environment and compositor probe.
 pub fn resolve(environ: std.process.Environ) RuntimeDecision {
-    const compositor_supported = std.mem.eql(u8, preflight.detectCompositor(environ), "niri");
+    const compositor_supported = compositor_runtime.supportedInCurrentScope(compositor_runtime.detect(environ));
     const backend = resolveBackend(environ);
 
     return .{
@@ -85,7 +64,7 @@ pub fn resolveBackend(environ: std.process.Environ) BackendKind {
         }
     }
 
-    if (std.mem.eql(u8, preflight.detectCompositor(environ), "niri")) {
+    if (compositor_runtime.detect(environ).kind == .niri) {
         return .niri_wayland_direct;
     }
 

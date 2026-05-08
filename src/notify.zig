@@ -1,4 +1,5 @@
 const std = @import("std");
+const process_exec = @import("runtime/process_exec.zig");
 
 pub const NotifyUrgency = enum {
     low,
@@ -64,13 +65,8 @@ pub fn notify(
     argv[argv_len] = body;
     argv_len += 1;
 
-    const result = std.process.run(allocator, io, .{
-        .argv = argv[0..argv_len],
-        .stdout_limit = .limited(1024),
-        .stderr_limit = .limited(1024),
-    }) catch return error.NotificationUnavailable;
-    defer allocator.free(result.stdout);
-    defer allocator.free(result.stderr);
+    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    defer result.deinit(allocator);
 
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
 }

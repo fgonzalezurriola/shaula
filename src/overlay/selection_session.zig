@@ -7,14 +7,11 @@ const previous_area_store = @import("../runtime/previous_area_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 const overlay_runtime = @import("runtime.zig");
+const compositor_focused_output = @import("../compositor/focused_output.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
 pub const deterministicFailureCode = helper_protocol.deterministicFailureCode;
-
-const NiriFocusedOutput = struct {
-    name: []const u8,
-};
 
 const OverlayBackground = struct {
     path: []u8,
@@ -243,24 +240,7 @@ fn resolveOverlayOutputName(
     io: std.Io,
     environ: std.process.Environ,
 ) !?[]u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_OUTPUT_NAME")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return try allocator.dupe(u8, raw);
-    }
-
-    if (environ.getPosix("NIRI_SOCKET") == null) return null;
-
-    const result = process_exec.run(allocator, io, &.{ "niri", "msg", "-j", "focused-output" }, 8192, 1024) catch return null;
-    defer result.deinit(allocator);
-    if (!result.exitedZero()) return null;
-
-    const parsed = std.json.parseFromSlice(NiriFocusedOutput, allocator, result.stdout, .{
-        .ignore_unknown_fields = true,
-    }) catch return null;
-    defer parsed.deinit();
-    if (parsed.value.name.len == 0) return null;
-
-    return try allocator.dupe(u8, parsed.value.name);
+    return compositor_focused_output.resolveName(allocator, io, environ);
 }
 
 fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
