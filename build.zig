@@ -30,11 +30,11 @@ pub fn build(b: *std.Build) void {
     const install_overlay_helper = b.addInstallFileWithDir(overlay_helper_bin, .bin, "shaula-overlay");
     b.getInstallStep().dependOn(&install_overlay_helper.step);
 
-    const preview_helper_bin = buildNativeGtkPreviewHelper(b);
+    const preview_helper_bin = buildNativeGtkPreviewHelper(b, target, optimize);
     const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
     b.getInstallStep().dependOn(&install_preview_helper.step);
 
-    const settings_helper_bin = buildNativeGtkSettingsHelper(b);
+    const settings_helper_bin = buildNativeGtkSettingsHelper(b, target, optimize);
     const install_settings_helper = b.addInstallFileWithDir(settings_helper_bin, .bin, "shaula-settings");
     b.getInstallStep().dependOn(&install_settings_helper.step);
 
@@ -97,7 +97,11 @@ fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
     return output;
 }
 
-fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
+fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) std.Build.LazyPath {
+    const preview_geometry_obj = buildZigObject(b, "preview-geometry", "src/preview/preview_geometry.zig", target, optimize);
+    const preview_image_io_obj = buildZigObject(b, "preview-image-io", "src/preview/preview_image_io.zig", target, optimize);
+    const preview_clipboard_obj = buildZigObject(b, "preview-clipboard", "src/preview/preview_clipboard.zig", target, optimize);
+
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -115,21 +119,23 @@ fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
     command.addFileArg(b.path("src/preview/preview_actions.c"));
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
     command.addFileArg(b.path("src/preview/preview_canvas.c"));
-    command.addFileArg(b.path("src/preview/preview_clipboard.c"));
     command.addFileArg(b.path("src/preview/preview_commands.c"));
     command.addFileArg(b.path("src/preview/preview_document_edit.c"));
-    command.addFileArg(b.path("src/preview/preview_geometry.c"));
     command.addFileArg(b.path("src/preview/preview_icons.c"));
-    command.addFileArg(b.path("src/preview/preview_image_io.c"));
     command.addFileArg(b.path("src/preview/preview_properties_panel.c"));
     command.addFileArg(b.path("src/preview/preview_render.c"));
     command.addFileArg(b.path("src/preview/preview_spotlight.c"));
     command.addFileArg(b.path("src/preview/preview_state.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
+    command.addFileArg(preview_geometry_obj);
+    command.addFileArg(preview_image_io_obj);
+    command.addFileArg(preview_clipboard_obj);
     return output;
 }
 
-fn buildNativeGtkSettingsHelper(b: *std.Build) std.Build.LazyPath {
+fn buildNativeGtkSettingsHelper(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) std.Build.LazyPath {
+    const settings_config_obj = buildZigObject(b, "settings-config", "src/settings/settings_config.zig", target, optimize);
+
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -144,6 +150,26 @@ fn buildNativeGtkSettingsHelper(b: *std.Build) std.Build.LazyPath {
     });
     const output = command.addOutputFileArg("shaula-settings");
     command.addFileArg(b.path("src/settings/native_gtk_settings.c"));
-    command.addFileArg(b.path("src/settings/settings_config.c"));
+    command.addFileArg(settings_config_obj);
     return output;
+}
+
+fn buildZigObject(
+    b: *std.Build,
+    name: []const u8,
+    source_path: []const u8,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) std.Build.LazyPath {
+    const module = b.createModule(.{
+        .root_source_file = b.path(source_path),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const object = b.addObject(.{
+        .name = name,
+        .root_module = module,
+    });
+    return object.getEmittedBin();
 }

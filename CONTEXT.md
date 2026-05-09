@@ -87,6 +87,15 @@ and the working diff.
 - Runtime process seam was deepened: `runtime/process_exec.zig` now also owns
   stdin-pipe execution (`runWithPipeInput`), and preview/notify/clipboard
   command execution now routes through runtime process adapters.
+- C-to-Zig migration pass: settings config contract logic now lives in
+  `src/settings/settings_config.zig`; preview geometry lives in
+  `src/preview/preview_geometry.zig`; preview image IO and preview clipboard
+  runtime calls live in `src/preview/preview_image_io.zig` and
+  `src/preview/preview_clipboard.zig`. The GTK helpers still call the existing
+  C headers, but `build.zig` builds Zig objects and links them into the native
+  helpers. The old C implementations and scratch GTK test file were removed.
+  Remaining C should be treated as GTK UI/rendering surface unless a later pass
+  first extracts the Preview document model from `ShaulaPreviewState`.
 - Overlay runtime cleanup: legacy unused `OverlayRuntime` lifecycle scaffolding
   was removed from `overlay/runtime.zig`; production overlay execution keeps a
   single helper stdio seam via `runSelectionHelper`.
