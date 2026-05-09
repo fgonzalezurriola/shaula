@@ -33,11 +33,13 @@ static const int SETTINGS_CONTROL_W = 132;
 static const int SETTINGS_SWITCH_W = 46;
 static const int SETTINGS_SWITCH_H = 26;
 
-static gboolean run_shaula(char **argv, gchar **stdout_text, gchar **stderr_text, int *exit_code) {
+static gboolean run_shaula(char **argv, gchar **stdout_text,
+                           gchar **stderr_text, int *exit_code) {
   gint status = 1;
   GError *error = NULL;
-  gboolean spawned = g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
-                                  stdout_text, stderr_text, &status, &error);
+  gboolean spawned =
+      g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
+                   stdout_text, stderr_text, &status, &error);
   if (!spawned) {
     if (stderr_text != NULL)
       *stderr_text = g_strdup(error != NULL ? error->message : "spawn failed");
@@ -68,8 +70,10 @@ static void set_status(const char *text, gboolean is_error) {
 }
 
 static void read_controls(ShaulaSettingsConfig *config) {
-  config->region_mode = (RegionMode)gtk_drop_down_get_selected(state.region_combo);
-  config->window_mode = (WindowMode)gtk_drop_down_get_selected(state.window_combo);
+  config->region_mode =
+      (RegionMode)gtk_drop_down_get_selected(state.region_combo);
+  config->window_mode =
+      (WindowMode)gtk_drop_down_get_selected(state.window_combo);
   config->focused = gtk_switch_get_active(state.focused_switch);
   SizePreset size = (SizePreset)gtk_drop_down_get_selected(state.size_combo);
   if (size == SIZE_CUSTOM) {
@@ -78,18 +82,23 @@ static void read_controls(ShaulaSettingsConfig *config) {
   } else {
     shaula_settings_apply_size_preset(config, size);
   }
-  PositionPreset position = (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
+  PositionPreset position =
+      (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
   if (position != POSITION_CUSTOM)
     shaula_settings_apply_position_preset(config, position);
 }
 
 static void update_dynamic_controls(void) {
-  gboolean floating = gtk_drop_down_get_selected(state.window_combo) == WINDOW_FLOATING;
-  gboolean custom_size = gtk_drop_down_get_selected(state.size_combo) == SIZE_CUSTOM;
+  gboolean floating =
+      gtk_drop_down_get_selected(state.window_combo) == WINDOW_FLOATING;
+  gboolean custom_size =
+      gtk_drop_down_get_selected(state.size_combo) == SIZE_CUSTOM;
   gtk_widget_set_sensitive(GTK_WIDGET(state.size_combo), floating);
   gtk_widget_set_sensitive(GTK_WIDGET(state.position_combo), floating);
-  gtk_widget_set_sensitive(GTK_WIDGET(state.width_spin), floating && custom_size);
-  gtk_widget_set_sensitive(GTK_WIDGET(state.height_spin), floating && custom_size);
+  gtk_widget_set_sensitive(GTK_WIDGET(state.width_spin),
+                           floating && custom_size);
+  gtk_widget_set_sensitive(GTK_WIDGET(state.height_spin),
+                           floating && custom_size);
 }
 
 static void on_control_changed(GtkWidget *widget, gpointer data) {
@@ -138,10 +147,13 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   g_free(height);
 
   if (exit_code != 0) {
-    char *message = g_strdup_printf("%s%s",
-                                    out != NULL && *out != '\0' ? out : "",
-                                    err != NULL && *err != '\0' ? err : "");
-    set_status(message != NULL && *message != '\0' ? message : "ERR_CONFIG_UNREADABLE: save failed", TRUE);
+    char *message =
+        g_strdup_printf("%s%s", out != NULL && *out != '\0' ? out : "",
+                        err != NULL && *err != '\0' ? err : "");
+    set_status(message != NULL && *message != '\0'
+                   ? message
+                   : "ERR_CONFIG_UNREADABLE: save failed",
+               TRUE);
     g_free(message);
     g_free(out);
     g_free(err);
@@ -154,7 +166,9 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   state.config_exists = TRUE;
 
   if (json_niri_changed(out))
-    set_status("Saved. Niri rule file changed. Reload Niri config with your normal workflow.", FALSE);
+    set_status("Saved. Niri rule file changed. Reload Niri config with your "
+               "normal workflow.",
+               FALSE);
   else
     set_status("Saved. Niri rule was already up to date.", FALSE);
   g_free(out);
@@ -165,7 +179,9 @@ static void on_open_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
   if (state.config_path == NULL) {
-    set_status("ERR_CONFIG_UNREADABLE: configuration path could not be resolved.", TRUE);
+    set_status(
+        "ERR_CONFIG_UNREADABLE: configuration path could not be resolved.",
+        TRUE);
     return;
   }
   if (!g_file_test(state.config_path, G_FILE_TEST_EXISTS)) {
@@ -177,7 +193,8 @@ static void on_open_clicked(GtkButton *button, gpointer data) {
   int exit_code = 1;
   run_shaula(argv, NULL, &err, &exit_code);
   if (exit_code != 0) {
-    char *message = g_strdup_printf("Could not open config file. %s", err != NULL ? err : "");
+    char *message = g_strdup_printf("Could not open config file. %s",
+                                    err != NULL ? err : "");
     set_status(message, TRUE);
     g_free(message);
   }
@@ -216,10 +233,13 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
   int exit_code = 1;
   run_shaula(argv, &out, &err, &exit_code);
   if (exit_code != 0) {
-    char *message = g_strdup_printf("%s%s",
-                                    out != NULL && *out != '\0' ? out : "",
-                                    err != NULL && *err != '\0' ? err : "");
-    set_status(message != NULL && *message != '\0' ? message : "ERR_CONFIG_UNREADABLE: reset failed", TRUE);
+    char *message =
+        g_strdup_printf("%s%s", out != NULL && *out != '\0' ? out : "",
+                        err != NULL && *err != '\0' ? err : "");
+    set_status(message != NULL && *message != '\0'
+                   ? message
+                   : "ERR_CONFIG_UNREADABLE: reset failed",
+               TRUE);
     g_free(message);
     g_free(out);
     g_free(err);
@@ -239,9 +259,9 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
 static void on_reset_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
-  GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(state.window), GTK_DIALOG_MODAL,
-                                             GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
-                                             "Reset Shaula settings to defaults?");
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(state.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
+      GTK_BUTTONS_NONE, "Reset Shaula settings to defaults?");
   gtk_message_dialog_format_secondary_text(
       GTK_MESSAGE_DIALOG(dialog),
       "The current config file will be backed up before defaults are written.");
@@ -273,7 +293,6 @@ static GtkWidget *labeled_row(const char *label, GtkWidget *child) {
   return row;
 }
 
-
 static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_add_css_class(box, "settings-form");
@@ -286,54 +305,72 @@ static GtkWidget *build_form(void) {
   const char *regions[] = {"Live", "Frozen", NULL};
   state.region_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(regions));
   gtk_drop_down_set_selected(state.region_combo, state.config.region_mode);
-  gtk_box_append(GTK_BOX(box), labeled_row("Region mode", GTK_WIDGET(state.region_combo)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Region mode", GTK_WIDGET(state.region_combo)));
 
   GtkWidget *preview_title = gtk_label_new("Preview Window");
   gtk_widget_add_css_class(preview_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(preview_title), 0.0);
   gtk_box_append(GTK_BOX(box), preview_title);
 
-  const char *windows[] = {"Auto", "Tiling", "Floating", "Maximized", "Maximized to edges", "Fullscreen", NULL};
+  const char *windows[] = {
+      "Auto",       "Tiling", "Floating", "Maximized", "Maximized to edges",
+      "Fullscreen", NULL};
   state.window_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(windows));
   gtk_drop_down_set_selected(state.window_combo, state.config.window_mode);
-  gtk_box_append(GTK_BOX(box), labeled_row("Window mode", GTK_WIDGET(state.window_combo)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Window mode", GTK_WIDGET(state.window_combo)));
 
   const char *sizes[] = {"Small", "Medium", "Large", "Custom", NULL};
   state.size_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(sizes));
-  gtk_drop_down_set_selected(state.size_combo, shaula_settings_size_preset_for_config(&state.config));
-  gtk_box_append(GTK_BOX(box), labeled_row("Preview size", GTK_WIDGET(state.size_combo)));
+  gtk_drop_down_set_selected(
+      state.size_combo, shaula_settings_size_preset_for_config(&state.config));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Preview size", GTK_WIDGET(state.size_combo)));
 
-  state.width_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(320, 7680, 10));
+  state.width_spin =
+      GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(320, 7680, 10));
   gtk_spin_button_set_value(state.width_spin, state.config.width);
-  gtk_box_append(GTK_BOX(box), labeled_row("Custom width", GTK_WIDGET(state.width_spin)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Custom width", GTK_WIDGET(state.width_spin)));
 
-  state.height_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(240, 4320, 10));
+  state.height_spin =
+      GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(240, 4320, 10));
   gtk_spin_button_set_value(state.height_spin, state.config.height);
-  gtk_box_append(GTK_BOX(box), labeled_row("Custom height", GTK_WIDGET(state.height_spin)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Custom height", GTK_WIDGET(state.height_spin)));
 
-  const char *positions_all[] = {"Centered", "Top Left", "Top Right", "Custom", NULL};
+  const char *positions_all[] = {"Centered", "Top Left", "Top Right", "Custom",
+                                 NULL};
   const char *positions_std[] = {"Centered", "Top Left", "Top Right", NULL};
   state.position_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(
-      state.config.position_preset == POSITION_CUSTOM ? positions_all : positions_std));
-  gtk_drop_down_set_selected(state.position_combo, state.config.position_preset);
-  gtk_box_append(GTK_BOX(box), labeled_row("Floating position", GTK_WIDGET(state.position_combo)));
+      state.config.position_preset == POSITION_CUSTOM ? positions_all
+                                                      : positions_std));
+  gtk_drop_down_set_selected(state.position_combo,
+                             state.config.position_preset);
+  gtk_box_append(GTK_BOX(box), labeled_row("Floating position",
+                                           GTK_WIDGET(state.position_combo)));
 
   state.focused_switch = GTK_SWITCH(gtk_switch_new());
   gtk_switch_set_active(state.focused_switch, state.config.focused);
-  gtk_box_append(GTK_BOX(box), labeled_row("Focus preview window", GTK_WIDGET(state.focused_switch)));
+  gtk_box_append(GTK_BOX(box), labeled_row("Focus preview window",
+                                           GTK_WIDGET(state.focused_switch)));
 
   GtkWidget *advanced_title = gtk_label_new("Advanced");
   gtk_widget_add_css_class(advanced_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(advanced_title), 0.0);
   gtk_box_append(GTK_BOX(box), advanced_title);
 
-  state.path_label = gtk_label_new(state.config_path != NULL ? state.config_path : "unknown");
+  state.path_label =
+      gtk_label_new(state.config_path != NULL ? state.config_path : "unknown");
   gtk_label_set_xalign(GTK_LABEL(state.path_label), 1.0);
   gtk_label_set_ellipsize(GTK_LABEL(state.path_label), PANGO_ELLIPSIZE_START);
   gtk_box_append(GTK_BOX(box), labeled_row("Config path", state.path_label));
 
-  g_signal_connect(state.window_combo, "notify::selected", G_CALLBACK(on_control_changed), NULL);
-  g_signal_connect(state.size_combo, "notify::selected", G_CALLBACK(on_control_changed), NULL);
+  g_signal_connect(state.window_combo, "notify::selected",
+                   G_CALLBACK(on_control_changed), NULL);
+  g_signal_connect(state.size_combo, "notify::selected",
+                   G_CALLBACK(on_control_changed), NULL);
   update_dynamic_controls();
   return box;
 }
@@ -344,7 +381,9 @@ static GtkWidget *build_error_box(void) {
   gtk_widget_add_css_class(title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(title), 0.0);
   gtk_box_append(GTK_BOX(box), title);
-  GtkWidget *body = gtk_label_new("Shaula could not parse the existing config file. Open it to fix the issue or reset to defaults after a backup.");
+  GtkWidget *body =
+      gtk_label_new("Shaula could not parse the existing config file. Open it "
+                    "to fix the issue or reset to defaults after a backup.");
   gtk_label_set_wrap(GTK_LABEL(body), TRUE);
   gtk_label_set_xalign(GTK_LABEL(body), 0.0);
   gtk_box_append(GTK_BOX(box), body);
@@ -390,6 +429,10 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_window_set_default_size(GTK_WINDOW(state.window), 560, 620);
   gtk_window_set_resizable(GTK_WINDOW(state.window), TRUE);
 
+  GtkWidget *titlebar = gtk_header_bar_new();
+  gtk_header_bar_set_show_title_buttons(GTK_HEADER_BAR(titlebar), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(state.window), titlebar);
+
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_add_css_class(root, "settings-root");
   gtk_window_set_child(GTK_WINDOW(state.window), root);
@@ -398,11 +441,6 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_set_halign(center_wrapper, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(center_wrapper, 560, -1);
   gtk_box_append(GTK_BOX(root), center_wrapper);
-
-  GtkWidget *header = gtk_label_new("Shaula Settings");
-  gtk_widget_add_css_class(header, "settings-title");
-  gtk_label_set_xalign(GTK_LABEL(header), 0.0);
-  gtk_box_append(GTK_BOX(center_wrapper), header);
 
   state.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_set_margin_top(state.content, 18);
@@ -418,7 +456,9 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_set_visible(state.error_box, state.config_invalid);
   gtk_widget_set_visible(state.form_box, !state.config_invalid);
 
-  state.status_label = gtk_label_new(state.config_invalid ? "Open the config file or reset to defaults." : "Changes apply to future preview windows.");
+  state.status_label = gtk_label_new(
+      state.config_invalid ? "Open the config file or reset to defaults."
+                           : "Changes apply to future preview windows.");
   gtk_label_set_wrap(GTK_LABEL(state.status_label), TRUE);
   gtk_label_set_xalign(GTK_LABEL(state.status_label), 0.0);
   gtk_box_append(GTK_BOX(state.content), state.status_label);
@@ -435,9 +475,12 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_box_append(GTK_BOX(state.content), buttons);
 
   gtk_widget_set_sensitive(state.apply_button, !state.config_invalid);
-  g_signal_connect(state.open_button, "clicked", G_CALLBACK(on_open_clicked), NULL);
-  g_signal_connect(state.reset_button, "clicked", G_CALLBACK(on_reset_clicked), NULL);
-  g_signal_connect(state.apply_button, "clicked", G_CALLBACK(on_save_clicked), NULL);
+  g_signal_connect(state.open_button, "clicked", G_CALLBACK(on_open_clicked),
+                   NULL);
+  g_signal_connect(state.reset_button, "clicked", G_CALLBACK(on_reset_clicked),
+                   NULL);
+  g_signal_connect(state.apply_button, "clicked", G_CALLBACK(on_save_clicked),
+                   NULL);
 
   gtk_window_present(GTK_WINDOW(state.window));
 }
@@ -449,20 +492,25 @@ static void install_css(GtkApplication *app, gpointer data) {
   gtk_css_provider_load_from_string(
       provider,
       ".settings-root { background: @theme_bg_color; color: @theme_fg_color; }"
-      ".settings-title { font-size: 24px; font-weight: 700; padding: 18px 18px 0 18px; }"
-      ".section-title { font-size: 12px; font-weight: 700; margin-top: 18px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }"
+      ".settings-title { font-size: 24px; font-weight: 700; padding: 18px 18px "
+      "0 18px; }"
+      ".section-title { font-size: 12px; font-weight: 700; margin-top: 18px; "
+      "margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px; "
+      "opacity: 0.7; }"
       ".settings-row { min-height: 38px; }"
       "button.suggested-action { font-weight: bold; }"
       ".error { color: @error_color; font-weight: bold; }");
-  gtk_style_context_add_provider_for_display(gdk_display_get_default(),
-                                             GTK_STYLE_PROVIDER(provider),
-                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  gtk_style_context_add_provider_for_display(
+      gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   g_object_unref(provider);
 }
 
 int main(int argc, char **argv) {
-  state.shaula_bin = g_strdup(argc >= 2 && argv[1][0] != '\0' ? argv[1] : "shaula");
-  GtkApplication *app = gtk_application_new("dev.shaula.settings", G_APPLICATION_DEFAULT_FLAGS);
+  state.shaula_bin =
+      g_strdup(argc >= 2 && argv[1][0] != '\0' ? argv[1] : "shaula");
+  GtkApplication *app =
+      gtk_application_new("dev.shaula.settings", G_APPLICATION_DEFAULT_FLAGS);
   if (app == NULL)
     return 45;
   g_signal_connect(app, "startup", G_CALLBACK(install_css), NULL);
