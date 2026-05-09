@@ -11,10 +11,10 @@ typedef struct {
   GtkWidget *form_box;
   GtkWidget *status_label;
   GtkWidget *path_label;
-  GtkComboBoxText *region_combo;
-  GtkComboBoxText *window_combo;
-  GtkComboBoxText *size_combo;
-  GtkComboBoxText *position_combo;
+  GtkDropDown *region_combo;
+  GtkDropDown *window_combo;
+  GtkDropDown *size_combo;
+  GtkDropDown *position_combo;
   GtkSpinButton *width_spin;
   GtkSpinButton *height_spin;
   GtkSwitch *focused_switch;
@@ -70,24 +70,24 @@ static void set_status(const char *text, gboolean is_error) {
 }
 
 static void read_controls(ShaulaSettingsConfig *config) {
-  config->region_mode = (RegionMode)gtk_combo_box_get_active(GTK_COMBO_BOX(state.region_combo));
-  config->window_mode = (WindowMode)gtk_combo_box_get_active(GTK_COMBO_BOX(state.window_combo));
+  config->region_mode = (RegionMode)gtk_drop_down_get_selected(state.region_combo);
+  config->window_mode = (WindowMode)gtk_drop_down_get_selected(state.window_combo);
   config->focused = gtk_switch_get_active(state.focused_switch);
-  SizePreset size = (SizePreset)gtk_combo_box_get_active(GTK_COMBO_BOX(state.size_combo));
+  SizePreset size = (SizePreset)gtk_drop_down_get_selected(state.size_combo);
   if (size == SIZE_CUSTOM) {
     config->width = gtk_spin_button_get_value_as_int(state.width_spin);
     config->height = gtk_spin_button_get_value_as_int(state.height_spin);
   } else {
     shaula_settings_apply_size_preset(config, size);
   }
-  PositionPreset position = (PositionPreset)gtk_combo_box_get_active(GTK_COMBO_BOX(state.position_combo));
+  PositionPreset position = (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
   if (position != POSITION_CUSTOM)
     shaula_settings_apply_position_preset(config, position);
 }
 
 static void update_dynamic_controls(void) {
-  gboolean floating = gtk_combo_box_get_active(GTK_COMBO_BOX(state.window_combo)) == WINDOW_FLOATING;
-  gboolean custom_size = gtk_combo_box_get_active(GTK_COMBO_BOX(state.size_combo)) == SIZE_CUSTOM;
+  gboolean floating = gtk_drop_down_get_selected(state.window_combo) == WINDOW_FLOATING;
+  gboolean custom_size = gtk_drop_down_get_selected(state.size_combo) == SIZE_CUSTOM;
   gtk_widget_set_sensitive(GTK_WIDGET(state.size_combo), floating);
   gtk_widget_set_sensitive(GTK_WIDGET(state.position_combo), floating);
   gtk_widget_set_sensitive(GTK_WIDGET(state.width_spin), floating && custom_size);
@@ -218,9 +218,6 @@ static GtkWidget *labeled_row(const char *label, GtkWidget *child) {
   return row;
 }
 
-static void add_combo_item(GtkComboBoxText *combo, const char *label) {
-  gtk_combo_box_text_append_text(combo, label);
-}
 
 static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
@@ -231,10 +228,9 @@ static GtkWidget *build_form(void) {
   gtk_label_set_xalign(GTK_LABEL(capture_title), 0.0);
   gtk_box_append(GTK_BOX(box), capture_title);
 
-  state.region_combo = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
-  add_combo_item(state.region_combo, "Live");
-  add_combo_item(state.region_combo, "Frozen");
-  gtk_combo_box_set_active(GTK_COMBO_BOX(state.region_combo), state.config.region_mode);
+  const char *regions[] = {"Live", "Frozen", NULL};
+  state.region_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(regions));
+  gtk_drop_down_set_selected(state.region_combo, state.config.region_mode);
   gtk_box_append(GTK_BOX(box), labeled_row("Region mode", GTK_WIDGET(state.region_combo)));
 
   GtkWidget *preview_title = gtk_label_new("Preview Window");
@@ -242,22 +238,14 @@ static GtkWidget *build_form(void) {
   gtk_label_set_xalign(GTK_LABEL(preview_title), 0.0);
   gtk_box_append(GTK_BOX(box), preview_title);
 
-  state.window_combo = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
-  add_combo_item(state.window_combo, "Auto");
-  add_combo_item(state.window_combo, "Tiling");
-  add_combo_item(state.window_combo, "Floating");
-  add_combo_item(state.window_combo, "Maximized");
-  add_combo_item(state.window_combo, "Maximized to edges");
-  add_combo_item(state.window_combo, "Fullscreen");
-  gtk_combo_box_set_active(GTK_COMBO_BOX(state.window_combo), state.config.window_mode);
+  const char *windows[] = {"Auto", "Tiling", "Floating", "Maximized", "Maximized to edges", "Fullscreen", NULL};
+  state.window_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(windows));
+  gtk_drop_down_set_selected(state.window_combo, state.config.window_mode);
   gtk_box_append(GTK_BOX(box), labeled_row("Window mode", GTK_WIDGET(state.window_combo)));
 
-  state.size_combo = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
-  add_combo_item(state.size_combo, "Small");
-  add_combo_item(state.size_combo, "Medium");
-  add_combo_item(state.size_combo, "Large");
-  add_combo_item(state.size_combo, "Custom");
-  gtk_combo_box_set_active(GTK_COMBO_BOX(state.size_combo), shaula_settings_size_preset_for_config(&state.config));
+  const char *sizes[] = {"Small", "Medium", "Large", "Custom", NULL};
+  state.size_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(sizes));
+  gtk_drop_down_set_selected(state.size_combo, shaula_settings_size_preset_for_config(&state.config));
   gtk_box_append(GTK_BOX(box), labeled_row("Preview size", GTK_WIDGET(state.size_combo)));
 
   state.width_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(320, 7680, 10));
@@ -268,13 +256,11 @@ static GtkWidget *build_form(void) {
   gtk_spin_button_set_value(state.height_spin, state.config.height);
   gtk_box_append(GTK_BOX(box), labeled_row("Custom height", GTK_WIDGET(state.height_spin)));
 
-  state.position_combo = GTK_COMBO_BOX_TEXT(gtk_combo_box_text_new());
-  add_combo_item(state.position_combo, "Centered");
-  add_combo_item(state.position_combo, "Top Left");
-  add_combo_item(state.position_combo, "Top Right");
-  if (state.config.position_preset == POSITION_CUSTOM)
-    add_combo_item(state.position_combo, "Custom");
-  gtk_combo_box_set_active(GTK_COMBO_BOX(state.position_combo), state.config.position_preset);
+  const char *positions_all[] = {"Centered", "Top Left", "Top Right", "Custom", NULL};
+  const char *positions_std[] = {"Centered", "Top Left", "Top Right", NULL};
+  state.position_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(
+      state.config.position_preset == POSITION_CUSTOM ? positions_all : positions_std));
+  gtk_drop_down_set_selected(state.position_combo, state.config.position_preset);
   gtk_box_append(GTK_BOX(box), labeled_row("Floating position", GTK_WIDGET(state.position_combo)));
 
   state.focused_switch = GTK_SWITCH(gtk_switch_new());
@@ -291,8 +277,8 @@ static GtkWidget *build_form(void) {
   gtk_label_set_ellipsize(GTK_LABEL(state.path_label), PANGO_ELLIPSIZE_START);
   gtk_box_append(GTK_BOX(box), labeled_row("Config path", state.path_label));
 
-  g_signal_connect(state.window_combo, "changed", G_CALLBACK(on_control_changed), NULL);
-  g_signal_connect(state.size_combo, "changed", G_CALLBACK(on_control_changed), NULL);
+  g_signal_connect(state.window_combo, "notify::selected", G_CALLBACK(on_control_changed), NULL);
+  g_signal_connect(state.size_combo, "notify::selected", G_CALLBACK(on_control_changed), NULL);
   update_dynamic_controls();
   return box;
 }
@@ -339,17 +325,22 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_add_css_class(root, "settings-root");
   gtk_window_set_child(GTK_WINDOW(state.window), root);
 
+  GtkWidget *center_wrapper = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_halign(center_wrapper, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(center_wrapper, 560, -1);
+  gtk_box_append(GTK_BOX(root), center_wrapper);
+
   GtkWidget *header = gtk_label_new("Shaula Settings");
   gtk_widget_add_css_class(header, "settings-title");
   gtk_label_set_xalign(GTK_LABEL(header), 0.0);
-  gtk_box_append(GTK_BOX(root), header);
+  gtk_box_append(GTK_BOX(center_wrapper), header);
 
   state.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_set_margin_top(state.content, 18);
   gtk_widget_set_margin_bottom(state.content, 18);
   gtk_widget_set_margin_start(state.content, 18);
   gtk_widget_set_margin_end(state.content, 18);
-  gtk_box_append(GTK_BOX(root), state.content);
+  gtk_box_append(GTK_BOX(center_wrapper), state.content);
 
   state.error_box = build_error_box();
   state.form_box = build_form();
@@ -393,10 +384,11 @@ static void install_css(GtkApplication *app, gpointer data) {
   gtk_css_provider_load_from_string(
       provider,
       ".settings-root { background: @theme_bg_color; color: @theme_fg_color; }"
-      ".settings-title { font-size: 22px; font-weight: 700; padding: 18px 18px 0 18px; }"
-      ".section-title { font-weight: 700; margin-top: 8px; }"
+      ".settings-title { font-size: 24px; font-weight: 700; padding: 18px 18px 0 18px; }"
+      ".section-title { font-size: 12px; font-weight: 700; margin-top: 18px; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }"
       ".settings-row { min-height: 38px; }"
-      ".error { color: @error_color; }");
+      "button.suggested-action { font-weight: bold; }"
+      ".error { color: @error_color; font-weight: bold; }");
   gtk_style_context_add_provider_for_display(gdk_display_get_default(),
                                              GTK_STYLE_PROVIDER(provider),
                                              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
