@@ -78,6 +78,7 @@ Manual helper commands:
 ```bash
 shaula config show --json
 shaula config init --json
+shaula config save --json --region-mode live --preview-mode floating --focused true --width 1100 --height 720 --floating-position centered
 shaula config niri-window-rule --json
 shaula settings
 ```
@@ -87,11 +88,12 @@ shaula settings
 from the installer.
 
 `shaula settings` launches the native GTK `shaula-settings` helper. It edits
-Shaula's public config contract, preserves valid config comments/layout where
-practical, creates `config.toml` on first save, and offers `Save & Apply` to
-save config then run the same managed Niri block update as
-`shaula config niri-install --json`. It does not reload or restart Niri, and it
-does not restart Noctalia.
+Shaula's public config contract by calling `shaula config show --json` and
+`shaula config save --json`. Zig owns TOML parsing, comment-preserving text
+patching, backups, atomic writes, and deterministic `ERR_CONFIG_*` outcomes.
+The GTK helper only owns UI state and CLI calls. `Save` writes config then runs
+the same managed Niri block update as `shaula config niri-install --json`. It
+does not reload or restart Niri, and it does not restart Noctalia.
 
 ## Noctalia
 

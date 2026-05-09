@@ -138,8 +138,8 @@ fn buildNativeGtkSettingsHelper(b: *std.Build) std.Build.LazyPath {
         \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
-\\ $(pkg-config --cflags --libs gtk4) -lm
-,
+        \\ $(pkg-config --cflags --libs gtk4) -lm
+        ,
         "build-shaula-settings",
     });
     const output = command.addOutputFileArg("shaula-settings");

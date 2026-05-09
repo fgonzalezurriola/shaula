@@ -32,12 +32,13 @@ and the working diff.
   presets with custom width/height, and centered/top-left/top-right floating
   placement. Missing config opens with defaults and is created on first save;
   invalid config shows `ERR_CONFIG_INVALID` with open/reset options; valid
-  config comments/layout are preserved where practical. `Save & Apply` writes
-  config and updates Shaula's managed Niri rule block, but does not reload or
-  restart Niri or Noctalia. Noctalia's Settings menu item only launches
-  `shaula settings`. The UI now uses system GTK theme colors, compact custom
-  spacing/typography CSS, and native GTK4 `GtkDropDown` widgets instead of the
-  deprecated `GtkComboBoxText` to avoid state and rendering glitches.
+  config comments/layout are preserved where practical by Zig
+  `shaula config save --json`, not by the GTK helper. `Save` writes config and
+  updates Shaula's managed Niri rule block, but does not reload or restart Niri
+  or Noctalia. Noctalia's Settings menu item only launches `shaula settings`.
+  The UI now uses system GTK theme colors, compact custom spacing/typography
+  CSS, and native GTK4 `GtkDropDown` widgets instead of the deprecated
+  `GtkComboBoxText` to avoid state and rendering glitches.
 - Public docs have been split: `README.md` is now the shorter product-facing
   install/usage/dev-basics page, `DEV.md` holds internal workflow and
   integration notes, and `docs/roadmap.md` tracks future features.
