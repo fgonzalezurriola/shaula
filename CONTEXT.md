@@ -26,6 +26,16 @@ and the working diff.
   for installed paths, config/generated files, Wayland env, Niri candidates,
   Noctalia detection paths, Shaula Noctalia plugin install/enabled state,
   runtime tools, and actionable warnings.
+- `shaula settings` now launches the native GTK `shaula-settings` helper.
+  The settings window edits the existing public config contract only:
+  live/frozen region capture mode, preview window mode/focus, floating size
+  presets with custom width/height, and centered/top-left/top-right floating
+  placement. Missing config opens with defaults and is created on first save;
+  invalid config shows `ERR_CONFIG_INVALID` with open/reset options; valid
+  config comments/layout are preserved where practical. `Save & Apply` writes
+  config and updates Shaula's managed Niri rule block, but does not reload or
+  restart Niri or Noctalia. Noctalia's Settings menu item only launches
+  `shaula settings`.
 - Public docs have been split: `README.md` is now the shorter product-facing
   install/usage/dev-basics page, `DEV.md` holds internal workflow and
   integration notes, and `docs/roadmap.md` tracks future features.

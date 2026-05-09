@@ -34,6 +34,10 @@ pub fn build(b: *std.Build) void {
     const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
     b.getInstallStep().dependOn(&install_preview_helper.step);
 
+    const settings_helper_bin = buildNativeGtkSettingsHelper(b);
+    const install_settings_helper = b.addInstallFileWithDir(settings_helper_bin, .bin, "shaula-settings");
+    b.getInstallStep().dependOn(&install_settings_helper.step);
+
     const install_preview_icons = b.addInstallDirectory(.{
         .source_dir = b.path("src/preview/icons/hicolor"),
         .install_dir = .{ .custom = "share" },
@@ -84,8 +88,8 @@ fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
         \\  -DSHAULA_OVERLAY_STANDALONE \
         \\  "$2" \
         \\  -o "$1" \
-\\ $(pkg-config --cflags --libs gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo) -lm
-,
+        \\ $(pkg-config --cflags --libs gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo) -lm
+        ,
         "build-shaula-overlay",
     });
     const output = command.addOutputFileArg("shaula-overlay");
@@ -102,8 +106,8 @@ fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
         \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
-\\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
-,
+        \\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
+        ,
         "build-shaula-preview",
     });
     const output = command.addOutputFileArg("shaula-preview");
@@ -122,5 +126,24 @@ fn buildNativeGtkPreviewHelper(b: *std.Build) std.Build.LazyPath {
     command.addFileArg(b.path("src/preview/preview_spotlight.c"));
     command.addFileArg(b.path("src/preview/preview_state.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
+    return output;
+}
+
+fn buildNativeGtkSettingsHelper(b: *std.Build) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\out="$1"
+        \\shift
+        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  "$@" \
+        \\  -o "${out}" \
+\\ $(pkg-config --cflags --libs gtk4) -lm
+,
+        "build-shaula-settings",
+    });
+    const output = command.addOutputFileArg("shaula-settings");
+    command.addFileArg(b.path("src/settings/native_gtk_settings.c"));
+    command.addFileArg(b.path("src/settings/settings_config.c"));
     return output;
 }

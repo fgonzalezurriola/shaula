@@ -52,6 +52,7 @@ Installed paths:
 - `~/.local/bin/shaula`
 - `~/.local/bin/shaula-overlay`
 - `~/.local/bin/shaula-preview`
+- `~/.local/bin/shaula-settings`
 - `~/.local/share/applications/shaula.desktop`
 - `~/.local/share/icons/hicolor/scalable/apps/shaula.svg`
 - `~/.config/shaula/config.toml`
@@ -78,11 +79,19 @@ Manual helper commands:
 shaula config show --json
 shaula config init --json
 shaula config niri-window-rule --json
+shaula settings
 ```
 
 `shaula config niri-install --json` can edit a marked Shaula block in
 `~/.config/niri/config.kdl`, but this is an explicit command and is separate
 from the installer.
+
+`shaula settings` launches the native GTK `shaula-settings` helper. It edits
+Shaula's public config contract, preserves valid config comments/layout where
+practical, creates `config.toml` on first save, and offers `Save & Apply` to
+save config then run the same managed Niri block update as
+`shaula config niri-install --json`. It does not reload or restart Niri, and it
+does not restart Noctalia.
 
 ## Noctalia
 
@@ -136,6 +145,9 @@ quickshell log
 Noctalia context menu behavior: the base menu closes almost immediately after a
 menu item is clicked, so the Shaula plugin should not add artificial capture
 delays unless a future Noctalia version regresses menu dismissal.
+
+The Settings menu item is only a launcher for `shaula settings`; Noctalia does
+not parse or mutate Shaula config after installation.
 
 Uninstall:
 

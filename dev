@@ -34,6 +34,7 @@ App:
  all Build, then run capture all-screens --json --copy
   overlay        Build, then run shaula-overlay directly
   stage          Build, create config, set preview mode, and install Niri rule
+  settings       Build, then open native settings
   noctalia-load  Build, install local Noctalia widget, and restart Noctalia
   context        Copy context snapshot, capture-mode note, last 3 commits, and diff to clipboard
   config         Build, then show resolved Shaula config
@@ -346,6 +347,9 @@ all)
     ;;
   stage)
     stage "$@"
+    ;;
+  settings)
+    run_shaula settings "$@"
     ;;
   noctalia-load)
     noctalia_load

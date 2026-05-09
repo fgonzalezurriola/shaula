@@ -50,10 +50,10 @@ NIconButton {
         "icon": "layout-dashboard"
       },
       {
-        "label": "Settings (WIP)",
-        "action": "settings-wip",
+        "label": "Settings",
+        "action": "settings",
         "icon": "settings",
-        "enabled": false
+        "enabled": true
       },
       {
         "label": "Run Doctor",
@@ -90,6 +90,8 @@ NIconButton {
       command = "shaula capture fullscreen --json";
     } else if (action === "capture-all-screens") {
       command = "shaula capture all-screens --json";
+    } else if (action === "settings") {
+      command = "shaula settings";
     } else if (action === "doctor") {
       command = "shaula doctor --json";
     } else if (action === "open-screenshots-folder") {
