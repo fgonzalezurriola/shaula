@@ -61,6 +61,15 @@ static gboolean validate_config_with_shaula(AppState *app) {
   return exit_code == 0;
 }
 
+static gboolean json_bool_field_is_true(const char *json, const char *field) {
+  if (json == NULL || field == NULL)
+    return FALSE;
+  char *needle = g_strdup_printf("\"%s\":true", field);
+  gboolean found = strstr(json, needle) != NULL;
+  g_free(needle);
+  return found;
+}
+
 static void set_status(const char *text, gboolean is_error) {
   gtk_label_set_text(GTK_LABEL(state.status_label), text);
   if (is_error)
@@ -133,7 +142,10 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   int exit_code = 1;
   run_shaula(argv, &out, &err, &exit_code);
   if (exit_code == 0) {
-    set_status("Saved. Niri rule updated. Reload Niri config if placement does not update.", FALSE);
+    if (json_bool_field_is_true(out, "changed"))
+      set_status("Saved. Niri rule file changed. Reload Niri config with your normal workflow.", FALSE);
+    else
+      set_status("Saved. Niri rule was already up to date.", FALSE);
   } else {
     char *message = g_strdup_printf("Saved, but Niri rule was not updated. %s%s",
                                     out != NULL && *out != '\0' ? out : "",
