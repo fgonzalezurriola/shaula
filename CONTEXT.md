@@ -104,6 +104,9 @@ and the working diff.
 - CLI contract drift reduction: preview/history/errors/doctor/notify command
   families now reuse shared `cli/json.zig` envelope helpers for timestamps,
   escaping, and deterministic `ERR_*` error JSON.
+- Default capture save path now prefers `~/Pictures/shaula` (lowercase) and
+  falls back to `~/shaula` when `~/Pictures/shaula` cannot be created or is not
+  writable; explicit `--output` still bypasses default resolution.
 
 ## Capture Runtime Foundation
 

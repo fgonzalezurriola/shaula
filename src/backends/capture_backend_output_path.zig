@@ -21,9 +21,13 @@ pub fn resolveOutputPath(
         break :blk value;
     };
 
-    const output_dir = try std.fmt.allocPrint(allocator, "{s}/Pictures/Shaula", .{home});
+    const preferred_dir = try std.fmt.allocPrint(allocator, "{s}/Pictures/shaula", .{home});
+    defer allocator.free(preferred_dir);
+    const fallback_dir = try std.fmt.allocPrint(allocator, "{s}/shaula", .{home});
+    defer allocator.free(fallback_dir);
+
+    const output_dir = chooseOutputDir(allocator, io, preferred_dir, fallback_dir) catch return error.OutputPathInvalid;
     defer allocator.free(output_dir);
-    try ensureDirectoryWritable(allocator, io, output_dir);
 
     const ts = std.Io.Timestamp.now(io, .real);
     const millis = ts.toMilliseconds();
@@ -32,6 +36,22 @@ pub fn resolveOutputPath(
         "{s}/capture-{s}-{d}.png",
         .{ output_dir, mode_string, millis },
     );
+}
+
+/// Resolves a writable output directory with a deterministic preference order.
+/// Contract: returns an owned absolute path for either `preferred_dir` or
+/// `fallback_dir`; when neither is writable it maps to `ERR_OUTPUT_PATH_INVALID`.
+fn chooseOutputDir(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    preferred_dir: []const u8,
+    fallback_dir: []const u8,
+) ![]u8 {
+    ensureDirectoryWritable(allocator, io, preferred_dir) catch {
+        try ensureDirectoryWritable(allocator, io, fallback_dir);
+        return allocator.dupe(u8, fallback_dir);
+    };
+    return allocator.dupe(u8, preferred_dir);
 }
 
 fn ensureDirectoryWritable(allocator: std.mem.Allocator, io: std.Io, dir_path: []const u8) !void {

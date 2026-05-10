@@ -178,7 +178,7 @@ test "runtime capture helper missing maps to backend unavailable" {
     }
 }
 
-test "default output path resolves under HOME Pictures Shaula" {
+test "default output path resolves under HOME Pictures shaula" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "HOME", .value = "/tmp/shaula-test-home" },
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
@@ -196,7 +196,44 @@ test "default output path resolves under HOME Pictures Shaula" {
 
     switch (outcome) {
         .success => |success| {
-            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-home/Pictures/Shaula/capture-area-"));
+            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-home/Pictures/shaula/capture-area-"));
+        },
+        else => return error.TestExpectedSuccess,
+    }
+}
+
+test "default output path falls back to HOME shaula when Pictures path is unusable" {
+    const io = std.testing.io;
+    const millis = std.Io.Timestamp.now(io, .real).toMilliseconds();
+    const home = try std.fmt.allocPrint(std.testing.allocator, "/tmp/shaula-test-home-fallback-{d}", .{millis});
+    defer std.testing.allocator.free(home);
+    try std.Io.Dir.cwd().createDirPath(io, home);
+
+    // Make ~/Pictures a file so ~/Pictures/shaula cannot be created.
+    const pictures_path = try std.fmt.allocPrint(std.testing.allocator, "{s}/Pictures", .{home});
+    defer std.testing.allocator.free(pictures_path);
+    var pictures_file = try std.Io.Dir.createFileAbsolute(io, pictures_path, .{ .truncate = true });
+    pictures_file.close(io);
+
+    var test_environ = try initTestEnviron(std.testing.allocator, &.{
+        .{ .key = "HOME", .value = home },
+        .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
+        .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.sh" },
+    });
+    defer test_environ.deinit(std.testing.allocator);
+
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    defer capture_backend.deinitOutcome(allocator, &outcome);
+
+    switch (outcome) {
+        .success => |success| {
+            const expected_prefix = try std.fmt.allocPrint(std.testing.allocator, "{s}/shaula/capture-area-", .{home});
+            defer std.testing.allocator.free(expected_prefix);
+            try std.testing.expect(std.mem.startsWith(u8, success.path, expected_prefix));
         },
         else => return error.TestExpectedSuccess,
     }
