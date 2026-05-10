@@ -178,9 +178,10 @@ test "runtime capture helper missing maps to backend unavailable" {
     }
 }
 
-test "default output path resolves under HOME Pictures shaula" {
+test "implicit output path resolves under temporary captures directory" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "HOME", .value = "/tmp/shaula-test-home" },
+        .{ .key = "XDG_RUNTIME_DIR", .value = "/tmp/shaula-test-runtime" },
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
         .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.sh" },
     });
@@ -196,13 +197,13 @@ test "default output path resolves under HOME Pictures shaula" {
 
     switch (outcome) {
         .success => |success| {
-            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-home/Pictures/shaula/capture-area-"));
+            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-runtime/shaula/captures/capture-area-"));
         },
         else => return error.TestExpectedSuccess,
     }
 }
 
-test "default output path falls back to HOME shaula when Pictures path is unusable" {
+test "saved output path falls back to HOME shaula when Pictures path is unusable" {
     const io = std.testing.io;
     const millis = std.Io.Timestamp.now(io, .real).toMilliseconds();
     const home = try std.fmt.allocPrint(std.testing.allocator, "/tmp/shaula-test-home-fallback-{d}", .{millis});
@@ -226,7 +227,7 @@ test "default output path falls back to HOME shaula when Pictures path is unusab
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .save_requested = true });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -239,7 +240,7 @@ test "default output path falls back to HOME shaula when Pictures path is unusab
     }
 }
 
-test "default output path without HOME returns OutputPathInvalid" {
+test "saved output path without HOME returns OutputPathInvalid" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
         .{ .key = "SHAULA_COMPOSITOR", .value = "niri" },
         .{ .key = "SHAULA_RUNTIME_CAPTURE_HELPER", .value = "scripts/qa/fake_runtime_capture_helper.sh" },
@@ -251,7 +252,7 @@ test "default output path without HOME returns OutputPathInvalid" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .save_requested = true });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {

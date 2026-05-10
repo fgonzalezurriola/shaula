@@ -32,8 +32,6 @@ static const ToolActionSpec secondary_tools[] = {
 };
 
 static GtkWidget *make_muted_label(const char *text);
-static GtkWidget *make_fixed_width_muted_label(const char *text, int chars,
-                                               float xalign);
 
 static void install_toolbar_css(void) {
   static gboolean installed = FALSE;
@@ -322,20 +320,6 @@ static GtkWidget *make_muted_label(const char *text) {
   return label;
 }
 
-static GtkWidget *make_fixed_width_muted_label(const char *text, int chars,
-                                               float xalign) {
-  GtkWidget *label = make_muted_label(text);
-  gtk_label_set_width_chars(GTK_LABEL(label), chars);
-  gtk_label_set_xalign(GTK_LABEL(label), xalign);
-
-  PangoAttrList *attrs = pango_attr_list_new();
-  pango_attr_list_insert(attrs, pango_attr_font_features_new("tnum=1"));
-  gtk_label_set_attributes(GTK_LABEL(label), attrs);
-  pango_attr_list_unref(attrs);
-
-  return label;
-}
-
 static void apply_fixed_code_width(GtkWidget *label, int chars, int px_width,
                                    float xalign) {
   gtk_label_set_width_chars(GTK_LABEL(label), chars);
@@ -473,14 +457,12 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
     gtk_box_append(GTK_BOX(metadata), state->dimensions_label);
   }
 
-  state->zoom_label = make_fixed_width_muted_label("100% Zoom", 9, 1.0f);
+  state->zoom_label = make_muted_label("100% Zoom");
+  apply_fixed_code_width(state->zoom_label, 9, 86, 1.0f);
   gtk_box_append(GTK_BOX(metadata), state->zoom_label);
   gtk_widget_set_margin_end(metadata, 8);
 
-  GtkWidget *discard_btn =
-      make_toolbar_button(state, "shaula-discard-symbolic", "Discard (Esc)",
-                          G_CALLBACK(shaula_preview_on_discard_clicked));
-  gtk_box_append(GTK_BOX(metadata), discard_btn);
+
 
   return metadata;
 }

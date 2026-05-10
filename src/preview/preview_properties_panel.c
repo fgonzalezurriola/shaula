@@ -36,6 +36,20 @@ static void install_properties_panel_css(void) {
       "  background: alpha(@theme_fg_color, 0.14);"
       "  border-color: alpha(@theme_fg_color, 0.20);"
       "}"
+      ".shaula-properties-panel .linked > button:not(:first-child) {\n"
+      "  border-top-left-radius: 0;\n"
+      "  border-bottom-left-radius: 0;\n"
+      "  border-left-color: transparent;\n"
+      "}\n"
+      ".shaula-properties-panel .linked > button:not(:last-child) {\n"
+      "  border-top-right-radius: 0;\n"
+      "  border-bottom-right-radius: 0;\n"
+      "  border-right-color: transparent;\n"
+      "}\n"
+      ".shaula-properties-panel separator {\n"
+      "  margin: 4px 2px;\n"
+      "  background: alpha(@theme_fg_color, 0.1);\n"
+      "}\n"
       ".shaula-properties-panel colorbutton {"
       "  min-width: 30px;"
       "  min-height: 28px;"
@@ -263,6 +277,11 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
                    state);
   gtk_box_append(GTK_BOX(panel), width);
 
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  GtkWidget *spotlight_shape_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(spotlight_shape_box, "linked");
+
   state->spotlight_sharp_button =
       make_panel_shape_toggle(state, draw_rectangle_icon,
                               "Pointed spotlight corners",
@@ -271,8 +290,9 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
       make_panel_shape_toggle(state, draw_rounded_icon,
                               "Rounded spotlight corners",
                               SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
-  gtk_box_append(GTK_BOX(panel), state->spotlight_sharp_button);
-  gtk_box_append(GTK_BOX(panel), state->spotlight_rounded_button);
+  gtk_box_append(GTK_BOX(spotlight_shape_box), state->spotlight_sharp_button);
+  gtk_box_append(GTK_BOX(spotlight_shape_box), state->spotlight_rounded_button);
+  gtk_box_append(GTK_BOX(panel), spotlight_shape_box);
 
   state->properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);
@@ -322,6 +342,11 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_arrow_width_changed), state);
   gtk_box_append(GTK_BOX(panel), width);
 
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  GtkWidget *arrow_stroke_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(arrow_stroke_box, "linked");
+
   state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID] =
       make_arrow_stroke_style_toggle(state, "shaula-line-solid-symbolic",
                                      "Normal arrow stroke",
@@ -334,12 +359,13 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
       make_arrow_stroke_style_toggle(state, "shaula-line-dotted-symbolic",
                                      "Dotted arrow stroke",
                                      PREVIEW_ARROW_STROKE_DOTTED);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(arrow_stroke_box),
                  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID]);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(arrow_stroke_box),
                  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED]);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(arrow_stroke_box),
                  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DOTTED]);
+  gtk_box_append(GTK_BOX(panel), arrow_stroke_box);
 
   state->arrow_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);
@@ -387,6 +413,10 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
                    state);
   gtk_box_append(GTK_BOX(panel), width);
 
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  GtkWidget *stroke_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(stroke_box, "linked");
   state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID] =
       make_rectangle_stroke_style_toggle(state, "shaula-line-solid-symbolic",
                                          "Normal rectangle stroke",
@@ -395,10 +425,13 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
       make_rectangle_stroke_style_toggle(state, "shaula-line-dashed-symbolic",
                                          "Dashed rectangle stroke",
                                          PREVIEW_ARROW_STROKE_DASHED);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(stroke_box),
                  state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID]);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(stroke_box),
                  state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED]);
+  gtk_box_append(GTK_BOX(panel), stroke_box);
+
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
 
   GtkWidget *fill = gtk_toggle_button_new();
   state->rectangle_fill_button = fill;
@@ -412,6 +445,10 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
                    state);
   gtk_box_append(GTK_BOX(panel), fill);
 
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  GtkWidget *corner_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(corner_box, "linked");
   state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_ROUNDED] =
       make_rectangle_corner_toggle(state, draw_rounded_icon,
                                    "Rounded rectangle corners",
@@ -421,11 +458,12 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
                                    "Square rectangle corners",
                                    PREVIEW_RECTANGLE_CORNERS_SQUARE);
   gtk_box_append(
-      GTK_BOX(panel),
+      GTK_BOX(corner_box),
       state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_ROUNDED]);
   gtk_box_append(
-      GTK_BOX(panel),
+      GTK_BOX(corner_box),
       state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_SQUARE]);
+  gtk_box_append(GTK_BOX(panel), corner_box);
 
   state->rectangle_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);
@@ -593,6 +631,11 @@ GtkWidget *shaula_preview_text_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_text_size_changed), state);
   gtk_box_append(GTK_BOX(panel), size);
 
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  GtkWidget *text_align_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(text_align_box, "linked");
+
   state->text_align_buttons[SHAULA_TEXT_ALIGN_LEFT] =
       make_text_align_toggle(state, "shaula-align-left-symbolic",
                              "Align text left", SHAULA_TEXT_ALIGN_LEFT);
@@ -602,12 +645,13 @@ GtkWidget *shaula_preview_text_properties_panel_build(
   state->text_align_buttons[SHAULA_TEXT_ALIGN_RIGHT] =
       make_text_align_toggle(state, "shaula-align-right-symbolic",
                              "Align text right", SHAULA_TEXT_ALIGN_RIGHT);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(text_align_box),
                  state->text_align_buttons[SHAULA_TEXT_ALIGN_LEFT]);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(text_align_box),
                  state->text_align_buttons[SHAULA_TEXT_ALIGN_CENTER]);
-  gtk_box_append(GTK_BOX(panel),
+  gtk_box_append(GTK_BOX(text_align_box),
                  state->text_align_buttons[SHAULA_TEXT_ALIGN_RIGHT]);
+  gtk_box_append(GTK_BOX(panel), text_align_box);
 
   state->text_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);

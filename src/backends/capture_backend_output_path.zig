@@ -6,12 +6,17 @@ pub fn resolveOutputPath(
     mode_string: []const u8,
     environ: std.process.Environ,
     output_path: ?[]const u8,
+    save_requested: bool,
 ) ![]u8 {
     if (output_path) |custom_path| {
         if (std.mem.indexOf(u8, custom_path, "::invalid::") != null) {
             return error.OutputPathInvalid;
         }
         return allocator.dupe(u8, custom_path);
+    }
+
+    if (!save_requested) {
+        return resolveTemporaryOutputPath(allocator, io, mode_string, environ);
     }
 
     const home = blk: {
@@ -35,6 +40,36 @@ pub fn resolveOutputPath(
         allocator,
         "{s}/capture-{s}-{d}.png",
         .{ output_dir, mode_string, millis },
+    );
+}
+
+/// Resolve a non-durable capture artifact path for preview/copy-only flows.
+///
+/// Contract: implicit captures must not create user-visible saved screenshots;
+/// only explicit `--save` or `--output` requests use the durable save directory.
+fn resolveTemporaryOutputPath(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    mode_string: []const u8,
+    environ: std.process.Environ,
+) ![]u8 {
+    const base_dir = if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| blk: {
+        const runtime_dir = std.mem.sliceTo(runtime_dir_z, 0);
+        if (runtime_dir.len > 0) {
+            break :blk try std.fmt.allocPrint(allocator, "{s}/shaula/captures", .{runtime_dir});
+        }
+        break :blk try allocator.dupe(u8, "/tmp/shaula/captures");
+    } else try allocator.dupe(u8, "/tmp/shaula/captures");
+    defer allocator.free(base_dir);
+
+    ensureDirectoryWritable(allocator, io, base_dir) catch return error.OutputPathInvalid;
+
+    const ts = std.Io.Timestamp.now(io, .real);
+    const millis = ts.toMilliseconds();
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}/capture-{s}-{d}.png",
+        .{ base_dir, mode_string, millis },
     );
 }
 

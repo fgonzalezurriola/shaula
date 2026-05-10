@@ -26,6 +26,7 @@ const standalone_capture_types = struct {
     pub const CaptureRequest = struct {
         mode: CaptureMode,
         output_path: ?[]const u8 = null,
+        save_requested: bool = false,
         window_id: ?[]const u8 = null,
         area_geometry: ?AreaGeometry = null,
     };
@@ -190,6 +191,7 @@ pub fn execute(
         mode_string,
         environ,
         request.output_path,
+        request.save_requested,
     ) catch |err| switch (err) {
         error.OutputPathInvalid => {
             return failure.outcome(capture_types, request.mode, "ERR_OUTPUT_PATH_INVALID", "output path is not writable", false, false, backend_used);

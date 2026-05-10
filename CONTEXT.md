@@ -104,9 +104,18 @@ and the working diff.
 - CLI contract drift reduction: preview/history/errors/doctor/notify command
   families now reuse shared `cli/json.zig` envelope helpers for timestamps,
   escaping, and deterministic `ERR_*` error JSON.
-- Default capture save path now prefers `~/Pictures/shaula` (lowercase) and
-  falls back to `~/shaula` when `~/Pictures/shaula` cannot be created or is not
-  writable; explicit `--output` still bypasses default resolution.
+- Implicit captures no longer save user-visible screenshots by default. Without
+  `--save` or `--output`, the backend writes a temporary artifact under
+  `$XDG_RUNTIME_DIR/shaula/captures` or `/tmp/shaula/captures` for preview/copy.
+  `--save` still prefers `~/Pictures/shaula` (lowercase) and falls back to
+  `~/shaula`; explicit `--output` still bypasses default resolution as a user
+  save decision.
+- Capture copy is also explicit by default: `--copy` is required for the Zig
+  post-capture pipeline to touch the system clipboard. Area/all-in-one still
+  open preview by default so the user can choose Copy, Save As, or Discard.
+- Preview metadata readouts that update while interacting must reserve stable
+  width. The color hex and zoom percentage labels both use fixed code-style
+  widths so hover color sampling and zoom changes do not shift the toolbar.
 
 ## Capture Runtime Foundation
 
@@ -279,8 +288,10 @@ and the working diff.
   to Select mode, and leaves the annotation movable/duplicable through the
   normal selected-annotation path. Rectangle defaults are orange stroke
   (`#FD7603`), 3.5 px, dashed, rounded corners, and no fill. Its floating HUD
-  exposes color, stroke width, normal/dashed stroke, fill toggle, and
-  rounded/square corners. Fill uses the selected stroke color at low alpha in
+  exposes color, stroke width, grouped normal/dashed stroke toggles, a fill toggle,
+  and grouped rounded/square corner toggles, separated by vertical dividers.
+  This grouped 'linked' UI pattern is also used in Arrow, Text, and Spotlight HUDs
+  for related option toggles. Fill uses the selected stroke color at low alpha in
   the draw/export path so filled rectangles mark an area without fully hiding
   screenshot content.
 - `shaula-highlight-symbolic` Highlight: implemented.

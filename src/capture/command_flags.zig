@@ -6,7 +6,7 @@ pub const AreaFlags = struct {
     dry_run: bool = false,
     simulate_cancel: bool = false,
     save: bool = false,
-    copy: bool = true,
+    copy: bool = false,
     preview: ?bool = null,
     aspect: ?[]const u8 = null,
     output: ?[]const u8 = null,
@@ -16,7 +16,7 @@ pub const AreaFlags = struct {
 pub const FullscreenFlags = struct {
     json_mode: bool = false,
     save: bool = false,
-    copy: bool = true,
+    copy: bool = false,
     preview: ?bool = null,
     output: ?[]const u8 = null,
 };

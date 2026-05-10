@@ -41,6 +41,7 @@ fn executeLifecycle(
     var outcome = try capture_backend.execute(allocator, io, environ, .{
         .mode = options.request_mode,
         .output_path = options.output_path,
+        .save_requested = options.post_flags.save,
         .window_id = options.window_id,
         .area_geometry = options.area_geometry,
     });

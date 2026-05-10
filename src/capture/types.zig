@@ -38,12 +38,16 @@ pub const AreaGeometry = struct {
 ///
 /// Important attributes:
 /// - `mode`: capture subcommand semantic target (`area|fullscreen|window`).
-/// - `output_path`: optional absolute path override; default path is resolved by backend.
+/// - `output_path`: optional absolute path override; explicit paths are user
+///   save decisions and are written as-is.
+/// - `save_requested`: controls whether implicit output paths are durable user
+///   files or temporary capture artifacts used for preview/copy.
 /// - `window_id`: optional explicit target for window mode (currently capability-gated).
 /// - `area_geometry`: optional area rectangle; required for real area backend capture.
 pub const CaptureRequest = struct {
     mode: CaptureMode,
     output_path: ?[]const u8 = null,
+    save_requested: bool = false,
     window_id: ?[]const u8 = null,
     area_geometry: ?AreaGeometry = null,
 };
