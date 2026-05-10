@@ -115,6 +115,12 @@ typedef struct {
   GtkWidget *arrow_color_button;
   GtkWidget *arrow_width_scale;
   GtkWidget *arrow_stroke_buttons[3];
+  GtkWidget *rectangle_properties_box;
+  GtkWidget *rectangle_color_button;
+  GtkWidget *rectangle_width_scale;
+  GtkWidget *rectangle_stroke_buttons[2];
+  GtkWidget *rectangle_fill_button;
+  GtkWidget *rectangle_corner_buttons[2];
   GtkWidget *pen_properties_box;
   GtkWidget *pen_color_button;
   GtkWidget *pen_width_scale;
@@ -191,6 +197,12 @@ typedef struct {
   int active_arrow_index;
   ShaulaColor arrow_color;
   double arrow_stroke_width;
+  int active_rectangle_index;
+  ShaulaColor rectangle_color;
+  double rectangle_stroke_width;
+  PreviewArrowStrokeStyle rectangle_stroke_style;
+  gboolean rectangle_filled;
+  PreviewRectangleCorners rectangle_corners;
   ShaulaColor pen_color;
   double pen_stroke_width;
   double pen_opacity;
@@ -284,6 +296,16 @@ void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
                                            double width);
 void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
                                            PreviewArrowStrokeStyle style);
+void shaula_preview_set_rectangle_color(ShaulaPreviewState *state,
+                                        ShaulaColor color);
+void shaula_preview_set_rectangle_stroke_width(ShaulaPreviewState *state,
+                                               double width);
+void shaula_preview_set_rectangle_stroke_style(ShaulaPreviewState *state,
+                                               PreviewArrowStrokeStyle style);
+void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
+                                         gboolean filled);
+void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
+                                          PreviewRectangleCorners corners);
 void shaula_preview_set_pen_color(ShaulaPreviewState *state,
                                   ShaulaColor color);
 void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,

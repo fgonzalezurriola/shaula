@@ -100,6 +100,17 @@ static void draw_rounded_icon(GtkDrawingArea *area, cairo_t *cr, int w, int h,
   cairo_stroke(cr);
 }
 
+static void draw_fill_icon(GtkDrawingArea *area, cairo_t *cr, int w, int h,
+                           gpointer data) {
+  (void)data;
+  set_theme_fg_source(GTK_WIDGET(area), cr, 0.92);
+  cairo_rectangle(cr, w * 0.26, h * 0.30, w * 0.48, h * 0.40);
+  cairo_fill_preserve(cr);
+  set_theme_fg_source(GTK_WIDGET(area), cr, 0.92);
+  cairo_set_line_width(cr, 1.6);
+  cairo_stroke(cr);
+}
+
 static GtkWidget *make_panel_icon(GtkDrawingAreaDrawFunc draw_func) {
   GtkWidget *icon = gtk_drawing_area_new();
   gtk_widget_set_size_request(icon, 16, 16);
@@ -154,6 +165,41 @@ static GtkWidget *make_arrow_stroke_style_toggle(ShaulaPreviewState *state,
                     GINT_TO_POINTER(style));
   g_signal_connect(button, "clicked",
                    G_CALLBACK(shaula_preview_on_arrow_stroke_style_clicked),
+                   state);
+  return button;
+}
+
+static GtkWidget *make_rectangle_stroke_style_toggle(
+    ShaulaPreviewState *state, const char *icon_name, const char *tooltip,
+    PreviewArrowStrokeStyle style) {
+  GtkWidget *button = gtk_toggle_button_new();
+  gtk_button_set_child(GTK_BUTTON(button),
+                       shaula_preview_make_toolbar_icon(state, icon_name));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 34, 28);
+  g_object_set_data(G_OBJECT(button), "rectangle-stroke-style",
+                    GINT_TO_POINTER(style));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_rectangle_stroke_style_clicked),
+                   state);
+  return button;
+}
+
+static GtkWidget *make_rectangle_corner_toggle(
+    ShaulaPreviewState *state, GtkDrawingAreaDrawFunc draw_func,
+    const char *tooltip, PreviewRectangleCorners corners) {
+  GtkWidget *button = gtk_toggle_button_new();
+  gtk_button_set_child(GTK_BUTTON(button), make_panel_icon(draw_func));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 34, 28);
+  g_object_set_data(G_OBJECT(button), "rectangle-corners",
+                    GINT_TO_POINTER(corners));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_rectangle_corners_clicked),
                    state);
   return button;
 }
@@ -296,6 +342,92 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
                  state->arrow_stroke_buttons[PREVIEW_ARROW_STROKE_DOTTED]);
 
   state->arrow_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
+}
+
+GtkWidget *shaula_preview_rectangle_properties_panel_build(
+    ShaulaPreviewState *state) {
+  install_properties_panel_css();
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
+
+  GtkWidget *back = make_panel_button(
+      state, draw_back_icon, "Back",
+      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  gtk_box_append(GTK_BOX(panel), back);
+
+  GtkWidget *color = gtk_color_button_new();
+  state->rectangle_color_button = color;
+  GdkRGBA rgba = {state->rectangle_color.r, state->rectangle_color.g,
+                  state->rectangle_color.b, state->rectangle_color.a};
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
+  gtk_widget_set_tooltip_text(color, "Rectangle color");
+  gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(color, 30, 28);
+  g_signal_connect(color, "color-set",
+                   G_CALLBACK(shaula_preview_on_rectangle_color_set), state);
+  gtk_box_append(GTK_BOX(panel), color);
+
+  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
+                                              12.0, 0.5);
+  state->rectangle_width_scale = width;
+  gtk_range_set_value(GTK_RANGE(width), state->rectangle_stroke_width);
+  gtk_widget_set_tooltip_text(width, "Rectangle stroke width");
+  gtk_widget_set_size_request(width, 120, -1);
+  gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
+  gtk_widget_set_valign(width, GTK_ALIGN_CENTER);
+  g_signal_connect(width, "value-changed",
+                   G_CALLBACK(shaula_preview_on_rectangle_width_changed),
+                   state);
+  gtk_box_append(GTK_BOX(panel), width);
+
+  state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID] =
+      make_rectangle_stroke_style_toggle(state, "shaula-line-solid-symbolic",
+                                         "Normal rectangle stroke",
+                                         PREVIEW_ARROW_STROKE_SOLID);
+  state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED] =
+      make_rectangle_stroke_style_toggle(state, "shaula-line-dashed-symbolic",
+                                         "Dashed rectangle stroke",
+                                         PREVIEW_ARROW_STROKE_DASHED);
+  gtk_box_append(GTK_BOX(panel),
+                 state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_SOLID]);
+  gtk_box_append(GTK_BOX(panel),
+                 state->rectangle_stroke_buttons[PREVIEW_ARROW_STROKE_DASHED]);
+
+  GtkWidget *fill = gtk_toggle_button_new();
+  state->rectangle_fill_button = fill;
+  gtk_button_set_child(GTK_BUTTON(fill), make_panel_icon(draw_fill_icon));
+  gtk_widget_set_tooltip_text(fill, "Fill rectangle");
+  gtk_widget_add_css_class(fill, "flat");
+  gtk_widget_set_valign(fill, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(fill, 34, 28);
+  g_signal_connect(fill, "clicked",
+                   G_CALLBACK(shaula_preview_on_rectangle_fill_toggled),
+                   state);
+  gtk_box_append(GTK_BOX(panel), fill);
+
+  state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_ROUNDED] =
+      make_rectangle_corner_toggle(state, draw_rounded_icon,
+                                   "Rounded rectangle corners",
+                                   PREVIEW_RECTANGLE_CORNERS_ROUNDED);
+  state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_SQUARE] =
+      make_rectangle_corner_toggle(state, draw_rectangle_icon,
+                                   "Square rectangle corners",
+                                   PREVIEW_RECTANGLE_CORNERS_SQUARE);
+  gtk_box_append(
+      GTK_BOX(panel),
+      state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_ROUNDED]);
+  gtk_box_append(
+      GTK_BOX(panel),
+      state->rectangle_corner_buttons[PREVIEW_RECTANGLE_CORNERS_SQUARE]);
+
+  state->rectangle_properties_box = panel;
   gtk_widget_set_visible(panel, FALSE);
   return panel;
 }

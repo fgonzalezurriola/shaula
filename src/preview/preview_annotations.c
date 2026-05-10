@@ -121,6 +121,9 @@ ShaulaAnnotation *shaula_annotation_new_rectangle(ShaulaRect rect,
   ShaulaAnnotation *annotation =
       annotation_alloc(SHAULA_ANNOTATION_RECTANGLE, color, stroke_width);
   annotation->data.rectangle.rect = shaula_rect_normalized(rect);
+  annotation->data.rectangle.stroke_style = PREVIEW_ARROW_STROKE_DASHED;
+  annotation->data.rectangle.corners = PREVIEW_RECTANGLE_CORNERS_ROUNDED;
+  annotation->data.rectangle.filled = FALSE;
   shaula_annotation_update_bounds(annotation);
   return annotation;
 }
@@ -396,6 +399,32 @@ static void apply_arrow_stroke_style(cairo_t *cr,
   }
 }
 
+static void rectangle_path(cairo_t *cr, ShaulaRect rect,
+                           PreviewRectangleCorners corners) {
+  rect = shaula_rect_normalized(rect);
+  if (corners == PREVIEW_RECTANGLE_CORNERS_SQUARE) {
+    cairo_rectangle(cr, rect.x, rect.y, rect.width, rect.height);
+    return;
+  }
+
+  double radius = MIN(12.0, MIN(rect.width, rect.height) * 0.16);
+  if (radius <= 0.5) {
+    cairo_rectangle(cr, rect.x, rect.y, rect.width, rect.height);
+    return;
+  }
+
+  double x = rect.x;
+  double y = rect.y;
+  double w = rect.width;
+  double h = rect.height;
+  cairo_new_sub_path(cr);
+  cairo_arc(cr, x + w - radius, y + radius, radius, -0.5 * G_PI, 0);
+  cairo_arc(cr, x + w - radius, y + h - radius, radius, 0, 0.5 * G_PI);
+  cairo_arc(cr, x + radius, y + h - radius, radius, 0.5 * G_PI, G_PI);
+  cairo_arc(cr, x + radius, y + radius, radius, G_PI, 1.5 * G_PI);
+  cairo_close_path(cr);
+}
+
 /* Computes the point on the shaft where it should stop before the arrowhead.
  * This avoids overlap artifacts between the rounded cap and the filled head.
  */
@@ -534,10 +563,15 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
     draw_measure_label(cr, annotation);
     break;
   case SHAULA_ANNOTATION_RECTANGLE:
-    cairo_rectangle(cr, annotation->data.rectangle.rect.x,
-                    annotation->data.rectangle.rect.y,
-                    annotation->data.rectangle.rect.width,
-                    annotation->data.rectangle.rect.height);
+    rectangle_path(cr, annotation->data.rectangle.rect,
+                   annotation->data.rectangle.corners);
+    if (annotation->data.rectangle.filled) {
+      set_annotation_color(cr, annotation->color, 0.22);
+      cairo_fill_preserve(cr);
+      set_annotation_color(cr, annotation->color, 1.0);
+    }
+    apply_arrow_stroke_style(cr, annotation->data.rectangle.stroke_style,
+                             annotation->stroke_width);
     cairo_stroke(cr);
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:

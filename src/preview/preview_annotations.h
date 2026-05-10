@@ -22,6 +22,11 @@ typedef enum {
 } PreviewArrowStrokeStyle;
 
 typedef enum {
+  PREVIEW_RECTANGLE_CORNERS_ROUNDED,
+  PREVIEW_RECTANGLE_CORNERS_SQUARE,
+} PreviewRectangleCorners;
+
+typedef enum {
   SHAULA_TEXT_ALIGN_LEFT,
   SHAULA_TEXT_ALIGN_CENTER,
   SHAULA_TEXT_ALIGN_RIGHT,
@@ -61,6 +66,9 @@ typedef struct ShaulaAnnotation {
     } measure;
     struct {
       ShaulaRect rect;
+      PreviewArrowStrokeStyle stroke_style;
+      PreviewRectangleCorners corners;
+      gboolean filled;
     } rectangle;
     ShaulaPenPath highlight;
     ShaulaPenPath pen;

@@ -558,6 +558,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
   gboolean show_arrow_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_ARROW;
+  gboolean show_rectangle_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_RECTANGLE;
   gboolean show_pen_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_PEN;
   gboolean show_highlight_properties =
@@ -572,6 +574,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->arrow_properties_box != NULL)
     gtk_widget_set_visible(state->arrow_properties_box,
                            show_arrow_properties);
+  if (state->rectangle_properties_box != NULL)
+    gtk_widget_set_visible(state->rectangle_properties_box,
+                           show_rectangle_properties);
   if (state->pen_properties_box != NULL)
     gtk_widget_set_visible(state->pen_properties_box, show_pen_properties);
   if (state->highlight_properties_box != NULL)
@@ -600,6 +605,47 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       gtk_toggle_button_set_active(
           GTK_TOGGLE_BUTTON(state->arrow_stroke_buttons[i]),
           i == (int)arrow_stroke_style);
+  }
+  if (state->rectangle_color_button != NULL) {
+    GdkRGBA rectangle_rgba = {state->rectangle_color.r,
+                              state->rectangle_color.g,
+                              state->rectangle_color.b,
+                              state->rectangle_color.a};
+    gtk_color_chooser_set_rgba(
+        GTK_COLOR_CHOOSER(state->rectangle_color_button), &rectangle_rgba);
+  }
+  if (state->rectangle_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->rectangle_width_scale)) -
+           state->rectangle_stroke_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->rectangle_width_scale),
+                        state->rectangle_stroke_width);
+  PreviewArrowStrokeStyle rectangle_style = state->rectangle_stroke_style;
+  if (state->selected_annotation != NULL &&
+      state->selected_annotation->type == SHAULA_ANNOTATION_RECTANGLE)
+    rectangle_style = state->selected_annotation->data.rectangle.stroke_style;
+  for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DASHED;
+       i++) {
+    if (state->rectangle_stroke_buttons[i] != NULL)
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->rectangle_stroke_buttons[i]),
+          i == (int)rectangle_style);
+  }
+  gboolean rectangle_filled = state->rectangle_filled;
+  PreviewRectangleCorners rectangle_corners = state->rectangle_corners;
+  if (state->selected_annotation != NULL &&
+      state->selected_annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+    rectangle_filled = state->selected_annotation->data.rectangle.filled;
+    rectangle_corners = state->selected_annotation->data.rectangle.corners;
+  }
+  if (state->rectangle_fill_button != NULL)
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->rectangle_fill_button),
+                                 rectangle_filled);
+  for (int i = PREVIEW_RECTANGLE_CORNERS_ROUNDED;
+       i <= PREVIEW_RECTANGLE_CORNERS_SQUARE; i++) {
+    if (state->rectangle_corner_buttons[i] != NULL)
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->rectangle_corner_buttons[i]),
+          i == (int)rectangle_corners);
   }
   if (state->spotlight_color_button != NULL) {
     GdkRGBA rgba = {state->spotlight_border_color.r,

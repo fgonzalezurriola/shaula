@@ -520,6 +520,43 @@ void shaula_preview_on_arrow_stroke_style_clicked(GtkButton *button,
   shaula_preview_toolbar_update_selection_state(data);
 }
 
+void shaula_preview_on_rectangle_color_set(GtkColorButton *button,
+                                           gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_rectangle_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_rectangle_width_changed(GtkRange *range,
+                                               gpointer data) {
+  shaula_preview_set_rectangle_stroke_width(data,
+                                            gtk_range_get_value(range));
+}
+
+void shaula_preview_on_rectangle_stroke_style_clicked(GtkButton *button,
+                                                      gpointer data) {
+  PreviewArrowStrokeStyle style =
+      (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
+          g_object_get_data(G_OBJECT(button), "rectangle-stroke-style"));
+  shaula_preview_set_rectangle_stroke_style(data, style);
+  shaula_preview_toolbar_update_selection_state(data);
+}
+
+void shaula_preview_on_rectangle_fill_toggled(GtkButton *button,
+                                              gpointer data) {
+  shaula_preview_set_rectangle_filled(
+      data, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)));
+}
+
+void shaula_preview_on_rectangle_corners_clicked(GtkButton *button,
+                                                 gpointer data) {
+  PreviewRectangleCorners corners =
+      (PreviewRectangleCorners)GPOINTER_TO_INT(
+          g_object_get_data(G_OBJECT(button), "rectangle-corners"));
+  shaula_preview_set_rectangle_corners(data, corners);
+}
+
 void shaula_preview_on_pen_color_set(GtkColorButton *button, gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);

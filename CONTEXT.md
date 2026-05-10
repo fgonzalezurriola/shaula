@@ -270,7 +270,16 @@ and the working diff.
   to Select mode with the new annotation selected so it can be moved
   immediately.
 - `shaula-measure-symbolic` Measure: implemented.
-- `shaula-rectangle-symbolic` Rectangle: implemented.
+- `shaula-rectangle-symbolic` Rectangle: implemented as a one-shot creation
+  tool matching Arrow's post-create flow. After a valid rectangle is drawn,
+  preview selects the new rectangle, opens the Rectangle properties HUD, returns
+  to Select mode, and leaves the annotation movable/duplicable through the
+  normal selected-annotation path. Rectangle defaults are orange stroke
+  (`#FD7603`), 3.5 px, dashed, rounded corners, and no fill. Its floating HUD
+  exposes color, stroke width, normal/dashed stroke, fill toggle, and
+  rounded/square corners. Fill uses the selected stroke color at low alpha in
+  the draw/export path so filled rectangles mark an area without fully hiding
+  screenshot content.
 - `shaula-highlight-symbolic` Highlight: implemented.
 - `shaula-pen-symbolic` Pen: implemented.
 - Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes

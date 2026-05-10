@@ -243,7 +243,23 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
 }
 
 static void draw_draft_rect(cairo_t *cr, ShaulaRect rect, ShaulaColor color,
-                            gboolean fill) {
+                            double stroke_width,
+                            PreviewArrowStrokeStyle stroke_style,
+                            PreviewRectangleCorners corners, gboolean fill) {
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_is_empty(rect))
+    return;
+  ShaulaAnnotation *annotation =
+      shaula_annotation_new_rectangle(rect, color, stroke_width);
+  annotation->data.rectangle.stroke_style = stroke_style;
+  annotation->data.rectangle.corners = corners;
+  annotation->data.rectangle.filled = fill;
+  shaula_annotation_draw(cr, annotation);
+  shaula_annotation_free(annotation);
+}
+
+static void draw_plain_draft_rect(cairo_t *cr, ShaulaRect rect,
+                                  ShaulaColor color, gboolean fill) {
   rect = shaula_rect_normalized(rect);
   if (shaula_rect_is_empty(rect))
     return;
@@ -370,7 +386,9 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
     draw_draft_rect(cr,
                     shaula_rect_from_points(state->drag_start_image,
                                             state->drag_current_image),
-                    state->current_color, FALSE);
+                    state->rectangle_color, state->rectangle_stroke_width,
+                    state->rectangle_stroke_style, state->rectangle_corners,
+                    state->rectangle_filled);
     break;
   case SHAULA_OPERATION_HIGHLIGHT:
     draw_path_draft(cr, state, state->highlight_color,
@@ -383,10 +401,10 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
     draw_path_draft(cr, state, state->pen_color, state->pen_stroke_width);
     break;
   case SHAULA_OPERATION_SPOTLIGHT:
-    draw_draft_rect(cr,
-                    shaula_rect_from_points(state->drag_start_image,
-                                            state->drag_current_image),
-                    state->spotlight_border_color, FALSE);
+    draw_plain_draft_rect(cr,
+                          shaula_rect_from_points(state->drag_start_image,
+                                                  state->drag_current_image),
+                          state->spotlight_border_color, FALSE);
     break;
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_NONE:
@@ -823,8 +841,14 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
         shaula_rect_from_points(state->drag_start_image,
                                 state->drag_current_image);
     if (rect.width >= 3.0 && rect.height >= 3.0)
-      annotation =
-          shaula_annotation_new_rectangle(rect, state->current_color, 3.0);
+      annotation = shaula_annotation_new_rectangle(
+          rect, state->rectangle_color, state->rectangle_stroke_width);
+    if (annotation != NULL) {
+      annotation->data.rectangle.stroke_style = state->rectangle_stroke_style;
+      annotation->data.rectangle.corners = state->rectangle_corners;
+      annotation->data.rectangle.filled = state->rectangle_filled;
+      shaula_annotation_update_bounds(annotation);
+    }
     break;
   }
   case SHAULA_OPERATION_HIGHLIGHT:
@@ -868,6 +892,15 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
       shaula_preview_select_annotation(state, annotation);
       state->active_arrow_index = (int)state->annotations->len - 1;
       state->active_properties_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+      state->active_tool = SHAULA_TOOL_SELECT;
+      shaula_preview_toolbar_update_tool_state(state);
+      if (state->area != NULL)
+        gtk_widget_set_cursor_from_name(state->area, "default");
+      shaula_preview_toolbar_update_selection_state(state);
+    } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+      shaula_preview_select_annotation(state, annotation);
+      state->active_rectangle_index = (int)state->annotations->len - 1;
+      state->active_properties_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
       state->active_tool = SHAULA_TOOL_SELECT;
       shaula_preview_toolbar_update_tool_state(state);
       if (state->area != NULL)
@@ -1034,6 +1067,9 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
                           shaula_preview_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_arrow_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_rectangle_properties_panel_build(
+                              state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_pen_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
