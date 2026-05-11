@@ -79,5 +79,7 @@ void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
 void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data);
 void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_measure_color_set(GtkColorButton *button, gpointer data);
+void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data);
 
 #endif

@@ -33,44 +33,44 @@ NIconButton {
   NPopupContextMenu {
     id: contextMenu
 
-    model: [
-      {
-        "label": "Capture Area",
-        "action": "capture-area",
-        "icon": "crop"
-      },
-      {
-        "label": "Capture Fullscreen",
-        "action": "capture-fullscreen",
-        "icon": "screen-share"
-      },
-      {
-        "label": "Capture All Screens",
-        "action": "capture-all-screens",
-        "icon": "layout-dashboard"
-      },
-      {
-        "label": "Settings",
-        "action": "settings",
-        "icon": "settings",
-        "enabled": true
-      },
-      {
-        "label": "Run Doctor",
-        "action": "doctor",
-        "icon": "stethoscope"
-      },
-      {
-        "label": "Open Screenshots Folder",
-        "action": "open-screenshots-folder",
-        "icon": "folder"
-      },
-      {
-        "label": "Report a Bug",
-        "action": "report-bug",
-        "icon": "bug"
-      }
-    ]
+ model: [
+ {
+ "label": "Capture Area",
+ "action": "capture-area",
+ "icon": "crop"
+ },
+ {
+ "label": "Capture Fullscreen",
+ "action": "capture-fullscreen",
+ "icon": "screen-share"
+ },
+ {
+ "label": "Capture All Screens",
+ "action": "capture-all-screens",
+ "icon": "layout-dashboard"
+ },
+ {
+ "label": "Settings",
+ "action": "settings",
+ "icon": "settings",
+ "enabled": true
+ },
+ {
+ "label": "Run Doctor",
+ "action": "doctor",
+ "icon": "stethoscope"
+ },
+ {
+ "label": "Open Screenshots Folder",
+ "action": "open-screenshots-folder",
+ "icon": "folder"
+ },
+ {
+ "label": "Report a Bug",
+ "action": "report-bug",
+ "icon": "bug"
+ }
+ ]
 
     onTriggered: action => {
       contextMenu.close();
@@ -84,13 +84,13 @@ NIconButton {
 
   function executeAction(action) {
     var command = "";
-    if (action === "capture-area") {
-      command = "shaula capture area --json";
-    } else if (action === "capture-fullscreen") {
-      command = "shaula capture fullscreen --json";
-    } else if (action === "capture-all-screens") {
-      command = "shaula capture all-screens --json";
-    } else if (action === "settings") {
+ if (action === "capture-area") {
+ command = "shaula capture area --json";
+ } else if (action === "capture-fullscreen") {
+ command = "shaula capture fullscreen --json";
+ } else if (action === "capture-all-screens") {
+ command = "shaula capture all-screens --json";
+ } else if (action === "settings") {
       command = "shaula settings";
     } else if (action === "doctor") {
       command = "shaula doctor --json";

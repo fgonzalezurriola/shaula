@@ -602,7 +602,18 @@ void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data) {
 }
 
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data) {
-  ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
-      g_object_get_data(G_OBJECT(button), "text-align"));
-  shaula_preview_set_text_align(data, align);
+ ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
+ g_object_get_data(G_OBJECT(button), "text-align"));
+ shaula_preview_set_text_align(data, align);
+}
+
+void shaula_preview_on_measure_color_set(GtkColorButton *button, gpointer data) {
+ GdkRGBA rgba;
+ gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+ shaula_preview_set_measure_color(
+ data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+}
+
+void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data) {
+ shaula_preview_set_measure_stroke_width(data, gtk_range_get_value(range));
 }

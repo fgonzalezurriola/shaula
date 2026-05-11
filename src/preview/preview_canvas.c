@@ -5,6 +5,7 @@
 
 #include "preview_actions.h"
 #include "preview_commands.h"
+#include "preview_measure.h"
 #include "preview_properties_panel.h"
 #include "preview_spotlight.h"
 #include "preview_toolbar.h"
@@ -284,11 +285,11 @@ static void draw_arrow_draft(cairo_t *cr, ShaulaPreviewState *state) {
 }
 
 static void draw_measure_draft(cairo_t *cr, ShaulaPreviewState *state) {
-  ShaulaAnnotation *annotation = shaula_annotation_new_measure(
-      state->drag_start_image, state->drag_current_image, state->current_color,
-      2.0);
-  shaula_annotation_draw(cr, annotation);
-  shaula_annotation_free(annotation);
+ ShaulaAnnotation *annotation = shaula_annotation_new_measure(
+ state->drag_start_image, state->drag_current_image, state->measure_color,
+ state->measure_stroke_width);
+ shaula_annotation_draw(cr, annotation);
+ shaula_annotation_free(annotation);
 }
 
 static void draw_path_draft(cairo_t *cr, ShaulaPreviewState *state,
@@ -370,15 +371,93 @@ static void draw_region_selection(cairo_t *cr, ShaulaPreviewState *state) {
   cairo_restore(cr);
 }
 
+static void draw_live_measure(cairo_t *cr, ShaulaPreviewState *state) {
+	if (!state->measure_has_live)
+		return;
+	ShaulaMeasureResult *r = &state->measure_result;
+	double x0 = (double)r->left;
+	double y0 = (double)r->top;
+	double x1 = (double)r->right + 1.0;
+	double y1 = (double)r->bottom + 1.0;
+
+ cairo_save(cr);
+ cairo_set_source_rgba(cr, state->measure_color.r, state->measure_color.g,
+ state->measure_color.b, 0.85);
+ cairo_set_line_width(cr, state->measure_stroke_width / state->zoom);
+
+	if (r->width > 1 && r->height > 1) {
+		cairo_rectangle(cr, x0, y0, x1 - x0, y1 - y0);
+		cairo_stroke(cr);
+	} else if (r->width > 1) {
+		cairo_move_to(cr, x0, y0);
+		cairo_line_to(cr, x1, y0);
+		cairo_stroke(cr);
+	} else if (r->height > 1) {
+		cairo_move_to(cr, x0, y0);
+		cairo_line_to(cr, x0, y1);
+		cairo_stroke(cr);
+	}
+
+ double foot = 6.0 / state->zoom;
+ cairo_set_line_width(cr, state->measure_stroke_width / state->zoom);
+	if (r->width > 1) {
+		cairo_move_to(cr, x0, y0 - foot);
+		cairo_line_to(cr, x0, y0 + foot);
+		cairo_stroke(cr);
+		cairo_move_to(cr, x1, y0 - foot);
+		cairo_line_to(cr, x1, y0 + foot);
+		cairo_stroke(cr);
+	}
+	if (r->height > 1) {
+		cairo_move_to(cr, x0 - foot, y0);
+		cairo_line_to(cr, x0 + foot, y0);
+		cairo_stroke(cr);
+		cairo_move_to(cr, x0 - foot, y1);
+		cairo_line_to(cr, x0 + foot, y1);
+		cairo_stroke(cr);
+	}
+
+	char label[128];
+	if (r->width > 1 && r->height > 1)
+		snprintf(label, sizeof(label), "%d \xc3\x97 %d px", r->width, r->height);
+	else if (r->width > 1)
+		snprintf(label, sizeof(label), "%d px", r->width);
+	else if (r->height > 1)
+		snprintf(label, sizeof(label), "%d px", r->height);
+	else
+		snprintf(label, sizeof(label), "1 px");
+
+	double lx = (x0 + x1) / 2.0;
+	double ly = (y0 + y1) / 2.0 - 8.0 / state->zoom;
+	cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
+		CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 13.0 / state->zoom);
+	cairo_text_extents_t extents;
+	cairo_text_extents(cr, label, &extents);
+	cairo_set_source_rgba(cr, 0.0, 0.1, 0.2, 0.82);
+	cairo_rectangle(cr, lx - extents.width / 2.0 - 5.0 / state->zoom,
+		ly - extents.height - 5.0 / state->zoom,
+		extents.width + 10.0 / state->zoom,
+		extents.height + 8.0 / state->zoom);
+	cairo_fill(cr);
+	cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+	cairo_move_to(cr, lx - extents.width / 2.0, ly - 4.0 / state->zoom);
+	cairo_show_text(cr, label);
+
+	cairo_restore(cr);
+}
+
 static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_save(cr);
   cairo_translate(cr, state->pan_x, state->pan_y);
   cairo_scale(cr, state->zoom, state->zoom);
-  cairo_rectangle(cr, 0, 0, shaula_preview_image_width(state),
-                  shaula_preview_image_height(state));
-  cairo_clip(cr);
+ cairo_rectangle(cr, 0, 0, shaula_preview_image_width(state),
+ shaula_preview_image_height(state));
+ cairo_clip(cr);
 
-  switch (state->operation) {
+ draw_live_measure(cr, state);
+
+ switch (state->operation) {
   case SHAULA_OPERATION_ARROW:
     draw_arrow_draft(cr, state);
     break;
@@ -435,14 +514,22 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
 }
 
 static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
-                          double dy, gpointer data) {
-  (void)controller;
-  (void)dx;
-  ShaulaPreviewState *state = data;
-  if (state->image == NULL)
-    return TRUE;
-  shaula_preview_zoom_by_factor(state, dy < 0 ? 1.12 : 1.0 / 1.12);
-  return TRUE;
+	double dy, gpointer data) {
+	(void)controller;
+	(void)dx;
+	ShaulaPreviewState *state = data;
+	if (state->image == NULL)
+		return TRUE;
+	if (state->active_tool == SHAULA_TOOL_MEASURE &&
+		state->operation == SHAULA_OPERATION_NONE) {
+		int step = dy < 0 ? 4 : -4;
+		state->measure_tolerance = CLAMP(state->measure_tolerance + step, 0, 255);
+		state->measure_has_live = FALSE;
+		shaula_preview_queue_draw(state);
+		return TRUE;
+	}
+	shaula_preview_zoom_by_factor(state, dy < 0 ? 1.12 : 1.0 / 1.12);
+	return TRUE;
 }
 
 static char *text_view_contents(GtkTextView *view) {
@@ -693,10 +780,23 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     if (inside)
       begin_text_entry(state, clamped);
     break;
-  case SHAULA_TOOL_MEASURE:
-    if (inside)
-      start_operation(state, SHAULA_OPERATION_MEASURE, clamped);
-    break;
+ case SHAULA_TOOL_MEASURE:
+ if (inside) {
+ if (state->measure_has_live) {
+ ShaulaMeasureResult *mr = &state->measure_result;
+ ShaulaPoint ms = {(double)mr->left, (double)mr->top};
+ ShaulaPoint me = {(double)mr->right + 1.0, (double)mr->bottom + 1.0};
+ if (shaula_point_distance(ms, me) >= 3.0) {
+ ShaulaAnnotation *annotation =
+ shaula_annotation_new_measure(ms, me,
+ state->measure_color, state->measure_stroke_width);
+ shaula_preview_add_annotation(state, annotation);
+ }
+ } else {
+ start_operation(state, SHAULA_OPERATION_MEASURE, clamped);
+ }
+ }
+ break;
   case SHAULA_TOOL_RECTANGLE:
     if (inside)
       start_operation(state, SHAULA_OPERATION_RECTANGLE, clamped);
@@ -821,9 +921,46 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
 }
 
 static void on_motion(GtkEventControllerMotion *controller, double x, double y,
-                      gpointer data) {
-  (void)controller;
-  update_hover_color(data, x, y);
+	gpointer data) {
+	(void)controller;
+	ShaulaPreviewState *state = data;
+	update_hover_color(state, x, y);
+
+	if (state->active_tool == SHAULA_TOOL_MEASURE &&
+		state->operation == SHAULA_OPERATION_NONE &&
+		state->image != NULL) {
+		ShaulaPoint image_point =
+			shaula_preview_canvas_screen_to_image(state, x, y);
+		int px = 0;
+		int py = 0;
+		if (image_point_to_pixel(state, image_point, &px, &py)) {
+			ShaulaMeasureResult prev = state->measure_result;
+			shaula_measure_detect_edges(state->image, px, py,
+				state->measure_tolerance, state->measure_compare,
+				state->measure_mode, state->measure_outer_bounds,
+				&state->measure_result);
+			state->measure_has_live = TRUE;
+			if (memcmp(&prev, &state->measure_result, sizeof(prev)) != 0)
+				shaula_preview_queue_draw(state);
+		} else {
+			if (state->measure_has_live) {
+				state->measure_has_live = FALSE;
+				shaula_preview_queue_draw(state);
+			}
+		}
+ }
+}
+
+static void on_motion_leave(GtkEventControllerMotion *controller,
+	gpointer data) {
+	(void)controller;
+	ShaulaPreviewState *state = data;
+	if (state->measure_has_live) {
+		state->measure_has_live = FALSE;
+		state->measure_mode = SHAULA_MEASURE_MODE_AUTO;
+		state->measure_outer_bounds = FALSE;
+		shaula_preview_queue_draw(state);
+	}
 }
 
 static void finish_shape_annotation(ShaulaPreviewState *state) {
@@ -859,12 +996,12 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
           state->highlight_stroke_width);
     }
     break;
-  case SHAULA_OPERATION_MEASURE:
-    if (shaula_point_distance(state->drag_start_image,
-                              state->drag_current_image) >= 3.0)
-      annotation = shaula_annotation_new_measure(
-          state->drag_start_image, state->drag_current_image,
-          state->current_color, 2.0);
+ case SHAULA_OPERATION_MEASURE:
+ if (shaula_point_distance(state->drag_start_image,
+ state->drag_current_image) >= 3.0)
+ annotation = shaula_annotation_new_measure(
+ state->drag_start_image, state->drag_current_image,
+ state->measure_color, state->measure_stroke_width);
     break;
   case SHAULA_OPERATION_PEN:
     if (state->draft_pen_points != NULL && state->draft_pen_points->len >= 2) {
@@ -979,12 +1116,19 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     }
     return FALSE;
   }
-  if (keyval == GDK_KEY_Escape) {
-    if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
-      shaula_preview_cancel_operation(state);
-      return TRUE;
-    }
-    if (state->last_action == NULL)
+ if (keyval == GDK_KEY_Escape) {
+ if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
+ shaula_preview_cancel_operation(state);
+ return TRUE;
+ }
+ if (state->measure_has_live) {
+ state->measure_has_live = FALSE;
+ state->measure_mode = SHAULA_MEASURE_MODE_AUTO;
+ state->measure_outer_bounds = FALSE;
+ shaula_preview_queue_draw(state);
+ return TRUE;
+ }
+ if (state->last_action == NULL)
       state->last_action = "close";
     if (state->app != NULL)
       g_application_quit(G_APPLICATION(state->app));
@@ -1002,12 +1146,35 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
       shaula_preview_apply_crop(state);
       return TRUE;
     }
-    shaula_preview_action_accept(state, (modifiers & GDK_SHIFT_MASK) != 0);
-    return TRUE;
-  }
+ shaula_preview_action_accept(state, (modifiers & GDK_SHIFT_MASK) != 0);
+ return TRUE;
+ }
 
-  ShaulaPreviewCommand command;
-  if (shaula_preview_shortcut_command(keyval, modifiers, &command)) {
+ gboolean shift = (modifiers & GDK_SHIFT_MASK) != 0;
+ if (state->active_tool == SHAULA_TOOL_MEASURE &&
+ state->operation == SHAULA_OPERATION_NONE) {
+ if (keyval == GDK_KEY_Left || keyval == GDK_KEY_Right) {
+ state->measure_mode = SHAULA_MEASURE_MODE_HORIZONTAL;
+ state->measure_outer_bounds = shift;
+ shaula_preview_queue_draw(state);
+ return TRUE;
+ }
+ if (keyval == GDK_KEY_Up || keyval == GDK_KEY_Down) {
+ state->measure_mode = SHAULA_MEASURE_MODE_VERTICAL;
+ state->measure_outer_bounds = shift;
+ shaula_preview_queue_draw(state);
+ return TRUE;
+ }
+ if (keyval == GDK_KEY_Tab) {
+ state->measure_mode = SHAULA_MEASURE_MODE_AUTO;
+ state->measure_outer_bounds = FALSE;
+ shaula_preview_queue_draw(state);
+ return TRUE;
+ }
+ }
+
+ ShaulaPreviewCommand command;
+ if (shaula_preview_shortcut_command(keyval, modifiers, &command)) {
     if (command == SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR)
       update_hover_color_from_pointer(state);
     gboolean executed = shaula_preview_execute_command(state, command);
@@ -1074,8 +1241,10 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
                           shaula_preview_pen_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_highlight_properties_panel_build(state));
-  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
-                          shaula_preview_text_properties_panel_build(state));
+ gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+ shaula_preview_text_properties_panel_build(state));
+ gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+ shaula_preview_measure_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);
@@ -1089,9 +1258,10 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   g_signal_connect(scroll, "scroll", G_CALLBACK(on_scroll), state);
   gtk_widget_add_controller(area, scroll);
 
-  GtkEventController *motion = gtk_event_controller_motion_new();
-  g_signal_connect(motion, "motion", G_CALLBACK(on_motion), state);
-  gtk_widget_add_controller(area, motion);
+ GtkEventController *motion = gtk_event_controller_motion_new();
+ g_signal_connect(motion, "motion", G_CALLBACK(on_motion), state);
+ g_signal_connect(motion, "leave", G_CALLBACK(on_motion_leave), state);
+ gtk_widget_add_controller(area, motion);
 
   GtkEventController *keys = gtk_event_controller_key_new();
   gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);

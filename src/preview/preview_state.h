@@ -6,6 +6,7 @@
 
 #include "preview_annotations.h"
 #include "preview_geometry.h"
+#include "preview_measure.h"
 
 enum {
   PREVIEW_MIN_W = 900,
@@ -46,15 +47,16 @@ typedef enum {
 } ShaulaPreviewOperation;
 
 typedef enum {
-  SHAULA_PROPERTIES_PANEL_NONE,
-  SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
-  SHAULA_PROPERTIES_PANEL_ARROW,
-  SHAULA_PROPERTIES_PANEL_RECTANGLE,
-  SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
-  SHAULA_PROPERTIES_PANEL_BLUR,
-  SHAULA_PROPERTIES_PANEL_ERASE,
-  SHAULA_PROPERTIES_PANEL_PEN,
-  SHAULA_PROPERTIES_PANEL_TEXT
+ SHAULA_PROPERTIES_PANEL_NONE,
+ SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
+ SHAULA_PROPERTIES_PANEL_ARROW,
+ SHAULA_PROPERTIES_PANEL_RECTANGLE,
+ SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
+ SHAULA_PROPERTIES_PANEL_BLUR,
+ SHAULA_PROPERTIES_PANEL_ERASE,
+ SHAULA_PROPERTIES_PANEL_PEN,
+ SHAULA_PROPERTIES_PANEL_TEXT,
+ SHAULA_PROPERTIES_PANEL_MEASURE
 } ShaulaPropertiesPanel;
 
 typedef enum {
@@ -129,11 +131,14 @@ typedef struct {
   GtkWidget *highlight_color_button;
   GtkWidget *highlight_width_scale;
   GtkWidget *highlight_opacity_scale;
-  GtkWidget *text_properties_box;
-  GtkWidget *text_color_button;
-  GtkWidget *text_size_scale;
-  GtkWidget *text_align_buttons[3];
-  GtkWidget *more_button;
+ GtkWidget *text_properties_box;
+ GtkWidget *text_color_button;
+ GtkWidget *text_size_scale;
+ GtkWidget *text_align_buttons[3];
+ GtkWidget *measure_properties_box;
+ GtkWidget *measure_color_button;
+ GtkWidget *measure_width_scale;
+ GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
   GtkWidget *text_entry;
@@ -209,10 +214,13 @@ typedef struct {
   ShaulaColor highlight_color;
   double highlight_stroke_width;
   double highlight_opacity;
-  ShaulaColor text_color;
-  double text_font_size;
-  ShaulaTextAlign text_align;
-  gboolean modified;
+ ShaulaColor text_color;
+ double text_font_size;
+ ShaulaTextAlign text_align;
+ int active_measure_index;
+ ShaulaColor measure_color;
+ double measure_stroke_width;
+ gboolean modified;
   gboolean copied;
   gboolean saved;
   /* Set when the helper already emitted the user-facing save/copy banner. */
@@ -221,7 +229,13 @@ typedef struct {
   const char *last_action;
   gboolean is_dark;
 
-  int toolbar_secondary_count;
+  gboolean measure_has_live;
+ int measure_tolerance;
+ ShaulaMeasureMode measure_mode;
+ ShaulaMeasurePixelCompare measure_compare;
+ gboolean measure_outer_bounds;
+ ShaulaMeasureResult measure_result;
+ int toolbar_secondary_count;
   int toolbar_overflow_visible_count;
   char *icon_roots[2];
   int icon_root_count;
@@ -323,7 +337,11 @@ void shaula_preview_set_text_color(ShaulaPreviewState *state,
 void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
                                        double font_size);
 void shaula_preview_set_text_align(ShaulaPreviewState *state,
-                                   ShaulaTextAlign align);
+ ShaulaTextAlign align);
+void shaula_preview_set_measure_color(ShaulaPreviewState *state,
+ ShaulaColor color);
+void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
+ double width);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

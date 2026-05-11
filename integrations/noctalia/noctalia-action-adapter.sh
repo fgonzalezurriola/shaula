@@ -62,31 +62,31 @@ PY
 }
 
 action_label() {
-    case "$1" in
-    capture-area) printf 'Capture Area' ;;
-    capture-fullscreen) printf 'Capture Fullscreen' ;;
-    capture-all-screens) printf 'Capture All Screens' ;;
-    capture-window) printf 'Capture Window' ;;
-    open-last) printf 'Open Last' ;;
-    history) printf 'History' ;;
-    open-output-folder) printf 'Open Output Folder' ;;
-    open-clipboard-image) printf 'Open Clipboard Image' ;;
-    *) return 1 ;;
-  esac
+ case "$1" in
+ capture-area) printf 'Capture Area' ;;
+ capture-fullscreen) printf 'Capture Fullscreen' ;;
+ capture-all-screens) printf 'Capture All Screens' ;;
+ capture-window) printf 'Capture Window' ;;
+ open-last) printf 'Open Last' ;;
+ history) printf 'History' ;;
+ open-output-folder) printf 'Open Output Folder' ;;
+ open-clipboard-image) printf 'Open Clipboard Image' ;;
+ *) return 1 ;;
+ esac
 }
 
 action_command_json() {
-    case "$1" in
-    capture-area) printf '["capture","area","--json"]' ;;
-    capture-fullscreen) printf '["capture","fullscreen","--json"]' ;;
-    capture-all-screens) printf '["capture","all-screens","--json"]' ;;
-    capture-window) printf '["capture","window","--json"]' ;;
-    open-last) printf '["history","show","--json","--id","latest"]' ;;
-    history) printf '["history","list","--json"]' ;;
-    open-output-folder) printf '["helper","open-output-folder"]' ;;
-    open-clipboard-image) printf '["helper","open-clipboard-image"]' ;;
-    *) return 1 ;;
-  esac
+ case "$1" in
+ capture-area) printf '["capture","area","--json"]' ;;
+ capture-fullscreen) printf '["capture","fullscreen","--json"]' ;;
+ capture-all-screens) printf '["capture","all-screens","--json"]' ;;
+ capture-window) printf '["capture","window","--json"]' ;;
+ open-last) printf '["history","show","--json","--id","latest"]' ;;
+ history) printf '["history","list","--json"]' ;;
+ open-output-folder) printf '["helper","open-output-folder"]' ;;
+ open-clipboard-image) printf '["helper","open-clipboard-image"]' ;;
+ *) return 1 ;;
+ esac
 }
 
 warning_array_json() {
@@ -196,18 +196,18 @@ build_action_entry() {
 }
 
 if [[ "${MODE}" == "menu" ]]; then
-a1="$(build_action_entry capture-area)"
-a2="$(build_action_entry capture-fullscreen)"
-a3="$(build_action_entry capture-all-screens)"
-a4="$(build_action_entry capture-window)"
-a5="$(build_action_entry open-last)"
-a6="$(build_action_entry history)"
-a7="$(build_action_entry open-output-folder)"
-a8="$(build_action_entry open-clipboard-image)"
+ a1="$(build_action_entry capture-area)"
+ a2="$(build_action_entry capture-fullscreen)"
+ a3="$(build_action_entry capture-all-screens)"
+ a4="$(build_action_entry capture-window)"
+ a5="$(build_action_entry open-last)"
+ a6="$(build_action_entry history)"
+ a7="$(build_action_entry open-output-folder)"
+ a8="$(build_action_entry open-clipboard-image)"
 
-printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s,%s,%s,%s]},"warnings":[]}\n' \
-    "${REQUEST_ID}" \
-    "${a1}" "${a2}" "${a3}" "${a4}" "${a5}" "${a6}" "${a7}" "${a8}"
+ printf '{"ok":true,"plugin":"noctalia","optional":true,"request_id":"%s","menu":{"minimal":true,"actions":[%s,%s,%s,%s,%s,%s,%s,%s]},"warnings":[]}\n' \
+ "${REQUEST_ID}" \
+ "${a1}" "${a2}" "${a3}" "${a4}" "${a5}" "${a6}" "${a7}" "${a8}"
   exit 0
 fi
 
@@ -281,14 +281,14 @@ import json
 import sys
 
 action = sys.argv[1]
-mapping = {
-    "capture-area": ["capture", "area", "--json"],
-    "capture-fullscreen": ["capture", "fullscreen", "--json"],
-    "capture-all-screens": ["capture", "all-screens", "--json"],
-    "capture-window": ["capture", "window", "--json"],
-    "open-last": ["history", "show", "--json", "--id", "latest"],
-    "history": ["history", "list", "--json"],
-}
+ mapping = {
+ "capture-area": ["capture", "area", "--json"],
+ "capture-fullscreen": ["capture", "fullscreen", "--json"],
+ "capture-all-screens": ["capture", "all-screens", "--json"],
+ "capture-window": ["capture", "window", "--json"],
+ "open-last": ["history", "show", "--json", "--id", "latest"],
+ "history": ["history", "list", "--json"],
+ }
 
 for arg in mapping[action]:
     print(arg)
