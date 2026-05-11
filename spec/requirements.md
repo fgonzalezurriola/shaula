@@ -21,7 +21,7 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Focused output capture.
 - Focused window capture through Niri IPC.
 - Repeat previous area.
-- Scrolling capture is deferred until the Wayland/Niri strategy is clear.
+- Scrolling capture is specified in [spec/scrolling-capture.md](scrolling-capture.md). Implementation starts with manual-scroll + row-vote stitching (Phase 1), then auto-scroll via `zwlr_virtual_pointer_v1` (Phase 2).
 
 ### Selection UX
 
@@ -77,4 +77,4 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Screen recording.
 - macOS-specific APIs or workflows.
 - Placeholder future UI surfaces.
-- Smart selection, object removal, OCR, QR, uploads, and scrolling capture before a clear implementation strategy exists.
+- Smart selection, object removal, OCR, QR, and uploads before a clear implementation strategy exists.

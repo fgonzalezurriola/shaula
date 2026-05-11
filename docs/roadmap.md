@@ -8,7 +8,7 @@ screenshot workflow with a native overlay and post-capture preview/editing.
 - pin screenshot
 - OCR
 - screen recording
-- scrolling capture
+- scrolling capture (spec: [spec/scrolling-capture.md](../spec/scrolling-capture.md))
 - deeper redaction tools
 - ruler and color picker workflows
 - Noctalia Bar Widget
