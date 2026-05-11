@@ -23,9 +23,9 @@ typedef struct {
 static const ToolActionSpec secondary_tools[] = {
     {"shaula-arrow-symbolic", "Arrow", "Arrow", SHAULA_TOOL_ARROW},
     {"shaula-text-symbolic", "Text", "Text", SHAULA_TOOL_TEXT},
-    {"shaula-measure-symbolic", "Measure", "Measure", SHAULA_TOOL_MEASURE},
     {"shaula-rectangle-symbolic", "Rectangle", "Rectangle",
      SHAULA_TOOL_RECTANGLE},
+    {"shaula-measure-symbolic", "Measure", "Measure", SHAULA_TOOL_MEASURE},
     {"shaula-highlight-symbolic", "Highlight", "Highlight",
      SHAULA_TOOL_HIGHLIGHT},
     {"shaula-pen-symbolic", "Pen", "Pen", SHAULA_TOOL_PEN},

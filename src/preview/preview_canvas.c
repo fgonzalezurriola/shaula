@@ -783,15 +783,17 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
  case SHAULA_TOOL_MEASURE:
  if (inside) {
  if (state->measure_has_live) {
- ShaulaMeasureResult *mr = &state->measure_result;
- ShaulaPoint ms = {(double)mr->left, (double)mr->top};
- ShaulaPoint me = {(double)mr->right + 1.0, (double)mr->bottom + 1.0};
- if (shaula_point_distance(ms, me) >= 3.0) {
- ShaulaAnnotation *annotation =
- shaula_annotation_new_measure(ms, me,
- state->measure_color, state->measure_stroke_width);
- shaula_preview_add_annotation(state, annotation);
- }
+  ShaulaMeasureResult *mr = &state->measure_result;
+  ShaulaPoint ms = {(double)mr->left, (double)mr->top};
+  ShaulaPoint me = {(double)mr->right + 1.0, (double)mr->bottom + 1.0};
+  if (shaula_point_distance(ms, me) >= 3.0) {
+  ShaulaAnnotation *annotation =
+  shaula_annotation_new_measure(ms, me,
+  state->measure_color, state->measure_stroke_width);
+  annotation->data.measure.rect_width = mr->width;
+  annotation->data.measure.rect_height = mr->height;
+  shaula_preview_add_annotation(state, annotation);
+  }
  } else {
  start_operation(state, SHAULA_OPERATION_MEASURE, clamped);
  }

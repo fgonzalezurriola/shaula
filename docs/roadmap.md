@@ -1,7 +1,7 @@
 # Shaula Roadmap
 
-Shaula is early software. The current direction is a fast, Niri-friendly
-screenshot workflow with a native overlay and post-capture preview/editing.
+Shaula is a focused, Niri-friendly screenshot workflow with a native overlay
+and post-capture preview/editing.
 
 ## Planned Features
 

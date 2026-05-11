@@ -63,6 +63,8 @@ typedef struct ShaulaAnnotation {
       ShaulaPoint start;
       ShaulaPoint end;
       double distance_px;
+      int rect_width;
+      int rect_height;
     } measure;
     struct {
       ShaulaRect rect;

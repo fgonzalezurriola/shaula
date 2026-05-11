@@ -6,7 +6,7 @@ workflow on Linux.
 It focuses on quick area capture, a native selection overlay, post-capture
 preview/editing, and scriptable JSON output.
 
-> Shaula is early software. The main target is CachyOS/Arch + Niri.
+> Shaula's main target is CachyOS/Arch + Niri.
 
 ## Install
 
@@ -27,7 +27,7 @@ Advanced install commands:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --yes
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --version v1.0.0
 ```
 
 The installer:

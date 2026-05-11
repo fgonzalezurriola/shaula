@@ -111,6 +111,8 @@ ShaulaAnnotation *shaula_annotation_new_measure(ShaulaPoint start,
   annotation->data.measure.start = start;
   annotation->data.measure.end = end;
   annotation->data.measure.distance_px = shaula_point_distance(start, end);
+  annotation->data.measure.rect_width = 0;
+  annotation->data.measure.rect_height = 0;
   shaula_annotation_update_bounds(annotation);
   return annotation;
 }
@@ -444,7 +446,14 @@ static ShaulaPoint arrow_shaft_end(ShaulaPoint dir_point, ShaulaPoint end,
 
 static void draw_measure_label(cairo_t *cr, const ShaulaAnnotation *annotation) {
   char label[64];
-  snprintf(label, sizeof(label), "%.0f px", annotation->data.measure.distance_px);
+  if (annotation->data.measure.rect_width > 0 &&
+      annotation->data.measure.rect_height > 0) {
+    snprintf(label, sizeof(label), "%d \xc3\x97 %d px",
+      annotation->data.measure.rect_width,
+      annotation->data.measure.rect_height);
+  } else {
+    snprintf(label, sizeof(label), "%.0f px", annotation->data.measure.distance_px);
+  }
   ShaulaPoint start = annotation->data.measure.start;
   ShaulaPoint end = annotation->data.measure.end;
   double x = (start.x + end.x) / 2.0;
@@ -456,12 +465,6 @@ static void draw_measure_label(cairo_t *cr, const ShaulaAnnotation *annotation) 
   cairo_set_font_size(cr, 13.0);
   cairo_text_extents_t extents;
   cairo_text_extents(cr, label, &extents);
-  cairo_set_source_rgba(cr, 0.02, 0.02, 0.025, 0.82);
-  cairo_rectangle(cr, x - extents.width / 2.0 - 5.0,
-                  y - extents.height - 5.0, extents.width + 10.0,
-                  extents.height + 8.0);
-  cairo_fill(cr);
-  cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
   cairo_move_to(cr, x - extents.width / 2.0, y - 4.0);
   cairo_show_text(cr, label);
   cairo_restore(cr);
@@ -555,11 +558,35 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
     break;
     }
   case SHAULA_ANNOTATION_MEASURE:
-    cairo_move_to(cr, annotation->data.measure.start.x,
-                  annotation->data.measure.start.y);
-    cairo_line_to(cr, annotation->data.measure.end.x,
-                  annotation->data.measure.end.y);
-    cairo_stroke(cr);
+    if (annotation->data.measure.rect_width > 0 &&
+        annotation->data.measure.rect_height > 0) {
+      double x0 = annotation->data.measure.start.x;
+      double y0 = annotation->data.measure.start.y;
+      double x1 = annotation->data.measure.end.x;
+      double y1 = annotation->data.measure.end.y;
+      cairo_rectangle(cr, x0, y0, x1 - x0, y1 - y0);
+      cairo_stroke(cr);
+      double foot = 6.0;
+      cairo_set_line_width(cr, annotation->stroke_width);
+      cairo_move_to(cr, x0, y0 - foot);
+      cairo_line_to(cr, x0, y0 + foot);
+      cairo_stroke(cr);
+      cairo_move_to(cr, x1, y0 - foot);
+      cairo_line_to(cr, x1, y0 + foot);
+      cairo_stroke(cr);
+      cairo_move_to(cr, x0 - foot, y0);
+      cairo_line_to(cr, x0 + foot, y0);
+      cairo_stroke(cr);
+      cairo_move_to(cr, x0 - foot, y1);
+      cairo_line_to(cr, x0 + foot, y1);
+      cairo_stroke(cr);
+    } else {
+      cairo_move_to(cr, annotation->data.measure.start.x,
+                    annotation->data.measure.start.y);
+      cairo_line_to(cr, annotation->data.measure.end.x,
+                    annotation->data.measure.end.y);
+      cairo_stroke(cr);
+    }
     draw_measure_label(cr, annotation);
     break;
   case SHAULA_ANNOTATION_RECTANGLE:
