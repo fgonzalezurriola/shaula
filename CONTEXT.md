@@ -121,6 +121,11 @@ and the working diff.
 - Preview metadata readouts that update while interacting must reserve stable
   width. The color hex and zoom percentage labels both use fixed code-style
   widths so hover color sampling and zoom changes do not shift the toolbar.
+- Preview toolbar actions are packed at the headerbar start, not as a centered
+  title widget, so extra tools can use left-side space before overflowing into
+  `...`. Overflow uses the measured gap between the toolbar start and the right
+  metadata readout; using the full headerbar width can reveal secondary buttons
+  too early and transiently overlap the color, dimensions, and zoom labels.
 
 ## Capture Runtime Foundation
 

@@ -13,8 +13,8 @@ enum {
   PREVIEW_MIN_H = 650,
   PREVIEW_DEFAULT_W = 960,
   PREVIEW_DEFAULT_H = 680,
-  PREVIEW_TOOLBAR_BASE_VISIBLE_W = 940,
-  PREVIEW_TOOLBAR_REVEAL_STEP_W = 48,
+  PREVIEW_TOOLBAR_BASE_VISIBLE_W = 320,
+  PREVIEW_TOOLBAR_REVEAL_STEP_W = 36,
 };
 
 typedef enum {
@@ -96,6 +96,8 @@ typedef struct {
   GtkWidget *dimensions_label;
   GtkWidget *color_swatch;
   GtkWidget *color_hex_label;
+  GtkWidget *toolbar_actions;
+  GtkWidget *toolbar_metadata;
   GtkWidget *toolbar_secondary[6];
   ShaulaTool toolbar_secondary_tools[6];
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];

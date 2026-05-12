@@ -26,9 +26,8 @@ static const ToolActionSpec secondary_tools[] = {
     {"shaula-rectangle-symbolic", "Rectangle", "Rectangle",
      SHAULA_TOOL_RECTANGLE},
     {"shaula-measure-symbolic", "Measure", "Measure", SHAULA_TOOL_MEASURE},
-    {"shaula-highlight-symbolic", "Highlight", "Highlight",
-     SHAULA_TOOL_HIGHLIGHT},
-    {"shaula-pen-symbolic", "Pen", "Pen", SHAULA_TOOL_PEN},
+    {"shaula-spotlight-symbolic", "Spotlight",
+     "Spotlight", SHAULA_TOOL_SPOTLIGHT},
 };
 
 static GtkWidget *make_muted_label(const char *text);
@@ -232,7 +231,20 @@ static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
                                gpointer data) {
   (void)clock;
   ShaulaPreviewState *state = data;
-  update_toolbar_overflow(state, gtk_widget_get_width(widget));
+  int available_width = gtk_widget_get_width(widget);
+  if (state->toolbar_actions != NULL && state->toolbar_metadata != NULL) {
+    graphene_rect_t toolbar_bounds;
+    graphene_rect_t metadata_bounds;
+    if (gtk_widget_compute_bounds(state->toolbar_actions, widget,
+                                  &toolbar_bounds) &&
+        gtk_widget_compute_bounds(state->toolbar_metadata, widget,
+                                  &metadata_bounds))
+      available_width =
+          (int)floorf(metadata_bounds.origin.x - toolbar_bounds.origin.x);
+  } else if (state->toolbar_metadata != NULL) {
+    available_width -= gtk_widget_get_width(state->toolbar_metadata);
+  }
+  update_toolbar_overflow(state, available_width);
   return G_SOURCE_CONTINUE;
 }
 
@@ -397,8 +409,11 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
                  make_tool_toggle(state, "shaula-select-symbolic", "Select",
                                   SHAULA_TOOL_SELECT));
   gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-spotlight-symbolic",
-                                  "Spotlight", SHAULA_TOOL_SPOTLIGHT));
+                 make_tool_toggle(state, "shaula-pen-symbolic", "Pen",
+                                  SHAULA_TOOL_PEN));
+  gtk_box_append(GTK_BOX(actions),
+                 make_tool_toggle(state, "shaula-highlight-symbolic",
+                                  "Highlight", SHAULA_TOOL_HIGHLIGHT));
 
   gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
 
@@ -473,14 +488,16 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   gtk_widget_add_css_class(bar, "shaula-preview-toolbar");
 
   GtkWidget *toolbar = build_tool_group(state);
-  gtk_widget_set_halign(toolbar, GTK_ALIGN_CENTER);
+  state->toolbar_actions = toolbar;
+  gtk_widget_set_halign(toolbar, GTK_ALIGN_START);
   gtk_widget_set_valign(toolbar, GTK_ALIGN_CENTER);
 
   GtkWidget *right_group = build_metadata_group(state);
+  state->toolbar_metadata = right_group;
   gtk_widget_set_halign(right_group, GTK_ALIGN_END);
   gtk_widget_set_valign(right_group, GTK_ALIGN_CENTER);
 
-  gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), toolbar);
+  gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), toolbar);
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
   update_toolbar_overflow(state, PREVIEW_TOOLBAR_BASE_VISIBLE_W);
   gtk_widget_add_tick_callback(bar, on_topbar_tick, state, NULL);
