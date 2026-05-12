@@ -129,6 +129,9 @@ and the working diff.
 - Fit to screen, Actual size, and Reset annotations are responsive utility
   actions: they appear as icon buttons before `...` when there is room, and
   move back into the overflow menu when the headerbar is narrow.
+- Spotlight remains a primary toolbar tool because its direct drag-to-create
+  flow is a high-frequency canvas mode. Pen and Highlight are responsive
+  secondary tools that can appear before `...` when there is room.
 
 ## Capture Runtime Foundation
 

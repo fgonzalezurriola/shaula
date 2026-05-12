@@ -26,8 +26,9 @@ static const ToolActionSpec secondary_tools[] = {
     {"shaula-rectangle-symbolic", "Rectangle", "Rectangle",
      SHAULA_TOOL_RECTANGLE},
     {"shaula-measure-symbolic", "Measure", "Measure", SHAULA_TOOL_MEASURE},
-    {"shaula-spotlight-symbolic", "Spotlight",
-     "Spotlight", SHAULA_TOOL_SPOTLIGHT},
+    {"shaula-highlight-symbolic", "Highlight", "Highlight",
+     SHAULA_TOOL_HIGHLIGHT},
+    {"shaula-pen-symbolic", "Pen", "Pen", SHAULA_TOOL_PEN},
 };
 
 static const MenuActionSpec utility_actions[] = {
@@ -447,11 +448,8 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
                  make_tool_toggle(state, "shaula-select-symbolic", "Select",
                                   SHAULA_TOOL_SELECT));
   gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-pen-symbolic", "Pen",
-                                  SHAULA_TOOL_PEN));
-  gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-highlight-symbolic",
-                                  "Highlight", SHAULA_TOOL_HIGHLIGHT));
+                 make_tool_toggle(state, "shaula-spotlight-symbolic",
+                                  "Spotlight", SHAULA_TOOL_SPOTLIGHT));
 
   gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
 

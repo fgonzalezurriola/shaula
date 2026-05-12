@@ -1,7 +1,6 @@
 # Shaula
 
 This app doesn't have any users yet, don't make regression tests
-Use always the zig related skill.
 
 ## Documentation policy for contributors and agents
 
