@@ -100,6 +100,7 @@ typedef struct {
   GtkWidget *toolbar_metadata;
   GtkWidget *toolbar_secondary[6];
   ShaulaTool toolbar_secondary_tools[6];
+  GtkWidget *toolbar_utility_actions[3];
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];
   GtkWidget *undo_button;
   GtkWidget *redo_button;
@@ -238,6 +239,7 @@ typedef struct {
  gboolean measure_outer_bounds;
  ShaulaMeasureResult measure_result;
  int toolbar_secondary_count;
+  int toolbar_utility_action_count;
   int toolbar_overflow_visible_count;
   char *icon_roots[2];
   int icon_root_count;

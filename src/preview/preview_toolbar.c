@@ -30,6 +30,15 @@ static const ToolActionSpec secondary_tools[] = {
      "Spotlight", SHAULA_TOOL_SPOTLIGHT},
 };
 
+static const MenuActionSpec utility_actions[] = {
+    {"shaula-select-symbolic", "Fit to screen", "Fit to screen (f)",
+     G_CALLBACK(shaula_preview_on_fit_clicked)},
+    {"shaula-select-symbolic", "Actual size", "Actual size (0)",
+     G_CALLBACK(shaula_preview_on_actual_clicked)},
+    {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
+     G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
+};
+
 static GtkWidget *make_muted_label(const char *text);
 
 static void install_toolbar_css(void) {
@@ -158,7 +167,8 @@ static int visible_secondary_count_for_width(ShaulaPreviewState *state,
   if (extra <= 0)
     return 0;
   int count = extra / PREVIEW_TOOLBAR_REVEAL_STEP_W;
-  return MIN(count, state->toolbar_secondary_count);
+  return MIN(count, state->toolbar_secondary_count +
+                        state->toolbar_utility_action_count);
 }
 
 static void append_separator(GtkWidget *box) {
@@ -194,13 +204,21 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   if (has_hidden_tools)
     append_separator(state->more_menu_box);
 
+  int visible_utility_count =
+      MAX(0, visible_count - state->toolbar_secondary_count);
+  visible_utility_count =
+      MIN(visible_utility_count, state->toolbar_utility_action_count);
+  gboolean has_hidden_utilities = FALSE;
+  for (int i = visible_utility_count; i < state->toolbar_utility_action_count;
+       i++) {
+    gtk_box_append(GTK_BOX(state->more_menu_box),
+                   make_menu_action_row(state, &utility_actions[i]));
+    has_hidden_utilities = TRUE;
+  }
+  if (has_hidden_utilities)
+    append_separator(state->more_menu_box);
+
   const MenuActionSpec actions[] = {
-      {"shaula-select-symbolic", "Fit to screen", "Fit to screen (f)",
-       G_CALLBACK(shaula_preview_on_fit_clicked)},
-      {"shaula-select-symbolic", "Actual size", "Actual size (0)",
-       G_CALLBACK(shaula_preview_on_actual_clicked)},
-      {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
-       G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
       {"shaula-copy-symbolic", "Copy path", "Copy original image path",
        G_CALLBACK(shaula_preview_on_copy_path_clicked)},
       {"shaula-more-symbolic", "Open containing folder",
@@ -222,6 +240,13 @@ static void update_toolbar_overflow(ShaulaPreviewState *state, int width) {
 
   for (int i = 0; i < state->toolbar_secondary_count; i++)
     gtk_widget_set_visible(state->toolbar_secondary[i], i < visible_count);
+  int visible_utility_count =
+      MAX(0, visible_count - state->toolbar_secondary_count);
+  visible_utility_count =
+      MIN(visible_utility_count, state->toolbar_utility_action_count);
+  for (int i = 0; i < state->toolbar_utility_action_count; i++)
+    gtk_widget_set_visible(state->toolbar_utility_actions[i],
+                           i < visible_utility_count);
 
   rebuild_more_menu(state, visible_count);
   state->toolbar_overflow_visible_count = visible_count;
@@ -284,6 +309,18 @@ static void append_secondary_toolbar_button(ShaulaPreviewState *state,
   state->toolbar_secondary_tools[state->toolbar_secondary_count] =
       secondary_tools[index].tool;
   state->toolbar_secondary_count++;
+}
+
+static void append_utility_toolbar_button(ShaulaPreviewState *state,
+                                          GtkWidget *actions, int index) {
+  GtkWidget *button =
+      make_toolbar_button(state, utility_actions[index].icon_name,
+                          utility_actions[index].tooltip,
+                          utility_actions[index].callback);
+  gtk_widget_set_visible(button, FALSE);
+  gtk_box_append(GTK_BOX(actions), button);
+  state->toolbar_utility_actions[state->toolbar_utility_action_count] = button;
+  state->toolbar_utility_action_count++;
 }
 
 static GtkWidget *build_selection_actions_group(ShaulaPreviewState *state) {
@@ -381,6 +418,7 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
   state->toolbar_secondary_count = 0;
+  state->toolbar_utility_action_count = 0;
   state->toolbar_overflow_visible_count = -1;
 
   gtk_box_append(GTK_BOX(actions),
@@ -419,6 +457,8 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   for (int i = 0; i < (int)G_N_ELEMENTS(secondary_tools); i++)
     append_secondary_toolbar_button(state, actions, i);
+  for (int i = 0; i < (int)G_N_ELEMENTS(utility_actions); i++)
+    append_utility_toolbar_button(state, actions, i);
 
   gtk_box_append(GTK_BOX(actions), make_more_button(state));
 
@@ -497,6 +537,9 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   gtk_widget_set_halign(right_group, GTK_ALIGN_END);
   gtk_widget_set_valign(right_group, GTK_ALIGN_CENTER);
 
+  GtkWidget *title_spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_hexpand(title_spacer, TRUE);
+  gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), title_spacer);
   gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), toolbar);
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
   update_toolbar_overflow(state, PREVIEW_TOOLBAR_BASE_VISIBLE_W);

@@ -126,6 +126,9 @@ and the working diff.
   `...`. Overflow uses the measured gap between the toolbar start and the right
   metadata readout; using the full headerbar width can reveal secondary buttons
   too early and transiently overlap the color, dimensions, and zoom labels.
+- Fit to screen, Actual size, and Reset annotations are responsive utility
+  actions: they appear as icon buttons before `...` when there is room, and
+  move back into the overflow menu when the headerbar is narrow.
 
 ## Capture Runtime Foundation
 
