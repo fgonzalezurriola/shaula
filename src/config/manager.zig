@@ -12,6 +12,7 @@ pub const default_config_toml =
     \\[preview.window]
     \\mode = "floating"
     \\focused = true
+    \\close_preview_on_save = true
     \\width = 1100
     \\height = 720
     \\default_column_display = "normal"
@@ -194,6 +195,7 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
         \\[preview.window]
         \\mode = "{s}"
         \\focused = {s}
+        \\close_preview_on_save = {s}
         \\width = {d}
         \\height = {d}
         \\default_column_display = "{s}"
@@ -207,6 +209,7 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
         config.capture.region_capture_mode.asString(),
         window.mode.asString(),
         if (window.focused) "true" else "false",
+        if (window.close_preview_on_save) "true" else "false",
         window.width orelse 1100,
         window.height orelse 720,
         window.default_column_display.asString(),
@@ -226,6 +229,7 @@ const SeenConfigFields = struct {
     region_mode: bool = false,
     preview_mode: bool = false,
     focused: bool = false,
+    close_preview_on_save: bool = false,
     width: bool = false,
     height: bool = false,
     column_display: bool = false,
@@ -313,6 +317,10 @@ fn appendMissingFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), se
                 try out.print(allocator, "focused = {s}\n", .{if (window.focused) "true" else "false"});
                 seen.focused = true;
             }
+            if (!seen.close_preview_on_save) {
+                try out.print(allocator, "close_preview_on_save = {s}\n", .{if (window.close_preview_on_save) "true" else "false"});
+                seen.close_preview_on_save = true;
+            }
             if (!seen.width) {
                 try out.print(allocator, "width = {d}\n", .{window.width orelse 1100});
                 seen.width = true;
@@ -375,6 +383,11 @@ fn maybeAppendPatchedField(
             if (std.mem.eql(u8, key, "focused")) {
                 try out.print(allocator, "focused = {s}\n", .{if (window.focused) "true" else "false"});
                 seen.focused = true;
+                return true;
+            }
+            if (std.mem.eql(u8, key, "close_preview_on_save")) {
+                try out.print(allocator, "close_preview_on_save = {s}\n", .{if (window.close_preview_on_save) "true" else "false"});
+                seen.close_preview_on_save = true;
                 return true;
             }
             if (std.mem.eql(u8, key, "width")) {

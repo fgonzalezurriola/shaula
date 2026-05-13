@@ -170,6 +170,10 @@ fn parsePreviewWindowField(parsed: *config_types.Config, key: []const u8, value:
         parsed.preview.window.focused = try parseBool(value);
         return;
     }
+    if (std.mem.eql(u8, key, "close_preview_on_save")) {
+        parsed.preview.window.close_preview_on_save = try parseBool(value);
+        return;
+    }
     if (std.mem.eql(u8, key, "width")) {
         parsed.preview.window.width = try parsePositiveU32(value);
         return;

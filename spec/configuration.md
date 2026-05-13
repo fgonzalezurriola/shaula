@@ -31,6 +31,7 @@ region_capture_mode = "live"
 [preview.window]
 mode = "floating"
 focused = true
+close_preview_on_save = true
 width = 1100
 height = 720
 default_column_display = "normal"
@@ -50,6 +51,7 @@ region_capture_mode = "live"
 [preview.window]
 mode = "floating"
 focused = true
+close_preview_on_save = true
 width = 1100
 height = 720
 default_column_display = "normal"
@@ -88,6 +90,15 @@ Supported `relative_to` values:
 `floating_position.x` and `floating_position.y` are optional. Niri
 `default-floating-position` is emitted only when both are set and
 `mode = "floating"`.
+
+`close_preview_on_save` defaults to `true`. When set to `true`, a successful
+preview Ctrl+S quick save sends the screenshot notification and then closes the
+preview window. Failed saves keep the preview open.
+
+Shaula sends screenshot thumbnails in desktop notifications using the
+Freedesktop image-path hint. If your notification daemon does not show
+thumbnails, check that image/icon display is enabled. On Mako, thumbnail size
+depends on notification daemon settings such as max-icon-size.
 
 ## CLI
 

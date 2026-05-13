@@ -12,6 +12,7 @@
 #include "preview_toolbar.h"
 
 static gboolean shaula_preview_notify(const char *summary, const char *body,
+                                      const char *image_path,
                                       gboolean transient, int timeout_ms);
 
 static void report_error(const char *context, GError *error) {
@@ -29,7 +30,8 @@ static void notify_save_failure(ShaulaPreviewState *state, const char *context,
   report_error(context, error);
   if (state != NULL)
     state->notified =
-        shaula_preview_notify("Could not save screenshot", body, FALSE, 6000);
+        shaula_preview_notify("Could not save screenshot", body, NULL, FALSE,
+                              6000);
   g_free(body);
 }
 
@@ -51,9 +53,14 @@ static char *render_or_original_png(ShaulaPreviewState *state, gboolean *is_temp
 /// feedback. Failures are intentionally non-fatal and reported to the caller
 /// only so the Zig service can keep a fallback path.
 static gboolean shaula_preview_notify(const char *summary, const char *body,
+                                      const char *image_path,
                                       gboolean transient, int timeout_ms) {
   gchar *timeout = g_strdup_printf("%d", timeout_ms);
-  gchar *argv[10];
+  gchar *image_hint = image_path != NULL && image_path[0] != '\0'
+                          ? g_strdup_printf("string:image-path:file://%s",
+                                            image_path)
+                          : NULL;
+  gchar *argv[13];
   int argc = 0;
   argv[argc++] = "notify-send";
   argv[argc++] = "--app-name=Shaula";
@@ -63,6 +70,10 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
   argv[argc++] = timeout;
   if (transient)
     argv[argc++] = "--transient";
+  if (image_hint != NULL) {
+    argv[argc++] = "--hint";
+    argv[argc++] = image_hint;
+  }
   argv[argc++] = (gchar *)summary;
   argv[argc++] = (gchar *)body;
   argv[argc] = NULL;
@@ -78,11 +89,41 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
     if (error != NULL)
       g_error_free(error);
     g_free(timeout);
+    g_free(image_hint);
     return FALSE;
   }
 
+  gboolean ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+  if (!ok && image_path != NULL && image_path[0] != '\0') {
+    argc = 0;
+    argv[argc++] = "notify-send";
+    argv[argc++] = "--app-name=Shaula";
+    argv[argc++] = "--urgency";
+    argv[argc++] = "normal";
+    argv[argc++] = "--expire-time";
+    argv[argc++] = timeout;
+    if (transient)
+      argv[argc++] = "--transient";
+    argv[argc++] = "-i";
+    argv[argc++] = (gchar *)image_path;
+    argv[argc++] = (gchar *)summary;
+    argv[argc++] = (gchar *)body;
+    argv[argc] = NULL;
+    status = 1;
+    error = NULL;
+    spawned = g_spawn_sync(
+        NULL, argv, NULL,
+        G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
+            G_SPAWN_STDERR_TO_DEV_NULL,
+        NULL, NULL, NULL, NULL, &status, &error);
+    ok = spawned && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (error != NULL)
+      g_error_free(error);
+  }
+
   g_free(timeout);
-  return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+  g_free(image_hint);
+  return ok;
 }
 
 static gboolean path_has_prefix_dir(const char *path, const char *dir) {
@@ -254,19 +295,20 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
   if (source == NULL) {
     report_error("copy render", error);
     state->notified = shaula_preview_notify("Could not copy screenshot",
-                                            "Copy failed", FALSE, 5000);
+                                            "Copy failed", NULL, FALSE, 5000);
     return;
   }
   if (!shaula_clipboard_copy_png_file(source, &error)) {
     report_error("copy", error);
     state->notified = shaula_preview_notify("Could not copy screenshot",
-                                            "Copy failed", FALSE, 5000);
+                                            "Copy failed", NULL, FALSE, 5000);
   } else {
     state->copied = TRUE;
-    state->notified = shaula_preview_notify("Screenshot copied",
-                                            "Copied to clipboard", TRUE, 1800);
+    state->notified = shaula_preview_notify(
+        "Shaula captured", "You can paste the image from the clipboard.",
+        source, TRUE, 2500);
   }
-  if (is_temp)
+  if (is_temp && !state->notified)
     g_unlink(source);
   g_free(source);
 }
@@ -305,10 +347,13 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   char *display = display_path_with_tilde(target);
   char *body = g_strdup_printf("Saved to %s", display);
   state->notified =
-      shaula_preview_notify("Screenshot saved", body, TRUE, 2500);
+      shaula_preview_notify("Shaula captured", body, target, TRUE, 2500);
   g_free(body);
   g_free(display);
   g_free(target);
+
+  if (state->close_preview_on_save && state->app != NULL)
+    g_application_quit(G_APPLICATION(state->app));
 }
 
 void shaula_preview_action_accept(ShaulaPreviewState *state,
@@ -327,7 +372,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   if (source == NULL) {
     report_error("accept render", error);
     state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", FALSE, 6000);
+        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
     if (state->app != NULL)
       g_application_quit(G_APPLICATION(state->app));
     return;
@@ -336,7 +381,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   char *target = shaula_image_io_with_png_extension(state->path);
   if (target == NULL) {
     state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", FALSE, 6000);
+        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
   } else if (g_strcmp0(source, target) == 0) {
     state->saved = TRUE;
     g_free(state->saved_path);
@@ -344,7 +389,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   } else if (!shaula_image_io_copy_file_bytes(source, target, &error)) {
     report_error("accept save", error);
     state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", FALSE, 6000);
+        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
   } else {
     state->saved = TRUE;
     g_free(state->saved_path);
@@ -355,7 +400,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
     if (!shaula_clipboard_copy_png_file(state->saved_path, &error)) {
       report_error("accept copy", error);
       state->notified = shaula_preview_notify(
-          "Could not copy screenshot", "Copy failed", FALSE, 5000);
+          "Could not copy screenshot", "Copy failed", NULL, FALSE, 5000);
     } else {
       state->copied = TRUE;
     }
@@ -363,14 +408,14 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 
   if (state->saved && copy_to_clipboard && state->copied) {
     state->notified = shaula_preview_notify(
-        "Screenshot saved and copied", state->saved_path, TRUE, 2500);
+        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
   } else if (state->saved && !copy_to_clipboard) {
     state->notified = shaula_preview_notify(
-        "Screenshot saved", state->saved_path, TRUE, 2500);
+        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
   } else if (state->saved && copy_to_clipboard && !state->copied &&
              !state->notified) {
     state->notified = shaula_preview_notify(
-        "Screenshot saved", state->saved_path, TRUE, 2500);
+        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
   }
 
   if (is_temp)
@@ -405,18 +450,21 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
             char *display = display_path_with_tilde(target_png);
             char *body = g_strdup_printf("Saved to %s", display);
             state->notified =
-                shaula_preview_notify("Screenshot saved", body, TRUE, 2500);
+                shaula_preview_notify("Shaula captured", body, target_png,
+                                      TRUE, 2500);
             g_free(body);
             g_free(display);
           }
           g_free(target_png);
         } else {
           state->notified = shaula_preview_notify("Could not save screenshot",
-                                                  "Save failed", FALSE, 6000);
+                                                  "Save failed", NULL, FALSE,
+                                                  6000);
         }
       } else {
         state->notified = shaula_preview_notify("Could not save screenshot",
-                                                "Save failed", FALSE, 6000);
+                                                "Save failed", NULL, FALSE,
+                                                6000);
       }
       g_free(target);
       g_object_unref(file);

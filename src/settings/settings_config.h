@@ -34,6 +34,7 @@ typedef struct {
   RegionMode region_mode;
   WindowMode window_mode;
   gboolean focused;
+  gboolean close_preview_on_save;
   int width;
   int height;
   char *column_display;

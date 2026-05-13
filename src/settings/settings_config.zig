@@ -42,6 +42,7 @@ const ShaulaSettingsConfig = extern struct {
     region_mode: RegionMode,
     window_mode: WindowMode,
     focused: CInt,
+    close_preview_on_save: CInt,
     width: CInt,
     height: CInt,
     column_display: ?[*:0]u8,
@@ -58,6 +59,7 @@ export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) vo
         .region_mode = .live,
         .window_mode = .floating,
         .focused = TRUE,
+        .close_preview_on_save = TRUE,
         .width = 1100,
         .height = 720,
         .column_display = dupZ("normal"),
@@ -181,6 +183,7 @@ export fn shaula_settings_config_from_show_json(json_z: ?[*:0]const u8, config: 
     }
 
     config.focused = jsonBoolAfter(json, "\"focused\":", config.focused);
+    config.close_preview_on_save = jsonBoolAfter(json, "\"close_preview_on_save\":", config.close_preview_on_save);
     config.width = jsonIntAfter(json, "\"width\":", config.width);
     config.height = jsonIntAfter(json, "\"height\":", config.height);
 

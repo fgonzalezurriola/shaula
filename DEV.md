@@ -78,7 +78,7 @@ Manual helper commands:
 ```bash
 shaula config show --json
 shaula config init --json
-shaula config save --json --region-mode live --preview-mode floating --focused true --width 1100 --height 720 --floating-position centered
+shaula config save --json --region-mode live --preview-mode floating --focused true --close-preview-on-save true --width 1100 --height 720 --floating-position centered
 shaula config niri-window-rule --json
 shaula settings
 ```
@@ -94,6 +94,11 @@ patching, backups, atomic writes, and deterministic `ERR_CONFIG_*` outcomes.
 The GTK helper only owns UI state and CLI calls. `Save` writes config then runs
 the same managed Niri block update as `shaula config niri-install --json`. It
 does not reload or restart Niri, and it does not restart Noctalia.
+
+Shaula sends screenshot thumbnails in desktop notifications using the
+Freedesktop image-path hint. If your notification daemon does not show
+thumbnails, check that image/icon display is enabled. On Mako, thumbnail size
+depends on notification daemon settings such as max-icon-size.
 
 ## Noctalia
 

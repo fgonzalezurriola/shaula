@@ -18,6 +18,7 @@ typedef struct {
   GtkSpinButton *width_spin;
   GtkSpinButton *height_spin;
   GtkSwitch *focused_switch;
+  GtkSwitch *close_preview_on_save_switch;
   GtkWidget *apply_button;
   GtkWidget *open_button;
   GtkWidget *reset_button;
@@ -75,6 +76,8 @@ static void read_controls(ShaulaSettingsConfig *config) {
   config->window_mode =
       (WindowMode)gtk_drop_down_get_selected(state.window_combo);
   config->focused = gtk_switch_get_active(state.focused_switch);
+  config->close_preview_on_save =
+      gtk_switch_get_active(state.close_preview_on_save_switch);
   SizePreset size = (SizePreset)gtk_drop_down_get_selected(state.size_combo);
   if (size == SIZE_CUSTOM) {
     config->width = gtk_spin_button_get_value_as_int(state.width_spin);
@@ -116,6 +119,8 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   read_controls(&next);
 
   char *focused = g_strdup(next.focused ? "true" : "false");
+  char *close_preview_on_save =
+      g_strdup(next.close_preview_on_save ? "true" : "false");
   char *width = g_strdup_printf("%d", next.width);
   char *height = g_strdup_printf("%d", next.height);
   char *argv[] = {
@@ -129,6 +134,8 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
       (char *)shaula_settings_window_mode_text(next.window_mode),
       "--focused",
       focused,
+      "--close-preview-on-save",
+      close_preview_on_save,
       "--width",
       width,
       "--height",
@@ -143,6 +150,7 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   int exit_code = 1;
   run_shaula(argv, &out, &err, &exit_code);
   g_free(focused);
+  g_free(close_preview_on_save);
   g_free(width);
   g_free(height);
 
@@ -220,6 +228,8 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
       "floating",
       "--focused",
       "true",
+      "--close-preview-on-save",
+      "true",
       "--width",
       "1100",
       "--height",
@@ -293,6 +303,34 @@ static GtkWidget *labeled_row(const char *label, GtkWidget *child) {
   return row;
 }
 
+static GtkWidget *labeled_description_row(const char *label,
+                                          const char *description,
+                                          GtkWidget *child) {
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+  gtk_widget_add_css_class(row, "settings-row");
+  GtkWidget *text_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+  gtk_widget_set_hexpand(text_box, TRUE);
+  GtkWidget *title = gtk_label_new(label);
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0);
+  GtkWidget *body = gtk_label_new(description);
+  gtk_widget_add_css_class(body, "description");
+  gtk_label_set_xalign(GTK_LABEL(body), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(body), TRUE);
+  gtk_box_append(GTK_BOX(text_box), title);
+  gtk_box_append(GTK_BOX(text_box), body);
+  GtkWidget *control_slot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(control_slot, SETTINGS_CONTROL_W, -1);
+  gtk_widget_set_halign(control_slot, GTK_ALIGN_END);
+  if (GTK_IS_SWITCH(child))
+    gtk_widget_set_size_request(child, SETTINGS_SWITCH_W, SETTINGS_SWITCH_H);
+  gtk_widget_set_halign(child, GTK_ALIGN_END);
+  gtk_widget_set_valign(child, GTK_ALIGN_CENTER);
+  gtk_box_append(GTK_BOX(row), text_box);
+  gtk_box_append(GTK_BOX(control_slot), child);
+  gtk_box_append(GTK_BOX(row), control_slot);
+  return row;
+}
+
 static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_add_css_class(box, "settings-form");
@@ -355,6 +393,18 @@ static GtkWidget *build_form(void) {
   gtk_switch_set_active(state.focused_switch, state.config.focused);
   gtk_box_append(GTK_BOX(box), labeled_row("Focus preview window",
                                            GTK_WIDGET(state.focused_switch)));
+
+  state.close_preview_on_save_switch = GTK_SWITCH(gtk_switch_new());
+  gtk_switch_set_active(state.close_preview_on_save_switch,
+                        state.config.close_preview_on_save);
+  gtk_widget_set_tooltip_text(GTK_WIDGET(state.close_preview_on_save_switch),
+                              "Close the preview window after a successful "
+                              "Ctrl+S save.");
+  gtk_box_append(GTK_BOX(box),
+                 labeled_description_row(
+                     "Close preview on save",
+                     "Close the preview window after a successful Ctrl+S save.",
+                     GTK_WIDGET(state.close_preview_on_save_switch)));
 
   GtkWidget *advanced_title = gtk_label_new("Advanced");
   gtk_widget_add_css_class(advanced_title, "section-title");
@@ -498,6 +548,7 @@ static void install_css(GtkApplication *app, gpointer data) {
       "margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px; "
       "opacity: 0.7; }"
       ".settings-row { min-height: 38px; }"
+      ".description { opacity: 0.72; font-size: 12px; }"
       "button.suggested-action { font-weight: bold; }"
       ".error { color: @error_color; font-weight: bold; }");
   gtk_style_context_add_provider_for_display(

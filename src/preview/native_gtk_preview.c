@@ -103,6 +103,9 @@ int main(int argc, char **argv) {
   }
 
   shaula_preview_state_init(&state, path, image);
+  const char *close_on_save = getenv("SHAULA_PREVIEW_CLOSE_ON_SAVE");
+  state.close_preview_on_save =
+      close_on_save != NULL && g_strcmp0(close_on_save, "1") == 0;
   GtkApplication *app =
       gtk_application_new("dev.shaula.preview", G_APPLICATION_DEFAULT_FLAGS);
   if (app == NULL) {

@@ -101,6 +101,19 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             save_options_seen = true;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--close-preview-on-save")) {
+            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--close-preview-on-save is supported only for save and requires a value", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            }
+            i += 1;
+            save_config.preview.window.close_preview_on_save = parseBoolArg(argToSlice(argv[i])) orelse {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --close-preview-on-save", false, null, null, "close_preview_on_save");
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            };
+            save_options_seen = true;
+            continue;
+        }
         if (std.mem.eql(u8, arg, "--width")) {
             if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
                 try writeErrorJson(io, command, "ERR_CLI_USAGE", "--width is supported only for save and requires a value", false, null, null, null);
@@ -498,13 +511,14 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
 
     return std.fmt.allocPrint(
         allocator,
-        "{{\"capture\":{{\"region_capture_mode\":{s}}},\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
+        "{{\"capture\":{{\"region_capture_mode\":{s}}},\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"close_preview_on_save\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
         .{
             region_capture_mode_json,
             app_id_json,
             title_json,
             mode_json,
             if (config.preview.window.focused) "true" else "false",
+            if (config.preview.window.close_preview_on_save) "true" else "false",
             width_json,
             height_json,
             display_json,

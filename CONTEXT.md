@@ -33,9 +33,10 @@ and the working diff.
   runtime tools, and actionable warnings.
 - `shaula settings` now launches the native GTK `shaula-settings` helper.
   The settings window edits the existing public config contract only:
-  live/frozen region capture mode, preview window mode/focus, floating size
-  presets with custom width/height, and centered/top-left/top-right floating
-  placement. Missing config opens with defaults and is created on first save;
+  live/frozen region capture mode, preview window mode/focus, close preview on
+  save, floating size presets with custom width/height, and
+  centered/top-left/top-right floating placement. Missing config opens with
+  defaults and is created on first save;
   invalid config shows `ERR_CONFIG_INVALID` with open/reset options; valid
   config comments/layout are preserved where practical by Zig
   `shaula config save --json`, not by the GTK helper. `Save` writes config and
@@ -70,6 +71,12 @@ and the working diff.
   `all-in-one` is no longer promoted in docs/scripts and remains only as a
   legacy CLI alias for the Capture overlay flow; `focused` remains a hidden
   compatibility alias for current-output fullscreen behavior.
+- Preview Ctrl+S and Ctrl+Shift+C success banners now use `Shaula captured`
+  desktop notifications with Freedesktop `image-path` screenshot thumbnails
+  and `notify-send -i` fallback. The `[preview.window] close_preview_on_save`
+  setting defaults to true; when true, only successful Ctrl+S quick-save
+  closes the preview after triggering the notification. Ctrl+Shift+S notifies
+  after success but stays conservative and does not close the preview.
 - Capture runtime terminology: internal capture planning now names
   `current-output` and `all-outputs` lanes separately from CLI compatibility
   tokens. Direct no-preview captures emit best-effort save/copy notifications

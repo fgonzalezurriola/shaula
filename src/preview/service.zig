@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const config_loader = @import("../config/loader.zig");
 const notify = @import("../notify.zig");
 const preview_result = @import("../preview_result.zig");
 const process_exec = @import("../runtime/process_exec.zig");
@@ -55,7 +56,14 @@ pub fn runPreview(
     const helper_bin = try resolvePreviewBinary(allocator, io, environ);
     defer allocator.free(helper_bin);
 
-    const result = process_exec.run(allocator, io, &.{ helper_bin, path }, 4096, 4096) catch {
+    var helper_env = try std.process.Environ.createMap(environ, allocator);
+    defer helper_env.deinit();
+    try helper_env.put(
+        "SHAULA_PREVIEW_CLOSE_ON_SAVE",
+        if (closePreviewOnSave(allocator, io, environ)) "1" else "0",
+    );
+
+    const result = process_exec.runWithEnv(allocator, io, &.{ helper_bin, path }, 4096, 4096, &helper_env) catch {
         return .{ .failure = .{
             .code = "ERR_PREVIEW_UNAVAILABLE",
             .message = "preview helper is unavailable",
@@ -107,6 +115,12 @@ pub fn runPreview(
     }
 
     return .{ .success = helper_result };
+}
+
+fn closePreviewOnSave(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) bool {
+    var loaded = config_loader.load(allocator, io, environ) catch return false;
+    defer loaded.deinit(allocator);
+    return loaded.config.preview.window.close_preview_on_save;
 }
 
 fn parseHelperResult(allocator: std.mem.Allocator, path: []const u8, stdout: []const u8) !PreviewRunResult {

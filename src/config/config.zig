@@ -70,6 +70,7 @@ pub const FloatingRelativeTo = enum {
 pub const PreviewWindowConfig = struct {
     mode: PreviewWindowMode = .floating,
     focused: bool = true,
+    close_preview_on_save: bool = true,
     width: ?u32 = 1100,
     height: ?u32 = 720,
     default_column_display: ColumnDisplay = .normal,
