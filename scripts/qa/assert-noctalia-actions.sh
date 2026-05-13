@@ -68,8 +68,9 @@ zig build >/dev/null
 mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula /tmp/shaula-task9-home
 
 EXPECTED_ACTIONS='[
-  {"id":"capture-area","label":"Capture Area","shaula_argv":["capture","area","--json"]},
+  {"id":"capture-area","label":"Quick Capture","shaula_argv":["capture","area","--json"]},
   {"id":"capture-fullscreen","label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json"]},
+  {"id":"capture-all-screens","label":"Capture All Screens","shaula_argv":["capture","all-screens","--json"]},
   {"id":"capture-window","label":"Capture Window","shaula_argv":["capture","window","--json"]},
   {"id":"open-last","label":"Open Last","shaula_argv":["history","show","--json","--id","latest"]},
   {"id":"history","label":"History","shaula_argv":["history","list","--json"]},
@@ -78,8 +79,9 @@ EXPECTED_ACTIONS='[
 ]'
 
 EXPECTED_ACTION_MAP='{
-  "capture-area": {"label":"Capture Area","shaula_argv":["capture","area","--json"]},
+  "capture-area": {"label":"Quick Capture","shaula_argv":["capture","area","--json"]},
   "capture-fullscreen": {"label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json"]},
+  "capture-all-screens": {"label":"Capture All Screens","shaula_argv":["capture","all-screens","--json"]},
   "capture-window": {"label":"Capture Window","shaula_argv":["capture","window","--json"]},
   "open-last": {"label":"Open Last","shaula_argv":["history","show","--json","--id","latest"]},
   "history": {"label":"History","shaula_argv":["history","list","--json"]},
@@ -100,7 +102,7 @@ printf '%s\n' "${menu_json}" | jq -e --argjson expected_actions "${EXPECTED_ACTI
   exit 1
 }
 
-for action in capture-area capture-fullscreen capture-window open-last history open-output-folder open-clipboard-image; do
+for action in capture-area capture-fullscreen capture-all-screens capture-window open-last history open-output-folder open-clipboard-image; do
   dry_json="$(${PLUGIN_SCRIPT} --action "${action}" --dry-run --request-id "task9-dry-${action}")"
   printf '%s\n' "${dry_json}" | jq -e --arg action "${action}" --argjson expected "${EXPECTED_ACTION_MAP}" '
     .ok == true and
@@ -207,7 +209,37 @@ printf '%s\n' "${window_exec_json}" | jq -e '
   exit 1
 }
 
-open_last_exec_json="$(${PLUGIN_SCRIPT} --action open-last --request-id "task9-exec-open-last")"
+history_seed_path="/tmp/shaula/task9-history-seed.png"
+rm -f "${history_seed_path}"
+
+history_seed_json="$({
+  HOME=/tmp/shaula-task9-home \
+  SHAULA_RUNTIME_CAPTURE_HELPER="${HELPER_SCRIPT}" \
+  SHAULA_COMPOSITOR=niri \
+  NIRI_SOCKET=/tmp/niri.sock \
+  WAYLAND_DISPLAY=wayland-1 \
+  ./zig-out/bin/shaula capture area --json --no-preview --save --output "${history_seed_path}"
+})"
+
+printf '%s\n' "${history_seed_json}" | jq -e --arg path "${history_seed_path}" '
+  .ok == true and
+  .saved.ok == true and
+  .path == $path
+' >/dev/null || {
+  echo "ERR_NOCTALIA_ACTION_ASSERT_FAILED reason=history_seed_invalid" >&2
+  printf '%s\n' "${history_seed_json}" >&2
+  exit 1
+}
+
+[[ -f "${history_seed_path}" ]] || {
+  echo "ERR_NOCTALIA_ACTION_ASSERT_FAILED reason=history_seed_file_missing path=${history_seed_path}" >&2
+  exit 1
+}
+
+open_last_exec_json="$({
+  HOME=/tmp/shaula-task9-home \
+  ${PLUGIN_SCRIPT} --action open-last --request-id "task9-exec-open-last"
+})"
 printf '%s\n' "${open_last_exec_json}" | jq -e '
   .ok == true and
   .action.id == "open-last" and
@@ -222,7 +254,10 @@ printf '%s\n' "${open_last_exec_json}" | jq -e '
   exit 1
 }
 
-history_exec_json="$(${PLUGIN_SCRIPT} --action history --request-id "task9-exec-history")"
+history_exec_json="$({
+  HOME=/tmp/shaula-task9-home \
+  ${PLUGIN_SCRIPT} --action history --request-id "task9-exec-history"
+})"
 printf '%s\n' "${history_exec_json}" | jq -e '
   .ok == true and
   .action.id == "history" and

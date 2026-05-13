@@ -3,7 +3,7 @@
 Shaula is a fast screenshot tool for Wayland/Niri, built for a Shottr-like
 workflow on Linux.
 
-It focuses on quick area capture, a native selection overlay, post-capture
+It focuses on Quick Capture, a native selection overlay, post-capture
 preview/editing, and scriptable JSON output.
 
 > Shaula's main target is CachyOS/Arch + Niri.
@@ -45,7 +45,7 @@ Niri config.
 
 ## Features
 
-- Area, fullscreen/current-monitor, all-screens, window, and previous-area capture
+- Quick Capture, fullscreen/current-monitor, all-screens, window, and previous-area capture
 - Native GTK/layer-shell selection overlay
 - Post-capture preview/editor
 - Native settings window for the current capture and preview-window config

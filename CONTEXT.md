@@ -64,8 +64,9 @@ and the working diff.
   monitor, `capture all-screens` preserves the old all-output fullscreen
   behavior, and `capture focused` remains as a CLI compatibility alias.
 - Capture surface unification: Noctalia's menu is the current naming source of
-  truth (`Capture Area`, `Capture Fullscreen`, `Capture All Screens`). Public
-  capabilities now report `area`, `fullscreen`, `all_screens`, and `window`.
+  truth (`Quick Capture`, `Capture Fullscreen`, `Capture All Screens`).
+  `capture-area` stays as the Noctalia placeholder id. Public capabilities now
+  report `area`, `fullscreen`, `all_screens`, and `window`.
   `all-in-one` is no longer promoted in docs/scripts and remains only as a
   legacy CLI alias for the Capture overlay flow; `focused` remains a hidden
   compatibility alias for current-output fullscreen behavior.

@@ -33,44 +33,44 @@ NIconButton {
   NPopupContextMenu {
     id: contextMenu
 
- model: [
- {
- "label": "Capture Area",
- "action": "capture-area",
- "icon": "crop"
- },
- {
- "label": "Capture Fullscreen",
- "action": "capture-fullscreen",
- "icon": "screen-share"
- },
- {
- "label": "Capture All Screens",
- "action": "capture-all-screens",
- "icon": "layout-dashboard"
- },
- {
- "label": "Settings",
- "action": "settings",
- "icon": "settings",
- "enabled": true
- },
- {
- "label": "Run Doctor",
- "action": "doctor",
- "icon": "stethoscope"
- },
- {
- "label": "Open Screenshots Folder",
- "action": "open-screenshots-folder",
- "icon": "folder"
- },
- {
- "label": "Report a Bug",
- "action": "report-bug",
- "icon": "bug"
- }
- ]
+    model: [
+      {
+        "label": "Quick Capture",
+        "action": "capture-area",
+        "icon": "crop"
+      },
+      {
+        "label": "Capture Fullscreen",
+        "action": "capture-fullscreen",
+        "icon": "screen-share"
+      },
+      {
+        "label": "Capture All Screens",
+        "action": "capture-all-screens",
+        "icon": "layout-dashboard"
+      },
+      {
+        "label": "Settings",
+        "action": "settings",
+        "icon": "settings",
+        "enabled": true
+      },
+      {
+        "label": "Run Doctor",
+        "action": "doctor",
+        "icon": "stethoscope"
+      },
+      {
+        "label": "Open Screenshots Folder",
+        "action": "open-screenshots-folder",
+        "icon": "folder"
+      },
+      {
+        "label": "Report a Bug",
+        "action": "report-bug",
+        "icon": "bug"
+      }
+    ]
 
     onTriggered: action => {
       contextMenu.close();

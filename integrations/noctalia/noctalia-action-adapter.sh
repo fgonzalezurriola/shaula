@@ -63,7 +63,8 @@ PY
 
 action_label() {
  case "$1" in
- capture-area) printf 'Capture Area' ;;
+ # Keep the legacy `capture-area` id as the Noctalia placeholder.
+ capture-area) printf 'Quick Capture' ;;
  capture-fullscreen) printf 'Capture Fullscreen' ;;
  capture-all-screens) printf 'Capture All Screens' ;;
  capture-window) printf 'Capture Window' ;;
@@ -281,14 +282,14 @@ import json
 import sys
 
 action = sys.argv[1]
- mapping = {
- "capture-area": ["capture", "area", "--json"],
- "capture-fullscreen": ["capture", "fullscreen", "--json"],
- "capture-all-screens": ["capture", "all-screens", "--json"],
- "capture-window": ["capture", "window", "--json"],
- "open-last": ["history", "show", "--json", "--id", "latest"],
- "history": ["history", "list", "--json"],
- }
+mapping = {
+    "capture-area": ["capture", "area", "--json"],
+    "capture-fullscreen": ["capture", "fullscreen", "--json"],
+    "capture-all-screens": ["capture", "all-screens", "--json"],
+    "capture-window": ["capture", "window", "--json"],
+    "open-last": ["history", "show", "--json", "--id", "latest"],
+    "history": ["history", "list", "--json"],
+}
 
 for arg in mapping[action]:
     print(arg)
