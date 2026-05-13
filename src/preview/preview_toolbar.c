@@ -92,15 +92,15 @@ static void install_toolbar_css(void) {
       "  opacity: 0.42;"
       "}"
       ".shaula-shortcut-badge {"
-      "  min-width: 11px;"
-      "  min-height: 11px;"
-      "  padding: 0 2px;"
-      "  border-radius: 4px;"
-      "  border: 1px solid alpha(@theme_fg_color, 0.26);"
-      "  background: alpha(@theme_bg_color, 0.92);"
-      "  color: alpha(@theme_fg_color, 0.78);"
-      "  font-size: 8px;"
-      "  font-weight: 700;"
+      "  min-width: 0;"
+      "  min-height: 0;"
+      "  padding: 0;"
+      "  margin: 0;"
+      "  border: none;"
+      "  background: transparent;"
+      "  color: @theme_fg_color;"
+      "  font-size: 9px;"
+      "  font-weight: 400;"
       "}"
       "popover.shaula-preview-popover contents {"
       "  background: alpha(@theme_bg_color, 0.98);"
@@ -146,8 +146,8 @@ static GtkWidget *make_icon_with_badge(ShaulaPreviewState *state,
     gtk_widget_add_css_class(badge, "shaula-shortcut-badge");
     gtk_widget_set_halign(badge, GTK_ALIGN_END);
     gtk_widget_set_valign(badge, GTK_ALIGN_END);
-    gtk_widget_set_margin_end(badge, 0);
-    gtk_widget_set_margin_bottom(badge, 0);
+    gtk_widget_set_margin_end(badge, -6);
+    gtk_widget_set_margin_bottom(badge, -2);
     gtk_overlay_add_overlay(GTK_OVERLAY(overlay), badge);
   }
 
