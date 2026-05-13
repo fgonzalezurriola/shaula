@@ -37,6 +37,27 @@ static ShaulaPoint clamped_image_point(ShaulaPreviewState *state,
                               shaula_preview_image_height(state));
 }
 
+static gboolean spotlight_debug_enabled(void) {
+  const char *value = g_getenv("SHAULA_DEBUG_SPOTLIGHT");
+  return value != NULL && value[0] != '\0' && g_strcmp0(value, "0") != 0;
+}
+
+static void debug_spotlight_rect(const char *stage, ShaulaPreviewState *state,
+                                 ShaulaRect rect) {
+  if (!spotlight_debug_enabled())
+    return;
+  g_printerr("[DEBUG-spotlight] %s rect=(%.2f,%.2f %.2fx%.2f) "
+             "start=(%.2f,%.2f) current=(%.2f,%.2f) pan=(%.2f,%.2f) "
+             "zoom=%.4f area=%dx%d image=%dx%d\n",
+             stage, rect.x, rect.y, rect.width, rect.height,
+             state->drag_start_image.x, state->drag_start_image.y,
+             state->drag_current_image.x, state->drag_current_image.y,
+             state->pan_x, state->pan_y, state->zoom,
+             state->area != NULL ? gtk_widget_get_width(state->area) : 0,
+             state->area != NULL ? gtk_widget_get_height(state->area) : 0,
+             shaula_preview_image_width(state), shaula_preview_image_height(state));
+}
+
 static gboolean image_point_to_pixel(ShaulaPreviewState *state,
                                      ShaulaPoint point, int *px, int *py) {
   int width = shaula_preview_image_width(state);
@@ -314,7 +335,7 @@ static void draw_crop_overlay(cairo_t *cr, ShaulaPreviewState *state) {
     return;
   int image_w = shaula_preview_image_width(state);
   int image_h = shaula_preview_image_height(state);
-  ShaulaRect rect = shaula_rect_clamped(state->crop_draft, image_w, image_h);
+  ShaulaRect rect = shaula_rect_clamped_c(state->crop_draft, image_w, image_h);
 
   cairo_save(cr);
   cairo_rectangle(cr, 0, 0, image_w, image_h);
@@ -341,9 +362,8 @@ static void draw_region_selection(cairo_t *cr, ShaulaPreviewState *state) {
                         ? shaula_rect_from_points(state->drag_start_image,
                                                   state->drag_current_image)
                         : state->region_selection_rect;
-  rect = shaula_rect_clamped(shaula_rect_normalized(rect),
-                             shaula_preview_image_width(state),
-                             shaula_preview_image_height(state));
+  rect = shaula_rect_clamped_c(rect, shaula_preview_image_width(state),
+                               shaula_preview_image_height(state));
   if (shaula_rect_is_empty(rect))
     return;
 
@@ -693,8 +713,7 @@ static void start_operation(ShaulaPreviewState *state,
     state->has_crop_draft = TRUE;
     state->crop_draft = (ShaulaRect){point.x, point.y, 0, 0};
   }
-  if (operation == SHAULA_OPERATION_SELECT_REGION ||
-      operation == SHAULA_OPERATION_SPOTLIGHT) {
+  if (operation == SHAULA_OPERATION_SELECT_REGION) {
     state->has_region_selection = FALSE;
     state->region_selection_rect = (ShaulaRect){point.x, point.y, 0, 0};
   }
@@ -711,6 +730,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   ShaulaPreviewState *state = data;
   if (state->image == NULL)
     return;
+  state->drag_start_x = x;
+  state->drag_start_y = y;
   update_hover_color(state, x, y);
 
   if (state->operation == SHAULA_OPERATION_TEXT &&
@@ -816,6 +837,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
       shaula_preview_clear_selection(state);
       shaula_preview_clear_region_selection(state);
       start_operation(state, SHAULA_OPERATION_SPOTLIGHT, clamped);
+      debug_spotlight_rect(
+          "begin", state,
+          (ShaulaRect){clamped.x, clamped.y, 0.0, 0.0});
     }
     break;
   case SHAULA_TOOL_COUNT:
@@ -831,12 +855,12 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
       state->operation == SHAULA_OPERATION_TEXT)
     return;
 
-  double x = state->drag_start_x + dx;
-  double y = state->drag_start_y + dy;
-  if (state->operation != SHAULA_OPERATION_PAN) {
-    x = state->pan_x + state->drag_start_image.x * state->zoom + dx;
-    y = state->pan_y + state->drag_start_image.y * state->zoom + dy;
-  }
+  double start_x = state->drag_start_x;
+  double start_y = state->drag_start_y;
+  if (gesture != NULL)
+    (void)gtk_gesture_drag_get_start_point(gesture, &start_x, &start_y);
+  double x = start_x + dx;
+  double y = start_y + dy;
   ShaulaPoint image_point = clamped_image_point(
       state, shaula_preview_canvas_screen_to_image(state, x, y));
 
@@ -894,7 +918,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     ShaulaRect rect =
         shaula_rect_from_points(state->drag_start_image, image_point);
     state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
-    state->region_selection_rect = rect;
+    debug_spotlight_rect("update", state, rect);
     break;
   }
   case SHAULA_OPERATION_CROP:
@@ -1057,10 +1081,14 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
 
 static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
                         gpointer data) {
-  (void)gesture;
-  (void)dx;
-  (void)dy;
   ShaulaPreviewState *state = data;
+  if (state->operation != SHAULA_OPERATION_NONE &&
+      state->operation != SHAULA_OPERATION_TEXT) {
+    /* Use the final release offset so commit state matches the visible drag
+     * endpoint even when GTK coalesces the last motion event.
+     */
+    on_drag_update(gesture, dx, dy, data);
+  }
   if (state->operation == SHAULA_OPERATION_PAN ||
       state->operation == SHAULA_OPERATION_MOVE ||
       state->operation == SHAULA_OPERATION_BEND_ARROW ||
@@ -1075,8 +1103,13 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
         shaula_preview_toolbar_update_selection_state(state);
     }
     if (state->operation == SHAULA_OPERATION_SPOTLIGHT) {
-      if (state->operation_changed)
-        shaula_preview_spotlight_rect(state, state->region_selection_rect);
+      if (state->operation_changed) {
+        ShaulaRect rect =
+            shaula_rect_from_points(state->drag_start_image,
+                                    state->drag_current_image);
+        debug_spotlight_rect("end-commit", state, rect);
+        shaula_preview_spotlight_rect(state, rect);
+      }
       state->has_region_selection = FALSE;
     }
     gtk_widget_set_cursor_from_name(

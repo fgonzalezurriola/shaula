@@ -282,7 +282,8 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   shaula_color_to_hex(state->hover_color, state->hover_hex);
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_NONE;
   state->active_spotlight_index = -1;
-  state->spotlight_border_color = state->current_color;
+  state->spotlight_border_color =
+      (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
   state->spotlight_border_width = 3.0;
   state->spotlight_shape = SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE;
   /* Shottr-like arrow defaults: strong orange, thick rounded shaft. */
@@ -296,7 +297,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->rectangle_stroke_style = PREVIEW_ARROW_STROKE_DASHED;
   state->rectangle_filled = FALSE;
   state->rectangle_corners = PREVIEW_RECTANGLE_CORNERS_ROUNDED;
-  state->pen_color = state->current_color;
+  state->pen_color = state->arrow_color;
   state->pen_stroke_width = 3.0;
   state->pen_opacity = 1.0;
   state->highlight_color =
@@ -835,8 +836,8 @@ static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
   if (state == NULL || state->image == NULL)
     return FALSE;
 
-  ShaulaRect crop = shaula_rect_clamped(
-      shaula_rect_normalized(rect), shaula_preview_image_width(state),
+  ShaulaRect crop = shaula_rect_clamped_c(
+      rect, shaula_preview_image_width(state),
       shaula_preview_image_height(state));
   if (crop.width < SHAULA_CROP_MIN_SIZE_PX ||
       crop.height < SHAULA_CROP_MIN_SIZE_PX)
@@ -1125,7 +1126,7 @@ static void remap_spotlight_regions_after_crop(ShaulaPreviewState *state,
     ShaulaSpotlightRegion *region =
         &g_array_index(state->spotlight_regions, ShaulaSpotlightRegion,
                        (guint)i);
-    ShaulaRect clamped = shaula_rect_clamped(
+    ShaulaRect clamped = shaula_rect_clamped_c(
         (ShaulaRect){region->rect.x - crop.x, region->rect.y - crop.y,
                      region->rect.width, region->rect.height},
         crop.width, crop.height);
@@ -1229,15 +1230,25 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
   if (state == NULL)
     return FALSE;
 
-  int x = 0;
-  int y = 0;
-  int w = 0;
-  int h = 0;
-  if (!crop_rect_to_pixels(state, rect, &x, &y, &w, &h))
+  ShaulaRect spotlight = shaula_rect_clamped_c(
+      rect, shaula_preview_image_width(state),
+      shaula_preview_image_height(state));
+  if (spotlight.width < SHAULA_CROP_MIN_SIZE_PX ||
+      spotlight.height < SHAULA_CROP_MIN_SIZE_PX)
     return FALSE;
 
+  const char *debug = g_getenv("SHAULA_DEBUG_SPOTLIGHT");
+  if (debug != NULL && debug[0] != '\0' && g_strcmp0(debug, "0") != 0) {
+    g_printerr("[DEBUG-spotlight] persist input=(%.2f,%.2f %.2fx%.2f) "
+               "stored=(%.2f,%.2f %.2fx%.2f) count_before=%u\n",
+               rect.x, rect.y, rect.width, rect.height, spotlight.x,
+               spotlight.y, spotlight.width, spotlight.height,
+               state->spotlight_regions != NULL ? state->spotlight_regions->len
+                                                 : 0);
+  }
+
   ShaulaSpotlightRegion region = {
-      .rect = (ShaulaRect){x, y, w, h},
+      .rect = spotlight,
       .shape = state->spotlight_shape,
       .border_color = state->spotlight_border_color,
       .border_width = MAX(0.0, state->spotlight_border_width),
@@ -1245,6 +1256,9 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
   shaula_preview_document_begin_edit(state);
   g_array_append_val(state->spotlight_regions, region);
   state->active_spotlight_index = (int)state->spotlight_regions->len - 1;
+  if (debug != NULL && debug[0] != '\0' && g_strcmp0(debug, "0") != 0)
+    g_printerr("[DEBUG-spotlight] persisted index=%d count_after=%u\n",
+               state->active_spotlight_index, state->spotlight_regions->len);
   state->active_properties_panel = SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
   shaula_preview_document_finish_edit(
       state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});

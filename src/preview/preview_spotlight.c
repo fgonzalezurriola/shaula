@@ -34,9 +34,9 @@ void shaula_preview_draw_spotlight_effect(ShaulaPreviewState *state,
   for (guint i = 0; i < state->spotlight_regions->len; i++) {
     ShaulaSpotlightRegion region =
         g_array_index(state->spotlight_regions, ShaulaSpotlightRegion, i);
-    region.rect = shaula_rect_clamped(region.rect,
-                                      shaula_preview_image_width(state),
-                                      shaula_preview_image_height(state));
+    region.rect = shaula_rect_clamped_c(region.rect,
+                                        shaula_preview_image_width(state),
+                                        shaula_preview_image_height(state));
     if (shaula_rect_is_empty(region.rect))
       continue;
     append_spotlight_path(cr, region);
@@ -51,9 +51,9 @@ void shaula_preview_draw_spotlight_effect(ShaulaPreviewState *state,
   for (guint i = 0; i < state->spotlight_regions->len; i++) {
     ShaulaSpotlightRegion region =
         g_array_index(state->spotlight_regions, ShaulaSpotlightRegion, i);
-    region.rect = shaula_rect_clamped(region.rect,
-                                      shaula_preview_image_width(state),
-                                      shaula_preview_image_height(state));
+    region.rect = shaula_rect_clamped_c(region.rect,
+                                        shaula_preview_image_width(state),
+                                        shaula_preview_image_height(state));
     if (shaula_rect_is_empty(region.rect) || region.border_width <= 0.0)
       continue;
     cairo_save(cr);

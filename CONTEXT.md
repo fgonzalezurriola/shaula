@@ -132,6 +132,27 @@ and the working diff.
 - Spotlight remains a primary toolbar tool because its direct drag-to-create
   flow is a high-frequency canvas mode. Pen and Highlight are responsive
   secondary tools that can appear before `...` when there is room.
+- Spotlight regions are vector effect rectangles stored in image coordinates,
+  matching the drag draft exactly. Do not route Spotlight creation through the
+  crop/blur/erase pixel helper; that helper may round to integer pixels and is
+  only for raster mutations. Default Spotlight border is the same strong orange
+  used by arrow/text/measure defaults.
+- Direct Spotlight drag does not use `region_selection_rect`; that state belongs
+  to Select-mode temporary region actions. Spotlight draft and commit both use
+  `drag_start_image` plus `drag_current_image` so multiple or nested Spotlights
+  cannot inherit stale Select-region geometry.
+- Drag commits now apply one final update with the gesture's release `dx/dy`
+  before ending the operation, so the committed geometry matches the exact
+  release point even if GTK coalesces the last motion callback.
+- Drag updates now derive pointer position from
+  `gtk_gesture_drag_get_start_point()` plus `dx/dy` offsets, instead of
+  reconstructing via image-space start and zoom/pan. This removes subtle
+  coordinate drift across tools (including Spotlight) in edge cases.
+- Preview C code uses `shaula_rect_clamped_c()` for interactive rectangle
+  clamping. The `/diagnose` Spotlight logs showed `end-commit` geometry was
+  correct while `persist` clipped against wrong bounds, so hot GTK C paths must
+  not depend on the exported Zig `shaula_rect_clamped()` ABI for four-double
+  structs plus scalar bounds.
 
 ## Capture Runtime Foundation
 
@@ -314,8 +335,12 @@ and the working diff.
 - `shaula-pen-symbolic` Pen: implemented.
 - Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes
   color, stroke width, and opacity for defaults and selected Pen annotations.
-  Additional Pen styles are desired future work and should fit into this HUD
-  rather than expanding the primary toolbar.
+  Pen defaults to the shared strong orange used by Arrow/Text/Rectangle/Measure.
+  Select-mode hit testing for Pen and Highlight is path-distance based rather
+  than bounding-box based, and selected freehand paths draw path-following
+  selection chrome instead of a large rectangular box. Additional Pen styles are
+  desired future work and should fit into this HUD rather than expanding the
+  primary toolbar.
 - Highlight highlighter: implemented as a separate Highlight button/HUD from
   Pen. Highlight is now a wide low-opacity freehand path with round caps, not a
   rectangle tool. Its HUD exposes only color, width, and opacity, and it avoids

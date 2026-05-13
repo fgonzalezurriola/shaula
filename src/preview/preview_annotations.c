@@ -354,6 +354,49 @@ static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   cairo_restore(cr);
 }
 
+static double path_distance_to_point(ShaulaPenPath path, ShaulaPoint point) {
+  if (path.len <= 0)
+    return G_MAXDOUBLE;
+  if (path.len == 1)
+    return shaula_point_distance(point, path.points[0]);
+
+  double best = G_MAXDOUBLE;
+  for (int i = 1; i < path.len; i++) {
+    double distance =
+        shaula_point_distance_to_segment(point, path.points[i - 1],
+                                         path.points[i]);
+    if (distance < best)
+      best = distance;
+  }
+  return best;
+}
+
+static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
+                                double stroke_width) {
+  if (path.len <= 0)
+    return;
+
+  cairo_save(cr);
+  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+  cairo_set_line_width(cr, MAX(stroke_width + 8.0, 10.0));
+  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.62);
+  cairo_move_to(cr, path.points[0].x, path.points[0].y);
+  for (int i = 1; i < path.len; i++)
+    cairo_line_to(cr, path.points[i].x, path.points[i].y);
+  cairo_stroke(cr);
+
+  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
+  double dashes[] = {4.0, 3.0};
+  cairo_set_dash(cr, dashes, 2, 0);
+  cairo_move_to(cr, path.points[0].x, path.points[0].y);
+  for (int i = 1; i < path.len; i++)
+    cairo_line_to(cr, path.points[i].x, path.points[i].y);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
 /* Draws a filled triangular arrowhead that scales with stroke width. The
  * head size is proportional to the shaft width so thicker arrows get larger
  * heads, matching Shottr-like proportions.
@@ -626,7 +669,14 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
   }
 
   if (annotation->selected) {
-    draw_selection(cr, annotation->bounds);
+    if (annotation->type == SHAULA_ANNOTATION_PEN) {
+      draw_path_selection(cr, annotation->data.pen, annotation->stroke_width);
+    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
+      draw_path_selection(cr, annotation->data.highlight,
+                          annotation->stroke_width);
+    } else {
+      draw_selection(cr, annotation->bounds);
+    }
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
       ShaulaPoint p0 = annotation->data.arrow.start;
       ShaulaPoint p2 = annotation->data.arrow.end;
@@ -679,10 +729,18 @@ ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
       break;
     case SHAULA_ANNOTATION_RECTANGLE:
     case SHAULA_ANNOTATION_TEXT:
-    case SHAULA_ANNOTATION_HIGHLIGHT:
-    case SHAULA_ANNOTATION_PEN:
       if (shaula_rect_contains_point(
               shaula_rect_expanded(annotation->bounds, tolerance), point))
+        return annotation;
+      break;
+    case SHAULA_ANNOTATION_HIGHLIGHT:
+      if (path_distance_to_point(annotation->data.highlight, point) <=
+          MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
+        return annotation;
+      break;
+    case SHAULA_ANNOTATION_PEN:
+      if (path_distance_to_point(annotation->data.pen, point) <=
+          MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
         return annotation;
       break;
     }

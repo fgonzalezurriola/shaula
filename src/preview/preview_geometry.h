@@ -41,4 +41,30 @@ double shaula_point_distance_to_segment(ShaulaPoint point, ShaulaPoint a,
 ShaulaPoint shaula_point_clamped(ShaulaPoint point, double max_width,
                                  double max_height);
 
+/* C-side rectangle clamp for hot GTK paths.
+ *
+ * The exported Zig geometry functions remain the cross-language contract, but
+ * passing/returning four-double structs plus scalar bounds through C call sites
+ * is brittle enough that interactive preview geometry should avoid depending on
+ * that ABI for frame-by-frame clamp work.
+ */
+static inline ShaulaRect shaula_rect_clamped_c(ShaulaRect input,
+                                               double max_width,
+                                               double max_height) {
+  ShaulaRect rect = input;
+  if (rect.width < 0.0) {
+    rect.x += rect.width;
+    rect.width = -rect.width;
+  }
+  if (rect.height < 0.0) {
+    rect.y += rect.height;
+    rect.height = -rect.height;
+  }
+  double x1 = CLAMP(rect.x, 0.0, max_width);
+  double y1 = CLAMP(rect.y, 0.0, max_height);
+  double x2 = CLAMP(rect.x + rect.width, 0.0, max_width);
+  double y2 = CLAMP(rect.y + rect.height, 0.0, max_height);
+  return (ShaulaRect){x1, y1, MAX(0.0, x2 - x1), MAX(0.0, y2 - y1)};
+}
+
 #endif
