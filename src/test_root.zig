@@ -23,6 +23,7 @@ const _overlay_toolbar_layout_test = @import("overlay/toolbar_layout_test.zig");
 const _overlay_ui_state_store = @import("overlay/ui_state_store.zig");
 const _overlay_capture_session = @import("overlay/capture_session.zig");
 const _overlay_selection_draft_store = @import("overlay/selection_draft_store.zig");
+const _overlay_aspect_store = @import("overlay/aspect_store.zig");
 const _preview_service = @import("preview/service.zig");
 const _post_capture_json = @import("pipeline/post_capture_json.zig");
 const _post_capture_types = @import("pipeline/post_capture_types.zig");
@@ -51,6 +52,7 @@ test {
     _ = _overlay_ui_state_store;
     _ = _overlay_capture_session;
     _ = _overlay_selection_draft_store;
+    _ = _overlay_aspect_store;
     _ = _preview_service;
     _ = _post_capture_json;
     _ = _post_capture_types;

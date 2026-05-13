@@ -2,6 +2,7 @@ const std = @import("std");
 const capture_types = @import("../capture/types.zig");
 
 pub const DraftMode = enum {
+    quick,
     area,
     capture,
 };
@@ -77,6 +78,7 @@ pub fn load(
 
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ, mode: DraftMode) ![]u8 {
     const override_key = switch (mode) {
+        .quick => "SHAULA_OVERLAY_QUICK_DRAFT_FILE",
         .area => "SHAULA_OVERLAY_AREA_DRAFT_FILE",
         .capture => "SHAULA_OVERLAY_CAPTURE_DRAFT_FILE",
     };
@@ -92,6 +94,7 @@ fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ, mode:
     }
 
     const filename = switch (mode) {
+        .quick => "quick-draft.v1",
         .area => "area-draft.v1",
         .capture => "capture-draft.v1",
     };

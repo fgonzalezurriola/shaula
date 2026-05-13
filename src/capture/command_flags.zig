@@ -13,6 +13,8 @@ pub const AreaFlags = struct {
     region_capture_mode: ?[]const u8 = null,
 };
 
+pub const QuickFlags = AreaFlags;
+
 pub const FullscreenFlags = struct {
     json_mode: bool = false,
     save: bool = false,
@@ -53,6 +55,11 @@ pub const AllInOneFlags = AreaFlags;
 /// Parse `capture area` flags and emit deterministic CLI usage errors.
 pub fn parseAreaFlags(io: std.Io, argv: []const [*:0]const u8) !AreaFlags {
     return grammar.parse(AreaFlags, io, argv, regionSpec("capture area", "area"));
+}
+
+/// Parse `capture quick` flags and emit deterministic CLI usage errors.
+pub fn parseQuickFlags(io: std.Io, argv: []const [*:0]const u8) !QuickFlags {
+    return grammar.parse(QuickFlags, io, argv, regionSpec("capture quick", "quick"));
 }
 
 pub fn parseFullscreenFlags(io: std.Io, argv: []const [*:0]const u8) !FullscreenFlags {
@@ -99,5 +106,5 @@ fn simpleSpec(command: []const u8, mode: []const u8) grammar.CommandSpec {
 
 pub fn resolvePreviewDefault(mode: []const u8, explicit: ?bool) bool {
     if (explicit) |value| return value;
-    return std.mem.eql(u8, mode, "area") or std.mem.eql(u8, mode, "all-in-one");
+    return std.mem.eql(u8, mode, "quick") or std.mem.eql(u8, mode, "area") or std.mem.eql(u8, mode, "all-in-one");
 }

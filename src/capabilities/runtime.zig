@@ -83,6 +83,7 @@ pub fn backendLabel(kind: BackendKind) []const u8 {
 /// Query if a public or compatibility mode token is executable.
 pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
     if (std.mem.eql(u8, mode, "all-in-one")) return capture.area;
+    if (std.mem.eql(u8, mode, "quick")) return capture.area;
     if (std.mem.eql(u8, mode, "area")) return capture.area;
     if (std.mem.eql(u8, mode, "fullscreen")) return capture.fullscreen;
     if (std.mem.eql(u8, mode, "all-screens")) return capture.all_screens;

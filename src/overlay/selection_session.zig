@@ -3,7 +3,7 @@ const selection = @import("../selection/selection.zig");
 const capture_session = @import("capture_session.zig");
 const helper_protocol = @import("helper_protocol.zig");
 const ui_state_store = @import("ui_state_store.zig");
-const previous_area_store = @import("../runtime/previous_area_store.zig");
+const aspect_store = @import("aspect_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 const overlay_runtime = @import("runtime.zig");
@@ -12,6 +12,18 @@ const compositor_focused_output = @import("../compositor/focused_output.zig");
 pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
 pub const deterministicFailureCode = helper_protocol.deterministicFailureCode;
+
+pub const InteractionMode = enum {
+    quick,
+    area,
+
+    fn asEnvValue(mode: InteractionMode) []const u8 {
+        return switch (mode) {
+            .quick => "quick",
+            .area => "area",
+        };
+    }
+};
 
 const OverlayBackground = struct {
     path: []u8,
@@ -37,6 +49,7 @@ pub fn runSelection(
     io: std.Io,
     environ: std.process.Environ,
     mode: selection.SelectionMode,
+    interaction_mode: InteractionMode,
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
     region_capture_mode: RegionCaptureMode,
@@ -69,15 +82,35 @@ pub fn runSelection(
         return result;
     }
 
-    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, draft_mode, constraint, region_capture_mode);
+    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, interaction_mode, draft_mode, constraint, region_capture_mode);
     switch (helper_attempt) {
-        .selection => |result| {
+        .selection => |helper_selection_raw| {
+            const helper_selection = helper_selection_raw;
+            defer helper_selection.deinit(allocator);
+            const result = helper_selection.result;
             persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
+            persistSelectionAspect(allocator, io, environ, interaction_mode, result, helper_selection) catch {};
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
             return result;
         },
         .unavailable => return cancelledSelection(mode, constraint),
     }
+}
+
+fn persistSelectionAspect(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    interaction_mode: InteractionMode,
+    result: selection.SelectionResult,
+    helper_selection: HelperSelection,
+) !void {
+    if (interaction_mode != .area or result.cancelled) return;
+    if (helper_selection.final_aspect_known) {
+        try aspect_store.store(allocator, io, environ, helper_selection.final_aspect);
+        return;
+    }
+    try aspect_store.store(allocator, io, environ, result.aspect);
 }
 
 fn persistSelectionDraft(
@@ -119,8 +152,18 @@ fn persistToolbarPositionForSelection(
 }
 
 const HelperSelectionAttempt = union(enum) {
-    selection: selection.SelectionResult,
+    selection: HelperSelection,
     unavailable,
+};
+
+const HelperSelection = struct {
+    result: selection.SelectionResult,
+    final_aspect_known: bool = false,
+    final_aspect: ?[]u8 = null,
+
+    fn deinit(self: HelperSelection, allocator: std.mem.Allocator) void {
+        if (self.final_aspect) |aspect| allocator.free(aspect);
+    }
 };
 
 /// Executes overlay helper first and decides deterministic fallback behavior.
@@ -134,6 +177,7 @@ fn runHelperSelectionAttempt(
     io: std.Io,
     environ: std.process.Environ,
     mode: selection.SelectionMode,
+    interaction_mode: InteractionMode,
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
     region_capture_mode: RegionCaptureMode,
@@ -148,7 +192,16 @@ fn runHelperSelectionAttempt(
 
     var helper_env = try std.process.Environ.createMap(environ, allocator);
     defer helper_env.deinit();
-    if (constraint.aspect) |aspect| {
+    try helper_env.put("SHAULA_OVERLAY_INTERACTION_MODE", interaction_mode.asEnvValue());
+
+    const stored_area_aspect = if (interaction_mode == .area and constraint.aspect == null)
+        try aspect_store.load(allocator, io, environ)
+    else
+        null;
+    defer if (stored_area_aspect) |aspect| allocator.free(aspect);
+
+    const helper_aspect = constraint.aspect orelse stored_area_aspect;
+    if (helper_aspect) |aspect| {
         try helper_env.put("SHAULA_OVERLAY_ASPECT", aspect);
     }
     if (background) |prepared| {
@@ -157,8 +210,7 @@ fn runHelperSelectionAttempt(
     if (output_name) |name| {
         try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
     }
-    const initial = (try selection_draft_store.load(allocator, io, environ, draft_mode)) orelse
-        (try previous_area_store.load(allocator, io, environ));
+    const initial = try selection_draft_store.load(allocator, io, environ, draft_mode);
     if (initial) |geometry| {
         const initial_geometry = try std.fmt.allocPrint(allocator, "{d},{d},{d},{d}", .{
             geometry.x,
@@ -179,7 +231,33 @@ fn runHelperSelectionAttempt(
         return .unavailable;
     }
 
-    return .{ .selection = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint) };
+    const result = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint);
+    const aspect_override = try helper_protocol.parseAspectOverrideAlloc(allocator, helper.stdout);
+    defer aspect_override.deinit(allocator);
+
+    return .{ .selection = .{
+        .result = result,
+        .final_aspect_known = !result.cancelled,
+        .final_aspect = if (!result.cancelled)
+            try finalAspectForConfirmedSelection(allocator, helper_aspect, aspect_override)
+        else
+            null,
+    } };
+}
+
+fn finalAspectForConfirmedSelection(
+    allocator: std.mem.Allocator,
+    helper_aspect: ?[]const u8,
+    aspect_override: helper_protocol.AspectOverride,
+) !?[]u8 {
+    switch (aspect_override) {
+        .free => return null,
+        .value => |aspect| return try allocator.dupe(u8, aspect),
+        .missing => {
+            if (helper_aspect) |aspect| return try allocator.dupe(u8, aspect);
+            return null;
+        },
+    }
 }
 
 /// Prepares the optional frozen-screen visual background for the helper.
@@ -383,6 +461,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         .{ .block = block },
         .freeform,
         .area,
+        .area,
         .{ .aspect = null },
         .live,
         false,
@@ -410,6 +489,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
         std.testing.io,
         .{ .block = block },
         .freeform,
+        .area,
         .area,
         .{ .aspect = null },
         .live,
@@ -449,4 +529,19 @@ test "confirmed selection persists toolbar position" {
     try persistToolbarPositionForSelection(std.testing.allocator, std.testing.io, .{ .block = block }, result);
     const loaded = try ui_state_store.load(std.testing.allocator, std.testing.io, .{ .block = block });
     try std.testing.expect(loaded != null);
+}
+
+test "confirmed helper aspect resolves override and fallback" {
+    const custom_override: helper_protocol.AspectOverride = .{ .value = try std.testing.allocator.dupe(u8, "16:3") };
+    defer custom_override.deinit(std.testing.allocator);
+    const custom = try finalAspectForConfirmedSelection(std.testing.allocator, "16:9", custom_override);
+    defer if (custom) |aspect| std.testing.allocator.free(aspect);
+    try std.testing.expectEqualStrings("16:3", custom orelse return error.TestExpectedEqual);
+
+    const fallback = try finalAspectForConfirmedSelection(std.testing.allocator, "4:3", .missing);
+    defer if (fallback) |aspect| std.testing.allocator.free(aspect);
+    try std.testing.expectEqualStrings("4:3", fallback orelse return error.TestExpectedEqual);
+
+    const free = try finalAspectForConfirmedSelection(std.testing.allocator, "4:3", .free);
+    try std.testing.expect(free == null);
 }

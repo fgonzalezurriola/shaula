@@ -66,11 +66,24 @@ and the working diff.
   behavior, and `capture focused` remains as a CLI compatibility alias.
 - Capture surface unification: Noctalia's menu is the current naming source of
   truth (`Quick Capture`, `Capture Fullscreen`, `Capture All Screens`).
-  `capture-area` stays as the Noctalia placeholder id. Public capabilities now
-  report `area`, `fullscreen`, `all_screens`, and `window`.
+  Public capabilities now report `area`, `fullscreen`, `all_screens`, and
+  `window`.
   `all-in-one` is no longer promoted in docs/scripts and remains only as a
   legacy CLI alias for the Capture overlay flow; `focused` remains a hidden
   compatibility alias for current-output fullscreen behavior.
+- Capture Area restoration: `capture quick` is now the capture-on-release flow,
+  while `capture area` is the adjustable overlay flow. The area overlay opens
+  with its last confirmed area or a centered 60% default, shows a minimal
+  aspect/Discard toolbar, confirms with `y`/Enter, cancels with
+  Ctrl+C/Esc/Backspace/`n`, persists area/aspect only on confirm, and opens the
+  normal post-capture preview. Quick and Area draft state are intentionally
+  separate. Helper aspect extraction is parsed separately from `SelectionResult`
+  ownership so custom ratios can persist without returning borrowed JSON memory;
+  targeted contract tests cover quick mode routing, preview defaults, helper
+  aspect override parsing, final aspect resolution, and aspect-store roundtrip.
+  The GTK widget toolbar must compute placement against the monitor initial
+  surface size until the drawing area has a real allocation; otherwise startup
+  placement clamps to `(12,12)` before GTK measures the canvas.
 - Preview Ctrl+S and Ctrl+Shift+C success banners now use `Shaula captured`
   desktop notifications with Freedesktop `image-path` screenshot thumbnails
   and `notify-send -i` fallback. The `[preview.window] close_preview_on_save`
@@ -220,9 +233,17 @@ and the working diff.
   dry-run/test payload handling, helper protocol mapping, and accepted-selection
   draft/UI persistence.
 - The native GTK overlay used by `./dev capture` is now capture-on-release.
-  It no longer draws or requires the floating Capture/Esc/aspect button strip:
+  In quick mode it no longer draws or requires the floating button strip:
   a valid create, move, or resize drag confirms the selection on release.
   Escape/Q still cancel and Enter still confirms as a keyboard fallback.
+- Area mode (`capture area`) replaces the old Cairo-drawn toolbar with a real
+  GTK widget toolbar using `GtkOverlay` + `GtkFixed` for floating positioning.
+  The widget toolbar uses `@theme_bg_color`, `@theme_fg_color`, `@borders`, and
+  `@accent_bg_color` CSS variables so it respects the active GTK theme. It
+  contains an aspect ratio dropdown button with a popover list, a themed Capture
+  button (accent color), and an Esc cancel button. The toolbar floats below or
+  above the selection and repositions itself with the same logic as the old
+  Cairo toolbar. Capture is only enabled when there is a valid selection.
 - Overlay selection stays output-local while the GTK layer-shell helper is
   interactive, then adds the selected monitor origin when emitting helper JSON
   for backend capture. Persisted initial geometry subtracts that origin before

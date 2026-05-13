@@ -51,6 +51,21 @@ pub fn area(parsed: flags.AreaFlags, region_capture_mode: core_capture_mode.Regi
     };
 }
 
+pub fn quick(parsed: flags.QuickFlags, region_capture_mode: core_capture_mode.RegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
+    const mode = core_capture_mode.cliToken(.quick);
+    return .{
+        .command = "capture quick",
+        .reported_mode = mode,
+        .backend_mode = core_capture_mode.backendModeToken(.quick) orelse mode,
+        .request_mode = .area,
+        .output_path = parsed.output,
+        .area_geometry = geometry,
+        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .persist_previous_area = geometry,
+        .settle_region_mode = region_capture_mode,
+    };
+}
+
 pub fn allInOne(parsed: flags.AllInOneFlags, region_capture_mode: core_capture_mode.RegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
     const reported_mode = core_capture_mode.cliToken(.all_in_one);
     return .{

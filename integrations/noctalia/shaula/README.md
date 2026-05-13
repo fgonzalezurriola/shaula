@@ -5,7 +5,7 @@ Minimal optional Noctalia Shell plugin for Shaula.
 ## Behavior
 
 - Left click and right click open the Shaula menu.
-- The menu exposes Quick Capture, fullscreen/current-monitor, all-screens, Settings, doctor, screenshots-folder, and bug-report actions.
+- The menu exposes Quick Capture, Capture Area, fullscreen/current-monitor, all-screens, Settings, doctor, screenshots-folder, and bug-report actions.
 - Settings launches `shaula settings`; Noctalia does not read or write Shaula config.
 - No screenshot logic runs in Noctalia; every action calls the Shaula CLI.
 

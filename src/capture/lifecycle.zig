@@ -68,7 +68,7 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     }
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .capture, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
+    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .quick, .capture, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 
@@ -82,6 +82,29 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
     return executeLifecycle(allocator, io, environ, invocation.allInOne(parsed, region_capture_mode, geometry));
 }
 
+/// Execute `capture quick` through the capture-on-release overlay lifecycle.
+pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const mode = core_capture_mode.cliToken(.quick);
+    const parsed = flags.parseQuickFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    if (!parsed.json_mode) {
+        try json.writeErrorJson(io, "capture quick", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
+        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    }
+
+    const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
+    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture quick", mode, .quick, .quick, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
+    if (selection_result.exit_code) |code| return code;
+    const selected = selection_result.selection;
+
+    if (parsed.dry_run) {
+        try json.writeSelectionDryRunJson(allocator, io, "capture quick", selected);
+        return 0;
+    }
+
+    const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
+    return executeLifecycle(allocator, io, environ, invocation.quick(parsed, region_capture_mode, geometry));
+}
+
 /// Execute `capture area` through the shared capture lifecycle.
 pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     const mode = core_capture_mode.cliToken(.area);
@@ -92,7 +115,7 @@ pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     }
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture area", mode, .area, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
+    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture area", mode, .area, .area, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 
@@ -181,6 +204,7 @@ fn resolveOverlaySelection(
     environ: std.process.Environ,
     command: []const u8,
     reported_mode: []const u8,
+    interaction_mode: overlay.InteractionMode,
     draft_mode: overlay.DraftMode,
     aspect: ?[]const u8,
     region_capture_mode: core_capture_mode.RegionCaptureMode,
@@ -194,6 +218,7 @@ fn resolveOverlaySelection(
         io,
         environ,
         selection.SelectionMode.freeform,
+        interaction_mode,
         draft_mode,
         .{ .aspect = aspect },
         region_capture_mode,

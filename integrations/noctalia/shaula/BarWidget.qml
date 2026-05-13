@@ -36,8 +36,13 @@ NIconButton {
     model: [
       {
         "label": "Quick Capture",
-        "action": "capture-area",
+        "action": "capture-quick",
         "icon": "crop"
+      },
+      {
+        "label": "Capture Area",
+        "action": "capture-area",
+        "icon": "scan"
       },
       {
         "label": "Capture Fullscreen",
@@ -84,7 +89,9 @@ NIconButton {
 
   function executeAction(action) {
     var command = "";
- if (action === "capture-area") {
+ if (action === "capture-quick") {
+ command = "shaula capture quick --json";
+ } else if (action === "capture-area") {
  command = "shaula capture area --json";
  } else if (action === "capture-fullscreen") {
  command = "shaula capture fullscreen --json";

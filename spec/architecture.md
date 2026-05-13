@@ -40,6 +40,7 @@ All commands below require `--json` for contract-compliant automation.
 
 #### Capture family
 
+- `shaula capture quick --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
 - `shaula capture area --json [--copy] [--save] [--preview|--no-preview] [--output <path>] [--dry-run]`
 - `shaula capture fullscreen --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
 - `shaula capture all-screens --json [--copy] [--save] [--preview|--no-preview] [--output <path>]`
@@ -59,13 +60,13 @@ All commands below require `--json` for contract-compliant automation.
 
 Preview defaults:
 
-- `capture area` launches post-capture preview by default.
+- `capture quick` and `capture area` launch post-capture preview by default.
 - `capture fullscreen`, `capture all-screens`, `capture window`, and `capture previous-area` do not launch preview unless `--preview` is supplied.
 - `--no-preview` disables preview explicitly. `--dry-run` never launches preview.
 
 Copy defaults:
 
-- `capture area`, `capture fullscreen`, and `capture all-screens` copy to the clipboard by default.
+- `capture quick`, `capture area`, `capture fullscreen`, and `capture all-screens` copy to the clipboard by default.
 - `capture window` and `capture previous-area` copy only when `--copy` is supplied.
 
 #### Daemon family

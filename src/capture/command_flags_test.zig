@@ -2,6 +2,7 @@ const std = @import("std");
 const command_flags = @import("command_flags.zig");
 
 test "preview defaults follow interactive capture modes" {
+    try std.testing.expect(command_flags.resolvePreviewDefault("quick", null));
     try std.testing.expect(command_flags.resolvePreviewDefault("area", null));
     try std.testing.expect(command_flags.resolvePreviewDefault("all-in-one", null));
     try std.testing.expect(!command_flags.resolvePreviewDefault("fullscreen", null));

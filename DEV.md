@@ -33,6 +33,7 @@ Common manual commands:
 
 ```bash
 ./zig-out/bin/shaula preflight --json
+./zig-out/bin/shaula capture quick --json
 ./zig-out/bin/shaula capture area --json
 ./zig-out/bin/shaula capture area --json --no-preview
 ./zig-out/bin/shaula capture fullscreen --json --preview

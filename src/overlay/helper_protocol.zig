@@ -27,9 +27,23 @@ const HelperError = struct {
 
 const HelperEnvelope = struct {
     status: HelperStatus,
+    aspect: ?[]const u8 = null,
     geometry: ?HelperGeometry = null,
     action: ?HelperAction = null,
     @"error": ?HelperError = null,
+};
+
+pub const AspectOverride = union(enum) {
+    missing,
+    free,
+    value: []u8,
+
+    pub fn deinit(self: AspectOverride, allocator: std.mem.Allocator) void {
+        switch (self) {
+            .value => |aspect| allocator.free(aspect),
+            .missing, .free => {},
+        }
+    }
 };
 
 /// Parse helper stdio envelope v1 into the selection contract.
@@ -71,6 +85,20 @@ pub fn parseSelectionEnvelope(
             return cancelledSelection(mode, constraint);
         },
     }
+}
+
+/// Extract the optional final aspect emitted by the native helper.
+///
+/// Contract: `"Free"` is a known unlocked aspect, valid `W:H` returns an owned
+/// value, and malformed or absent aspect fields are ignored as missing.
+pub fn parseAspectOverrideAlloc(allocator: std.mem.Allocator, payload: []const u8) !AspectOverride {
+    const parsed = std.json.parseFromSlice(HelperEnvelope, allocator, payload, .{}) catch return .missing;
+    defer parsed.deinit();
+
+    const aspect = parsed.value.aspect orelse return .missing;
+    if (freeAspect(aspect)) return .free;
+    if (validAspect(aspect)) |valid| return .{ .value = try allocator.dupe(u8, valid) };
+    return .missing;
 }
 
 pub fn reportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {
@@ -210,6 +238,24 @@ fn resultFromGeometry(
     };
 }
 
+fn validAspect(aspect: ?[]const u8) ?[]const u8 {
+    const raw = aspect orelse return null;
+    if (freeAspect(aspect)) return null;
+    var parts = std.mem.splitScalar(u8, raw, ':');
+    const w_raw = parts.next() orelse return null;
+    const h_raw = parts.next() orelse return null;
+    if (parts.next() != null) return null;
+    const w = std.fmt.parseInt(u32, w_raw, 10) catch return null;
+    const h = std.fmt.parseInt(u32, h_raw, 10) catch return null;
+    if (w == 0 or h == 0) return null;
+    return raw;
+}
+
+fn freeAspect(aspect: ?[]const u8) bool {
+    const raw = aspect orelse return false;
+    return std.ascii.eqlIgnoreCase(raw, "Free");
+}
+
 fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.SelectionConstraint) selection.SelectionResult {
     return .{
         .mode = mode,
@@ -217,4 +263,37 @@ fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.Selec
         .geometry = null,
         .cancelled = true,
     };
+}
+
+test "helper aspect override extracts fixed custom and free values" {
+    const custom = try parseAspectOverrideAlloc(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"16:3\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    defer custom.deinit(std.testing.allocator);
+    try std.testing.expect(custom == .value);
+    try std.testing.expectEqualStrings("16:3", custom.value);
+
+    const free = try parseAspectOverrideAlloc(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"Free\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    defer free.deinit(std.testing.allocator);
+    try std.testing.expect(free == .free);
+}
+
+test "helper aspect override ignores missing or malformed values" {
+    const missing = try parseAspectOverrideAlloc(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    defer missing.deinit(std.testing.allocator);
+    try std.testing.expect(missing == .missing);
+
+    const malformed = try parseAspectOverrideAlloc(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"16/9\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    defer malformed.deinit(std.testing.allocator);
+    try std.testing.expect(malformed == .missing);
 }

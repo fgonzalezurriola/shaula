@@ -45,7 +45,7 @@ Niri config.
 
 ## Features
 
-- Quick Capture, fullscreen/current-monitor, all-screens, window, and previous-area capture
+- Quick Capture, adjustable Capture Area, fullscreen/current-monitor, all-screens, window, and previous-area capture
 - Native GTK/layer-shell selection overlay
 - Post-capture preview/editor
 - Native settings window for the current capture and preview-window config
@@ -89,6 +89,7 @@ sudo pacman -S grim wl-clipboard gtk4 gtk4-layer-shell
 ```bash
 shaula doctor
 shaula doctor --json
+shaula capture quick --json
 shaula capture area --json
 shaula capture area --json --no-preview
 shaula capture fullscreen --json --preview

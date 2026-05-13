@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 enum {
-  TOOLBAR_W = 326,
-  TOOLBAR_H = 48,
+  TOOLBAR_W = 280,
+  TOOLBAR_H = 40,
   PADDING = 12,
   HANDLE_CLEARANCE = 18,
   BADGE_CLEARANCE = 30,
@@ -21,25 +21,35 @@ enum {
   DROPDOWN_PADDING = 6,
   DROPDOWN_RADIUS = 10,
   RESIZE_HIT_RADIUS = 10,
-  CAPTURE_ON_RELEASE = 1,
+  CREATE_THRESHOLD = 6,
 };
 
 typedef enum {
   ASPECT_FREE,
+  ASPECT_1_1,
   ASPECT_16_9,
   ASPECT_4_3,
-  ASPECT_1_1,
   ASPECT_3_2,
+  ASPECT_16_10,
   ASPECT_9_16,
+  ASPECT_4_5,
+  ASPECT_3_4,
+  ASPECT_CUSTOM,
   ASPECT_COUNT,
 } ShaulaAspectChoice;
 
 static const char *ASPECT_LABELS[ASPECT_COUNT] = {
-  "Free", "16:9", "4:3", "1:1", "3:2", "9:16"
+  "Free", "1:1 Square", "16:9 Widescreen", "4:3 Standard", "3:2 Photo",
+  "16:10 Desktop", "9:16 Vertical", "4:5 Portrait", "3:4 Phone photo", "Custom..."
 };
 
-static const int ASPECT_WIDTHS[ASPECT_COUNT] =  { 0, 16, 4, 1, 3, 9 };
-static const int ASPECT_HEIGHTS[ASPECT_COUNT] = { 0, 9,  3, 1, 2, 16 };
+static const int ASPECT_WIDTHS[ASPECT_COUNT] =  { 0, 1, 16, 4, 3, 16, 9, 4, 3, 0 };
+static const int ASPECT_HEIGHTS[ASPECT_COUNT] = { 0, 1, 9,  3, 2, 10, 16, 5, 4, 0 };
+
+typedef enum {
+  INTERACTION_QUICK,
+  INTERACTION_AREA,
+} ShaulaInteractionMode;
 
 typedef struct {
   int x;
@@ -100,6 +110,7 @@ typedef struct {
   gboolean has_selection;
   ShaulaRect selection;
   gboolean has_toolbar;
+  ShaulaInteractionMode interaction_mode;
   ShaulaPoint toolbar;
   gboolean has_aspect;
   ShaulaAspect aspect;
@@ -111,13 +122,31 @@ typedef struct {
   gboolean dropdown_open;
   ShaulaAspectChoice aspect_choice;
   char aspect_custom_label[32];
+  char aspect_output_label[32];
   gboolean suppress_pointer_drag;
   ShaulaCursorShape cursor_shape;
+  /* GTK widget toolbar */
+  GtkWidget *overlay_container;
+  GtkWidget *toolbar_box;
+  GtkWidget *aspect_button;
+  GtkWidget *aspect_label;
+  GtkWidget *capture_button;
+  GtkWidget *cancel_button;
+  GtkWidget *aspect_popover;
+  GtkWidget *aspect_list_box;
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
 
 static GdkMonitor *monitor_for_output(void);
+static ShaulaPoint initial_surface_size(void);
+static void open_custom_aspect_dialog(void);
+static void reposition_toolbar_widget(void);
+static void update_aspect_label(void);
+
+static gboolean capture_on_release(void) {
+    return state.interaction_mode == INTERACTION_QUICK;
+}
 
 static ShaulaPoint current_output_origin(void) {
     GdkMonitor *monitor = monitor_for_output();
@@ -136,6 +165,69 @@ static void install_transparent_overlay_css(void) {
         ".shaula-overlay-window, .shaula-overlay-area {"
         "  background: transparent;"
         "  background-color: transparent;"
+        "}"
+        ".shaula-overlay-toolbar {"
+        "  background: alpha(@theme_bg_color, 0.92);"
+        "  border: 1px solid alpha(@borders, 0.6);"
+        "  border-radius: 12px;"
+        "  padding: 4px 6px;"
+        "  box-shadow: 0 2px 8px alpha(black, 0.3);"
+        "}"
+        ".shaula-overlay-toolbar button {"
+        "  color: @theme_fg_color;"
+        "  border-radius: 8px;"
+        "  padding: 4px 12px;"
+        "  min-height: 24px;"
+        "}"
+        ".shaula-overlay-toolbar button.flat:hover {"
+        "  background: alpha(@theme_fg_color, 0.08);"
+        "}"
+        ".shaula-overlay-toolbar .shaula-capture-btn {"
+        "  background: alpha(@accent_bg_color, 0.85);"
+        "  color: @accent_fg_color;"
+        "  font-weight: bold;"
+        "  border-radius: 8px;"
+        "}"
+        ".shaula-overlay-toolbar .shaula-capture-btn:hover {"
+        "  background: @accent_bg_color;"
+        "}"
+        ".shaula-overlay-toolbar .shaula-capture-btn:disabled {"
+        "  background: alpha(@theme_fg_color, 0.10);"
+        "  color: alpha(@theme_fg_color, 0.45);"
+        "}"
+        ".shaula-overlay-toolbar .shaula-cancel-btn {"
+        "  background: alpha(#8f3f46, 0.80);"
+        "  color: white;"
+        "  font-weight: bold;"
+        "  border-radius: 8px;"
+        "}"
+        ".shaula-overlay-toolbar .shaula-cancel-btn:hover {"
+        "  background: #8f3f46;"
+        "}"
+        ".shaula-overlay-toolbar .shaula-aspect-btn {"
+        "  color: @theme_fg_color;"
+        "}"
+        ".shaula-overlay-toolbar .shaula-aspect-btn:hover {"
+        "  background: alpha(@theme_fg_color, 0.08);"
+        "}"
+        ".shaula-overlay-aspect-popover contents {"
+        "  background: alpha(@theme_bg_color, 0.95);"
+        "  color: @theme_fg_color;"
+        "  border: 1px solid @borders;"
+        "  border-radius: 10px;"
+        "  padding: 4px;"
+        "}"
+        ".shaula-overlay-aspect-popover .aspect-row {"
+        "  padding: 6px 16px;"
+        "  border-radius: 6px;"
+        "  min-height: 24px;"
+        "}"
+        ".shaula-overlay-aspect-popover .aspect-row:hover {"
+        "  background: alpha(@theme_fg_color, 0.08);"
+        "}"
+        ".shaula-overlay-aspect-popover .aspect-row:selected,"
+        ".shaula-overlay-aspect-popover .aspect-row.selected {"
+        "  background: alpha(@accent_bg_color, 0.25);"
         "}";
     gtk_css_provider_load_from_data(provider, css, -1);
     GdkDisplay *display = gdk_display_get_default();
@@ -165,12 +257,13 @@ static void rounded_rect(cairo_t *cr, double x, double y, double w, double h, do
 
 static ShaulaPoint output_size(void) {
     if (state.area != NULL) {
-        return (ShaulaPoint){
-            .x = MAX(1, gtk_widget_get_width(state.area)),
-            .y = MAX(1, gtk_widget_get_height(state.area)),
-        };
+        int width = gtk_widget_get_width(state.area);
+        int height = gtk_widget_get_height(state.area);
+        if (width > 1 && height > 1) {
+            return (ShaulaPoint){ .x = width, .y = height };
+        }
     }
-    return (ShaulaPoint){ .x = 1920, .y = 1080 };
+    return initial_surface_size();
 }
 
 static gboolean point_in_selection(ShaulaRect selection, ShaulaPoint point) {
@@ -407,6 +500,21 @@ static gboolean resize_selection(ShaulaRect origin, ShaulaResizeHandle handle, S
     return resize_free(origin, handle, point, bounds, out);
 }
 
+static gboolean apply_aspect_from_center(ShaulaRect input, ShaulaAspect aspect, ShaulaPoint bounds, ShaulaRect *out) {
+    int w = input.width;
+    int h = input.height;
+    apply_aspect(&w, &h, aspect);
+    int cx = input.x + input.width / 2;
+    int cy = input.y + input.height / 2;
+    ShaulaRect centered = {
+        .x = cx - w / 2,
+        .y = cy - h / 2,
+        .width = w,
+        .height = h,
+    };
+    return clamp_selection(centered, bounds, out);
+}
+
 static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
   int left = s.x;
   int top = s.y;
@@ -469,61 +577,12 @@ static void update_toolbar(void) {
     }
     state.toolbar = candidate;
     state.has_toolbar = TRUE;
+    reposition_toolbar_widget();
 }
 
-static gboolean toolbar_aspect_hit(ShaulaPoint point) {
-  if (!state.has_toolbar) return FALSE;
-  ShaulaPoint t = state.toolbar;
-  return point.x >= t.x + 10 && point.x <= t.x + 110 &&
-         point.y >= t.y + 9 && point.y <= t.y + 39;
-}
 
-static gboolean toolbar_capture_hit(ShaulaPoint point) {
-  if (!state.has_toolbar) return FALSE;
-  ShaulaPoint t = state.toolbar;
-  return point.x >= t.x + 178 && point.x <= t.x + 252 &&
-         point.y >= t.y + 9 && point.y <= t.y + 39;
-}
-
-static gboolean toolbar_cancel_hit(ShaulaPoint point) {
-  if (!state.has_toolbar) return FALSE;
-  ShaulaPoint t = state.toolbar;
-  return point.x >= t.x + 260 && point.x <= t.x + 316 &&
-         point.y >= t.y + 9 && point.y <= t.y + 39;
-}
-
-static ShaulaRect dropdown_rect(void) {
-  if (!state.has_toolbar) return (ShaulaRect){ .x = 0, .y = 0, .width = 0, .height = 0 };
-  ShaulaPoint t = state.toolbar;
-  ShaulaPoint bounds = output_size();
-  int dd_w = 100;
-  int dd_h = DROPDOWN_PADDING * 2 + ASPECT_COUNT * DROPDOWN_ITEM_H;
-  int dd_x = clamp_int(t.x + 10, PADDING, MAX(PADDING, bounds.x - PADDING - dd_w));
-  int below_y = t.y + TOOLBAR_H + 6;
-  int above_y = t.y - dd_h - 6;
-  int dd_y = below_y + dd_h <= bounds.y - PADDING ? below_y : above_y;
-  dd_y = clamp_int(dd_y, PADDING, MAX(PADDING, bounds.y - PADDING - dd_h));
-  return (ShaulaRect){ .x = dd_x, .y = dd_y, .width = dd_w, .height = dd_h };
-}
-
-static int dropdown_item_at(ShaulaPoint point) {
-  if (!state.dropdown_open || !state.has_toolbar) return -1;
-  ShaulaRect dd = dropdown_rect();
-  if (point.x < dd.x || point.x > dd.x + dd.width || point.y < dd.y || point.y > dd.y + dd.height) return -1;
-  int relative_y = point.y - dd.y - DROPDOWN_PADDING;
-  if (relative_y < 0) return -1;
-  int idx = relative_y / DROPDOWN_ITEM_H;
-  return idx < ASPECT_COUNT ? idx : -1;
-}
 
 static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
-  if (!CAPTURE_ON_RELEASE && state.dropdown_open && dropdown_item_at(p) >= 0) return CURSOR_POINTER;
-  if (!CAPTURE_ON_RELEASE && state.has_toolbar &&
-      (toolbar_aspect_hit(p) ||
-       (state.has_selection && toolbar_capture_hit(p)) ||
-       toolbar_cancel_hit(p))) {
-    return CURSOR_POINTER;
-  }
   if (state.has_selection) {
     ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
     if (handle != HANDLE_NONE) return cursor_for_handle(handle);
@@ -536,25 +595,83 @@ static void apply_aspect_choice(void) {
   if (state.aspect_choice == ASPECT_FREE) {
     state.has_aspect = FALSE;
     state.aspect_custom_label[0] = '\0';
+    state.aspect_output_label[0] = '\0';
+  } else if (state.aspect_choice == ASPECT_CUSTOM) {
+    state.has_aspect = TRUE;
+    snprintf(state.aspect_output_label, sizeof(state.aspect_output_label), "%d:%d", state.aspect.width, state.aspect.height);
   } else {
     state.has_aspect = TRUE;
     state.aspect = (ShaulaAspect){
       .width = ASPECT_WIDTHS[(int)state.aspect_choice],
       .height = ASPECT_HEIGHTS[(int)state.aspect_choice],
     };
+    snprintf(state.aspect_output_label, sizeof(state.aspect_output_label), "%d:%d", state.aspect.width, state.aspect.height);
   }
   if (state.has_selection && state.has_aspect) {
     ShaulaPoint bounds = output_size();
-    int w = state.selection.width;
-    int h = state.selection.height;
-    apply_aspect(&w, &h, state.aspect);
-    ShaulaRect adj = { .x = state.selection.x, .y = state.selection.y, .width = w, .height = h };
-    if (clamp_selection(adj, bounds, &adj)) {
+    ShaulaRect adj;
+    if (apply_aspect_from_center(state.selection, state.aspect, bounds, &adj)) {
       state.selection = adj;
     }
   }
   update_toolbar();
   state.dropdown_open = FALSE;
+  if (state.aspect_popover != NULL)
+    gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
+}
+
+static gboolean parse_custom_aspect(const char *raw, ShaulaAspect *out) {
+  if (raw == NULL) return FALSE;
+  int w = 0;
+  int h = 0;
+  char tail = '\0';
+  if (sscanf(raw, " %d : %d %c", &w, &h, &tail) != 2 || w <= 0 || h <= 0) return FALSE;
+  *out = (ShaulaAspect){ .width = w, .height = h };
+  return TRUE;
+}
+
+static void custom_aspect_response(GtkDialog *dialog, int response_id, gpointer data) {
+  GtkEntry *entry = GTK_ENTRY(data);
+  if (response_id == GTK_RESPONSE_ACCEPT) {
+    ShaulaAspect next;
+    const char *raw = gtk_editable_get_text(GTK_EDITABLE(entry));
+    if (parse_custom_aspect(raw, &next)) {
+      state.aspect = next;
+      state.aspect_choice = ASPECT_CUSTOM;
+      state.has_aspect = TRUE;
+      snprintf(state.aspect_custom_label, sizeof(state.aspect_custom_label), "%d:%d", next.width, next.height);
+      snprintf(state.aspect_output_label, sizeof(state.aspect_output_label), "%d:%d", next.width, next.height);
+      apply_aspect_choice();
+      update_aspect_label();
+      queue_draw();
+    }
+  }
+  gtk_window_destroy(GTK_WINDOW(dialog));
+}
+
+static void custom_aspect_entry_activate(GtkEntry *entry, gpointer data) {
+  custom_aspect_response(GTK_DIALOG(data), GTK_RESPONSE_ACCEPT, entry);
+}
+
+static void open_custom_aspect_dialog(void) {
+  GtkWidget *dialog = gtk_dialog_new_with_buttons(
+      "Custom aspect",
+      GTK_WINDOW(state.window),
+      GTK_DIALOG_MODAL,
+      "Cancel",
+      GTK_RESPONSE_CANCEL,
+      "Apply",
+      GTK_RESPONSE_ACCEPT,
+      NULL);
+  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  GtkWidget *entry = gtk_entry_new();
+  gtk_editable_set_text(GTK_EDITABLE(entry), state.has_aspect ? state.aspect_output_label : "16:9");
+  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "W:H");
+  gtk_box_append(GTK_BOX(content), entry);
+  g_signal_connect(dialog, "response", G_CALLBACK(custom_aspect_response), entry);
+  g_signal_connect(entry, "activate", G_CALLBACK(custom_aspect_entry_activate), dialog);
+  gtk_window_present(GTK_WINDOW(dialog));
+  gtk_widget_grab_focus(entry);
 }
 
 static void draw_background(cairo_t *cr, int width, int height) {
@@ -566,45 +683,6 @@ static void draw_background(cairo_t *cr, int width, int height) {
     g_object_unref(scaled);
 }
 
-static void draw_pill(cairo_t *cr, int x, int y, int width, int height, const char *label, double r, double g, double b, double a, gboolean active) {
-  double rx = (double)x;
-  double ry = (double)y;
-  double rw = (double)width;
-  double rh = (double)height;
-
-  rounded_rect(cr, rx, ry, rw, rh, PILL_RADIUS);
-  if (active) {
-    cairo_set_source_rgba(cr, r, g, b, a);
-  } else {
-    cairo_set_source_rgba(cr, r * 0.8, g * 0.8, b * 0.8, 0.45);
-  }
-  cairo_fill_preserve(cr);
-
-  cairo_set_source_rgba(cr, 1, 1, 1, active ? 0.12 : 0.06);
-  cairo_set_line_width(cr, 1);
-  cairo_stroke(cr);
-
-  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-  cairo_set_font_size(cr, 12.5);
-  cairo_text_extents_t extents;
-  cairo_text_extents(cr, label, &extents);
-  double text_x = rx + (rw - extents.width) / 2 - extents.x_bearing;
-  double text_y = ry + (rh - extents.height) / 2 - extents.y_bearing;
-  cairo_move_to(cr, text_x, text_y);
-  cairo_set_source_rgba(cr, 1, 1, 1, active ? 0.95 : 0.5);
-  cairo_show_text(cr, label);
-}
-
-static void draw_chevron(cairo_t *cr, double cx, double cy, gboolean open) {
-  double s = 3.5;
-  cairo_set_line_width(cr, 1.5);
-  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.5);
-  cairo_move_to(cr, cx - s, open ? cy + s : cy - s);
-  cairo_line_to(cr, cx, open ? cy : cy);
-  cairo_line_to(cr, cx + s, open ? cy + s : cy - s);
-  cairo_stroke(cr);
-}
 
 static void draw_selection_guides(cairo_t *cr, ShaulaRect s, int width, int height) {
   double dash[] = { 5.0, 7.0 };
@@ -692,93 +770,6 @@ static void draw_badge(cairo_t *cr, ShaulaRect s, int width, int height) {
   cairo_show_text(cr, label);
 }
 
-static void draw_toolbar(cairo_t *cr, ShaulaPoint t, gboolean enabled) {
-  double tx = (double)t.x;
-  double ty = (double)t.y;
-
-  cairo_set_source_rgba(cr, 0, 0, 0, 0.25);
-  rounded_rect(cr, tx + 1, ty + 3, TOOLBAR_W, TOOLBAR_H, TOOLBAR_RADIUS + 1);
-  cairo_fill(cr);
-
-  rounded_rect(cr, tx, ty, TOOLBAR_W, TOOLBAR_H, TOOLBAR_RADIUS);
-  cairo_set_source_rgba(cr, 0.10, 0.10, 0.13, 0.78);
-  cairo_fill_preserve(cr);
-
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.10);
-  cairo_set_line_width(cr, 0.8);
-  cairo_stroke(cr);
-
-  rounded_rect(cr, tx + 1, ty + 1, TOOLBAR_W - 2, 1, 0);
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.06);
-  cairo_fill(cr);
-
-  const char *aspect_lbl = state.has_aspect && state.aspect_choice == ASPECT_FREE && state.aspect_custom_label[0] != '\0'
-    ? state.aspect_custom_label
-    : ASPECT_LABELS[state.aspect_choice];
-  draw_pill(cr, t.x + 10, t.y + 9, 100, 30, aspect_lbl, 0.28, 0.52, 0.83, 0.55, TRUE);
-  draw_chevron(cr, tx + 10 + 100 - 16, ty + 9 + 15, state.dropdown_open);
-
-  draw_pill(cr, t.x + 118, t.y + 9, 52, 30, "Area", 0.35, 0.42, 0.52, 0.4, TRUE);
-  if (enabled) {
-    draw_pill(cr, t.x + 178, t.y + 9, 74, 30, "Capture", 0.22, 0.72, 0.42, 0.6, TRUE);
-  } else {
-    draw_pill(cr, t.x + 178, t.y + 9, 74, 30, "Capture", 0.30, 0.33, 0.35, 0.3, FALSE);
-  }
-  draw_pill(cr, t.x + 260, t.y + 9, 56, 30, "Esc", 0.52, 0.28, 0.28, 0.4, TRUE);
-}
-
-static void draw_dropdown(cairo_t *cr, ShaulaPoint t) {
-  (void)t;
-  ShaulaRect dd = dropdown_rect();
-  double dd_x = (double)dd.x;
-  double dd_y = (double)dd.y;
-  double dd_w = (double)dd.width;
-  double dd_h = (double)dd.height;
-
-  cairo_set_source_rgba(cr, 0, 0, 0, 0.20);
-  rounded_rect(cr, dd_x + 1, dd_y + 3, dd_w, dd_h, DROPDOWN_RADIUS + 1);
-  cairo_fill(cr);
-
-  rounded_rect(cr, dd_x, dd_y, dd_w, dd_h, DROPDOWN_RADIUS);
-  cairo_set_source_rgba(cr, 0.08, 0.08, 0.11, 0.92);
-  cairo_fill_preserve(cr);
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.10);
-  cairo_set_line_width(cr, 0.5);
-  cairo_stroke(cr);
-
-  rounded_rect(cr, dd_x + 1, dd_y + 1, dd_w - 2, 1, 0);
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.05);
-  cairo_fill(cr);
-
-  for (int i = 0; i < ASPECT_COUNT; i += 1) {
-    double item_y = dd_y + DROPDOWN_PADDING + i * DROPDOWN_ITEM_H;
-    double item_h = (double)DROPDOWN_ITEM_H;
-
-    if (i == (int)state.aspect_choice) {
-      rounded_rect(cr, dd_x + 4, item_y + 2, dd_w - 8, item_h - 4, 6);
-      cairo_set_source_rgba(cr, 0.28, 0.52, 0.83, 0.25);
-      cairo_fill(cr);
-    }
-
-    if (i < ASPECT_COUNT - 1) {
-      cairo_set_source_rgba(cr, 1, 1, 1, 0.05);
-      cairo_set_line_width(cr, 0.5);
-      cairo_move_to(cr, dd_x + 10, item_y + item_h);
-      cairo_line_to(cr, dd_x + dd_w - 10, item_y + item_h);
-      cairo_stroke(cr);
-    }
-
-    cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL, i == (int)state.aspect_choice ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size(cr, 12.5);
-    cairo_text_extents_t extents;
-    cairo_text_extents(cr, ASPECT_LABELS[i], &extents);
-    double text_x = dd_x + (dd_w - extents.width) / 2 - extents.x_bearing;
-    double text_y = item_y + (item_h - extents.height) / 2 - extents.y_bearing;
-    cairo_move_to(cr, text_x, text_y);
-    cairo_set_source_rgba(cr, 1, 1, 1, i == (int)state.aspect_choice ? 0.95 : 0.6);
-    cairo_show_text(cr, ASPECT_LABELS[i]);
-  }
-}
 
 static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer data) {
   (void)area;
@@ -810,20 +801,13 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height, gp
     draw_handles(cr, s);
     draw_badge(cr, s, width, height);
   }
-
-  if (!CAPTURE_ON_RELEASE) {
-    ShaulaPoint t = state.has_toolbar ? state.toolbar : (ShaulaPoint){ .x = PADDING, .y = PADDING };
-    draw_toolbar(cr, t, state.has_selection);
-
-    if (state.dropdown_open) {
-      draw_dropdown(cr, t);
-    }
-  }
 }
 
 static void confirm(void) {
     if (!state.has_selection || state.selection.width <= 0 || state.selection.height <= 0) return;
-    printf("{\"status\":\"ok\",\"action\":\"capture\",\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
+    const char *aspect = state.has_aspect ? state.aspect_output_label : "Free";
+    printf("{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"%s\",\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
+        aspect,
         state.selection.x + state.output_origin.x,
         state.selection.y + state.output_origin.y,
         state.selection.width,
@@ -851,31 +835,10 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
   (void)data;
   ShaulaPoint p = { .x = (int)x, .y = (int)y };
 
-  if (!CAPTURE_ON_RELEASE) {
+  if (!capture_on_release()) {
     if (state.suppress_pointer_drag) {
       state.drag_mode = DRAG_TOOLBAR;
       apply_cursor(resolve_hover_cursor(p));
-      return;
-    }
-
-    if (state.dropdown_open) {
-      state.drag_mode = DRAG_TOOLBAR;
-      apply_cursor(resolve_hover_cursor(p));
-      return;
-    }
-
-    if (state.has_toolbar && toolbar_aspect_hit(p)) {
-      state.drag_mode = DRAG_TOOLBAR;
-      apply_cursor(CURSOR_POINTER);
-      return;
-    }
-
-    if (state.has_selection && toolbar_capture_hit(p)) {
-      state.drag_mode = DRAG_TOOLBAR;
-      return;
-    }
-    if (toolbar_cancel_hit(p)) {
-      state.drag_mode = DRAG_TOOLBAR;
       return;
     }
   }
@@ -899,7 +862,6 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y, gpointer 
     apply_cursor(CURSOR_GRABBING);
   } else {
     state.drag_mode = DRAG_CREATE;
-    state.has_selection = FALSE;
     apply_cursor(CURSOR_CROSSHAIR);
   }
   queue_draw();
@@ -912,6 +874,10 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy, gpoint
     ShaulaPoint p = { .x = state.drag_start.x + (int)dx, .y = state.drag_start.y + (int)dy };
     ShaulaRect next;
     if (state.drag_mode == DRAG_CREATE) {
+        if (abs((int)dx) < CREATE_THRESHOLD && abs((int)dy) < CREATE_THRESHOLD && state.has_selection) {
+            queue_draw();
+            return;
+        }
         state.has_selection = geometry_from_points(state.drag_start, p, bounds, &next);
         if (state.has_selection) state.selection = next;
     } else if (state.drag_mode == DRAG_MOVE) {
@@ -940,7 +906,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy, gpointer 
     ShaulaDragMode completed_mode = state.drag_mode;
     on_drag_update(gesture, dx, dy, data);
     gboolean should_confirm =
-        CAPTURE_ON_RELEASE &&
+        capture_on_release() &&
         (completed_mode == DRAG_CREATE ||
          completed_mode == DRAG_MOVE ||
          completed_mode == DRAG_RESIZE) &&
@@ -988,41 +954,12 @@ static void on_click(GtkGestureClick *gesture, int n_press, double x, double y, 
   (void)gesture;
   (void)n_press;
   (void)data;
-  ShaulaPoint p = { .x = (int)x, .y = (int)y };
+  (void)x;
+  (void)y;
 
-  if (CAPTURE_ON_RELEASE) {
+  if (capture_on_release()) {
     state.suppress_pointer_drag = FALSE;
-    state.dropdown_open = FALSE;
     return;
-  }
-
-  if (state.dropdown_open) {
-    int idx = dropdown_item_at(p);
-    state.suppress_pointer_drag = TRUE;
-    if (idx >= 0) {
-      state.aspect_choice = (ShaulaAspectChoice)idx;
-      apply_aspect_choice();
-      queue_draw();
-      return;
-    }
-    state.dropdown_open = FALSE;
-    queue_draw();
-    return;
-  }
-
-  if (state.has_toolbar && toolbar_aspect_hit(p)) {
-    state.suppress_pointer_drag = TRUE;
-    state.dropdown_open = !state.dropdown_open;
-    queue_draw();
-    return;
-  }
-
-  if (state.has_selection && toolbar_capture_hit(p)) {
-    state.suppress_pointer_drag = TRUE;
-    confirm();
-  } else if (toolbar_cancel_hit(p)) {
-    state.suppress_pointer_drag = TRUE;
-    cancel();
   }
 }
 
@@ -1040,22 +977,23 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval, guint ke
   (void)keycode;
   (void)data;
   if (keyval == GDK_KEY_Escape) {
-    if (state.dropdown_open) {
-      state.dropdown_open = FALSE;
-      queue_draw();
+    if (state.aspect_popover != NULL &&
+        gtk_widget_get_visible(state.aspect_popover)) {
+      gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
       return TRUE;
     }
     cancel();
     return TRUE;
   }
-  if (keyval == GDK_KEY_q) {
+  if (keyval == GDK_KEY_BackSpace || keyval == GDK_KEY_n || keyval == GDK_KEY_N || keyval == GDK_KEY_q ||
+      ((modifiers & GDK_CONTROL_MASK) != 0 && (keyval == GDK_KEY_c || keyval == GDK_KEY_C))) {
     cancel();
     return TRUE;
   }
-  if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
-    if (state.dropdown_open) {
-      state.dropdown_open = FALSE;
-      queue_draw();
+  if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter || keyval == GDK_KEY_y || keyval == GDK_KEY_Y) {
+    if (state.aspect_popover != NULL &&
+        gtk_widget_get_visible(state.aspect_popover)) {
+      gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
       return TRUE;
     }
     confirm();
@@ -1086,6 +1024,7 @@ static gboolean load_aspect(void) {
   if (raw == NULL || raw[0] == '\0') {
     state.has_aspect = FALSE;
     state.aspect_choice = ASPECT_FREE;
+    state.aspect_output_label[0] = '\0';
     return FALSE;
   }
   int w = 0;
@@ -1094,12 +1033,14 @@ static gboolean load_aspect(void) {
     state.has_aspect = FALSE;
     state.aspect_choice = ASPECT_FREE;
     state.aspect_custom_label[0] = '\0';
+    state.aspect_output_label[0] = '\0';
     return FALSE;
   }
   state.aspect = (ShaulaAspect){ .width = w, .height = h };
   state.has_aspect = TRUE;
-  state.aspect_choice = ASPECT_FREE;
+  state.aspect_choice = ASPECT_CUSTOM;
   snprintf(state.aspect_custom_label, sizeof(state.aspect_custom_label), "%d:%d", w, h);
+  snprintf(state.aspect_output_label, sizeof(state.aspect_output_label), "%d:%d", w, h);
   for (int i = 1; i < ASPECT_COUNT; i += 1) {
     if (ASPECT_WIDTHS[i] == w && ASPECT_HEIGHTS[i] == h) {
       state.aspect_choice = (ShaulaAspectChoice)i;
@@ -1108,6 +1049,15 @@ static gboolean load_aspect(void) {
     }
   }
   return TRUE;
+}
+
+static void load_interaction_mode(void) {
+  const char *raw = getenv("SHAULA_OVERLAY_INTERACTION_MODE");
+  if (raw != NULL && strcmp(raw, "area") == 0) {
+    state.interaction_mode = INTERACTION_AREA;
+  } else {
+    state.interaction_mode = INTERACTION_QUICK;
+  }
 }
 
 static void load_background(void) {
@@ -1129,18 +1079,52 @@ static void load_initial_geometry(void) {
   }
 
   ShaulaRect rect;
+  ShaulaPoint bounds = initial_surface_size();
   if (!clamp_selection((ShaulaRect){
       .x = x - state.output_origin.x,
       .y = y - state.output_origin.y,
       .width = width,
       .height = height,
-  }, output_size(), &rect)) {
+  }, bounds, &rect)) {
     return;
   }
 
   state.selection = rect;
+  if (state.has_aspect) {
+    ShaulaRect adjusted;
+    if (apply_aspect_from_center(state.selection, state.aspect, bounds, &adjusted)) state.selection = adjusted;
+  }
   state.has_selection = TRUE;
   update_toolbar();
+}
+
+static void ensure_default_area_selection(ShaulaPoint bounds) {
+  if (state.has_selection || state.interaction_mode != INTERACTION_AREA) return;
+
+  int margin_x = MAX(16, bounds.x / 5);
+  int margin_y = MAX(16, bounds.y / 5);
+  int width = MAX(1, bounds.x - margin_x * 2);
+  int height = MAX(1, bounds.y - margin_y * 2);
+  if (width < 320 && bounds.x > 340) width = 320;
+  if (height < 180 && bounds.y > 200) height = 180;
+  width = MIN(width, bounds.x - 2 * MIN(16, bounds.x / 10));
+  height = MIN(height, bounds.y - 2 * MIN(16, bounds.y / 10));
+
+  ShaulaRect rect = {
+    .x = (bounds.x - width) / 2,
+    .y = (bounds.y - height) / 2,
+    .width = width,
+    .height = height,
+  };
+  if (state.has_aspect) {
+    ShaulaRect adjusted;
+    if (apply_aspect_from_center(rect, state.aspect, bounds, &adjusted)) rect = adjusted;
+  }
+  if (clamp_selection(rect, bounds, &rect)) {
+    state.selection = rect;
+    state.has_selection = TRUE;
+    update_toolbar();
+  }
 }
 
 static GdkMonitor *monitor_for_output(void) {
@@ -1172,6 +1156,120 @@ static ShaulaPoint initial_surface_size(void) {
         return (ShaulaPoint){ .x = MAX(1, rect.width), .y = MAX(1, rect.height) };
     }
     return (ShaulaPoint){ .x = 1920, .y = 1080 };
+}
+
+/* --- GTK widget toolbar for the overlay --- */
+
+static void update_aspect_label(void) {
+  if (state.aspect_button == NULL) return;
+  const char *label;
+  if (!state.has_aspect) {
+    label = "Free";
+  } else if (state.aspect_output_label[0] != '\0') {
+    label = state.aspect_output_label;
+  } else {
+    label = ASPECT_LABELS[state.aspect_choice];
+  }
+  char buf[64];
+  snprintf(buf, sizeof(buf), "%s ▾", label);
+  gtk_button_set_label(GTK_BUTTON(state.aspect_button), buf);
+}
+
+static void on_aspect_item_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  int idx = GPOINTER_TO_INT(data);
+  if ((ShaulaAspectChoice)idx == ASPECT_CUSTOM) {
+    if (state.aspect_popover != NULL)
+      gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
+    open_custom_aspect_dialog();
+    return;
+  }
+  state.aspect_choice = (ShaulaAspectChoice)idx;
+  apply_aspect_choice();
+  update_aspect_label();
+  if (state.aspect_popover != NULL)
+    gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
+  queue_draw();
+}
+
+static void on_cancel_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  cancel();
+}
+
+static void on_capture_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  confirm();
+}
+
+static void reposition_toolbar_widget(void) {
+  if (state.toolbar_box == NULL) return;
+  gboolean visible = state.has_toolbar && !capture_on_release();
+  gtk_widget_set_visible(state.toolbar_box, visible);
+  if (!visible) return;
+  gtk_widget_set_margin_start(state.toolbar_box, state.toolbar.x);
+  gtk_widget_set_margin_top(state.toolbar_box, state.toolbar.y);
+  if (state.capture_button != NULL) {
+    gtk_widget_set_sensitive(state.capture_button,
+                             state.has_selection &&
+                             state.selection.width > 0 &&
+                             state.selection.height > 0);
+  }
+}
+
+static GtkWidget *build_widget_toolbar(void) {
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_widget_add_css_class(box, "shaula-overlay-toolbar");
+
+  /* Aspect ratio menu button with popover */
+  GtkWidget *aspect_btn = gtk_button_new_with_label("Free ▾");
+  gtk_widget_add_css_class(aspect_btn, "flat");
+  gtk_widget_add_css_class(aspect_btn, "shaula-aspect-btn");
+  state.aspect_button = aspect_btn;
+
+  GtkWidget *popover = gtk_popover_new();
+  gtk_widget_add_css_class(popover, "shaula-overlay-aspect-popover");
+  gtk_widget_set_parent(popover, aspect_btn);
+  state.aspect_popover = popover;
+
+  GtkWidget *list_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  for (int i = 0; i < ASPECT_COUNT; i++) {
+    GtkWidget *item = gtk_button_new_with_label(ASPECT_LABELS[i]);
+    gtk_widget_add_css_class(item, "flat");
+    gtk_widget_add_css_class(item, "aspect-row");
+    if (i == (int)state.aspect_choice)
+      gtk_widget_add_css_class(item, "selected");
+    gtk_widget_set_halign(item, GTK_ALIGN_FILL);
+    g_signal_connect(item, "clicked", G_CALLBACK(on_aspect_item_clicked),
+                     GINT_TO_POINTER(i));
+    gtk_box_append(GTK_BOX(list_box), item);
+  }
+  state.aspect_list_box = list_box;
+  gtk_popover_set_child(GTK_POPOVER(popover), list_box);
+
+  g_signal_connect_swapped(aspect_btn, "clicked",
+                           G_CALLBACK(gtk_popover_popup), popover);
+
+  gtk_box_append(GTK_BOX(box), aspect_btn);
+
+  GtkWidget *capture_btn = gtk_button_new_with_label("Capture");
+  gtk_widget_add_css_class(capture_btn, "shaula-capture-btn");
+  gtk_widget_set_sensitive(capture_btn, state.has_selection);
+  g_signal_connect(capture_btn, "clicked", G_CALLBACK(on_capture_clicked), NULL);
+  state.capture_button = capture_btn;
+  gtk_box_append(GTK_BOX(box), capture_btn);
+
+  GtkWidget *cancel_btn = gtk_button_new_with_label("Discard");
+  gtk_widget_add_css_class(cancel_btn, "shaula-cancel-btn");
+  g_signal_connect(cancel_btn, "clicked", G_CALLBACK(on_cancel_clicked), NULL);
+  state.cancel_button = cancel_btn;
+  gtk_box_append(GTK_BOX(box), cancel_btn);
+
+  state.toolbar_box = box;
+  update_aspect_label();
+  return box;
 }
 
 static void on_activate(GtkApplication *app, gpointer data) {
@@ -1216,8 +1314,27 @@ static void on_activate(GtkApplication *app, gpointer data) {
     gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(area), size.x);
     gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(area), size.y);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, NULL, NULL);
-    gtk_window_set_child(GTK_WINDOW(window), area);
+
+    /* Use GtkOverlay so the GTK widget toolbar floats above the Cairo
+     * drawing area without adding a fullscreen event target over the canvas.
+     */
+    GtkWidget *overlay = gtk_overlay_new();
+    gtk_overlay_set_child(GTK_OVERLAY(overlay), area);
+    state.overlay_container = overlay;
+
+    if (!capture_on_release()) {
+        GtkWidget *toolbar_widget = build_widget_toolbar();
+        gtk_widget_set_halign(toolbar_widget, GTK_ALIGN_START);
+        gtk_widget_set_valign(toolbar_widget, GTK_ALIGN_START);
+        gtk_widget_set_can_target(toolbar_widget, TRUE);
+        gtk_overlay_add_overlay(GTK_OVERLAY(overlay), toolbar_widget);
+    }
+
+    gtk_window_set_child(GTK_WINDOW(window), overlay);
+
     load_initial_geometry();
+    ensure_default_area_selection(size);
+    reposition_toolbar_widget();
 
     GtkGesture *drag = gtk_gesture_drag_new();
     g_signal_connect(drag, "drag-begin", G_CALLBACK(on_drag_begin), NULL);
@@ -1243,6 +1360,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
     gtk_window_present(GTK_WINDOW(window));
     gtk_widget_grab_focus(area);
 }
+
 
 int shaula_native_gtk_overlay_run(void) {
     if (getenv("SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE") != NULL) {
@@ -1272,6 +1390,7 @@ int shaula_native_gtk_overlay_run(void) {
     state.has_toolbar = TRUE;
     state.cursor_shape = CURSOR_UNSET;
     install_transparent_overlay_css();
+    load_interaction_mode();
     load_aspect();
     load_background();
 
