@@ -99,9 +99,9 @@ typedef struct {
   GtkWidget *color_hex_label;
   GtkWidget *toolbar_actions;
   GtkWidget *toolbar_metadata;
-  GtkWidget *toolbar_secondary[7];
-  ShaulaTool toolbar_secondary_tools[7];
-  GtkWidget *toolbar_utility_actions[4];
+  GtkWidget *toolbar_secondary[8];
+  ShaulaTool toolbar_secondary_tools[8];
+  GtkWidget *toolbar_utility_actions[3];
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];
   GtkWidget *undo_button;
   GtkWidget *redo_button;

@@ -9,7 +9,9 @@
 typedef struct {
   const char *icon_name;
   const char *label;
+  const char *overflow_label;
   const char *tooltip;
+  const char *badge;
   ShaulaTool tool;
 } ToolActionSpec;
 
@@ -21,23 +23,33 @@ typedef struct {
 } MenuActionSpec;
 
 static const ToolActionSpec secondary_tools[] = {
-    {"shaula-hand-symbolic", "Pan", "Pan (hold Space)", SHAULA_TOOL_HAND},
-    {"shaula-arrow-symbolic", "Arrow", "Arrow (2)", SHAULA_TOOL_ARROW},
-    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle (3)",
+    {"shaula-select-symbolic", "Select", "Select (1)", "Select (1)", "1",
+     SHAULA_TOOL_SELECT},
+    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle (2)",
+     "Rectangle (2)", "2",
      SHAULA_TOOL_RECTANGLE},
-    {"shaula-text-symbolic", "Text", "Text (4)", SHAULA_TOOL_TEXT},
-    {"shaula-pen-symbolic", "Pen", "Pen (6)", SHAULA_TOOL_PEN},
+    {"shaula-arrow-symbolic", "Arrow", "Arrow (3)", "Arrow (3)", "3",
+     SHAULA_TOOL_ARROW},
+    /* Number 4 is reserved for a future Line tool; insert it here without
+     * renumbering the remaining canvas tools once Line exists.
+     */
+    {"shaula-text-symbolic", "Text", "Text (5)", "Text (5)", "5",
+     SHAULA_TOOL_TEXT},
+    {"shaula-pen-symbolic", "Pen", "Pen (6)", "Pen (6)", "6",
+     SHAULA_TOOL_PEN},
     {"shaula-highlight-symbolic", "Highlight", "Highlight (7)",
+     "Highlight (7)", "7",
      SHAULA_TOOL_HIGHLIGHT},
-    {"shaula-measure-symbolic", "Measure", "Measure (8)", SHAULA_TOOL_MEASURE},
+    {"shaula-measure-symbolic", "Measure", "Measure (8)", "Measure (8)", "8",
+     SHAULA_TOOL_MEASURE},
+    {"shaula-spotlight-symbolic", "Spotlight", "Spotlight (9)",
+     "Spotlight (9)", "9", SHAULA_TOOL_SPOTLIGHT},
 };
 
 static const MenuActionSpec utility_actions[] = {
-    {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
-     G_CALLBACK(shaula_preview_on_save_as_clicked)},
-    {"shaula-select-symbolic", "Fit to screen", "Fit to screen (F)",
+    {"shaula-fit-to-screen-symbolic", "Fit to screen", "Fit to screen (F)",
      G_CALLBACK(shaula_preview_on_fit_clicked)},
-    {"shaula-select-symbolic", "Actual size", "Actual size (0)",
+    {"shaula-actual-size-symbolic", "Actual size", "Actual size (0)",
      G_CALLBACK(shaula_preview_on_actual_clicked)},
     {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
      G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
@@ -79,6 +91,17 @@ static void install_toolbar_css(void) {
       "headerbar.shaula-preview-toolbar button.flat:disabled {"
       "  opacity: 0.42;"
       "}"
+      ".shaula-shortcut-badge {"
+      "  min-width: 11px;"
+      "  min-height: 11px;"
+      "  padding: 0 2px;"
+      "  border-radius: 4px;"
+      "  border: 1px solid alpha(@theme_fg_color, 0.26);"
+      "  background: alpha(@theme_bg_color, 0.92);"
+      "  color: alpha(@theme_fg_color, 0.78);"
+      "  font-size: 8px;"
+      "  font-weight: 700;"
+      "}"
       "popover.shaula-preview-popover contents {"
       "  background: alpha(@theme_bg_color, 0.98);"
       "  color: @theme_fg_color;"
@@ -108,12 +131,35 @@ static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
   return button;
 }
 
+static GtkWidget *make_icon_with_badge(ShaulaPreviewState *state,
+                                       const char *icon_name,
+                                       const char *badge_text) {
+  GtkWidget *overlay = gtk_overlay_new();
+  GtkWidget *icon = shaula_preview_make_toolbar_icon(state, icon_name);
+  gtk_widget_set_size_request(overlay, 22, 22);
+  gtk_widget_set_halign(overlay, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(overlay, GTK_ALIGN_CENTER);
+  gtk_overlay_set_child(GTK_OVERLAY(overlay), icon);
+
+  if (badge_text != NULL && badge_text[0] != '\0') {
+    GtkWidget *badge = gtk_label_new(badge_text);
+    gtk_widget_add_css_class(badge, "shaula-shortcut-badge");
+    gtk_widget_set_halign(badge, GTK_ALIGN_END);
+    gtk_widget_set_valign(badge, GTK_ALIGN_END);
+    gtk_widget_set_margin_end(badge, 0);
+    gtk_widget_set_margin_bottom(badge, 0);
+    gtk_overlay_add_overlay(GTK_OVERLAY(overlay), badge);
+  }
+
+  return overlay;
+}
+
 static GtkWidget *make_tool_toggle(ShaulaPreviewState *state,
                                    const char *icon_name, const char *tooltip,
-                                   ShaulaTool tool) {
+                                   const char *badge, ShaulaTool tool) {
   GtkWidget *button = gtk_toggle_button_new();
   gtk_button_set_child(GTK_BUTTON(button),
-                       shaula_preview_make_toolbar_icon(state, icon_name));
+                       make_icon_with_badge(state, icon_name, badge));
   gtk_widget_set_tooltip_text(button, tooltip);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
@@ -150,7 +196,7 @@ static GtkWidget *make_menu_tool_row(ShaulaPreviewState *state,
   GtkWidget *button = gtk_button_new();
   GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   GtkWidget *icon = shaula_preview_make_toolbar_icon(state, spec->icon_name);
-  GtkWidget *label = gtk_label_new(spec->label);
+  GtkWidget *label = gtk_label_new(spec->overflow_label);
   gtk_widget_set_halign(label, GTK_ALIGN_START);
   gtk_widget_set_hexpand(label, TRUE);
   gtk_box_append(GTK_BOX(row), icon);
@@ -223,7 +269,9 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
     append_separator(state->more_menu_box);
 
   const MenuActionSpec actions[] = {
-      {"shaula-copy-symbolic", "Copy path", "Copy original image path",
+      {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
+       G_CALLBACK(shaula_preview_on_save_as_clicked)},
+      {"shaula-copy-symbolic", "Copy path", "Copy path",
        G_CALLBACK(shaula_preview_on_copy_path_clicked)},
       {"shaula-more-symbolic", "Open containing folder",
        "Open containing folder",
@@ -306,6 +354,7 @@ static void append_secondary_toolbar_button(ShaulaPreviewState *state,
                                             GtkWidget *actions, int index) {
   GtkWidget *button = make_tool_toggle(state, secondary_tools[index].icon_name,
                                        secondary_tools[index].tooltip,
+                                       secondary_tools[index].badge,
                                        secondary_tools[index].tool);
   gtk_widget_set_visible(button, FALSE);
   gtk_box_append(GTK_BOX(actions), button);
@@ -395,10 +444,10 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
                                      "Save (Ctrl+S)",
                                      G_CALLBACK(shaula_preview_on_save_clicked)));
   state->undo_button =
-      make_toolbar_button(state, "shaula-undo-symbolic", "Undo",
+      make_toolbar_button(state, "shaula-undo-symbolic", "Undo (Ctrl+Z)",
                           G_CALLBACK(shaula_preview_on_undo_clicked));
   state->redo_button =
-      make_toolbar_button(state, "shaula-redo-symbolic", "Redo",
+      make_toolbar_button(state, "shaula-redo-symbolic", "Redo (Ctrl+Shift+Z)",
                           G_CALLBACK(shaula_preview_on_redo_clicked));
   gtk_widget_set_sensitive(state->undo_button, FALSE);
   gtk_widget_set_sensitive(state->redo_button, FALSE);
@@ -406,14 +455,12 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(GTK_BOX(actions), state->redo_button);
 
   gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-crop-symbolic", "Crop (9)",
+                 make_tool_toggle(state, "shaula-hand-symbolic",
+                                  "Pan (hold Space)", NULL,
+                                  SHAULA_TOOL_HAND));
+  gtk_box_append(GTK_BOX(actions),
+                 make_tool_toggle(state, "shaula-crop-symbolic", "Crop", NULL,
                                   SHAULA_TOOL_CROP));
-  gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-select-symbolic", "Select (1)",
-                                  SHAULA_TOOL_SELECT));
-  gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-spotlight-symbolic",
-                                  "Spotlight (5)", SHAULA_TOOL_SPOTLIGHT));
 
   for (int i = 0; i < (int)G_N_ELEMENTS(secondary_tools); i++)
     append_secondary_toolbar_button(state, actions, i);

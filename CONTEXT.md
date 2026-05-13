@@ -132,13 +132,14 @@ and the working diff.
   width. Contextual Select actions live in a floating canvas HUD, like the
   Pen/Highlight property HUDs, so selecting tools or regions cannot ask GTK/Niri
   to resize the floating window.
-- Save As, Fit to screen, Actual size, and Reset annotations are responsive
-  utility actions: they appear as icon buttons before `...` when there is room,
-  and move back into the overflow menu when the headerbar is narrow. Hand/Pan is
-  a responsive canvas tool near the creation tools.
-- Spotlight remains a primary toolbar tool because its direct drag-to-create
-  flow is a high-frequency canvas mode. Pen and Highlight are responsive
-  secondary tools that can appear before `...` when there is room.
+- Pan and Crop are fixed navigation/utility tools after Copy, Save, Undo, and
+  Redo. Numbered canvas tools are ordered Select `1`, Rectangle `2`, Arrow `3`,
+  reserved Line `4`, Text `5`, Pen `6`, Highlight `7`, Measure `8`, and
+  Spotlight `9`; only implemented numbered tools show subtle GTK keycap badges.
+- Fit to screen, Actual size, and Reset annotations are responsive utility
+  actions: they appear as icon buttons before `...` when there is room, and move
+  back into the overflow menu when the headerbar is narrow. Save As remains a
+  More-menu action.
 - Spotlight regions are vector effect rectangles stored in image coordinates,
   matching the drag draft exactly. Do not route Spotlight creation through the
   crop/blur/erase pixel helper; that helper may round to integer pixels and is
@@ -251,8 +252,11 @@ and the working diff.
   annotations, left-drag on a selected annotation moves it, and left-click/drag
   from empty image space creates a temporary region selection. Clicking/dragging
   empty space outside the image clears selection without panning. Canvas panning
-  is now an explicit middle-button drag gesture. The same icon is reused in the
-  overflow menu for Fit to screen and Actual size.
+  is now an explicit middle-button drag gesture.
+- `shaula-fit-to-screen-symbolic` Fit to screen uses the root-provided
+  arrows-maximize SVG moved into the preview icon theme.
+- `shaula-actual-size-symbolic` Actual size uses a simple currentColor `1:1`
+  symbolic SVG and keeps `0` as the shortcut without showing a toolbar badge.
 - `shaula-hand-symbolic` Hand/Pan: implemented as a view-only navigation tool.
   It is routed through `SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND`, uses the existing
   pan operation, left-drag pans while active, and the cursor is `grab`/`grabbing`.
@@ -374,6 +378,7 @@ and the working diff.
 
 ## Overflow Menu
 
+- Save As: implemented.
 - Fit to screen: implemented.
 - Actual size: implemented.
 - Reset annotations: implemented.
@@ -464,10 +469,11 @@ and the working diff.
   shortcut map.
 - Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+Shift+S,
   Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`/`F`,
-  `0`, number tool hotkeys `1` Select, `2` Arrow, `3` Rectangle, `4` Text,
-  `5` Spotlight, `6` Pen, `7` Highlight, `8` Measure, `9` Crop, and secondary
-  letter tool hotkeys `V/A/R/T/S/P/H/M/C` plus `B` Blur and `E` Erase when their
-  region command is available. Space-held Hand/Pan is transient input state in
+  `0`, number tool hotkeys `1` Select, `2` Rectangle, `3` Arrow, reserved `4`
+  Line with no current command, `5` Text, `6` Pen, `7` Highlight, `8` Measure,
+  `9` Spotlight, and secondary letter tool hotkeys `V/A/R/T/S/P/H/M/C` plus `B`
+  Blur and `E` Erase when their region command is available. Space-held Hand/Pan
+  is transient input state in
   `preview_canvas.c`, not a persistent shortcut command, so it can restore the
   previous selected tool safely.
 - Toolbar/menu callbacks now dispatch through preview commands while existing
