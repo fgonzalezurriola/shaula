@@ -273,6 +273,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->fit_zoom = 1.0;
   state->fit_mode = TRUE;
   state->active_tool = SHAULA_TOOL_SELECT;
+  state->previous_tool_before_space_pan = SHAULA_TOOL_SELECT;
   state->operation = SHAULA_OPERATION_NONE;
   state->last_action = "close";
   state->is_dark = TRUE;

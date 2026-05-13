@@ -1,5 +1,6 @@
 #include "preview_actions.h"
 
+#include <errno.h>
 #include <glib/gstdio.h>
 #include <sys/wait.h>
 #include <stdio.h>
@@ -10,6 +11,9 @@
 #include "preview_render.h"
 #include "preview_toolbar.h"
 
+static gboolean shaula_preview_notify(const char *summary, const char *body,
+                                      gboolean transient, int timeout_ms);
+
 static void report_error(const char *context, GError *error) {
   if (error != NULL) {
     fprintf(stderr, "shaula-preview %s failed: %s\n", context, error->message);
@@ -17,6 +21,16 @@ static void report_error(const char *context, GError *error) {
   } else {
     fprintf(stderr, "shaula-preview %s failed\n", context);
   }
+}
+
+static void notify_save_failure(ShaulaPreviewState *state, const char *context,
+                                GError *error) {
+  char *body = g_strdup(error != NULL ? error->message : "Save failed");
+  report_error(context, error);
+  if (state != NULL)
+    state->notified =
+        shaula_preview_notify("Could not save screenshot", body, FALSE, 6000);
+  g_free(body);
 }
 
 static char *render_or_original_png(ShaulaPreviewState *state, gboolean *is_temp,
@@ -71,6 +85,126 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
   return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+static gboolean path_has_prefix_dir(const char *path, const char *dir) {
+  if (path == NULL || dir == NULL || dir[0] == '\0')
+    return FALSE;
+  gsize len = strlen(dir);
+  return g_str_has_prefix(path, dir) &&
+         (path[len] == '\0' || path[len] == G_DIR_SEPARATOR);
+}
+
+static gboolean is_temporary_capture_path(const char *path) {
+  if (path == NULL)
+    return TRUE;
+  if (g_str_has_prefix(path, "/tmp/shaula/captures/"))
+    return TRUE;
+  const char *runtime_dir = g_getenv("XDG_RUNTIME_DIR");
+  if (runtime_dir != NULL && runtime_dir[0] != '\0') {
+    char *runtime_captures =
+        g_build_filename(runtime_dir, "shaula", "captures", NULL);
+    gboolean temporary = path_has_prefix_dir(path, runtime_captures);
+    g_free(runtime_captures);
+    if (temporary)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static gboolean ensure_writable_dir(const char *dir, GError **error) {
+  if (dir == NULL || dir[0] == '\0')
+    return FALSE;
+  if (g_mkdir_with_parents(dir, 0700) != 0) {
+    if (error != NULL)
+      g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(errno),
+                  "Could not create %s: %s", dir, g_strerror(errno));
+    return FALSE;
+  }
+
+  char *probe = g_strdup_printf("%s%c.shaula-write-probe-%" G_GINT64_FORMAT
+                                ".tmp",
+                                dir, G_DIR_SEPARATOR, g_get_real_time());
+  gboolean ok = g_file_set_contents(probe, "", 0, error);
+  if (ok)
+    g_unlink(probe);
+  g_free(probe);
+  return ok;
+}
+
+static char *quick_save_directory(GError **error) {
+  const char *home = g_get_home_dir();
+  if (home == NULL || home[0] == '\0') {
+    g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
+                "Home directory is not available");
+    return NULL;
+  }
+
+  char *preferred = g_build_filename(home, "Pictures", "shaula", NULL);
+  if (ensure_writable_dir(preferred, NULL))
+    return preferred;
+  g_free(preferred);
+
+  char *fallback = g_build_filename(home, "shaula", NULL);
+  if (ensure_writable_dir(fallback, error))
+    return fallback;
+  g_free(fallback);
+  return NULL;
+}
+
+static char *timestamped_quick_save_path(GError **error) {
+  char *dir = quick_save_directory(error);
+  if (dir == NULL)
+    return NULL;
+
+  GDateTime *now = g_date_time_new_now_local();
+  char *stamp = now != NULL ? g_date_time_format(now, "%Y-%m-%d-%H%M%S")
+                            : g_strdup_printf("%" G_GINT64_FORMAT,
+                                              g_get_real_time());
+  if (now != NULL)
+    g_date_time_unref(now);
+  char *filename = g_strdup_printf("shaula-%s.png", stamp);
+  char *path = g_build_filename(dir, filename, NULL);
+  g_free(filename);
+  g_free(stamp);
+  g_free(dir);
+  return path;
+}
+
+static char *display_path_with_tilde(const char *path) {
+  const char *home = g_get_home_dir();
+  if (home != NULL && home[0] != '\0' && path_has_prefix_dir(path, home)) {
+    gsize home_len = strlen(home);
+    if (path[home_len] == '\0')
+      return g_strdup("~");
+    return g_strdup_printf("~%s", path + home_len);
+  }
+  return g_strdup(path);
+}
+
+static gboolean save_rendered_png_to_path(ShaulaPreviewState *state,
+                                          const char *target,
+                                          GError **error) {
+  gboolean is_temp = FALSE;
+  char *source = render_or_original_png(state, &is_temp, error);
+  if (source == NULL)
+    return FALSE;
+
+  gboolean saved = TRUE;
+  if (g_strcmp0(source, target) != 0)
+    saved = shaula_image_io_copy_file_bytes(source, target, error);
+  if (is_temp)
+    g_unlink(source);
+  g_free(source);
+  return saved;
+}
+
+static void remember_real_save_path(ShaulaPreviewState *state,
+                                    const char *target) {
+  g_free(state->saved_path);
+  state->saved_path = g_strdup(target);
+  g_free(state->path);
+  state->path = g_strdup(target);
+}
+
 void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) {
   if (state == NULL)
     return;
@@ -78,8 +212,13 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
       shaula_preview_apply_crop_to_selected_rect(state))
     return;
   shaula_preview_commit_history_gesture(state, TRUE);
-  shaula_preview_cancel_operation(state);
-  if (tool != SHAULA_TOOL_SELECT) {
+  if (tool == SHAULA_TOOL_HAND) {
+    if (state->operation != SHAULA_OPERATION_NONE)
+      shaula_preview_cancel_operation(state);
+  } else {
+    shaula_preview_cancel_operation(state);
+  }
+  if (tool != SHAULA_TOOL_SELECT && tool != SHAULA_TOOL_HAND) {
     shaula_preview_clear_selection(state);
     shaula_preview_clear_region_selection(state);
   }
@@ -95,6 +234,8 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) 
     const char *cursor = "crosshair";
     if (tool == SHAULA_TOOL_SELECT)
       cursor = "default";
+    else if (tool == SHAULA_TOOL_HAND)
+      cursor = "grab";
     else if (tool == SHAULA_TOOL_TEXT)
       cursor = "text";
     gtk_widget_set_cursor_from_name(state->area, cursor);
@@ -128,6 +269,46 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
   if (is_temp)
     g_unlink(source);
   g_free(source);
+}
+
+void shaula_preview_action_save(ShaulaPreviewState *state) {
+  if (state == NULL || state->image == NULL)
+    return;
+
+  state->last_action = "save";
+  state->saved = FALSE;
+  state->notified = FALSE;
+
+  GError *error = NULL;
+  const char *real_path =
+      state->saved_path != NULL ? state->saved_path : state->path;
+  char *target = NULL;
+  if (real_path != NULL && !is_temporary_capture_path(real_path)) {
+    target = shaula_image_io_with_png_extension(real_path);
+  } else {
+    target = timestamped_quick_save_path(&error);
+  }
+
+  if (target == NULL) {
+    notify_save_failure(state, "quick save target", error);
+    return;
+  }
+
+  if (!save_rendered_png_to_path(state, target, &error)) {
+    notify_save_failure(state, "quick save", error);
+    g_free(target);
+    return;
+  }
+
+  state->saved = TRUE;
+  remember_real_save_path(state, target);
+  char *display = display_path_with_tilde(target);
+  char *body = g_strdup_printf("Saved to %s", display);
+  state->notified =
+      shaula_preview_notify("Screenshot saved", body, TRUE, 2500);
+  g_free(body);
+  g_free(display);
+  g_free(target);
 }
 
 void shaula_preview_action_accept(ShaulaPreviewState *state,
@@ -215,27 +396,19 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
       if (target != NULL) {
         char *target_png = shaula_image_io_with_png_extension(target);
         if (target_png != NULL) {
-          gboolean is_temp = FALSE;
           GError *error = NULL;
-          char *source = render_or_original_png(state, &is_temp, &error);
-          if (source == NULL) {
-            report_error("save render", error);
-            state->notified = shaula_preview_notify(
-                "Could not save screenshot", "Save failed", FALSE, 6000);
-          } else if (!shaula_image_io_copy_file_bytes(source, target_png, &error)) {
-            report_error("save", error);
-            state->notified = shaula_preview_notify(
-                "Could not save screenshot", "Save failed", FALSE, 6000);
+          if (!save_rendered_png_to_path(state, target_png, &error)) {
+            notify_save_failure(state, "save", error);
           } else {
             state->saved = TRUE;
-            g_free(state->saved_path);
-            state->saved_path = g_strdup(target_png);
-            state->notified = shaula_preview_notify("Screenshot saved",
-                                                    target_png, TRUE, 2500);
+            remember_real_save_path(state, target_png);
+            char *display = display_path_with_tilde(target_png);
+            char *body = g_strdup_printf("Saved to %s", display);
+            state->notified =
+                shaula_preview_notify("Screenshot saved", body, TRUE, 2500);
+            g_free(body);
+            g_free(display);
           }
-          if (is_temp)
-            g_unlink(source);
-          g_free(source);
           g_free(target_png);
         } else {
           state->notified = shaula_preview_notify("Could not save screenshot",
@@ -347,6 +520,11 @@ void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data) {
 }
 
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SAVE);
+}
+
+void shaula_preview_on_save_as_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SAVE_AS);
 }
@@ -469,6 +647,9 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
   switch (tool) {
   case SHAULA_TOOL_SELECT:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT;
+    break;
+  case SHAULA_TOOL_HAND:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND;
     break;
   case SHAULA_TOOL_CROP:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP;

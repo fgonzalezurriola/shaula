@@ -7,6 +7,7 @@
 
 void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool);
 void shaula_preview_action_copy(ShaulaPreviewState *state);
+void shaula_preview_action_save(ShaulaPreviewState *state);
 void shaula_preview_action_accept(ShaulaPreviewState *state,
                                   gboolean copy_to_clipboard);
 void shaula_preview_action_save_as(ShaulaPreviewState *state);
@@ -27,6 +28,7 @@ void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state);
 
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_save_as_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_undo_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_redo_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_discard_clicked(GtkButton *button, gpointer data);

@@ -397,6 +397,15 @@ static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
   cairo_restore(cr);
 }
 
+static void draw_pen_path(cairo_t *cr, ShaulaPenPath path) {
+  if (path.len <= 0)
+    return;
+  cairo_move_to(cr, path.points[0].x, path.points[0].y);
+  for (int i = 1; i < path.len; i++)
+    cairo_line_to(cr, path.points[i].x, path.points[i].y);
+  cairo_stroke(cr);
+}
+
 /* Draws a filled triangular arrowhead that scales with stroke width. The
  * head size is proportional to the shaft width so thicker arrows get larger
  * heads, matching Shottr-like proportions.
@@ -648,22 +657,12 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
     if (annotation->data.highlight.len > 0) {
       set_annotation_color(cr, annotation->color, 1.0);
       cairo_set_line_width(cr, annotation->stroke_width);
-      cairo_move_to(cr, annotation->data.highlight.points[0].x,
-                    annotation->data.highlight.points[0].y);
-      for (int i = 1; i < annotation->data.highlight.len; i++)
-        cairo_line_to(cr, annotation->data.highlight.points[i].x,
-                      annotation->data.highlight.points[i].y);
-      cairo_stroke(cr);
+      draw_pen_path(cr, annotation->data.highlight);
     }
     break;
   case SHAULA_ANNOTATION_PEN:
     if (annotation->data.pen.len > 0) {
-      cairo_move_to(cr, annotation->data.pen.points[0].x,
-                    annotation->data.pen.points[0].y);
-      for (int i = 1; i < annotation->data.pen.len; i++)
-        cairo_line_to(cr, annotation->data.pen.points[i].x,
-                      annotation->data.pen.points[i].y);
-      cairo_stroke(cr);
+      draw_pen_path(cr, annotation->data.pen);
     }
     break;
   }
@@ -671,9 +670,15 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
   if (annotation->selected) {
     if (annotation->type == SHAULA_ANNOTATION_PEN) {
       draw_path_selection(cr, annotation->data.pen, annotation->stroke_width);
+      set_annotation_color(cr, annotation->color, 1.0);
+      cairo_set_line_width(cr, annotation->stroke_width);
+      draw_pen_path(cr, annotation->data.pen);
     } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
       draw_path_selection(cr, annotation->data.highlight,
                           annotation->stroke_width);
+      set_annotation_color(cr, annotation->color, 1.0);
+      cairo_set_line_width(cr, annotation->stroke_width);
+      draw_pen_path(cr, annotation->data.highlight);
     } else {
       draw_selection(cr, annotation->bounds);
     }

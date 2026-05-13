@@ -37,6 +37,77 @@ static ShaulaPoint clamped_image_point(ShaulaPreviewState *state,
                               shaula_preview_image_height(state));
 }
 
+static const char *cursor_name_for_tool(ShaulaTool tool) {
+  switch (tool) {
+  case SHAULA_TOOL_SELECT:
+    return "default";
+  case SHAULA_TOOL_HAND:
+    return "grab";
+  case SHAULA_TOOL_TEXT:
+    return "text";
+  case SHAULA_TOOL_CROP:
+  case SHAULA_TOOL_ARROW:
+  case SHAULA_TOOL_MEASURE:
+  case SHAULA_TOOL_RECTANGLE:
+  case SHAULA_TOOL_HIGHLIGHT:
+  case SHAULA_TOOL_PEN:
+  case SHAULA_TOOL_SPOTLIGHT:
+    return "crosshair";
+  case SHAULA_TOOL_COUNT:
+    return "default";
+  }
+  return "default";
+}
+
+static gboolean focus_is_editable_text(ShaulaPreviewState *state,
+                                       GtkWidget *focus) {
+  if (focus == NULL)
+    return FALSE;
+  return GTK_IS_EDITABLE(focus) || GTK_IS_TEXT_VIEW(focus) ||
+         focus == state->text_entry ||
+         (state->text_entry != NULL &&
+          gtk_widget_is_ancestor(focus, state->text_entry));
+}
+
+static gboolean is_space_key(guint keyval) {
+  return keyval == GDK_KEY_space || keyval == GDK_KEY_KP_Space;
+}
+
+static void restore_space_pan_tool(ShaulaPreviewState *state) {
+  if (state == NULL || !state->space_pan_active)
+    return;
+  ShaulaTool previous = state->previous_tool_before_space_pan;
+  state->space_pan_active = FALSE;
+  state->space_pan_restore_pending = FALSE;
+  if (previous != SHAULA_TOOL_HAND && state->active_tool == SHAULA_TOOL_HAND) {
+    state->active_tool = previous;
+    shaula_preview_toolbar_update_tool_state(state);
+    if (state->area != NULL && state->operation != SHAULA_OPERATION_PAN)
+      gtk_widget_set_cursor_from_name(state->area,
+                                      cursor_name_for_tool(state->active_tool));
+  }
+}
+
+static gboolean begin_space_pan_tool(ShaulaPreviewState *state,
+                                     GdkModifierType modifiers) {
+  if (state == NULL || state->space_pan_active)
+    return TRUE;
+  if ((modifiers & (GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK)) != 0)
+    return FALSE;
+
+  state->previous_tool_before_space_pan = state->active_tool;
+  state->space_pan_active = TRUE;
+  state->space_pan_restore_pending = FALSE;
+  if (state->operation == SHAULA_OPERATION_NONE &&
+      state->active_tool != SHAULA_TOOL_HAND) {
+    state->active_tool = SHAULA_TOOL_HAND;
+    shaula_preview_toolbar_update_tool_state(state);
+    if (state->area != NULL)
+      gtk_widget_set_cursor_from_name(state->area, "grab");
+  }
+  return TRUE;
+}
+
 static gboolean spotlight_debug_enabled(void) {
   const char *value = g_getenv("SHAULA_DEBUG_SPOTLIGHT");
   return value != NULL && value[0] != '\0' && g_strcmp0(value, "0") != 0;
@@ -755,6 +826,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     return;
 
   switch (state->active_tool) {
+  case SHAULA_TOOL_HAND:
+    start_pan(state, x, y);
+    break;
   case SHAULA_TOOL_SELECT: {
     ShaulaAnnotation *hit = inside ? shaula_annotations_hit_test(
                                          state->annotations, image_point,
@@ -1112,9 +1186,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
       }
       state->has_region_selection = FALSE;
     }
-    gtk_widget_set_cursor_from_name(
-        state->area, state->active_tool == SHAULA_TOOL_SELECT ? "default"
-                                                              : "crosshair");
+    gtk_widget_set_cursor_from_name(state->area,
+                                    cursor_name_for_tool(state->active_tool));
   } else if (state->operation == SHAULA_OPERATION_CROP) {
     if (!shaula_preview_apply_crop(state))
       shaula_preview_cancel_operation(state);
@@ -1124,6 +1197,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   if (state->operation != SHAULA_OPERATION_CROP)
     state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
+  if (state->space_pan_restore_pending)
+    restore_space_pan_tool(state);
   if (state->draft_pen_points != NULL &&
       state->operation != SHAULA_OPERATION_PEN)
     g_array_set_size(state->draft_pen_points, 0);
@@ -1141,16 +1216,15 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   GtkWidget *focus = state->window != NULL
                          ? gtk_window_get_focus(GTK_WINDOW(state->window))
                          : NULL;
-  if (focus != NULL &&
-      (GTK_IS_EDITABLE(focus) || focus == state->text_entry ||
-       (state->text_entry != NULL &&
-        gtk_widget_is_ancestor(focus, state->text_entry)))) {
+  if (focus_is_editable_text(state, focus)) {
     if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
       shaula_preview_cancel_operation(state);
       return TRUE;
     }
     return FALSE;
   }
+  if (is_space_key(keyval))
+    return begin_space_pan_tool(state, modifiers);
  if (keyval == GDK_KEY_Escape) {
  if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
  shaula_preview_cancel_operation(state);
@@ -1227,6 +1301,22 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   return FALSE;
 }
 
+static void on_key_released(GtkEventControllerKey *controller, guint keyval,
+                            guint keycode, GdkModifierType modifiers,
+                            gpointer data) {
+  (void)controller;
+  (void)keycode;
+  (void)modifiers;
+  ShaulaPreviewState *state = data;
+  if (!is_space_key(keyval) || !state->space_pan_active)
+    return;
+  if (state->operation == SHAULA_OPERATION_PAN) {
+    state->space_pan_restore_pending = TRUE;
+    return;
+  }
+  restore_space_pan_tool(state);
+}
+
 static gboolean on_copy_hover_color_shortcut(GtkWidget *widget,
                                              GVariant *args, gpointer data) {
   (void)widget;
@@ -1235,7 +1325,7 @@ static gboolean on_copy_hover_color_shortcut(GtkWidget *widget,
   GtkWidget *focus = state->window != NULL
                          ? gtk_window_get_focus(GTK_WINDOW(state->window))
                          : NULL;
-  if (focus != NULL && GTK_IS_EDITABLE(focus))
+  if (focus_is_editable_text(state, focus))
     return FALSE;
 
   ShaulaPreviewCommand command;
@@ -1301,6 +1391,7 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   GtkEventController *keys = gtk_event_controller_key_new();
   gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), state);
+  g_signal_connect(keys, "key-released", G_CALLBACK(on_key_released), state);
   gtk_widget_add_controller(state->window, keys);
 
   GtkEventController *shortcut_controller = gtk_shortcut_controller_new();

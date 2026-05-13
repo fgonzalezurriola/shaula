@@ -19,6 +19,7 @@ enum {
 
 typedef enum {
   SHAULA_TOOL_SELECT,
+  SHAULA_TOOL_HAND,
   SHAULA_TOOL_CROP,
   SHAULA_TOOL_ARROW,
   SHAULA_TOOL_TEXT,
@@ -98,9 +99,9 @@ typedef struct {
   GtkWidget *color_hex_label;
   GtkWidget *toolbar_actions;
   GtkWidget *toolbar_metadata;
-  GtkWidget *toolbar_secondary[6];
-  ShaulaTool toolbar_secondary_tools[6];
-  GtkWidget *toolbar_utility_actions[3];
+  GtkWidget *toolbar_secondary[7];
+  ShaulaTool toolbar_secondary_tools[7];
+  GtkWidget *toolbar_utility_actions[4];
   GtkWidget *tool_buttons[SHAULA_TOOL_COUNT];
   GtkWidget *undo_button;
   GtkWidget *redo_button;
@@ -156,8 +157,11 @@ typedef struct {
   gboolean fit_mode;
 
   ShaulaTool active_tool;
+  ShaulaTool previous_tool_before_space_pan;
   ShaulaPreviewOperation operation;
   gboolean operation_changed;
+  gboolean space_pan_active;
+  gboolean space_pan_restore_pending;
   ShaulaPoint drag_start_image;
   ShaulaPoint drag_current_image;
   ShaulaPoint drag_last_image;

@@ -49,7 +49,7 @@ Niri config.
 - Native GTK/layer-shell selection overlay
 - Post-capture preview/editor
 - Native settings window for the current capture and preview-window config
-- Copy, Save As, Crop, Blur, Erase, Spotlight, annotations, undo/redo
+- Copy, Save, Save As, Crop, Blur, Erase, Spotlight, annotations, undo/redo
 - Live hover color sampling and Tab-to-copy color
 - JSON output for automation
 - Niri-first behavior with conservative integration helpers

@@ -117,7 +117,8 @@ and the working diff.
   save decision.
 - Capture copy is also explicit by default: `--copy` is required for the Zig
   post-capture pipeline to touch the system clipboard. Area/all-in-one still
-  open preview by default so the user can choose Copy, Save As, or Discard.
+  open preview by default so the user can choose Copy, Save, Save As, or
+  Discard.
 - Preview metadata readouts that update while interacting must reserve stable
   width. The color hex and zoom percentage labels both use fixed code-style
   widths so hover color sampling and zoom changes do not shift the toolbar.
@@ -126,9 +127,10 @@ and the working diff.
   `...`. Overflow uses the measured gap between the toolbar start and the right
   metadata readout; using the full headerbar width can reveal secondary buttons
   too early and transiently overlap the color, dimensions, and zoom labels.
-- Fit to screen, Actual size, and Reset annotations are responsive utility
-  actions: they appear as icon buttons before `...` when there is room, and
-  move back into the overflow menu when the headerbar is narrow.
+- Save As, Fit to screen, Actual size, and Reset annotations are responsive
+  utility actions: they appear as icon buttons before `...` when there is room,
+  and move back into the overflow menu when the headerbar is narrow. Hand/Pan is
+  a responsive canvas tool near the creation tools.
 - Spotlight remains a primary toolbar tool because its direct drag-to-create
   flow is a high-frequency canvas mode. Pen and Highlight are responsive
   secondary tools that can appear before `...` when there is room.
@@ -222,8 +224,15 @@ and the working diff.
 
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
-- `shaula-save-symbolic` Save As: implemented. Opens a file chooser and writes
-  a PNG to disk.
+- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves to the current
+  real save path, or promotes a temporary capture from
+  `$XDG_RUNTIME_DIR/shaula/captures`/`/tmp/shaula/captures` into
+  `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`, falling back to
+  `~/shaula` when the Pictures directory cannot be created or written.
+  Quick Save updates preview save metadata but does not create undo history.
+- Save As: implemented as a responsive utility/menu action and
+  `Ctrl+Shift+S`. It opens a file chooser, writes a PNG to disk, and updates
+  the current real save path so later `Ctrl+S` saves to the chosen file.
 - `shaula-undo-symbolic` Undo: implemented. Disabled when the history stack has
   no undo entry. Also available with `Ctrl+Z`.
 - `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
@@ -239,6 +248,14 @@ and the working diff.
   empty space outside the image clears selection without panning. Canvas panning
   is now an explicit middle-button drag gesture. The same icon is reused in the
   overflow menu for Fit to screen and Actual size.
+- `shaula-hand-symbolic` Hand/Pan: implemented as a view-only navigation tool.
+  It is routed through `SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND`, uses the existing
+  pan operation, left-drag pans while active, and the cursor is `grab`/`grabbing`.
+  Hand/Pan does not edit pixels, annotations, Spotlight regions, modified state,
+  save state, or undo history. Holding Space temporarily switches to Hand/Pan
+  unless an editable widget is focused; releasing Space restores the previous
+  tool, and release during an active pan waits until the drag ends before
+  restoring.
 - `shaula-spotlight-symbolic` Spotlight: implemented as an independent primary
   toolbar tool outside Select-mode-only contextual actions. Activating it does
   not reuse the Select contextual toolbar; it lets the user drag a new area
@@ -338,9 +355,10 @@ and the working diff.
   Pen defaults to the shared strong orange used by Arrow/Text/Rectangle/Measure.
   Select-mode hit testing for Pen and Highlight is path-distance based rather
   than bounding-box based, and selected freehand paths draw path-following
-  selection chrome instead of a large rectangular box. Additional Pen styles are
-  desired future work and should fit into this HUD rather than expanding the
-  primary toolbar.
+  selection chrome instead of a large rectangular box. The real path is repainted
+  above selection chrome so selecting a Pen/Highlight path must not visually turn
+  its stroke white. Additional Pen styles are desired future work and should fit
+  into this HUD rather than expanding the primary toolbar.
 - Highlight highlighter: implemented as a separate Highlight button/HUD from
   Pen. Highlight is now a wide low-opacity freehand path with round caps, not a
   rectangle tool. Its HUD exposes only color, width, and opacity, and it avoids
@@ -396,7 +414,8 @@ and the working diff.
 - Switching from Select into a creation tool commits any pending properties HUD
   transaction, cancels transient operations, clears object/region selection, and
   then opens only that tool's default HUD when the tool has one. This prevents a
-  selected annotation from retaining an incompatible properties panel.
+  selected annotation from retaining an incompatible properties panel. Switching
+  to Hand/Pan is view-only and preserves selection/HUD state.
 - Existing wired operations: crop, annotation creation, selected annotation
   move, selected annotation duplicate/delete, properties HUD edits, and reset
   annotations. Annotation moves capture before-state on mouse down and commit
@@ -438,8 +457,14 @@ and the working diff.
 - `preview_commands.*` owns `ShaulaPreviewCommand`,
   `shaula_preview_execute_command`, command availability, and the static
   shortcut map.
-- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+Z,
-  Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`, and `0`.
+- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+Shift+S,
+  Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`/`F`,
+  `0`, number tool hotkeys `1` Select, `2` Arrow, `3` Rectangle, `4` Text,
+  `5` Spotlight, `6` Pen, `7` Highlight, `8` Measure, `9` Crop, and secondary
+  letter tool hotkeys `V/A/R/T/S/P/H/M/C` plus `B` Blur and `E` Erase when their
+  region command is available. Space-held Hand/Pan is transient input state in
+  `preview_canvas.c`, not a persistent shortcut command, so it can restore the
+  previous selected tool safely.
 - Toolbar/menu callbacks now dispatch through preview commands while existing
   low-level action helpers still own runtime work such as copy, save, discard,
   open folder, and tool cursor updates.

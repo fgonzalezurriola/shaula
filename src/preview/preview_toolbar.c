@@ -21,18 +21,21 @@ typedef struct {
 } MenuActionSpec;
 
 static const ToolActionSpec secondary_tools[] = {
-    {"shaula-arrow-symbolic", "Arrow", "Arrow", SHAULA_TOOL_ARROW},
-    {"shaula-text-symbolic", "Text", "Text", SHAULA_TOOL_TEXT},
-    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle",
+    {"shaula-hand-symbolic", "Pan", "Pan (hold Space)", SHAULA_TOOL_HAND},
+    {"shaula-arrow-symbolic", "Arrow", "Arrow (2)", SHAULA_TOOL_ARROW},
+    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle (3)",
      SHAULA_TOOL_RECTANGLE},
-    {"shaula-measure-symbolic", "Measure", "Measure", SHAULA_TOOL_MEASURE},
-    {"shaula-highlight-symbolic", "Highlight", "Highlight",
+    {"shaula-text-symbolic", "Text", "Text (4)", SHAULA_TOOL_TEXT},
+    {"shaula-pen-symbolic", "Pen", "Pen (6)", SHAULA_TOOL_PEN},
+    {"shaula-highlight-symbolic", "Highlight", "Highlight (7)",
      SHAULA_TOOL_HIGHLIGHT},
-    {"shaula-pen-symbolic", "Pen", "Pen", SHAULA_TOOL_PEN},
+    {"shaula-measure-symbolic", "Measure", "Measure (8)", SHAULA_TOOL_MEASURE},
 };
 
 static const MenuActionSpec utility_actions[] = {
-    {"shaula-select-symbolic", "Fit to screen", "Fit to screen (f)",
+    {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
+     G_CALLBACK(shaula_preview_on_save_as_clicked)},
+    {"shaula-select-symbolic", "Fit to screen", "Fit to screen (F)",
      G_CALLBACK(shaula_preview_on_fit_clicked)},
     {"shaula-select-symbolic", "Actual size", "Actual size (0)",
      G_CALLBACK(shaula_preview_on_actual_clicked)},
@@ -424,11 +427,11 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(actions),
                  make_toolbar_button(state, "shaula-copy-symbolic",
-                                     "Copy (Ctrl+Shift+C)",
+                                     "Copy image (Ctrl+Shift+C)",
                                      G_CALLBACK(shaula_preview_on_copy_clicked)));
   gtk_box_append(GTK_BOX(actions),
                  make_toolbar_button(state, "shaula-save-symbolic",
-                                     "Save As (Ctrl+S)",
+                                     "Save (Ctrl+S)",
                                      G_CALLBACK(shaula_preview_on_save_clicked)));
   state->undo_button =
       make_toolbar_button(state, "shaula-undo-symbolic", "Undo",
@@ -442,14 +445,14 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(GTK_BOX(actions), state->redo_button);
 
   gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-crop-symbolic", "Crop",
+                 make_tool_toggle(state, "shaula-crop-symbolic", "Crop (9)",
                                   SHAULA_TOOL_CROP));
   gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-select-symbolic", "Select",
+                 make_tool_toggle(state, "shaula-select-symbolic", "Select (1)",
                                   SHAULA_TOOL_SELECT));
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-spotlight-symbolic",
-                                  "Spotlight", SHAULA_TOOL_SPOTLIGHT));
+                                  "Spotlight (5)", SHAULA_TOOL_SPOTLIGHT));
 
   gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
 
