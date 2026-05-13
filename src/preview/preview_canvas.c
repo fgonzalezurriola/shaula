@@ -1356,6 +1356,8 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, state, NULL);
   gtk_overlay_set_child(GTK_OVERLAY(overlay), area);
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_select_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_arrow_properties_panel_build(state));

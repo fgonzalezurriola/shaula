@@ -128,6 +128,10 @@ and the working diff.
   `...`. Overflow uses the measured gap between the toolbar start and the right
   metadata readout; using the full headerbar width can reveal secondary buttons
   too early and transiently overlap the color, dimensions, and zoom labels.
+- Toolbar tool changes must not alter the preview window's natural titlebar
+  width. Contextual Select actions live in a floating canvas HUD, like the
+  Pen/Highlight property HUDs, so selecting tools or regions cannot ask GTK/Niri
+  to resize the floating window.
 - Save As, Fit to screen, Actual size, and Reset annotations are responsive
   utility actions: they appear as icon buttons before `...` when there is room,
   and move back into the overflow menu when the headerbar is narrow. Hand/Pan is

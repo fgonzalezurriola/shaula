@@ -327,45 +327,6 @@ static void append_utility_toolbar_button(ShaulaPreviewState *state,
   state->toolbar_utility_action_count++;
 }
 
-static GtkWidget *build_selection_actions_group(ShaulaPreviewState *state) {
-  GtkWidget *group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
-  gtk_widget_set_valign(group, GTK_ALIGN_CENTER);
-  gtk_widget_add_css_class(group, "linked");
-
-  state->duplicate_button =
-      make_toolbar_button(state, "shaula-duplicate-symbolic",
-                          "Duplicate selected annotation (Ctrl+D)",
-                          G_CALLBACK(shaula_preview_on_duplicate_clicked));
-  state->crop_selected_button =
-      make_toolbar_button(state, "shaula-crop-symbolic",
-                          "Crop to selected annotation",
-                          G_CALLBACK(shaula_preview_on_crop_selected_clicked));
-  state->blur_region_button =
-      make_toolbar_button(state, "shaula-blur-symbolic", "Blur selected region",
-                          G_CALLBACK(shaula_preview_on_blur_region_clicked));
-  state->erase_region_button =
-      make_toolbar_button(state, "shaula-erase-symbolic",
-                          "Erase selected region",
-                          G_CALLBACK(shaula_preview_on_erase_region_clicked));
-  state->spotlight_region_button = make_toolbar_button(
-      state, "shaula-spotlight-symbolic", "Spotlight selected region",
-      G_CALLBACK(shaula_preview_on_spotlight_region_clicked));
-  state->delete_button =
-      make_toolbar_button(state, "shaula-trash-symbolic",
-                          "Delete selected annotation (Delete)",
-                          G_CALLBACK(shaula_preview_on_delete_clicked));
-
-  gtk_box_append(GTK_BOX(group), state->duplicate_button);
-  gtk_box_append(GTK_BOX(group), state->crop_selected_button);
-  gtk_box_append(GTK_BOX(group), state->blur_region_button);
-  gtk_box_append(GTK_BOX(group), state->erase_region_button);
-  gtk_box_append(GTK_BOX(group), state->spotlight_region_button);
-  gtk_box_append(GTK_BOX(group), state->delete_button);
-  state->selection_actions_box = group;
-  shaula_preview_toolbar_update_selection_state(state);
-  return group;
-}
-
 static GtkWidget *make_muted_label(const char *text) {
   GtkWidget *label = gtk_label_new(text);
   gtk_widget_add_css_class(label, "dim-label");
@@ -453,8 +414,6 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-spotlight-symbolic",
                                   "Spotlight (5)", SHAULA_TOOL_SPOTLIGHT));
-
-  gtk_box_append(GTK_BOX(actions), build_selection_actions_group(state));
 
   for (int i = 0; i < (int)G_N_ELEMENTS(secondary_tools); i++)
     append_secondary_toolbar_button(state, actions, i);

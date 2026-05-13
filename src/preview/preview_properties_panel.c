@@ -235,6 +235,64 @@ static GtkWidget *make_text_align_toggle(ShaulaPreviewState *state,
   return button;
 }
 
+static GtkWidget *make_selection_action_button(ShaulaPreviewState *state,
+                                               const char *icon_name,
+                                               const char *tooltip,
+                                               GCallback callback) {
+  GtkWidget *button = gtk_button_new();
+  gtk_button_set_child(GTK_BUTTON(button),
+                       shaula_preview_make_toolbar_icon(state, icon_name));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 28, 28);
+  g_signal_connect(button, "clicked", callback, state);
+  return button;
+}
+
+GtkWidget *shaula_preview_select_properties_panel_build(
+    ShaulaPreviewState *state) {
+  install_properties_panel_css();
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
+
+  state->duplicate_button = make_selection_action_button(
+      state, "shaula-duplicate-symbolic",
+      "Duplicate selected annotation (Ctrl+D)",
+      G_CALLBACK(shaula_preview_on_duplicate_clicked));
+  state->crop_selected_button = make_selection_action_button(
+      state, "shaula-crop-symbolic", "Crop to selected annotation",
+      G_CALLBACK(shaula_preview_on_crop_selected_clicked));
+  state->blur_region_button = make_selection_action_button(
+      state, "shaula-blur-symbolic", "Blur selected region",
+      G_CALLBACK(shaula_preview_on_blur_region_clicked));
+  state->erase_region_button = make_selection_action_button(
+      state, "shaula-erase-symbolic", "Erase selected region",
+      G_CALLBACK(shaula_preview_on_erase_region_clicked));
+  state->spotlight_region_button = make_selection_action_button(
+      state, "shaula-spotlight-symbolic", "Spotlight selected region",
+      G_CALLBACK(shaula_preview_on_spotlight_region_clicked));
+  state->delete_button = make_selection_action_button(
+      state, "shaula-trash-symbolic", "Delete selected annotation (Delete)",
+      G_CALLBACK(shaula_preview_on_delete_clicked));
+
+  gtk_box_append(GTK_BOX(panel), state->duplicate_button);
+  gtk_box_append(GTK_BOX(panel), state->crop_selected_button);
+  gtk_box_append(GTK_BOX(panel), state->blur_region_button);
+  gtk_box_append(GTK_BOX(panel), state->erase_region_button);
+  gtk_box_append(GTK_BOX(panel), state->spotlight_region_button);
+  gtk_box_append(GTK_BOX(panel), state->delete_button);
+
+  state->selection_actions_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
+}
+
 GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
