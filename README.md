@@ -6,28 +6,37 @@ workflow on Linux.
 It focuses on Quick Capture, a native selection overlay, post-capture
 preview/editing, and scriptable JSON output.
 
-> Shaula's main target is CachyOS/Arch + Niri.
+Shaula is currently tested primarily on Niri. It also includes integration work
+for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
+is the main supported environment right now.
 
-## Install
+> Shaula's main target is Linux x86_64 on CachyOS/Arch + Niri.
 
-Shaula installs locally for the current user. The installer does not use
-`sudo`.
+## Install or Update
+
+Shaula installs locally for the current user under `~/.local` and does not use
+`sudo`. Run the same command to install or update to the latest stable GitHub
+Release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh
+```
+
+The installer downloads `shaula-linux-x86_64.tar.gz` and `SHA256SUMS` from
+GitHub Releases, verifies the checksum, installs the current release, and keeps
+an existing `~/.config/shaula/config.toml`.
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- v1.0.0
+SHAULA_VERSION=v1.0.0 sh scripts/install.sh
 ```
 
 Uninstall:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --uninstall
-```
-
-Advanced install commands:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --yes
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --version v1.0.0
 ```
 
 The installer:
@@ -37,7 +46,9 @@ The installer:
 - does not use `sudo`
 - does not overwrite an existing `~/.config/shaula/config.toml`
 - does not edit Niri config automatically
-- can optionally install the Noctalia Bar Widget with config backups
+- can optionally install the Noctalia Bar Widget with config backups when
+  explicitly confirmed
+- fails clearly on unsupported release architectures
 
 If Niri is detected, the installer generates
 `~/.config/shaula/generated/niri-shaula.kdl` for manual inclusion in your active
@@ -64,7 +75,9 @@ Not implemented yet:
 
 ## Runtime Requirements
 
-Shaula currently expects a Wayland compositor and is tested mainly on Niri.
+Shaula currently expects Wayland and is tested mainly on Niri. Full support
+across GNOME, KDE, Hyprland, Sway, and other Wayland compositors is not promised
+yet.
 
 Recommended runtime tools:
 

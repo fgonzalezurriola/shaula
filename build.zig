@@ -84,7 +84,7 @@ fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
-        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  -DSHAULA_OVERLAY_STANDALONE \
         \\  "$2" \
         \\  -o "$1" \
@@ -107,7 +107,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
         "-c",
         \\out="$1"
         \\shift
-        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
         \\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
@@ -142,7 +142,7 @@ fn buildNativeGtkSettingsHelper(b: *std.Build, target: std.Build.ResolvedTarget,
         "-c",
         \\out="$1"
         \\shift
-        \\cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
         \\ $(pkg-config --cflags --libs gtk4) -lm

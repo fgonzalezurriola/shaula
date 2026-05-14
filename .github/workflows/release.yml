@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish-linux-x86_64:
+    name: Build and publish Linux x86_64 release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            curl \
+            gh \
+            jq \
+            pkg-config \
+            libgtk-4-dev \
+            libgtk4-layer-shell-dev \
+            libgdk-pixbuf-2.0-dev \
+            libcairo2-dev
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build release
+        run: zig build -Doptimize=ReleaseSafe -Dstrip
+
+      - name: Package release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          test -x zig-out/bin/shaula
+          tar -C zig-out -czf dist/shaula-linux-x86_64.tar.gz bin share
+          tar -tzf dist/shaula-linux-x86_64.tar.gz | grep -Eq '(^|/)bin/shaula$'
+
+          (
+            cd dist
+            sha256sum shaula-linux-x86_64.tar.gz > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          prerelease_args=()
+          case "${TAG_NAME}" in
+            *alpha*|*beta*|*rc*) prerelease_args=(--prerelease) ;;
+          esac
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release edit "${TAG_NAME}" \
+              --title "${TAG_NAME}" \
+              "${prerelease_args[@]}"
+            gh release upload "${TAG_NAME}" \
+              dist/shaula-linux-x86_64.tar.gz \
+              dist/SHA256SUMS \
+              --clobber
+          else
+            gh release create "${TAG_NAME}" \
+              dist/shaula-linux-x86_64.tar.gz \
+              dist/SHA256SUMS \
+              --title "${TAG_NAME}" \
+              --generate-notes \
+              "${prerelease_args[@]}"
+          fi

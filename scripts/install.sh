@@ -4,7 +4,7 @@ set -eu
 REPO_URL="https://github.com/fgonzalezurriola/shaula"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
-INSTALL_VERSION=""
+INSTALL_VERSION="${SHAULA_VERSION:-}"
 ASSUME_YES=0
 INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
@@ -28,6 +28,7 @@ NOCTALIA_MANAGED_MARKER=".shaula-managed"
 usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [options]
+       scripts/install.sh v1.0.0
 
 Install Shaula for the current user. This script never uses sudo and never
 overwrites an existing ~/.config/shaula/config.toml.
@@ -42,6 +43,7 @@ Options:
   --uninstall         Remove files installed by this script.
 
 Environment:
+  SHAULA_VERSION             Install a specific GitHub release tag.
   SHAULA_RELEASE_ASSET_URL   Override release archive URL.
   SHAULA_SHA256SUMS_URL      Override SHA256SUMS URL.
 EOF
@@ -68,6 +70,9 @@ confirm() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
+  if [ "$INSTALL_CONTEXT" = "release" ]; then
+    return 0
+  fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
     printf 'Install this local dev build of Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
   else
@@ -83,6 +88,9 @@ confirm() {
 confirm_noctalia_widget() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
+  fi
+  if [ "$INSTALL_CONTEXT" = "release" ]; then
+    return 1
   fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
     printf 'Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
@@ -100,8 +108,7 @@ detect_arch() {
   machine="$(uname -m)"
   case "$machine" in
     x86_64|amd64) printf 'x86_64' ;;
-    aarch64|arm64) printf 'aarch64' ;;
-    *) die "unsupported architecture: $machine" ;;
+    *) die "unsupported architecture: $machine (supported release asset: linux x86_64)" ;;
   esac
 }
 
@@ -643,6 +650,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --uninstall)
       UNINSTALL=1
+      ;;
+    v*)
+      [ -z "$INSTALL_VERSION" ] || die "version specified more than once"
+      INSTALL_VERSION="$1"
       ;;
     *)
       die "unknown option: $1"

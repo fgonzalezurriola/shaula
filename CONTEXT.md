@@ -12,11 +12,20 @@ and the working diff.
 
 - Prompt handoff snapshot is now `CONTEXT.md`; `./dev context` copies it with
   the capture-mode note, last 3 commits, and working diff.
+- GitHub Releases are published by `.github/workflows/release.yml` on `v*` tag
+  pushes. The release job builds from the tag with
+  `zig build -Doptimize=ReleaseSafe -Dstrip`, packages `zig-out/bin` and
+  `zig-out/share` as `shaula-linux-x86_64.tar.gz`, writes and verifies
+  `SHA256SUMS`, and publishes/replaces release assets with `gh`. The publish job
+  uses `contents: write`, does not run on PRs, and does not use shared caches.
 - First installer foundation is now present in `scripts/install.sh` and
   `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
-  `SHA256SUMS`, detects `x86_64`/`aarch64`, warns about missing runtime tools,
-  installs desktop/icon/config/generated paths, never uses sudo, and preserves
-  an existing `~/.config/shaula/config.toml`.
+  `SHA256SUMS`, supports latest stable, `--version`, positional `v*`, and
+  `SHAULA_VERSION`, warns about missing runtime tools, installs
+  desktop/icon/config/generated paths, never uses sudo, and preserves an
+  existing `~/.config/shaula/config.toml`. Release installs are non-interactive;
+  optional Noctalia installation is skipped unless explicitly confirmed with
+  `--yes`, and local dev installs still prompt unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use
