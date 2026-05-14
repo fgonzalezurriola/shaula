@@ -84,18 +84,18 @@ NIconButton {
 
   function executeAction(action) {
     var command = "";
- if (action === "capture-quick") {
- command = "shaula capture quick --json";
- } else if (action === "capture-area") {
- command = "shaula capture area --json";
- } else if (action === "capture-fullscreen") {
- command = "shaula capture fullscreen --json";
- } else if (action === "capture-all-screens") {
- command = "shaula capture all-screens --json";
- } else if (action === "settings") {
+    if (action === "capture-quick") {
+      command = "shaula capture quick --json";
+    } else if (action === "capture-area") {
+      command = "shaula capture area --json";
+    } else if (action === "capture-fullscreen") {
+      command = "shaula capture fullscreen --json";
+    } else if (action === "capture-all-screens") {
+      command = "shaula capture all-screens --json";
+    } else if (action === "settings") {
       command = "shaula settings";
     } else if (action === "open-screenshots-folder") {
-      command = "mkdir -p \"$HOME/Pictures/Shaula\" && xdg-open \"$HOME/Pictures/Shaula\"";
+      command = "shaula directory screenshots --open";
     } else if (action === "report-bug") {
       command = "xdg-open https://github.com/fgonzalezurriola/shaula/issues";
     }

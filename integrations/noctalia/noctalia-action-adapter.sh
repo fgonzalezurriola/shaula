@@ -48,7 +48,7 @@ if [[ "${MODE}" == "action" && -z "${ACTION_ID}" ]]; then
   exit 1
 fi
 
-if [[ "${MODE}" == "action" && ${EXECUTE} -eq 1 && "${ACTION_ID}" != "open-output-folder" && "${ACTION_ID}" != "open-clipboard-image" && ! -x "${SHAULA_BIN}" ]]; then
+if [[ "${MODE}" == "action" && ${EXECUTE} -eq 1 && "${ACTION_ID}" != "open-clipboard-image" && ! -x "${SHAULA_BIN}" ]]; then
   echo "ERR_NOCTALIA_ADAPTER_EXECUTION_UNAVAILABLE reason=shaula_binary_missing path=${SHAULA_BIN}" >&2
   exit 1
 fi
@@ -85,7 +85,7 @@ action_command_json() {
  capture-window) printf '["capture","window","--json"]' ;;
  open-last) printf '["history","show","--json","--id","latest"]' ;;
  history) printf '["history","list","--json"]' ;;
- open-output-folder) printf '["helper","open-output-folder"]' ;;
+ open-output-folder) printf '["directory","screenshots","--open","--json"]' ;;
  open-clipboard-image) printf '["helper","open-clipboard-image"]' ;;
  *) return 1 ;;
  esac
@@ -237,12 +237,8 @@ if [[ "${ACTION_ID}" == "open-output-folder" || "${ACTION_ID}" == "open-clipboar
   warning_token=""
 
   if [[ "${ACTION_ID}" == "open-output-folder" ]]; then
-    target_path="${SHAULA_NOCTALIA_OUTPUT_DIR:-${HOME:-/tmp}/Pictures/Shaula}"
-    mkdir -p "${target_path}" >/dev/null 2>&1 || true
-    execute_open_target "${target_path}"
-    if [[ ${OPEN_ACTION_RC} -ne 0 ]]; then
-      warning_token="noctalia_open_output_folder_tool_unavailable"
-    fi
+    OPEN_ACTION_OUTPUT="$(${SHAULA_BIN} directory screenshots --open --json 2>&1)" || OPEN_ACTION_RC=$?
+    [[ ${OPEN_ACTION_RC} -ne 0 ]] && warning_token="noctalia_open_output_folder_tool_unavailable"
   else
     clipboard_path="$(resolve_clipboard_image_path || true)"
     if [[ -z "${clipboard_path}" || ! -f "${clipboard_path}" ]]; then

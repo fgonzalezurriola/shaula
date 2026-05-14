@@ -162,6 +162,9 @@ and the working diff.
   `--save` still prefers `~/Pictures/shaula` (lowercase) and falls back to
   `~/shaula`; explicit `--output` still bypasses default resolution as a user
   save decision.
+- `shaula directory screenshots [--open] [--json]` is the shared resolver for
+  the durable screenshot folder. Noctalia's Open Screenshots Folder action
+  calls this command instead of duplicating fallback path rules.
 - Capture copy is also explicit by default: `--copy` is required for the Zig
   post-capture pipeline to touch the system clipboard. Area/all-in-one still
   open preview by default so the user can choose Copy, Save, Save As, or
