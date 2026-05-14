@@ -61,11 +61,6 @@ NIconButton {
         "enabled": true
       },
       {
-        "label": "Run Doctor",
-        "action": "doctor",
-        "icon": "stethoscope"
-      },
-      {
         "label": "Open Screenshots Folder",
         "action": "open-screenshots-folder",
         "icon": "folder"
@@ -99,8 +94,6 @@ NIconButton {
  command = "shaula capture all-screens --json";
  } else if (action === "settings") {
       command = "shaula settings";
-    } else if (action === "doctor") {
-      command = "shaula doctor --json";
     } else if (action === "open-screenshots-folder") {
       command = "mkdir -p \"$HOME/Pictures/Shaula\" && xdg-open \"$HOME/Pictures/Shaula\"";
     } else if (action === "report-bug") {

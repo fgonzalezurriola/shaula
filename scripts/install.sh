@@ -11,6 +11,7 @@ INSTALL_DESKTOP=1
 INSTALL_ICON=1
 UNINSTALL=0
 RELEASE_EXTRACT_DIR=""
+INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
 
 XDG_BIN_HOME="${XDG_BIN_HOME:-${HOME}/.local/bin}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
@@ -67,7 +68,11 @@ confirm() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
-  printf 'Install Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
+  if [ "$INSTALL_CONTEXT" = "dev" ]; then
+    printf 'Install this local dev build of Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
+  else
+    printf 'Install Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
+  fi
   read answer
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
@@ -79,7 +84,11 @@ confirm_noctalia_widget() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
-  printf 'Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
+  if [ "$INSTALL_CONTEXT" = "dev" ]; then
+    printf 'Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
+  else
+    printf 'Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
+  fi
   read answer
   case "$answer" in
     y|Y|yes|YES) return 0 ;;

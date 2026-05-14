@@ -27,6 +27,7 @@ Core:
 
 App:
   preflight      Build, then run preflight + capabilities
+  dev-install    Build current checkout, install it locally, and reload Noctalia
  capture Build, then run live capture area --json
  frozen Build, then run frozen capture area --json
  fullscreen Build, then run capture fullscreen --json --copy
@@ -56,6 +57,7 @@ Pass-through:
   run <args...>  Build, then run ./zig-out/bin/shaula <args...>
 
 Examples:
+  ./dev dev-install --yes
   ./dev capture
   ./dev stage tiling
   ./dev stage floating
@@ -252,6 +254,36 @@ stage() {
   echo "reload Niri config with your normal Niri workflow before testing preview placement"
 }
 
+restart_noctalia() {
+  if systemctl --user restart noctalia.service >/dev/null 2>&1; then
+    echo "restarted noctalia.service"
+  elif have qs; then
+    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
+    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with qs -d --allow-duplicate -c noctalia-shell"
+    echo "log /tmp/shaula-noctalia.log"
+  elif have quickshell; then
+    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
+    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    echo "restarted Noctalia with quickshell -d --allow-duplicate -c noctalia-shell"
+    echo "log /tmp/shaula-noctalia.log"
+  else
+    echo "warning: could not restart Noctalia; missing noctalia.service and qs/quickshell" >&2
+    return 1
+  fi
+}
+
+dev_install_should_restart_noctalia() {
+  for arg in "$@"; do
+    case "${arg}" in
+      --help|-h|--uninstall|--no-integrations)
+        return 1
+        ;;
+    esac
+  done
+  [[ -e "${HOME}/.config/noctalia" ]]
+}
+
 noctalia_load() {
   build >/dev/null
 
@@ -269,23 +301,61 @@ noctalia_load() {
     SHAULA_SHA256SUMS_URL="file://${sums}" \
     scripts/install.sh --yes
 
-  if systemctl --user restart noctalia.service >/dev/null 2>&1; then
-    echo "restarted noctalia.service"
-  elif have qs; then
-    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
-    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with qs -d --allow-duplicate -c noctalia-shell"
-    echo "log /tmp/shaula-noctalia.log"
-  elif have quickshell; then
-    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
-    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with quickshell -d --allow-duplicate -c noctalia-shell"
-    echo "log /tmp/shaula-noctalia.log"
-  else
-    echo "warning: could not restart Noctalia; missing noctalia.service and qs/quickshell" >&2
-  fi
+  restart_noctalia || true
 
   echo "Noctalia widget installed at ${HOME}/.config/noctalia/plugins/shaula"
+}
+
+install_local() {
+  build >/dev/null
+
+  local arch tmp_dir archive sums
+  case "$(uname -m)" in
+    x86_64|amd64)
+      arch="x86_64"
+      ;;
+    aarch64|arm64)
+      arch="aarch64"
+      ;;
+    *)
+      echo "unsupported architecture: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' RETURN
+
+  archive="${tmp_dir}/shaula-linux-${arch}.tar.gz"
+  sums="${tmp_dir}/SHA256SUMS"
+
+  tar -C zig-out -czf "${archive}" .
+  (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
+
+  cat <<EOF
+Shaula local dev install
+
+This command installs the current checkout build from:
+  ${ROOT_DIR}
+
+It does not download a GitHub release. It packages ./zig-out into a temporary
+local archive and runs scripts/install.sh against file:// URLs.
+
+Installed files still go to the normal per-user locations used by Shaula:
+  ${XDG_BIN_HOME:-${HOME}/.local/bin}
+  ${XDG_DATA_HOME:-${HOME}/.local/share}
+  ${XDG_CONFIG_HOME:-${HOME}/.config}/shaula
+
+EOF
+
+  SHAULA_RELEASE_ASSET_URL="file://${archive}" \
+    SHAULA_SHA256SUMS_URL="file://${sums}" \
+    SHAULA_INSTALL_CONTEXT=dev \
+    scripts/install.sh "$@"
+
+  if dev_install_should_restart_noctalia "$@"; then
+    restart_noctalia || true
+  fi
 }
 
 cmd="${1:-help}"
@@ -324,6 +394,13 @@ release-arm)
     shaula_env
     "${SHAULA_BIN}" preflight --json | jq
     "${SHAULA_BIN}" capabilities list --json | jq
+    ;;
+  dev-install)
+    install_local "$@"
+    ;;
+  install)
+    echo "warning: ./dev install is deprecated; use ./dev dev-install for local checkout installs" >&2
+    install_local "$@"
     ;;
 capture)
 	run_shaula capture area --json "$@"

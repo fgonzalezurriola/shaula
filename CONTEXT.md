@@ -17,6 +17,17 @@ and the working diff.
   `SHA256SUMS`, detects `x86_64`/`aarch64`, warns about missing runtime tools,
   installs desktop/icon/config/generated paths, never uses sudo, and preserves
   an existing `~/.config/shaula/config.toml`.
+- `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
+  packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
+  and runs `scripts/install.sh` against `file://` URLs. Use
+  `./dev dev-install --yes` for a non-interactive install of the exact local
+  build. `./dev install` remains as a deprecated alias with a warning.
+  The dev wrapper sets `SHAULA_INSTALL_CONTEXT=dev`, prints a local-dev banner,
+  and makes install/Noctalia prompts explicitly say they are installing or
+  reloading this local dev build rather than a GitHub release. When
+  `~/.config/noctalia` exists, `dev-install` restarts Noctalia after a real
+  install by trying `noctalia.service`, then `qs`, then `quickshell`; it skips
+  restart for `--help`, `--uninstall`, and `--no-integrations`.
 - Installer integration behavior is intentionally conservative: it detects Niri
   config candidates and generates
   `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The
@@ -26,7 +37,9 @@ and the working diff.
   `integrations/noctalia/shaula/` Bar Widget into
   `~/.config/noctalia/plugins/shaula/`, enabling `states.shaula.enabled` and
   adding `plugin:shaula` to the bar only after backing up and validating
-  Noctalia JSON config.
+  Noctalia JSON config. The user-facing Noctalia menu should expose capture,
+  Settings, screenshots-folder, and bug-report actions; keep `shaula doctor`
+  out of that menu because it is a diagnostic/development command.
 - `shaula doctor` and `shaula doctor --json` now provide read-only diagnostics
   for installed paths, config/generated files, Wayland env, Niri candidates,
   Noctalia detection paths, Shaula Noctalia plugin install/enabled state,
@@ -300,7 +313,8 @@ and the working diff.
   not reuse the Select contextual toolbar; it lets the user drag a new area
   directly on the canvas, applies Spotlight on mouse release, and then opens
   the floating properties HUD. The existing Select-mode contextual Spotlight
-  action still works for an already selected temporary region.
+  action still works for an already selected temporary region. Its icon is the
+  Tabler filter-style glyph; do not apply this glyph to Highlight.
 - Selected annotation actions: implemented as a small contextual toolbar group
   that appears only while Select is active and an annotation is selected.
 - Region selection actions: implemented as temporary Select-mode UI state.
@@ -360,27 +374,45 @@ and the working diff.
   path-following selection chrome and repaint the arrow above it. Selected
   arrows expose resize handles at start/end plus the curve control handle;
   dragging the shaft moves the arrow, dragging handles reshapes it.
+- `shaula-line-symbolic` Line uses the Arrow annotation geometry and Arrow HUD
+  styling controls, but stores `data.arrow.has_head = FALSE` at draft and commit
+  time. `shaula_annotation_new_arrow` defaults to `has_head = TRUE`; Line must
+  explicitly clear it so draw/export/copy render a plain shaft without an
+  arrowhead while still sharing stroke color, width, style, hit testing, history,
+  duplicate, and clipboard behavior.
 - Arrow stroke style: implemented in the Arrow properties HUD. Selecting an
   arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
   selected arrow annotation, pushes undo before the document change, and keeps
   copy/export rendering on the annotation draw path.
 - `shaula-text-symbolic` Text: implemented. Text uses the same orange default
-  as arrows, opens a floating Text HUD for color, size, and left/center/right
-  alignment, and stores alignment on the annotation. Active text input keeps a
+  as arrows, opens a floating Text HUD for color, size, Normal/Sketch font
+  mode, and left/center/right alignment, and stores font mode plus alignment on
+  the annotation. The font-mode HUD is a compact linked two-button segmented
+  control whose buttons render live `Ab` previews in the resolved Normal or
+  Sketch families; do not replace it with SVG icons or repo-root icon files.
+  Active text input keeps a
   hidden `GtkTextView` only as the keyboard buffer; the visible draft is drawn
   as a temporary text annotation through the same Pango/Cairo
   `shaula_annotation_draw` path used by committed annotations, export, and
   copy. Draft and commit therefore share image-coordinate anchoring, zoom/pan
   transform, font family/weight, size, color, opacity, multiline layout,
-  alignment, and text bounds. Text anchoring uses Pango ink extents, not
-  logical layout origin, so the clicked point matches the visible top-left of
-  the first glyph instead of an internal font padding offset. Empty drafts draw
-  a canvas caret at the anchor with a contrast halo for immediate placement
-  feedback. Text HUD changes during an active draft update the draft state and
-  do not mutate a previously selected committed text annotation. Drag release
-  must keep `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks
-  draft rendering and click-to-commit flow because the draft path is
-  operation-gated.
+  alignment, and text bounds. Text `position` is the stable Pango layout origin;
+  do not reinterpret it as changing ink top-left. `text_line_metrics` computes
+  the layout draw origin, ink/logical union bounds, and line advance once, then
+  committed rendering, selected bounds, draft editing bounds, and draft caret
+  reuse those metrics. Active drafts always draw a canvas caret with a contrast
+  halo, including non-empty text. The caret rect comes from the committed text
+  layout path via `shaula_annotation_text_cursor_rect`, using the hidden
+  buffer's UTF-8 insert byte index and `pango_layout_get_cursor_pos`;
+  `GtkTextBuffer::mark-set` redraws cursor moves even when text content does
+  not change. Active drafts also draw a faint dashed editing box from the same
+  annotation bounds, distinct from selected-annotation chrome. Empty drafts use
+  the caret rect, not the empty annotation bounds, as the editing-box base so
+  the caret halo cannot visually overflow the initial box at low zoom. Text HUD
+  changes during an active draft update the draft state and do not mutate a
+  previously selected committed text annotation. Drag release must keep
+  `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks draft
+  rendering and click-to-commit flow because the draft path is operation-gated.
   `Enter` commits non-empty text, `Shift+Enter` inserts a newline,
   `Escape` cancels text entry, and clicking back on the canvas commits
   non-empty text without closing. After a
@@ -407,7 +439,8 @@ and the working diff.
   objects behind them. Selected rectangles draw border-following selection chrome
   instead of a generic expanded bounds box and expose eight resize handles in
   Select mode.
-- `shaula-highlight-symbolic` Highlight: implemented.
+- `shaula-highlight-symbolic` Highlight: implemented. Its icon is the
+  highlighter glyph, not the Spotlight/filter glyph.
 - `shaula-pen-symbolic` Pen: implemented.
 - Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes
   color, stroke width, and opacity for defaults and selected Pen annotations.

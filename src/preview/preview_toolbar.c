@@ -430,7 +430,7 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(actions),
                  make_toolbar_button(
-                     state, "shaula-copy-symbolic", "Copy image (Ctrl+Shift+C)",
+                     state, "shaula-copy-symbolic", "Copy image (Ctrl+C)",
                      G_CALLBACK(shaula_preview_on_copy_clicked)));
   gtk_box_append(
       GTK_BOX(actions),
@@ -777,11 +777,10 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   }
 
   for (int i = 0; i < 2; i++) {
-    if (state->text_style_buttons[i] != NULL) {
-      gboolean target_handdrawn = (i == 1);
+    if (state->text_font_mode_buttons[i] != NULL) {
       gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->text_style_buttons[i]),
-          state->text_is_handdrawn == target_handdrawn);
+          GTK_TOGGLE_BUTTON(state->text_font_mode_buttons[i]),
+          state->text_font_mode == (ShaulaTextFontMode)i);
     }
   }
 

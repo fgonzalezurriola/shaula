@@ -157,7 +157,7 @@ typedef struct {
   GtkWidget *text_color_button;
   GtkWidget *text_size_buttons[4];
   GtkWidget *text_align_buttons[3];
-  GtkWidget *text_style_buttons[2];
+  GtkWidget *text_font_mode_buttons[2];
   GtkWidget *measure_properties_box;
   GtkWidget *measure_color_button;
   GtkWidget *measure_width_scale;
@@ -249,7 +249,7 @@ typedef struct {
   ShaulaColor text_color;
   double text_font_size;
   ShaulaTextAlign text_align;
-  gboolean text_is_handdrawn;
+  ShaulaTextFontMode text_font_mode;
   int active_measure_index;
   ShaulaColor measure_color;
   double measure_stroke_width;
@@ -371,8 +371,8 @@ void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
                                        double font_size);
 void shaula_preview_set_text_align(ShaulaPreviewState *state,
                                    ShaulaTextAlign align);
-void shaula_preview_set_text_is_handdrawn(ShaulaPreviewState *state,
-                                          gboolean is_handdrawn);
+void shaula_preview_set_text_font_mode(ShaulaPreviewState *state,
+                                       ShaulaTextFontMode font_mode);
 void shaula_preview_set_measure_color(ShaulaPreviewState *state,
                                       ShaulaColor color);
 void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,

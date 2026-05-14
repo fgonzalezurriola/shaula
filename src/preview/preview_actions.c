@@ -821,9 +821,9 @@ void shaula_preview_on_text_size_clicked(GtkButton *button, gpointer data) {
 }
 
 void shaula_preview_on_text_style_clicked(GtkButton *button, gpointer data) {
-  gboolean is_handdrawn = (gboolean)GPOINTER_TO_INT(
-      g_object_get_data(G_OBJECT(button), "text-is-handdrawn"));
-  shaula_preview_set_text_is_handdrawn(data, is_handdrawn);
+  ShaulaTextFontMode font_mode = (ShaulaTextFontMode)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "text-font-mode"));
+  shaula_preview_set_text_font_mode(data, font_mode);
 }
 
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data) {

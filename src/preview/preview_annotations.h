@@ -33,6 +33,11 @@ typedef enum {
 } ShaulaTextAlign;
 
 typedef enum {
+  SHAULA_TEXT_FONT_NORMAL,
+  SHAULA_TEXT_FONT_SKETCH,
+} ShaulaTextFontMode;
+
+typedef enum {
   SHAULA_ANNOTATION_HIT_NONE,
   SHAULA_ANNOTATION_HIT_TEXT_BOUNDS,
   SHAULA_ANNOTATION_HIT_FILL,
@@ -60,13 +65,14 @@ typedef struct ShaulaAnnotation {
       ShaulaPoint control;
       PreviewArrowStrokeStyle stroke_style;
       gboolean is_curved;
+      gboolean has_head;
     } arrow;
     struct {
       ShaulaPoint position;
       char *text;
       double font_size;
       ShaulaTextAlign align;
-      gboolean is_handdrawn;
+      ShaulaTextFontMode font_mode;
     } text;
     struct {
       ShaulaPoint start;
@@ -98,7 +104,8 @@ ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
 ShaulaAnnotation *
 shaula_annotation_new_text(ShaulaPoint position, const char *text,
                            ShaulaColor color, double font_size,
-                           ShaulaTextAlign align, gboolean is_handdrawn);
+                           ShaulaTextAlign align,
+                           ShaulaTextFontMode font_mode);
 ShaulaAnnotation *shaula_annotation_new_measure(ShaulaPoint start,
                                                 ShaulaPoint end,
                                                 ShaulaColor color,
@@ -119,6 +126,13 @@ GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
+/* Central text font contract used by preview labels, bounds, draw, copy, and
+ * export so font-mode output cannot diverge across render paths.
+ */
+const char *shaula_text_font_family(ShaulaTextFontMode font_mode);
+gboolean shaula_annotation_text_cursor_rect(const ShaulaAnnotation *annotation,
+                                            int cursor_byte_index,
+                                            ShaulaRect *rect);
 ShaulaAnnotationHit shaula_annotations_hit_test_ranked(GPtrArray *annotations,
                                                        ShaulaPoint point,
                                                        double tolerance);

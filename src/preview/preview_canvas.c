@@ -372,6 +372,8 @@ static void draw_arrow_draft(cairo_t *cr, ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = shaula_annotation_new_arrow(
       state->drag_start_image, state->drag_current_image, state->arrow_color,
       state->arrow_stroke_width);
+  annotation->data.arrow.has_head =
+      state->operation != SHAULA_OPERATION_LINE;
   shaula_annotation_draw(cr, annotation);
   shaula_annotation_free(annotation);
 }
@@ -392,17 +394,51 @@ static char *text_view_contents(GtkTextView *view) {
   return gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 }
 
-static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state) {
-  double line_width = MAX(1.0 / state->zoom, 0.8);
-  double height = MAX(state->text_font_size * 1.25, 18.0 / state->zoom);
-  double x = state->text_anchor_image.x;
-  double y0 = state->text_anchor_image.y;
+static int text_view_cursor_byte_index(GtkTextView *view, const char *text) {
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
+  GtkTextMark *insert = gtk_text_buffer_get_insert(buffer);
+  GtkTextIter iter;
+  gtk_text_buffer_get_iter_at_mark(buffer, &iter, insert);
+  int char_offset = gtk_text_iter_get_offset(&iter);
+  const char *cursor = g_utf8_offset_to_pointer(text != NULL ? text : "",
+                                                char_offset);
+  return (int)(cursor - (text != NULL ? text : ""));
+}
+
+static void draw_text_editing_bounds(cairo_t *cr, ShaulaPreviewState *state,
+                                     ShaulaRect bounds) {
+  double zoom = MAX(state->zoom, 0.01);
+  bounds = shaula_rect_expanded(bounds, 4.0 / zoom);
+
+  cairo_save(cr);
+  double dashes[] = {5.0 / zoom, 4.0 / zoom};
+  cairo_set_dash(cr, dashes, 2, 0);
+  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.34);
+  cairo_set_line_width(cr, 2.5 / zoom);
+  cairo_rectangle(cr, bounds.x, bounds.y, bounds.width, bounds.height);
+  cairo_stroke(cr);
+  cairo_set_source_rgba(cr, state->text_color.r, state->text_color.g,
+                        state->text_color.b, 0.68);
+  cairo_set_line_width(cr, 1.0 / zoom);
+  cairo_rectangle(cr, bounds.x, bounds.y, bounds.width, bounds.height);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
+static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state,
+                                      ShaulaRect caret) {
+  double zoom = MAX(state->zoom, 0.01);
+  double line_width = MAX(1.25 / zoom, 0.8);
+  double height = MAX(caret.height, state->text_font_size * 1.1);
+  double x = caret.x;
+  double y0 = caret.y;
   double y1 = y0 + height;
 
   cairo_save(cr);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.55);
-  cairo_set_line_width(cr, line_width + 2.0 / state->zoom);
+  cairo_set_line_width(cr, line_width + 2.0 / zoom);
   cairo_move_to(cr, x, y0);
   cairo_line_to(cr, x, y1);
   cairo_stroke(cr);
@@ -421,12 +457,23 @@ static void draw_text_draft(cairo_t *cr, ShaulaPreviewState *state) {
     return;
 
   char *text = text_view_contents(GTK_TEXT_VIEW(state->text_entry));
+  int cursor_byte_index =
+      text_view_cursor_byte_index(GTK_TEXT_VIEW(state->text_entry), text);
   ShaulaAnnotation *annotation = shaula_annotation_new_text(
       state->text_anchor_image, text, state->text_color, state->text_font_size,
-      state->text_align, state->text_is_handdrawn);
+      state->text_align, state->text_font_mode);
   shaula_annotation_draw(cr, annotation);
-  if (text == NULL || text[0] == '\0')
-    draw_text_insertion_caret(cr, state);
+  ShaulaRect caret = {0};
+  gboolean has_caret =
+      shaula_annotation_text_cursor_rect(annotation, cursor_byte_index, &caret);
+  ShaulaRect editing_bounds = annotation->bounds;
+  if (has_caret && (text == NULL || text[0] == '\0')) {
+    double zoom = MAX(state->zoom, 0.01);
+    editing_bounds = (ShaulaRect){caret.x, caret.y, 1.0 / zoom, caret.height};
+  }
+  draw_text_editing_bounds(cr, state, editing_bounds);
+  if (has_caret)
+    draw_text_insertion_caret(cr, state, caret);
   shaula_annotation_free(annotation);
   g_free(text);
 }
@@ -684,7 +731,7 @@ static void finish_text_entry(ShaulaPreviewState *state) {
   if (trimmed[0] != '\0') {
     ShaulaAnnotation *annotation = shaula_annotation_new_text(
         state->text_anchor_image, text, state->text_color,
-        state->text_font_size, state->text_align, state->text_is_handdrawn);
+        state->text_font_size, state->text_align, state->text_font_mode);
     shaula_preview_add_annotation(state, annotation);
     shaula_preview_select_annotation(state, annotation);
     state->active_properties_panel = SHAULA_PROPERTIES_PANEL_TEXT;
@@ -730,6 +777,13 @@ static void on_text_buffer_changed(GtkTextBuffer *buffer, gpointer data) {
   shaula_preview_queue_draw(data);
 }
 
+static void on_text_buffer_mark_set(GtkTextBuffer *buffer, GtkTextIter *iter,
+                                    GtkTextMark *mark, gpointer data) {
+  (void)iter;
+  if (mark == gtk_text_buffer_get_insert(buffer))
+    shaula_preview_queue_draw(data);
+}
+
 static void begin_text_entry(ShaulaPreviewState *state,
                              ShaulaPoint image_point) {
   if (state->canvas_overlay == NULL)
@@ -761,6 +815,8 @@ static void begin_text_entry(ShaulaPreviewState *state,
 
   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(entry));
   g_signal_connect(buffer, "changed", G_CALLBACK(on_text_buffer_changed),
+                   state);
+  g_signal_connect(buffer, "mark-set", G_CALLBACK(on_text_buffer_mark_set),
                    state);
   GtkEventController *keys = gtk_event_controller_key_new();
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_text_entry_key), state);
@@ -1353,6 +1409,8 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
       annotation = shaula_annotation_new_arrow(
           state->drag_start_image, state->drag_current_image,
           state->arrow_color, state->arrow_stroke_width);
+    if (annotation != NULL && state->operation == SHAULA_OPERATION_LINE)
+      annotation->data.arrow.has_head = FALSE;
     break;
   case SHAULA_OPERATION_RECTANGLE: {
     ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,

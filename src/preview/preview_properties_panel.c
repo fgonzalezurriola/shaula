@@ -266,18 +266,31 @@ static GtkWidget *make_text_size_toggle(ShaulaPreviewState *state,
 }
 
 static GtkWidget *make_text_style_toggle(ShaulaPreviewState *state,
-                                         const char *icon_name,
                                          const char *tooltip,
-                                         gboolean is_handdrawn) {
+                                         ShaulaTextFontMode font_mode) {
   GtkWidget *button = gtk_toggle_button_new();
-  gtk_button_set_child(GTK_BUTTON(button),
-                       shaula_preview_make_toolbar_icon(state, icon_name));
+  GtkWidget *label = gtk_label_new("Ab");
+  gtk_label_set_xalign(GTK_LABEL(label), 0.5);
+  gtk_widget_set_hexpand(label, TRUE);
+  PangoAttrList *attrs = pango_attr_list_new();
+  pango_attr_list_insert(
+      attrs, pango_attr_family_new(shaula_text_font_family(font_mode)));
+  pango_attr_list_insert(attrs, pango_attr_weight_new(
+                                    font_mode == SHAULA_TEXT_FONT_SKETCH
+                                        ? PANGO_WEIGHT_NORMAL
+                                        : PANGO_WEIGHT_BOLD));
+  pango_attr_list_insert(attrs, pango_attr_size_new(15 * PANGO_SCALE));
+  gtk_label_set_attributes(GTK_LABEL(label), attrs);
+  pango_attr_list_unref(attrs);
+  gtk_button_set_child(GTK_BUTTON(button), label);
   gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL, tooltip, -1);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 34, 28);
-  g_object_set_data(G_OBJECT(button), "text-is-handdrawn",
-                    GINT_TO_POINTER((int)is_handdrawn));
+  g_object_set_data(G_OBJECT(button), "text-font-mode",
+                    GINT_TO_POINTER(font_mode));
   g_signal_connect(button, "clicked",
                    G_CALLBACK(shaula_preview_on_text_style_clicked), state);
   return button;
@@ -727,13 +740,15 @@ shaula_preview_text_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *style_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_add_css_class(style_box, "linked");
 
-  state->text_style_buttons[0] =
-      make_text_style_toggle(state, "shaula-text-symbolic", "Normal", FALSE);
-  state->text_style_buttons[1] = make_text_style_toggle(
-      state, "shaula-marker-symbolic", "Handdrawn", TRUE);
+  state->text_font_mode_buttons[SHAULA_TEXT_FONT_NORMAL] =
+      make_text_style_toggle(state, "Normal", SHAULA_TEXT_FONT_NORMAL);
+  state->text_font_mode_buttons[SHAULA_TEXT_FONT_SKETCH] =
+      make_text_style_toggle(state, "Sketch", SHAULA_TEXT_FONT_SKETCH);
 
-  gtk_box_append(GTK_BOX(style_box), state->text_style_buttons[0]);
-  gtk_box_append(GTK_BOX(style_box), state->text_style_buttons[1]);
+  gtk_box_append(GTK_BOX(style_box),
+                 state->text_font_mode_buttons[SHAULA_TEXT_FONT_NORMAL]);
+  gtk_box_append(GTK_BOX(style_box),
+                 state->text_font_mode_buttons[SHAULA_TEXT_FONT_SKETCH]);
 
   gtk_box_append(GTK_BOX(panel), style_box);
 

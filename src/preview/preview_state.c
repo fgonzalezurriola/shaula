@@ -309,7 +309,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
       (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
   state->text_font_size = 24.0;
   state->text_align = SHAULA_TEXT_ALIGN_LEFT;
-  state->text_is_handdrawn = FALSE;
+  state->text_font_mode = SHAULA_TEXT_FONT_NORMAL;
   state->active_measure_index = -1;
   state->measure_color =
       (ShaulaColor){0xFD / 255.0, 0x76 / 255.0, 0x03 / 255.0, 1.0};
@@ -510,7 +510,7 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
       state->text_color = annotation->color;
       state->text_font_size = annotation->data.text.font_size;
       state->text_align = annotation->data.text.align;
-      state->text_is_handdrawn = annotation->data.text.is_handdrawn;
+      state->text_font_mode = annotation->data.text.font_mode;
     } else if (annotation->type == SHAULA_ANNOTATION_MEASURE) {
       state->active_properties_panel = SHAULA_PROPERTIES_PANEL_MEASURE;
       state->measure_color = annotation->color;
@@ -1697,18 +1697,20 @@ void shaula_preview_set_text_align(ShaulaPreviewState *state,
   shaula_preview_queue_draw(state);
 }
 
-void shaula_preview_set_text_is_handdrawn(ShaulaPreviewState *state,
-                                          gboolean is_handdrawn) {
+void shaula_preview_set_text_font_mode(ShaulaPreviewState *state,
+                                       ShaulaTextFontMode font_mode) {
   if (state == NULL)
     return;
-  state->text_is_handdrawn = is_handdrawn;
+  if (font_mode != SHAULA_TEXT_FONT_SKETCH)
+    font_mode = SHAULA_TEXT_FONT_NORMAL;
+  state->text_font_mode = font_mode;
   ShaulaAnnotation *text = state->text_entry == NULL
                                ? selected_annotation_of_type(
                                      state, SHAULA_ANNOTATION_TEXT)
                                : NULL;
-  if (text != NULL && text->data.text.is_handdrawn != is_handdrawn) {
+  if (text != NULL && text->data.text.font_mode != font_mode) {
     begin_property_history_if_targeted(state, TRUE);
-    text->data.text.is_handdrawn = is_handdrawn;
+    text->data.text.font_mode = font_mode;
     shaula_annotation_update_bounds(text);
     state->modified = TRUE;
   }
