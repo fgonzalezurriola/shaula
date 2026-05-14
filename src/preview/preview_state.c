@@ -375,7 +375,7 @@ void shaula_preview_update_dimensions_label(ShaulaPreviewState *state) {
   if (state->dimensions_label == NULL || state->image == NULL)
     return;
   char size_buf[32];
-  snprintf(size_buf, sizeof(size_buf), "%d\xc3\x97%d px",
+  snprintf(size_buf, sizeof(size_buf), "%dw\xc3\x97%dh",
            shaula_preview_image_width(state), shaula_preview_image_height(state));
   gtk_label_set_text(GTK_LABEL(state->dimensions_label), size_buf);
 }
@@ -385,7 +385,7 @@ void shaula_preview_update_zoom_label(ShaulaPreviewState *state) {
     return;
   int pct = (int)(state->zoom * 100.0 + 0.5);
   char buf[32];
-  snprintf(buf, sizeof(buf), "%d%% Zoom", pct);
+  snprintf(buf, sizeof(buf), "Zoom %d%%", pct);
   gtk_label_set_text(GTK_LABEL(state->zoom_label), buf);
 }
 

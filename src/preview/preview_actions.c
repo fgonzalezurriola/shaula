@@ -705,6 +705,9 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
   case SHAULA_TOOL_ARROW:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW;
     break;
+  case SHAULA_TOOL_LINE:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_LINE;
+    break;
   case SHAULA_TOOL_TEXT:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_TEXT;
     break;

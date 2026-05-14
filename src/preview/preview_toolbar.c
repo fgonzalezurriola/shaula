@@ -30,9 +30,8 @@ static const ToolActionSpec secondary_tools[] = {
      SHAULA_TOOL_RECTANGLE},
     {"shaula-arrow-symbolic", "Arrow", "Arrow (3)", "Arrow (3)", "3",
      SHAULA_TOOL_ARROW},
-    /* Number 4 is reserved for a future Line tool; insert it here without
-     * renumbering the remaining canvas tools once Line exists.
-     */
+    {"shaula-line-symbolic", "Line", "Line (4)", "Line (4)", "4",
+     SHAULA_TOOL_LINE},
     {"shaula-text-symbolic", "Text", "Text (5)", "Text (5)", "5",
      SHAULA_TOOL_TEXT},
     {"shaula-pen-symbolic", "Pen", "Pen (6)", "Pen (6)", "6",
@@ -510,21 +509,40 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(metadata), color_stack);
 
+  /* Dimensions + zoom stacked in a single compact column. */
+  GtkWidget *info_stack = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_valign(info_stack, GTK_ALIGN_CENTER);
+
   if (state->image != NULL) {
     char size_buf[32];
-    snprintf(size_buf, sizeof(size_buf), "%d\xc3\x97%d px",
+    snprintf(size_buf, sizeof(size_buf), "%dw\xc3\x97%dh",
              shaula_preview_image_width(state),
              shaula_preview_image_height(state));
     state->dimensions_label = make_muted_label(size_buf);
-    gtk_box_append(GTK_BOX(metadata), state->dimensions_label);
+    gtk_label_set_xalign(GTK_LABEL(state->dimensions_label), 1.0f);
+    PangoAttrList *dim_attrs = pango_attr_list_new();
+    pango_attr_list_insert(dim_attrs,
+                           pango_attr_scale_new(PANGO_SCALE_SMALL));
+    pango_attr_list_insert(dim_attrs, pango_attr_family_new("monospace"));
+    gtk_label_set_attributes(GTK_LABEL(state->dimensions_label), dim_attrs);
+    pango_attr_list_unref(dim_attrs);
+    gtk_box_append(GTK_BOX(info_stack), state->dimensions_label);
   }
 
-  state->zoom_label = make_muted_label("100% Zoom");
-  apply_fixed_code_width(state->zoom_label, 9, 86, 1.0f);
-  gtk_box_append(GTK_BOX(metadata), state->zoom_label);
+  state->zoom_label = make_muted_label("Zoom 100%");
+  gtk_label_set_xalign(GTK_LABEL(state->zoom_label), 1.0f);
+  {
+    PangoAttrList *zoom_attrs = pango_attr_list_new();
+    pango_attr_list_insert(zoom_attrs,
+                           pango_attr_scale_new(PANGO_SCALE_SMALL));
+    pango_attr_list_insert(zoom_attrs, pango_attr_family_new("monospace"));
+    gtk_label_set_attributes(GTK_LABEL(state->zoom_label), zoom_attrs);
+    pango_attr_list_unref(zoom_attrs);
+  }
+  gtk_box_append(GTK_BOX(info_stack), state->zoom_label);
+
+  gtk_box_append(GTK_BOX(metadata), info_stack);
   gtk_widget_set_margin_end(metadata, 8);
-
-
 
   return metadata;
 }

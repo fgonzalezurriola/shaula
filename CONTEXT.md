@@ -455,8 +455,10 @@ and the working diff.
   `g_spawn_command_line_sync` / `g_shell_parse_argv` do not interpret `|`.
 - The live hex label has a fixed pixel width and monospace glyphs so changing
   sampled colors does not shift the metadata group.
-- Image dimensions label: implemented.
-- Zoom label: implemented.
+- Image dimensions and zoom are stacked in a single compact column using
+  `PANGO_SCALE_SMALL` monospace: dimensions (`987×721`) on top, zoom (`100%`)
+  below, both right-aligned. This layout saves horizontal toolbar space
+  compared to the previous inline readouts.
 
 ## Preview History
 

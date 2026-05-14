@@ -47,6 +47,7 @@ static const char *cursor_name_for_tool(ShaulaTool tool) {
     return "text";
   case SHAULA_TOOL_CROP:
   case SHAULA_TOOL_ARROW:
+  case SHAULA_TOOL_LINE:
   case SHAULA_TOOL_MEASURE:
   case SHAULA_TOOL_RECTANGLE:
   case SHAULA_TOOL_HIGHLIGHT:
@@ -550,6 +551,7 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
 
  switch (state->operation) {
   case SHAULA_OPERATION_ARROW:
+  case SHAULA_OPERATION_LINE:
     draw_arrow_draft(cr, state);
     break;
   case SHAULA_OPERATION_RECTANGLE:
@@ -1094,9 +1096,10 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     start_operation(state, SHAULA_OPERATION_CROP, clamped);
     break;
   case SHAULA_TOOL_ARROW:
+  case SHAULA_TOOL_LINE:
     if (inside) {
       shaula_preview_clear_selection(state);
-      start_operation(state, SHAULA_OPERATION_ARROW, clamped);
+      start_operation(state, state->active_tool == SHAULA_TOOL_ARROW ? SHAULA_OPERATION_ARROW : SHAULA_OPERATION_LINE, clamped);
     }
     break;
   case SHAULA_TOOL_TEXT:
@@ -1247,6 +1250,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
         shaula_rect_from_points(state->drag_start_image, image_point);
     break;
   case SHAULA_OPERATION_ARROW:
+  case SHAULA_OPERATION_LINE:
   case SHAULA_OPERATION_RECTANGLE:
   case SHAULA_OPERATION_MEASURE:
     state->drag_current_image = image_point;
@@ -1343,6 +1347,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = NULL;
   switch (state->operation) {
   case SHAULA_OPERATION_ARROW:
+  case SHAULA_OPERATION_LINE:
     if (shaula_point_distance(state->drag_start_image,
                               state->drag_current_image) >= 3.0)
       annotation = shaula_annotation_new_arrow(
