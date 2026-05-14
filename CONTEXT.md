@@ -451,10 +451,12 @@ and the working diff.
   Pen defaults to the shared strong orange used by Arrow/Text/Rectangle/Measure.
   Select-mode hit testing for Pen and Highlight is path-distance based rather
   than bounding-box based, and selected freehand paths draw path-following
-  selection chrome instead of a large rectangular box. The real path is repainted
-  above selection chrome so selecting a Pen/Highlight path must not visually turn
-  its stroke white. Additional Pen styles are desired future work and should fit
-  into this HUD rather than expanding the primary toolbar.
+  selection chrome instead of a large rectangular box. Keep Arrow/Line and
+  Pen/Highlight selection chrome low-alpha and solid; do not change their hit
+  geometry while tuning the white outline. The real path is repainted above
+  selection chrome so selecting a Pen/Highlight path must not visually turn its
+  stroke white. Additional Pen styles are desired future work and should fit into
+  this HUD rather than expanding the primary toolbar.
 - Highlight highlighter: implemented as a separate Highlight button/HUD from
   Pen. Highlight is now a wide low-opacity freehand path with round caps, not a
   rectangle tool. Its HUD exposes only color, width, and opacity, and it avoids

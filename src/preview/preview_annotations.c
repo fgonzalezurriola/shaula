@@ -539,17 +539,16 @@ static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
   cairo_save(cr);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-  cairo_set_line_width(cr, MAX(stroke_width + 8.0, 10.0));
-  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.62);
+  cairo_set_dash(cr, NULL, 0, 0);
+  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
+  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.26);
   cairo_move_to(cr, path.points[0].x, path.points[0].y);
   for (int i = 1; i < path.len; i++)
     cairo_line_to(cr, path.points[i].x, path.points[i].y);
   cairo_stroke(cr);
 
-  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
-  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
-  double dashes[] = {4.0, 3.0};
-  cairo_set_dash(cr, dashes, 2, 0);
+  cairo_set_line_width(cr, MAX(stroke_width + 1.5, 2.5));
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.22);
   cairo_move_to(cr, path.points[0].x, path.points[0].y);
   for (int i = 1; i < path.len; i++)
     cairo_line_to(cr, path.points[i].x, path.points[i].y);
@@ -600,16 +599,15 @@ static void draw_arrow_selection(cairo_t *cr,
   cairo_save(cr);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+  cairo_set_dash(cr, NULL, 0, 0);
 
   for (int pass = 0; pass < 2; pass++) {
     if (pass == 0) {
-      cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.62);
-      cairo_set_line_width(cr, MAX(stroke_width + 8.0, 10.0));
-    } else {
-      cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
+      cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.26);
       cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
-      double dashes[] = {4.0, 3.0};
-      cairo_set_dash(cr, dashes, 2, 0);
+    } else {
+      cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.22);
+      cairo_set_line_width(cr, MAX(stroke_width + 1.5, 2.5));
     }
 
     cairo_move_to(cr, start.x, start.y);
@@ -926,11 +924,11 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
                          0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
       cairo_save(cr);
-      cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+      cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.88);
       cairo_arc(cr, mid.x, mid.y, 4.0, 0, 2 * G_PI);
       cairo_fill_preserve(cr);
-      cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 1.0);
-      cairo_set_line_width(cr, 1.5);
+      cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.72);
+      cairo_set_line_width(cr, 1.25);
       cairo_stroke(cr);
       cairo_restore(cr);
       draw_round_handle(cr, p0);
