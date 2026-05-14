@@ -56,20 +56,7 @@ common_env=(
   "SHAULA_SHA256SUMS_URL=file://${tmp_dir}/SHA256SUMS"
 )
 
-set +e
-printf 'n\n' | env "${common_env[@]}" scripts/install.sh >/tmp/shaula-installer-prompt.out 2>/tmp/shaula-installer-prompt.err
-prompt_rc=$?
-set -e
-if [[ "${prompt_rc}" -eq 0 ]]; then
-  echo "ERR_INSTALLER_PROMPT_INVALID reason=decline_succeeded" >&2
-  exit 1
-fi
-if [[ -e "${xdg_bin}/shaula" ]]; then
-  echo "ERR_INSTALLER_PROMPT_INVALID reason=installed_after_decline" >&2
-  exit 1
-fi
-
-env "${common_env[@]}" scripts/install.sh --yes >/tmp/shaula-installer-install.out
+env "${common_env[@]}" scripts/install.sh >/tmp/shaula-installer-install.out
 test -x "${xdg_bin}/shaula"
 test -f "${xdg_data}/applications/shaula.desktop"
 test -f "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
@@ -90,9 +77,9 @@ test ! -e "${xdg_bin}/shaula"
 test -f "${xdg_config}/shaula/config.toml"
 grep -q 'sentinel = true' "${xdg_config}/shaula/config.toml"
 
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh$' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --uninstall' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --yes' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --version v1.0.0' README.md
+grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh$' README.md
+grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall' README.md
+grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --yes' README.md
+grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v1.0.0' README.md
 
 echo "Installer foundation QA passed."

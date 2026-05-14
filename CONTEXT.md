@@ -18,6 +18,8 @@ and the working diff.
   `zig-out/share` as `shaula-linux-x86_64.tar.gz`, writes and verifies
   `SHA256SUMS`, and publishes/replaces release assets with `gh`. The publish job
   uses `contents: write`, does not run on PRs, and does not use shared caches.
+- The public repository currently uses `master` as the default branch, so README
+  installer snippets use `raw.githubusercontent.com/.../master/scripts/install.sh`.
 - First installer foundation is now present in `scripts/install.sh` and
   `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
   `SHA256SUMS`, supports latest stable, `--version`, positional `v*`, and
@@ -70,8 +72,9 @@ and the working diff.
   a native GTK header bar/titlebar with window controls; Preview and Overlay
   decoration behavior is unchanged.
 - Public docs have been split: `README.md` is now the shorter product-facing
-  install/usage/dev-basics page, `DEV.md` holds internal workflow and
-  integration notes, and `docs/roadmap.md` tracks future features.
+  install/usage/dev-basics page with `docs/assets/shaula-preview.png` as the
+  product preview image. `DEV.md` holds internal workflow and integration notes,
+  and `docs/roadmap.md` tracks future features.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - `pin screenshot` is a roadmap item, not a current toolbar action.

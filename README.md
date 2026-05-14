@@ -6,18 +6,32 @@ Shaula is currently tested primarily on Niri. It also includes integration work
 for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
 is the main supported environment right now.
 
+![Shaula preview with annotations](docs/assets/shaula-preview.png)
+
 ## Installation
 
-Install with:
+Install or update with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
+```
+
+Install a specific release with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v1.0.0
+```
+
+For a non-interactive install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --yes
 ```
 
 Uninstall with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/main/scripts/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall
 ```
 
 ## Runtime Requirements
