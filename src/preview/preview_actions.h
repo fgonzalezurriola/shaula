@@ -35,7 +35,7 @@ void shaula_preview_on_discard_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_fit_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_actual_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_reset_annotations_clicked(GtkButton *button,
-                                                gpointer data);
+                                                 gpointer data);
 void shaula_preview_on_duplicate_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data);
@@ -49,8 +49,7 @@ void shaula_preview_on_properties_back_clicked(GtkButton *button,
                                                gpointer data);
 void shaula_preview_on_spotlight_color_set(GtkColorButton *button,
                                            gpointer data);
-void shaula_preview_on_spotlight_width_changed(GtkRange *range,
-                                               gpointer data);
+void shaula_preview_on_spotlight_width_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
                                                gpointer data);
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
@@ -65,8 +64,7 @@ void shaula_preview_on_rectangle_color_set(GtkColorButton *button,
 void shaula_preview_on_rectangle_width_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_rectangle_stroke_style_clicked(GtkButton *button,
                                                       gpointer data);
-void shaula_preview_on_rectangle_fill_toggled(GtkButton *button,
-                                              gpointer data);
+void shaula_preview_on_rectangle_fill_toggled(GtkButton *button, gpointer data);
 void shaula_preview_on_rectangle_corners_clicked(GtkButton *button,
                                                  gpointer data);
 void shaula_preview_on_pen_color_set(GtkColorButton *button, gpointer data);
@@ -74,12 +72,12 @@ void shaula_preview_on_pen_width_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_pen_opacity_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_highlight_color_set(GtkColorButton *button,
                                            gpointer data);
-void shaula_preview_on_highlight_width_changed(GtkRange *range,
-                                               gpointer data);
+void shaula_preview_on_highlight_width_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
                                                  gpointer data);
 void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data);
-void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data);
+void shaula_preview_on_text_size_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_text_style_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_measure_color_set(GtkColorButton *button, gpointer data);
 void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data);

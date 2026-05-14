@@ -29,14 +29,13 @@ static void notify_save_failure(ShaulaPreviewState *state, const char *context,
   char *body = g_strdup(error != NULL ? error->message : "Save failed");
   report_error(context, error);
   if (state != NULL)
-    state->notified =
-        shaula_preview_notify("Could not save screenshot", body, NULL, FALSE,
-                              6000);
+    state->notified = shaula_preview_notify("Could not save screenshot", body,
+                                            NULL, FALSE, 6000);
   g_free(body);
 }
 
-static char *render_or_original_png(ShaulaPreviewState *state, gboolean *is_temp,
-                                    GError **error) {
+static char *render_or_original_png(ShaulaPreviewState *state,
+                                    gboolean *is_temp, GError **error) {
   *is_temp = FALSE;
   if (shaula_preview_state_has_modifications(state) ||
       !shaula_image_io_path_has_png_extension(state->path)) {
@@ -56,10 +55,10 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
                                       const char *image_path,
                                       gboolean transient, int timeout_ms) {
   gchar *timeout = g_strdup_printf("%d", timeout_ms);
-  gchar *image_hint = image_path != NULL && image_path[0] != '\0'
-                          ? g_strdup_printf("string:image-path:file://%s",
-                                            image_path)
-                          : NULL;
+  gchar *image_hint =
+      image_path != NULL && image_path[0] != '\0'
+          ? g_strdup_printf("string:image-path:file://%s", image_path)
+          : NULL;
   gchar *argv[13];
   int argc = 0;
   argv[argc++] = "notify-send";
@@ -80,11 +79,11 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
 
   gint status = 1;
   GError *error = NULL;
-  gboolean spawned = g_spawn_sync(
-      NULL, argv, NULL,
-      G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-          G_SPAWN_STDERR_TO_DEV_NULL,
-      NULL, NULL, NULL, NULL, &status, &error);
+  gboolean spawned =
+      g_spawn_sync(NULL, argv, NULL,
+                   G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
+                       G_SPAWN_STDERR_TO_DEV_NULL,
+                   NULL, NULL, NULL, NULL, &status, &error);
   if (!spawned) {
     if (error != NULL)
       g_error_free(error);
@@ -111,11 +110,10 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
     argv[argc] = NULL;
     status = 1;
     error = NULL;
-    spawned = g_spawn_sync(
-        NULL, argv, NULL,
-        G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-            G_SPAWN_STDERR_TO_DEV_NULL,
-        NULL, NULL, NULL, NULL, &status, &error);
+    spawned = g_spawn_sync(NULL, argv, NULL,
+                           G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
+                               G_SPAWN_STDERR_TO_DEV_NULL,
+                           NULL, NULL, NULL, NULL, &status, &error);
     ok = spawned && WIFEXITED(status) && WEXITSTATUS(status) == 0;
     if (error != NULL)
       g_error_free(error);
@@ -161,9 +159,9 @@ static gboolean ensure_writable_dir(const char *dir, GError **error) {
     return FALSE;
   }
 
-  char *probe = g_strdup_printf("%s%c.shaula-write-probe-%" G_GINT64_FORMAT
-                                ".tmp",
-                                dir, G_DIR_SEPARATOR, g_get_real_time());
+  char *probe =
+      g_strdup_printf("%s%c.shaula-write-probe-%" G_GINT64_FORMAT ".tmp", dir,
+                      G_DIR_SEPARATOR, g_get_real_time());
   gboolean ok = g_file_set_contents(probe, "", 0, error);
   if (ok)
     g_unlink(probe);
@@ -197,9 +195,9 @@ static char *timestamped_quick_save_path(GError **error) {
     return NULL;
 
   GDateTime *now = g_date_time_new_now_local();
-  char *stamp = now != NULL ? g_date_time_format(now, "%Y-%m-%d-%H%M%S")
-                            : g_strdup_printf("%" G_GINT64_FORMAT,
-                                              g_get_real_time());
+  char *stamp = now != NULL
+                    ? g_date_time_format(now, "%Y-%m-%d-%H%M%S")
+                    : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
   if (now != NULL)
     g_date_time_unref(now);
   char *filename = g_strdup_printf("shaula-%s.png", stamp);
@@ -222,8 +220,7 @@ static char *display_path_with_tilde(const char *path) {
 }
 
 static gboolean save_rendered_png_to_path(ShaulaPreviewState *state,
-                                          const char *target,
-                                          GError **error) {
+                                          const char *target, GError **error) {
   gboolean is_temp = FALSE;
   char *source = render_or_original_png(state, &is_temp, error);
   if (source == NULL)
@@ -246,7 +243,8 @@ static void remember_real_save_path(ShaulaPreviewState *state,
   state->path = g_strdup(target);
 }
 
-void shaula_preview_action_set_tool(ShaulaPreviewState *state, ShaulaTool tool) {
+void shaula_preview_action_set_tool(ShaulaPreviewState *state,
+                                    ShaulaTool tool) {
   if (state == NULL)
     return;
   if (tool == SHAULA_TOOL_CROP && state->active_tool == SHAULA_TOOL_SELECT &&
@@ -371,8 +369,8 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   char *source = render_or_original_png(state, &is_temp, &error);
   if (source == NULL) {
     report_error("accept render", error);
-    state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
+    state->notified = shaula_preview_notify("Could not save screenshot",
+                                            "Save failed", NULL, FALSE, 6000);
     if (state->app != NULL)
       g_application_quit(G_APPLICATION(state->app));
     return;
@@ -380,16 +378,16 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 
   char *target = shaula_image_io_with_png_extension(state->path);
   if (target == NULL) {
-    state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
+    state->notified = shaula_preview_notify("Could not save screenshot",
+                                            "Save failed", NULL, FALSE, 6000);
   } else if (g_strcmp0(source, target) == 0) {
     state->saved = TRUE;
     g_free(state->saved_path);
     state->saved_path = g_strdup(target);
   } else if (!shaula_image_io_copy_file_bytes(source, target, &error)) {
     report_error("accept save", error);
-    state->notified = shaula_preview_notify(
-        "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
+    state->notified = shaula_preview_notify("Could not save screenshot",
+                                            "Save failed", NULL, FALSE, 6000);
   } else {
     state->saved = TRUE;
     g_free(state->saved_path);
@@ -399,8 +397,8 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   if (copy_to_clipboard && state->saved_path != NULL) {
     if (!shaula_clipboard_copy_png_file(state->saved_path, &error)) {
       report_error("accept copy", error);
-      state->notified = shaula_preview_notify(
-          "Could not copy screenshot", "Copy failed", NULL, FALSE, 5000);
+      state->notified = shaula_preview_notify("Could not copy screenshot",
+                                              "Copy failed", NULL, FALSE, 5000);
     } else {
       state->copied = TRUE;
     }
@@ -449,22 +447,19 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
             remember_real_save_path(state, target_png);
             char *display = display_path_with_tilde(target_png);
             char *body = g_strdup_printf("Saved to %s", display);
-            state->notified =
-                shaula_preview_notify("Shaula captured", body, target_png,
-                                      TRUE, 2500);
+            state->notified = shaula_preview_notify("Shaula captured", body,
+                                                    target_png, TRUE, 2500);
             g_free(body);
             g_free(display);
           }
           g_free(target_png);
         } else {
-          state->notified = shaula_preview_notify("Could not save screenshot",
-                                                  "Save failed", NULL, FALSE,
-                                                  6000);
+          state->notified = shaula_preview_notify(
+              "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
         }
       } else {
-        state->notified = shaula_preview_notify("Could not save screenshot",
-                                                "Save failed", NULL, FALSE,
-                                                6000);
+        state->notified = shaula_preview_notify(
+            "Could not save screenshot", "Save failed", NULL, FALSE, 6000);
       }
       g_free(target);
       g_object_unref(file);
@@ -603,7 +598,7 @@ void shaula_preview_on_actual_clicked(GtkButton *button, gpointer data) {
 }
 
 void shaula_preview_on_reset_annotations_clicked(GtkButton *button,
-                                                gpointer data) {
+                                                 gpointer data) {
   (void)button;
   shaula_preview_execute_command(data,
                                  SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS);
@@ -617,8 +612,7 @@ void shaula_preview_on_duplicate_clicked(GtkButton *button, gpointer data) {
 
 void shaula_preview_on_delete_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_execute_command(data,
-                                 SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
 }
 
 void shaula_preview_on_crop_selected_clicked(GtkButton *button, gpointer data) {
@@ -646,8 +640,7 @@ void shaula_preview_on_spotlight_toolbar_clicked(GtkButton *button,
 void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
                                                 gpointer data) {
   (void)button;
-  shaula_preview_execute_command(data,
-                                 SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
 }
 
 void shaula_preview_on_properties_back_clicked(GtkButton *button,
@@ -664,10 +657,8 @@ void shaula_preview_on_spotlight_color_set(GtkColorButton *button,
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
-void shaula_preview_on_spotlight_width_changed(GtkRange *range,
-                                               gpointer data) {
-  shaula_preview_set_spotlight_border_width(data,
-                                            gtk_range_get_value(range));
+void shaula_preview_on_spotlight_width_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_spotlight_border_width(data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
@@ -745,9 +736,8 @@ void shaula_preview_on_arrow_width_changed(GtkRange *range, gpointer data) {
 
 void shaula_preview_on_arrow_stroke_style_clicked(GtkButton *button,
                                                   gpointer data) {
-  PreviewArrowStrokeStyle style =
-      (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
-          g_object_get_data(G_OBJECT(button), "arrow-stroke-style"));
+  PreviewArrowStrokeStyle style = (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "arrow-stroke-style"));
   shaula_preview_set_arrow_stroke_style(data, style);
   shaula_preview_toolbar_update_selection_state(data);
 }
@@ -760,17 +750,14 @@ void shaula_preview_on_rectangle_color_set(GtkColorButton *button,
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
-void shaula_preview_on_rectangle_width_changed(GtkRange *range,
-                                               gpointer data) {
-  shaula_preview_set_rectangle_stroke_width(data,
-                                            gtk_range_get_value(range));
+void shaula_preview_on_rectangle_width_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_rectangle_stroke_width(data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_rectangle_stroke_style_clicked(GtkButton *button,
                                                       gpointer data) {
-  PreviewArrowStrokeStyle style =
-      (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
-          g_object_get_data(G_OBJECT(button), "rectangle-stroke-style"));
+  PreviewArrowStrokeStyle style = (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "rectangle-stroke-style"));
   shaula_preview_set_rectangle_stroke_style(data, style);
   shaula_preview_toolbar_update_selection_state(data);
 }
@@ -783,9 +770,8 @@ void shaula_preview_on_rectangle_fill_toggled(GtkButton *button,
 
 void shaula_preview_on_rectangle_corners_clicked(GtkButton *button,
                                                  gpointer data) {
-  PreviewRectangleCorners corners =
-      (PreviewRectangleCorners)GPOINTER_TO_INT(
-          g_object_get_data(G_OBJECT(button), "rectangle-corners"));
+  PreviewRectangleCorners corners = (PreviewRectangleCorners)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "rectangle-corners"));
   shaula_preview_set_rectangle_corners(data, corners);
 }
 
@@ -812,8 +798,7 @@ void shaula_preview_on_highlight_color_set(GtkColorButton *button,
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
-void shaula_preview_on_highlight_width_changed(GtkRange *range,
-                                               gpointer data) {
+void shaula_preview_on_highlight_width_changed(GtkRange *range, gpointer data) {
   shaula_preview_set_highlight_stroke_width(data, gtk_range_get_value(range));
 }
 
@@ -829,23 +814,32 @@ void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data) {
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, 1.0});
 }
 
-void shaula_preview_on_text_size_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_text_font_size(data, gtk_range_get_value(range));
+void shaula_preview_on_text_size_clicked(GtkButton *button, gpointer data) {
+  double font_size = (double)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "text-font-size"));
+  shaula_preview_set_text_font_size(data, font_size);
+}
+
+void shaula_preview_on_text_style_clicked(GtkButton *button, gpointer data) {
+  gboolean is_handdrawn = (gboolean)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "text-is-handdrawn"));
+  shaula_preview_set_text_is_handdrawn(data, is_handdrawn);
 }
 
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data) {
- ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
- g_object_get_data(G_OBJECT(button), "text-align"));
- shaula_preview_set_text_align(data, align);
+  ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(button), "text-align"));
+  shaula_preview_set_text_align(data, align);
 }
 
-void shaula_preview_on_measure_color_set(GtkColorButton *button, gpointer data) {
- GdkRGBA rgba;
- gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
- shaula_preview_set_measure_color(
- data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
+void shaula_preview_on_measure_color_set(GtkColorButton *button,
+                                         gpointer data) {
+  GdkRGBA rgba;
+  gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
+  shaula_preview_set_measure_color(
+      data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data) {
- shaula_preview_set_measure_stroke_width(data, gtk_range_get_value(range));
+  shaula_preview_set_measure_stroke_width(data, gtk_range_get_value(range));
 }

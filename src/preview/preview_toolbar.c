@@ -25,24 +25,21 @@ typedef struct {
 static const ToolActionSpec secondary_tools[] = {
     {"shaula-select-symbolic", "Select", "Select (1)", "Select (1)", "1",
      SHAULA_TOOL_SELECT},
-    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle (2)",
-     "Rectangle (2)", "2",
-     SHAULA_TOOL_RECTANGLE},
+    {"shaula-rectangle-symbolic", "Rectangle", "Rectangle (2)", "Rectangle (2)",
+     "2", SHAULA_TOOL_RECTANGLE},
     {"shaula-arrow-symbolic", "Arrow", "Arrow (3)", "Arrow (3)", "3",
      SHAULA_TOOL_ARROW},
     {"shaula-line-symbolic", "Line", "Line (4)", "Line (4)", "4",
      SHAULA_TOOL_LINE},
     {"shaula-text-symbolic", "Text", "Text (5)", "Text (5)", "5",
      SHAULA_TOOL_TEXT},
-    {"shaula-pen-symbolic", "Pen", "Pen (6)", "Pen (6)", "6",
-     SHAULA_TOOL_PEN},
-    {"shaula-highlight-symbolic", "Highlight", "Highlight (7)",
-     "Highlight (7)", "7",
-     SHAULA_TOOL_HIGHLIGHT},
+    {"shaula-pen-symbolic", "Pen", "Pen (6)", "Pen (6)", "6", SHAULA_TOOL_PEN},
+    {"shaula-highlight-symbolic", "Highlight", "Highlight (7)", "Highlight (7)",
+     "7", SHAULA_TOOL_HIGHLIGHT},
     {"shaula-measure-symbolic", "Measure", "Measure (8)", "Measure (8)", "8",
      SHAULA_TOOL_MEASURE},
-    {"shaula-spotlight-symbolic", "Spotlight", "Spotlight (9)",
-     "Spotlight (9)", "9", SHAULA_TOOL_SPOTLIGHT},
+    {"shaula-spotlight-symbolic", "Spotlight", "Spotlight (9)", "Spotlight (9)",
+     "9", SHAULA_TOOL_SPOTLIGHT},
 };
 
 static const MenuActionSpec utility_actions[] = {
@@ -62,51 +59,50 @@ static void install_toolbar_css(void) {
     return;
 
   GtkCssProvider *provider = gtk_css_provider_new();
-  const char *css =
-      "headerbar.shaula-preview-toolbar {"
-      "  background: alpha(@theme_bg_color, 0.98);"
-      "  color: @theme_fg_color;"
-      "  border-bottom: 1px solid @borders;"
-      "  box-shadow: 0 1px 0 alpha(@theme_fg_color, 0.06);"
-      "}"
-      "headerbar.shaula-preview-toolbar button.flat,"
-      "popover.shaula-preview-popover button.flat {"
-      "  color: @theme_fg_color;"
-      "  border: 1px solid transparent;"
-      "  border-radius: 7px;"
-      "  background: transparent;"
-      "}"
-      "headerbar.shaula-preview-toolbar button.flat:hover,"
-      "popover.shaula-preview-popover button.flat:hover {"
-      "  background: alpha(@theme_fg_color, 0.08);"
-      "  border-color: alpha(@theme_fg_color, 0.12);"
-      "}"
-      "headerbar.shaula-preview-toolbar button.flat:checked,"
-      "headerbar.shaula-preview-toolbar button.flat:active,"
-      "popover.shaula-preview-popover button.flat:active {"
-      "  background: alpha(@theme_fg_color, 0.14);"
-      "  border-color: alpha(@theme_fg_color, 0.20);"
-      "}"
-      "headerbar.shaula-preview-toolbar button.flat:disabled {"
-      "  opacity: 0.42;"
-      "}"
-      ".shaula-shortcut-badge {"
-      "  min-width: 0;"
-      "  min-height: 0;"
-      "  padding: 0;"
-      "  margin: 0;"
-      "  border: none;"
-      "  background: transparent;"
-      "  color: @theme_fg_color;"
-      "  font-size: 9px;"
-      "  font-weight: 400;"
-      "}"
-      "popover.shaula-preview-popover contents {"
-      "  background: alpha(@theme_bg_color, 0.98);"
-      "  color: @theme_fg_color;"
-      "  border: 1px solid @borders;"
-      "  border-radius: 8px;"
-      "}";
+  const char *css = "headerbar.shaula-preview-toolbar {"
+                    "  background: alpha(@theme_bg_color, 0.98);"
+                    "  color: @theme_fg_color;"
+                    "  border-bottom: 1px solid @borders;"
+                    "  box-shadow: 0 1px 0 alpha(@theme_fg_color, 0.06);"
+                    "}"
+                    "headerbar.shaula-preview-toolbar button.flat,"
+                    "popover.shaula-preview-popover button.flat {"
+                    "  color: @theme_fg_color;"
+                    "  border: 1px solid transparent;"
+                    "  border-radius: 7px;"
+                    "  background: transparent;"
+                    "}"
+                    "headerbar.shaula-preview-toolbar button.flat:hover,"
+                    "popover.shaula-preview-popover button.flat:hover {"
+                    "  background: alpha(@theme_fg_color, 0.08);"
+                    "  border-color: alpha(@theme_fg_color, 0.12);"
+                    "}"
+                    "headerbar.shaula-preview-toolbar button.flat:checked,"
+                    "headerbar.shaula-preview-toolbar button.flat:active,"
+                    "popover.shaula-preview-popover button.flat:active {"
+                    "  background: alpha(@theme_fg_color, 0.14);"
+                    "  border-color: alpha(@theme_fg_color, 0.20);"
+                    "}"
+                    "headerbar.shaula-preview-toolbar button.flat:disabled {"
+                    "  opacity: 0.42;"
+                    "}"
+                    ".shaula-shortcut-badge {"
+                    "  min-width: 0;"
+                    "  min-height: 0;"
+                    "  padding: 0;"
+                    "  margin: 0;"
+                    "  border: none;"
+                    "  background: transparent;"
+                    "  color: @theme_fg_color;"
+                    "  font-size: 9px;"
+                    "  font-weight: 400;"
+                    "}"
+                    "popover.shaula-preview-popover contents {"
+                    "  background: alpha(@theme_bg_color, 0.98);"
+                    "  color: @theme_fg_color;"
+                    "  border: 1px solid @borders;"
+                    "  border-radius: 8px;"
+                    "}";
   gtk_css_provider_load_from_data(provider, css, -1);
   gtk_style_context_add_provider_for_display(
       gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
@@ -117,8 +113,7 @@ static void install_toolbar_css(void) {
 
 static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
                                       const char *icon_name,
-                                      const char *tooltip,
-                                      GCallback callback) {
+                                      const char *tooltip, GCallback callback) {
   GtkWidget *button = gtk_button_new();
   gtk_button_set_child(GTK_BUTTON(button),
                        shaula_preview_make_toolbar_icon(state, icon_name));
@@ -166,8 +161,8 @@ static GtkWidget *make_tool_toggle(ShaulaPreviewState *state,
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
                                state->active_tool == tool);
   g_object_set_data(G_OBJECT(button), "tool", GINT_TO_POINTER(tool));
-  g_signal_connect(button, "clicked", G_CALLBACK(shaula_preview_on_tool_clicked),
-                   state);
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_tool_clicked), state);
   state->tool_buttons[tool] = button;
   return button;
 }
@@ -205,8 +200,8 @@ static GtkWidget *make_menu_tool_row(ShaulaPreviewState *state,
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
   g_object_set_data(G_OBJECT(button), "tool", GINT_TO_POINTER(spec->tool));
-  g_signal_connect(button, "clicked", G_CALLBACK(shaula_preview_on_tool_clicked),
-                   state);
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_tool_clicked), state);
   return button;
 }
 
@@ -326,7 +321,8 @@ static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
 
 static GtkWidget *make_more_button(ShaulaPreviewState *state) {
   GtkWidget *button = gtk_menu_button_new();
-  GtkWidget *icon = shaula_preview_make_toolbar_icon(state, "shaula-more-symbolic");
+  GtkWidget *icon =
+      shaula_preview_make_toolbar_icon(state, "shaula-more-symbolic");
   GtkWidget *popover = gtk_popover_new();
   gtk_widget_add_css_class(popover, "shaula-preview-popover");
   GtkWidget *menu_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
@@ -351,10 +347,9 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
 
 static void append_secondary_toolbar_button(ShaulaPreviewState *state,
                                             GtkWidget *actions, int index) {
-  GtkWidget *button = make_tool_toggle(state, secondary_tools[index].icon_name,
-                                       secondary_tools[index].tooltip,
-                                       secondary_tools[index].badge,
-                                       secondary_tools[index].tool);
+  GtkWidget *button = make_tool_toggle(
+      state, secondary_tools[index].icon_name, secondary_tools[index].tooltip,
+      secondary_tools[index].badge, secondary_tools[index].tool);
   gtk_widget_set_visible(button, FALSE);
   gtk_box_append(GTK_BOX(actions), button);
   state->toolbar_secondary[state->toolbar_secondary_count] = button;
@@ -365,10 +360,9 @@ static void append_secondary_toolbar_button(ShaulaPreviewState *state,
 
 static void append_utility_toolbar_button(ShaulaPreviewState *state,
                                           GtkWidget *actions, int index) {
-  GtkWidget *button =
-      make_toolbar_button(state, utility_actions[index].icon_name,
-                          utility_actions[index].tooltip,
-                          utility_actions[index].callback);
+  GtkWidget *button = make_toolbar_button(
+      state, utility_actions[index].icon_name, utility_actions[index].tooltip,
+      utility_actions[index].callback);
   gtk_widget_set_visible(button, FALSE);
   gtk_box_append(GTK_BOX(actions), button);
   state->toolbar_utility_actions[state->toolbar_utility_action_count] = button;
@@ -420,8 +414,8 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 
   /* Border matches the SVG icon foreground resolved from the GTK theme. */
   GdkRGBA fg;
-  gtk_style_context_get_color(
-      gtk_widget_get_style_context(GTK_WIDGET(area)), &fg);
+  gtk_style_context_get_color(gtk_widget_get_style_context(GTK_WIDGET(area)),
+                              &fg);
   cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.55);
   cairo_set_line_width(cr, 1);
   cairo_stroke(cr);
@@ -435,13 +429,13 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   state->toolbar_overflow_visible_count = -1;
 
   gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button(state, "shaula-copy-symbolic",
-                                     "Copy image (Ctrl+Shift+C)",
-                                     G_CALLBACK(shaula_preview_on_copy_clicked)));
-  gtk_box_append(GTK_BOX(actions),
-                 make_toolbar_button(state, "shaula-save-symbolic",
-                                     "Save (Ctrl+S)",
-                                     G_CALLBACK(shaula_preview_on_save_clicked)));
+                 make_toolbar_button(
+                     state, "shaula-copy-symbolic", "Copy image (Ctrl+Shift+C)",
+                     G_CALLBACK(shaula_preview_on_copy_clicked)));
+  gtk_box_append(
+      GTK_BOX(actions),
+      make_toolbar_button(state, "shaula-save-symbolic", "Save (Ctrl+S)",
+                          G_CALLBACK(shaula_preview_on_save_clicked)));
   state->undo_button =
       make_toolbar_button(state, "shaula-undo-symbolic", "Undo (Ctrl+Z)",
                           G_CALLBACK(shaula_preview_on_undo_clicked));
@@ -455,8 +449,7 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-hand-symbolic",
-                                  "Pan (hold Space)", NULL,
-                                  SHAULA_TOOL_HAND));
+                                  "Pan (hold Space)", NULL, SHAULA_TOOL_HAND));
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-crop-symbolic", "Crop", NULL,
                                   SHAULA_TOOL_CROP));
@@ -521,8 +514,7 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
     state->dimensions_label = make_muted_label(size_buf);
     gtk_label_set_xalign(GTK_LABEL(state->dimensions_label), 1.0f);
     PangoAttrList *dim_attrs = pango_attr_list_new();
-    pango_attr_list_insert(dim_attrs,
-                           pango_attr_scale_new(PANGO_SCALE_SMALL));
+    pango_attr_list_insert(dim_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
     pango_attr_list_insert(dim_attrs, pango_attr_family_new("monospace"));
     gtk_label_set_attributes(GTK_LABEL(state->dimensions_label), dim_attrs);
     pango_attr_list_unref(dim_attrs);
@@ -533,8 +525,7 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   gtk_label_set_xalign(GTK_LABEL(state->zoom_label), 1.0f);
   {
     PangoAttrList *zoom_attrs = pango_attr_list_new();
-    pango_attr_list_insert(zoom_attrs,
-                           pango_attr_scale_new(PANGO_SCALE_SMALL));
+    pango_attr_list_insert(zoom_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
     pango_attr_list_insert(zoom_attrs, pango_attr_family_new("monospace"));
     gtk_label_set_attributes(GTK_LABEL(state->zoom_label), zoom_attrs);
     pango_attr_list_unref(zoom_attrs);
@@ -631,18 +622,17 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_PEN;
   gboolean show_highlight_properties =
       state->active_properties_panel == SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
- gboolean show_text_properties =
- state->active_properties_panel == SHAULA_PROPERTIES_PANEL_TEXT;
- gboolean show_measure_properties =
- state->active_properties_panel == SHAULA_PROPERTIES_PANEL_MEASURE;
+  gboolean show_text_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_TEXT;
+  gboolean show_measure_properties =
+      state->active_properties_panel == SHAULA_PROPERTIES_PANEL_MEASURE;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
   if (state->properties_box != NULL)
     gtk_widget_set_visible(state->properties_box, show_spotlight_properties);
   if (state->arrow_properties_box != NULL)
-    gtk_widget_set_visible(state->arrow_properties_box,
-                           show_arrow_properties);
+    gtk_widget_set_visible(state->arrow_properties_box, show_arrow_properties);
   if (state->rectangle_properties_box != NULL)
     gtk_widget_set_visible(state->rectangle_properties_box,
                            show_rectangle_properties);
@@ -651,15 +641,16 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->highlight_properties_box != NULL)
     gtk_widget_set_visible(state->highlight_properties_box,
                            show_highlight_properties);
- if (state->text_properties_box != NULL)
- gtk_widget_set_visible(state->text_properties_box, show_text_properties);
- if (state->measure_properties_box != NULL)
- gtk_widget_set_visible(state->measure_properties_box, show_measure_properties);
- if (state->arrow_color_button != NULL) {
+  if (state->text_properties_box != NULL)
+    gtk_widget_set_visible(state->text_properties_box, show_text_properties);
+  if (state->measure_properties_box != NULL)
+    gtk_widget_set_visible(state->measure_properties_box,
+                           show_measure_properties);
+  if (state->arrow_color_button != NULL) {
     GdkRGBA arrow_rgba = {state->arrow_color.r, state->arrow_color.g,
                           state->arrow_color.b, state->arrow_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->arrow_color_button), &arrow_rgba);
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->arrow_color_button),
+                               &arrow_rgba);
   }
   if (state->arrow_width_scale != NULL &&
       fabs(gtk_range_get_value(GTK_RANGE(state->arrow_width_scale)) -
@@ -678,12 +669,11 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
           i == (int)arrow_stroke_style);
   }
   if (state->rectangle_color_button != NULL) {
-    GdkRGBA rectangle_rgba = {state->rectangle_color.r,
-                              state->rectangle_color.g,
-                              state->rectangle_color.b,
-                              state->rectangle_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->rectangle_color_button), &rectangle_rgba);
+    GdkRGBA rectangle_rgba = {
+        state->rectangle_color.r, state->rectangle_color.g,
+        state->rectangle_color.b, state->rectangle_color.a};
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->rectangle_color_button),
+                               &rectangle_rgba);
   }
   if (state->rectangle_width_scale != NULL &&
       fabs(gtk_range_get_value(GTK_RANGE(state->rectangle_width_scale)) -
@@ -709,8 +699,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     rectangle_corners = state->selected_annotation->data.rectangle.corners;
   }
   if (state->rectangle_fill_button != NULL)
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(state->rectangle_fill_button),
-                                 rectangle_filled);
+    gtk_toggle_button_set_active(
+        GTK_TOGGLE_BUTTON(state->rectangle_fill_button), rectangle_filled);
   for (int i = PREVIEW_RECTANGLE_CORNERS_ROUNDED;
        i <= PREVIEW_RECTANGLE_CORNERS_SQUARE; i++) {
     if (state->rectangle_corner_buttons[i] != NULL)
@@ -719,10 +709,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
           i == (int)rectangle_corners);
   }
   if (state->spotlight_color_button != NULL) {
-    GdkRGBA rgba = {state->spotlight_border_color.r,
-                    state->spotlight_border_color.g,
-                    state->spotlight_border_color.b,
-                    state->spotlight_border_color.a};
+    GdkRGBA rgba = {
+        state->spotlight_border_color.r, state->spotlight_border_color.g,
+        state->spotlight_border_color.b, state->spotlight_border_color.a};
     gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->spotlight_color_button),
                                &rgba);
   }
@@ -740,8 +729,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
         GTK_TOGGLE_BUTTON(state->spotlight_rounded_button),
         state->spotlight_shape == SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
   if (state->pen_color_button != NULL) {
-    GdkRGBA rgba = {state->pen_color.r, state->pen_color.g,
-                    state->pen_color.b, state->pen_color.a};
+    GdkRGBA rgba = {state->pen_color.r, state->pen_color.g, state->pen_color.b,
+                    state->pen_color.a};
     gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->pen_color_button),
                                &rgba);
   }
@@ -758,8 +747,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->highlight_color_button != NULL) {
     GdkRGBA rgba = {state->highlight_color.r, state->highlight_color.g,
                     state->highlight_color.b, state->highlight_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->highlight_color_button), &rgba);
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->highlight_color_button),
+                               &rgba);
   }
   if (state->highlight_width_scale != NULL &&
       fabs(gtk_range_get_value(GTK_RANGE(state->highlight_width_scale)) -
@@ -777,38 +766,52 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->text_color_button),
                                &rgba);
   }
-  if (state->text_size_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->text_size_scale)) -
-           state->text_font_size) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->text_size_scale),
-                        state->text_font_size);
- for (int i = SHAULA_TEXT_ALIGN_LEFT; i <= SHAULA_TEXT_ALIGN_RIGHT; i++) {
- if (state->text_align_buttons[i] != NULL)
- gtk_toggle_button_set_active(
- GTK_TOGGLE_BUTTON(state->text_align_buttons[i]),
- i == (int)state->text_align);
- }
- if (state->measure_color_button != NULL) {
- GdkRGBA rgba = {state->measure_color.r, state->measure_color.g,
- state->measure_color.b, state->measure_color.a};
- gtk_color_chooser_set_rgba(
- GTK_COLOR_CHOOSER(state->measure_color_button), &rgba);
- }
- if (state->measure_width_scale != NULL &&
- fabs(gtk_range_get_value(GTK_RANGE(state->measure_width_scale)) -
- state->measure_stroke_width) > 0.01)
- gtk_range_set_value(GTK_RANGE(state->measure_width_scale),
- state->measure_stroke_width);
- if (state->duplicate_button != NULL) {
+
+  double font_sizes[4] = {16.0, 24.0, 36.0, 64.0};
+  for (int i = 0; i < 4; i++) {
+    if (state->text_size_buttons[i] != NULL) {
+      gboolean is_active = (fabs(state->text_font_size - font_sizes[i]) < 0.01);
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->text_size_buttons[i]), is_active);
+    }
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (state->text_style_buttons[i] != NULL) {
+      gboolean target_handdrawn = (i == 1);
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->text_style_buttons[i]),
+          state->text_is_handdrawn == target_handdrawn);
+    }
+  }
+
+  for (int i = SHAULA_TEXT_ALIGN_LEFT; i <= SHAULA_TEXT_ALIGN_RIGHT; i++) {
+    if (state->text_align_buttons[i] != NULL)
+      gtk_toggle_button_set_active(
+          GTK_TOGGLE_BUTTON(state->text_align_buttons[i]),
+          i == (int)state->text_align);
+  }
+  if (state->measure_color_button != NULL) {
+    GdkRGBA rgba = {state->measure_color.r, state->measure_color.g,
+                    state->measure_color.b, state->measure_color.a};
+    gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(state->measure_color_button),
+                               &rgba);
+  }
+  if (state->measure_width_scale != NULL &&
+      fabs(gtk_range_get_value(GTK_RANGE(state->measure_width_scale)) -
+           state->measure_stroke_width) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->measure_width_scale),
+                        state->measure_stroke_width);
+  if (state->duplicate_button != NULL) {
     gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
   }
   if (state->crop_selected_button != NULL) {
     gtk_widget_set_visible(state->crop_selected_button, can_crop);
     gtk_widget_set_sensitive(state->crop_selected_button, can_crop);
-    gtk_widget_set_tooltip_text(
-        state->crop_selected_button,
-        state->has_region_selection ? "Crop to selected region"
+    gtk_widget_set_tooltip_text(state->crop_selected_button,
+                                state->has_region_selection
+                                    ? "Crop to selected region"
                                     : "Crop to selected annotation");
   }
   if (state->blur_region_button != NULL) {

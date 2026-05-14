@@ -134,8 +134,7 @@ static GtkWidget *make_panel_icon(GtkDrawingAreaDrawFunc draw_func) {
 
 static GtkWidget *make_panel_button(ShaulaPreviewState *state,
                                     GtkDrawingAreaDrawFunc draw_func,
-                                    const char *tooltip,
-                                    GCallback callback) {
+                                    const char *tooltip, GCallback callback) {
   GtkWidget *button = gtk_button_new();
   gtk_button_set_child(GTK_BUTTON(button), make_panel_icon(draw_func));
   gtk_widget_set_tooltip_text(button, tooltip);
@@ -164,10 +163,10 @@ static GtkWidget *make_panel_shape_toggle(ShaulaPreviewState *state,
   return button;
 }
 
-static GtkWidget *make_arrow_stroke_style_toggle(ShaulaPreviewState *state,
-                                                 const char *icon_name,
-                                                 const char *tooltip,
-                                                 PreviewArrowStrokeStyle style) {
+static GtkWidget *
+make_arrow_stroke_style_toggle(ShaulaPreviewState *state, const char *icon_name,
+                               const char *tooltip,
+                               PreviewArrowStrokeStyle style) {
   GtkWidget *button = gtk_toggle_button_new();
   gtk_button_set_child(GTK_BUTTON(button),
                        shaula_preview_make_toolbar_icon(state, icon_name));
@@ -183,9 +182,10 @@ static GtkWidget *make_arrow_stroke_style_toggle(ShaulaPreviewState *state,
   return button;
 }
 
-static GtkWidget *make_rectangle_stroke_style_toggle(
-    ShaulaPreviewState *state, const char *icon_name, const char *tooltip,
-    PreviewArrowStrokeStyle style) {
+static GtkWidget *
+make_rectangle_stroke_style_toggle(ShaulaPreviewState *state,
+                                   const char *icon_name, const char *tooltip,
+                                   PreviewArrowStrokeStyle style) {
   GtkWidget *button = gtk_toggle_button_new();
   gtk_button_set_child(GTK_BUTTON(button),
                        shaula_preview_make_toolbar_icon(state, icon_name));
@@ -250,8 +250,41 @@ static GtkWidget *make_selection_action_button(ShaulaPreviewState *state,
   return button;
 }
 
-GtkWidget *shaula_preview_select_properties_panel_build(
-    ShaulaPreviewState *state) {
+static GtkWidget *make_text_size_toggle(ShaulaPreviewState *state,
+                                        const char *label, const char *tooltip,
+                                        double font_size) {
+  GtkWidget *button = gtk_toggle_button_new_with_label(label);
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 28, 28);
+  g_object_set_data(G_OBJECT(button), "text-font-size",
+                    GINT_TO_POINTER((int)font_size));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_text_size_clicked), state);
+  return button;
+}
+
+static GtkWidget *make_text_style_toggle(ShaulaPreviewState *state,
+                                         const char *icon_name,
+                                         const char *tooltip,
+                                         gboolean is_handdrawn) {
+  GtkWidget *button = gtk_toggle_button_new();
+  gtk_button_set_child(GTK_BUTTON(button),
+                       shaula_preview_make_toolbar_icon(state, icon_name));
+  gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_widget_add_css_class(button, "flat");
+  gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(button, 34, 28);
+  g_object_set_data(G_OBJECT(button), "text-is-handdrawn",
+                    GINT_TO_POINTER((int)is_handdrawn));
+  g_signal_connect(button, "clicked",
+                   G_CALLBACK(shaula_preview_on_text_style_clicked), state);
+  return button;
+}
+
+GtkWidget *
+shaula_preview_select_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -303,17 +336,16 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
   state->spotlight_color_button = color;
-  GdkRGBA rgba = {state->spotlight_border_color.r,
-                  state->spotlight_border_color.g,
-                  state->spotlight_border_color.b,
-                  state->spotlight_border_color.a};
+  GdkRGBA rgba = {
+      state->spotlight_border_color.r, state->spotlight_border_color.g,
+      state->spotlight_border_color.b, state->spotlight_border_color.a};
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Spotlight border color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
@@ -322,8 +354,8 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
                    G_CALLBACK(shaula_preview_on_spotlight_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0,
-                                              16.0, 1.0);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0, 16.0, 1.0);
   state->spotlight_width_scale = width;
   gtk_range_set_value(GTK_RANGE(width), state->spotlight_border_width);
   gtk_widget_set_tooltip_text(width, "Spotlight border width");
@@ -340,14 +372,12 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *spotlight_shape_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_add_css_class(spotlight_shape_box, "linked");
 
-  state->spotlight_sharp_button =
-      make_panel_shape_toggle(state, draw_rectangle_icon,
-                              "Pointed spotlight corners",
-                              SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE);
-  state->spotlight_rounded_button =
-      make_panel_shape_toggle(state, draw_rounded_icon,
-                              "Rounded spotlight corners",
-                              SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
+  state->spotlight_sharp_button = make_panel_shape_toggle(
+      state, draw_rectangle_icon, "Pointed spotlight corners",
+      SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE);
+  state->spotlight_rounded_button = make_panel_shape_toggle(
+      state, draw_rounded_icon, "Rounded spotlight corners",
+      SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
   gtk_box_append(GTK_BOX(spotlight_shape_box), state->spotlight_sharp_button);
   gtk_box_append(GTK_BOX(spotlight_shape_box), state->spotlight_rounded_button);
   gtk_box_append(GTK_BOX(panel), spotlight_shape_box);
@@ -360,8 +390,8 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
 /* Arrow properties HUD targets a just-created or currently selected Arrow
  * annotation. Controls: Back, Color, Stroke width, and stroke style.
  */
-GtkWidget *shaula_preview_arrow_properties_panel_build(
-    ShaulaPreviewState *state) {
+GtkWidget *
+shaula_preview_arrow_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -371,15 +401,15 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
   state->arrow_color_button = color;
   GdkRGBA rgba = {state->arrow_color.r, state->arrow_color.g,
-                   state->arrow_color.b, state->arrow_color.a};
+                  state->arrow_color.b, state->arrow_color.a};
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Arrow color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
@@ -388,8 +418,8 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_arrow_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
-                                              12.0, 0.5);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 12.0, 0.5);
   state->arrow_width_scale = width;
   gtk_range_set_value(GTK_RANGE(width), state->arrow_stroke_width);
   gtk_widget_set_tooltip_text(width, "Arrow stroke width");
@@ -430,8 +460,8 @@ GtkWidget *shaula_preview_arrow_properties_panel_build(
   return panel;
 }
 
-GtkWidget *shaula_preview_rectangle_properties_panel_build(
-    ShaulaPreviewState *state) {
+GtkWidget *
+shaula_preview_rectangle_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -441,9 +471,9 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
@@ -458,8 +488,8 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_rectangle_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
-                                              12.0, 0.5);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 12.0, 0.5);
   state->rectangle_width_scale = width;
   gtk_range_set_value(GTK_RANGE(width), state->rectangle_stroke_width);
   gtk_widget_set_tooltip_text(width, "Rectangle stroke width");
@@ -499,8 +529,7 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
   gtk_widget_set_valign(fill, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(fill, 34, 28);
   g_signal_connect(fill, "clicked",
-                   G_CALLBACK(shaula_preview_on_rectangle_fill_toggled),
-                   state);
+                   G_CALLBACK(shaula_preview_on_rectangle_fill_toggled), state);
   gtk_box_append(GTK_BOX(panel), fill);
 
   gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
@@ -528,7 +557,8 @@ GtkWidget *shaula_preview_rectangle_properties_panel_build(
   return panel;
 }
 
-GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) {
+GtkWidget *
+shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -538,15 +568,15 @@ GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) 
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
   state->pen_color_button = color;
-  GdkRGBA rgba = {state->pen_color.r, state->pen_color.g,
-                  state->pen_color.b, state->pen_color.a};
+  GdkRGBA rgba = {state->pen_color.r, state->pen_color.g, state->pen_color.b,
+                  state->pen_color.a};
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Pen color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
@@ -555,8 +585,8 @@ GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) 
                    G_CALLBACK(shaula_preview_on_pen_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
-                                              24.0, 0.5);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 24.0, 0.5);
   state->pen_width_scale = width;
   gtk_range_set_value(GTK_RANGE(width), state->pen_stroke_width);
   gtk_widget_set_tooltip_text(width, "Pen stroke width");
@@ -567,8 +597,8 @@ GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) 
                    G_CALLBACK(shaula_preview_on_pen_width_changed), state);
   gtk_box_append(GTK_BOX(panel), width);
 
-  GtkWidget *opacity = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.1,
-                                                1.0, 0.05);
+  GtkWidget *opacity =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.1, 1.0, 0.05);
   state->pen_opacity_scale = opacity;
   gtk_range_set_value(GTK_RANGE(opacity), state->pen_opacity);
   gtk_widget_set_tooltip_text(opacity, "Pen opacity");
@@ -584,8 +614,8 @@ GtkWidget *shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) 
   return panel;
 }
 
-GtkWidget *shaula_preview_highlight_properties_panel_build(
-    ShaulaPreviewState *state) {
+GtkWidget *
+shaula_preview_highlight_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -595,9 +625,9 @@ GtkWidget *shaula_preview_highlight_properties_panel_build(
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
@@ -612,8 +642,8 @@ GtkWidget *shaula_preview_highlight_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_highlight_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 4.0,
-                                              48.0, 1.0);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 4.0, 48.0, 1.0);
   state->highlight_width_scale = width;
   gtk_range_set_value(GTK_RANGE(width), state->highlight_stroke_width);
   gtk_widget_set_tooltip_text(width, "Highlight width");
@@ -625,8 +655,8 @@ GtkWidget *shaula_preview_highlight_properties_panel_build(
                    state);
   gtk_box_append(GTK_BOX(panel), width);
 
-  GtkWidget *opacity = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.05,
-                                                1.0, 0.05);
+  GtkWidget *opacity =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.05, 1.0, 0.05);
   state->highlight_opacity_scale = opacity;
   gtk_range_set_value(GTK_RANGE(opacity), state->highlight_opacity);
   gtk_widget_set_tooltip_text(opacity, "Highlight opacity");
@@ -643,8 +673,8 @@ GtkWidget *shaula_preview_highlight_properties_panel_build(
   return panel;
 }
 
-GtkWidget *shaula_preview_text_properties_panel_build(
-    ShaulaPreviewState *state) {
+GtkWidget *
+shaula_preview_text_properties_panel_build(ShaulaPreviewState *state) {
   install_properties_panel_css();
 
   GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -654,15 +684,15 @@ GtkWidget *shaula_preview_text_properties_panel_build(
   gtk_widget_set_margin_top(panel, 16);
   gtk_widget_set_margin_end(panel, 16);
 
-  GtkWidget *back = make_panel_button(
-      state, draw_back_icon, "Back",
-      G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
   gtk_box_append(GTK_BOX(panel), back);
 
   GtkWidget *color = gtk_color_button_new();
   state->text_color_button = color;
-  GdkRGBA rgba = {state->text_color.r, state->text_color.g,
-                  state->text_color.b, state->text_color.a};
+  GdkRGBA rgba = {state->text_color.r, state->text_color.g, state->text_color.b,
+                  state->text_color.a};
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Text color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
@@ -671,23 +701,41 @@ GtkWidget *shaula_preview_text_properties_panel_build(
                    G_CALLBACK(shaula_preview_on_text_color_set), state);
   gtk_box_append(GTK_BOX(panel), color);
 
-  GtkWidget *size_icon =
-      shaula_preview_make_toolbar_icon(state, "shaula-text-size-symbolic");
-  gtk_widget_set_tooltip_text(size_icon, "Text size");
-  gtk_widget_set_valign(size_icon, GTK_ALIGN_CENTER);
-  gtk_box_append(GTK_BOX(panel), size_icon);
+  // Size buttons box
+  GtkWidget *size_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(size_box, "linked");
 
-  GtkWidget *size = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 12.0,
-                                             72.0, 1.0);
-  state->text_size_scale = size;
-  gtk_range_set_value(GTK_RANGE(size), state->text_font_size);
-  gtk_widget_set_tooltip_text(size, "Text size");
-  gtk_widget_set_size_request(size, 120, -1);
-  gtk_scale_set_draw_value(GTK_SCALE(size), FALSE);
-  gtk_widget_set_valign(size, GTK_ALIGN_CENTER);
-  g_signal_connect(size, "value-changed",
-                   G_CALLBACK(shaula_preview_on_text_size_changed), state);
-  gtk_box_append(GTK_BOX(panel), size);
+  state->text_size_buttons[0] =
+      make_text_size_toggle(state, "S", "Small", 16.0);
+  state->text_size_buttons[1] =
+      make_text_size_toggle(state, "M", "Medium", 24.0);
+  state->text_size_buttons[2] =
+      make_text_size_toggle(state, "L", "Large", 36.0);
+  state->text_size_buttons[3] =
+      make_text_size_toggle(state, "XL", "Extra Large", 64.0);
+
+  gtk_box_append(GTK_BOX(size_box), state->text_size_buttons[0]);
+  gtk_box_append(GTK_BOX(size_box), state->text_size_buttons[1]);
+  gtk_box_append(GTK_BOX(size_box), state->text_size_buttons[2]);
+  gtk_box_append(GTK_BOX(size_box), state->text_size_buttons[3]);
+
+  gtk_box_append(GTK_BOX(panel), size_box);
+
+  gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
+
+  // Style buttons box
+  GtkWidget *style_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class(style_box, "linked");
+
+  state->text_style_buttons[0] =
+      make_text_style_toggle(state, "shaula-text-symbolic", "Normal", FALSE);
+  state->text_style_buttons[1] = make_text_style_toggle(
+      state, "shaula-marker-symbolic", "Handdrawn", TRUE);
+
+  gtk_box_append(GTK_BOX(style_box), state->text_style_buttons[0]);
+  gtk_box_append(GTK_BOX(style_box), state->text_style_buttons[1]);
+
+  gtk_box_append(GTK_BOX(panel), style_box);
 
   gtk_box_append(GTK_BOX(panel), gtk_separator_new(GTK_ORIENTATION_VERTICAL));
 
@@ -711,52 +759,52 @@ GtkWidget *shaula_preview_text_properties_panel_build(
                  state->text_align_buttons[SHAULA_TEXT_ALIGN_RIGHT]);
   gtk_box_append(GTK_BOX(panel), text_align_box);
 
- state->text_properties_box = panel;
- gtk_widget_set_visible(panel, FALSE);
- return panel;
+  state->text_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
 }
 
-GtkWidget *shaula_preview_measure_properties_panel_build(
- ShaulaPreviewState *state) {
- install_properties_panel_css();
+GtkWidget *
+shaula_preview_measure_properties_panel_build(ShaulaPreviewState *state) {
+  install_properties_panel_css();
 
- GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
- gtk_widget_add_css_class(panel, "shaula-properties-panel");
- gtk_widget_set_halign(panel, GTK_ALIGN_END);
- gtk_widget_set_valign(panel, GTK_ALIGN_START);
- gtk_widget_set_margin_top(panel, 16);
- gtk_widget_set_margin_end(panel, 16);
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
 
- GtkWidget *back = make_panel_button(
- state, draw_back_icon, "Back",
- G_CALLBACK(shaula_preview_on_properties_back_clicked));
- gtk_box_append(GTK_BOX(panel), back);
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  gtk_box_append(GTK_BOX(panel), back);
 
- GtkWidget *color = gtk_color_button_new();
- state->measure_color_button = color;
- GdkRGBA rgba = {state->measure_color.r, state->measure_color.g,
- state->measure_color.b, state->measure_color.a};
- gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
- gtk_widget_set_tooltip_text(color, "Measure color");
- gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
- gtk_widget_set_size_request(color, 30, 28);
- g_signal_connect(color, "color-set",
- G_CALLBACK(shaula_preview_on_measure_color_set), state);
- gtk_box_append(GTK_BOX(panel), color);
+  GtkWidget *color = gtk_color_button_new();
+  state->measure_color_button = color;
+  GdkRGBA rgba = {state->measure_color.r, state->measure_color.g,
+                  state->measure_color.b, state->measure_color.a};
+  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
+  gtk_widget_set_tooltip_text(color, "Measure color");
+  gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(color, 30, 28);
+  g_signal_connect(color, "color-set",
+                   G_CALLBACK(shaula_preview_on_measure_color_set), state);
+  gtk_box_append(GTK_BOX(panel), color);
 
- GtkWidget *width = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0,
- 8.0, 0.5);
- state->measure_width_scale = width;
- gtk_range_set_value(GTK_RANGE(width), state->measure_stroke_width);
- gtk_widget_set_tooltip_text(width, "Measure stroke width");
- gtk_widget_set_size_request(width, 120, -1);
- gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
- gtk_widget_set_valign(width, GTK_ALIGN_CENTER);
- g_signal_connect(width, "value-changed",
- G_CALLBACK(shaula_preview_on_measure_width_changed), state);
- gtk_box_append(GTK_BOX(panel), width);
+  GtkWidget *width =
+      gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 8.0, 0.5);
+  state->measure_width_scale = width;
+  gtk_range_set_value(GTK_RANGE(width), state->measure_stroke_width);
+  gtk_widget_set_tooltip_text(width, "Measure stroke width");
+  gtk_widget_set_size_request(width, 120, -1);
+  gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
+  gtk_widget_set_valign(width, GTK_ALIGN_CENTER);
+  g_signal_connect(width, "value-changed",
+                   G_CALLBACK(shaula_preview_on_measure_width_changed), state);
+  gtk_box_append(GTK_BOX(panel), width);
 
- state->measure_properties_box = panel;
- gtk_widget_set_visible(panel, FALSE);
- return panel;
+  state->measure_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
 }

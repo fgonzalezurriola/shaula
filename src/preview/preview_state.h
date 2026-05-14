@@ -51,16 +51,16 @@ typedef enum {
 } ShaulaPreviewOperation;
 
 typedef enum {
- SHAULA_PROPERTIES_PANEL_NONE,
- SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
- SHAULA_PROPERTIES_PANEL_ARROW,
- SHAULA_PROPERTIES_PANEL_RECTANGLE,
- SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
- SHAULA_PROPERTIES_PANEL_BLUR,
- SHAULA_PROPERTIES_PANEL_ERASE,
- SHAULA_PROPERTIES_PANEL_PEN,
- SHAULA_PROPERTIES_PANEL_TEXT,
- SHAULA_PROPERTIES_PANEL_MEASURE
+  SHAULA_PROPERTIES_PANEL_NONE,
+  SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
+  SHAULA_PROPERTIES_PANEL_ARROW,
+  SHAULA_PROPERTIES_PANEL_RECTANGLE,
+  SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
+  SHAULA_PROPERTIES_PANEL_BLUR,
+  SHAULA_PROPERTIES_PANEL_ERASE,
+  SHAULA_PROPERTIES_PANEL_PEN,
+  SHAULA_PROPERTIES_PANEL_TEXT,
+  SHAULA_PROPERTIES_PANEL_MEASURE
 } ShaulaPropertiesPanel;
 
 typedef enum {
@@ -153,14 +153,15 @@ typedef struct {
   GtkWidget *highlight_color_button;
   GtkWidget *highlight_width_scale;
   GtkWidget *highlight_opacity_scale;
- GtkWidget *text_properties_box;
- GtkWidget *text_color_button;
- GtkWidget *text_size_scale;
- GtkWidget *text_align_buttons[3];
- GtkWidget *measure_properties_box;
- GtkWidget *measure_color_button;
- GtkWidget *measure_width_scale;
- GtkWidget *more_button;
+  GtkWidget *text_properties_box;
+  GtkWidget *text_color_button;
+  GtkWidget *text_size_buttons[4];
+  GtkWidget *text_align_buttons[3];
+  GtkWidget *text_style_buttons[2];
+  GtkWidget *measure_properties_box;
+  GtkWidget *measure_color_button;
+  GtkWidget *measure_width_scale;
+  GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
   GtkWidget *text_entry;
@@ -245,13 +246,14 @@ typedef struct {
   ShaulaColor highlight_color;
   double highlight_stroke_width;
   double highlight_opacity;
- ShaulaColor text_color;
- double text_font_size;
- ShaulaTextAlign text_align;
- int active_measure_index;
- ShaulaColor measure_color;
- double measure_stroke_width;
- gboolean modified;
+  ShaulaColor text_color;
+  double text_font_size;
+  ShaulaTextAlign text_align;
+  gboolean text_is_handdrawn;
+  int active_measure_index;
+  ShaulaColor measure_color;
+  double measure_stroke_width;
+  gboolean modified;
   gboolean copied;
   gboolean saved;
   /* Set when the helper already emitted the user-facing save/copy banner. */
@@ -262,12 +264,12 @@ typedef struct {
   gboolean is_dark;
 
   gboolean measure_has_live;
- int measure_tolerance;
- ShaulaMeasureMode measure_mode;
- ShaulaMeasurePixelCompare measure_compare;
- gboolean measure_outer_bounds;
- ShaulaMeasureResult measure_result;
- int toolbar_secondary_count;
+  int measure_tolerance;
+  ShaulaMeasureMode measure_mode;
+  ShaulaMeasurePixelCompare measure_compare;
+  gboolean measure_outer_bounds;
+  ShaulaMeasureResult measure_result;
+  int toolbar_secondary_count;
   int toolbar_utility_action_count;
   int toolbar_overflow_visible_count;
   char *icon_roots[2];
@@ -322,8 +324,8 @@ gboolean shaula_preview_apply_crop(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
                                            ShaulaRect rect);
 gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state);
-gboolean shaula_preview_apply_crop_to_region_selection(
-    ShaulaPreviewState *state);
+gboolean
+shaula_preview_apply_crop_to_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_blur_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state);
@@ -353,12 +355,10 @@ void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
                                          gboolean filled);
 void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
                                           PreviewRectangleCorners corners);
-void shaula_preview_set_pen_color(ShaulaPreviewState *state,
-                                  ShaulaColor color);
+void shaula_preview_set_pen_color(ShaulaPreviewState *state, ShaulaColor color);
 void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
                                          double width);
-void shaula_preview_set_pen_opacity(ShaulaPreviewState *state,
-                                    double opacity);
+void shaula_preview_set_pen_opacity(ShaulaPreviewState *state, double opacity);
 void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
                                         ShaulaColor color);
 void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
@@ -370,11 +370,13 @@ void shaula_preview_set_text_color(ShaulaPreviewState *state,
 void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
                                        double font_size);
 void shaula_preview_set_text_align(ShaulaPreviewState *state,
- ShaulaTextAlign align);
+                                   ShaulaTextAlign align);
+void shaula_preview_set_text_is_handdrawn(ShaulaPreviewState *state,
+                                          gboolean is_handdrawn);
 void shaula_preview_set_measure_color(ShaulaPreviewState *state,
- ShaulaColor color);
+                                      ShaulaColor color);
 void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
- double width);
+                                             double width);
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations);
 

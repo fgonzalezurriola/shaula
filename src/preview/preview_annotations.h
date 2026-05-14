@@ -66,6 +66,7 @@ typedef struct ShaulaAnnotation {
       char *text;
       double font_size;
       ShaulaTextAlign align;
+      gboolean is_handdrawn;
     } text;
     struct {
       ShaulaPoint start;
@@ -94,11 +95,10 @@ ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
                                               ShaulaPoint end,
                                               ShaulaColor color,
                                               double stroke_width);
-ShaulaAnnotation *shaula_annotation_new_text(ShaulaPoint position,
-                                             const char *text,
-                                             ShaulaColor color,
-                                             double font_size,
-                                             ShaulaTextAlign align);
+ShaulaAnnotation *
+shaula_annotation_new_text(ShaulaPoint position, const char *text,
+                           ShaulaColor color, double font_size,
+                           ShaulaTextAlign align, gboolean is_handdrawn);
 ShaulaAnnotation *shaula_annotation_new_measure(ShaulaPoint start,
                                                 ShaulaPoint end,
                                                 ShaulaColor color,
@@ -117,8 +117,7 @@ void shaula_annotation_free(gpointer annotation);
 
 GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
-void shaula_annotation_move(ShaulaAnnotation *annotation, double dx,
-                            double dy);
+void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
 ShaulaAnnotationHit shaula_annotations_hit_test_ranked(GPtrArray *annotations,
                                                        ShaulaPoint point,
