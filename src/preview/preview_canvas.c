@@ -384,6 +384,53 @@ static void draw_measure_draft(cairo_t *cr, ShaulaPreviewState *state) {
   shaula_annotation_free(annotation);
 }
 
+static char *text_view_contents(GtkTextView *view) {
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
+  GtkTextIter start;
+  GtkTextIter end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  return gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+}
+
+static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state) {
+  double line_width = MAX(1.0 / state->zoom, 0.8);
+  double height = MAX(state->text_font_size * 1.25, 18.0 / state->zoom);
+  double x = state->text_anchor_image.x;
+  double y0 = state->text_anchor_image.y;
+  double y1 = y0 + height;
+
+  cairo_save(cr);
+  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.55);
+  cairo_set_line_width(cr, line_width + 2.0 / state->zoom);
+  cairo_move_to(cr, x, y0);
+  cairo_line_to(cr, x, y1);
+  cairo_stroke(cr);
+
+  cairo_set_source_rgba(cr, state->text_color.r, state->text_color.g,
+                        state->text_color.b, state->text_color.a);
+  cairo_set_line_width(cr, line_width);
+  cairo_move_to(cr, x, y0);
+  cairo_line_to(cr, x, y1);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
+static void draw_text_draft(cairo_t *cr, ShaulaPreviewState *state) {
+  if (state->text_entry == NULL)
+    return;
+
+  char *text = text_view_contents(GTK_TEXT_VIEW(state->text_entry));
+  ShaulaAnnotation *annotation = shaula_annotation_new_text(
+      state->text_anchor_image, text, state->text_color, state->text_font_size,
+      state->text_align, state->text_is_handdrawn);
+  shaula_annotation_draw(cr, annotation);
+  if (text == NULL || text[0] == '\0')
+    draw_text_insertion_caret(cr, state);
+  shaula_annotation_free(annotation);
+  g_free(text);
+}
+
 static void draw_path_draft(cairo_t *cr, ShaulaPreviewState *state,
                             ShaulaColor color, double stroke_width) {
   if (state->draft_pen_points == NULL || state->draft_pen_points->len < 2)
@@ -571,6 +618,9 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   case SHAULA_OPERATION_PEN:
     draw_path_draft(cr, state, state->pen_color, state->pen_stroke_width);
     break;
+  case SHAULA_OPERATION_TEXT:
+    draw_text_draft(cr, state);
+    break;
   case SHAULA_OPERATION_SPOTLIGHT:
     draw_plain_draft_rect(cr,
                           shaula_rect_from_points(state->drag_start_image,
@@ -584,7 +634,6 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   case SHAULA_OPERATION_BEND_ARROW:
   case SHAULA_OPERATION_RESIZE_ANNOTATION:
   case SHAULA_OPERATION_SELECT_REGION:
-  case SHAULA_OPERATION_TEXT:
     break;
   }
   draw_region_selection(cr, state);
@@ -623,14 +672,6 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
   }
   shaula_preview_zoom_by_factor(state, dy < 0 ? 1.12 : 1.0 / 1.12);
   return TRUE;
-}
-
-static char *text_view_contents(GtkTextView *view) {
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
-  GtkTextIter start;
-  GtkTextIter end;
-  gtk_text_buffer_get_bounds(buffer, &start, &end);
-  return gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
 }
 
 static void finish_text_entry(ShaulaPreviewState *state) {
@@ -684,47 +725,9 @@ static gboolean on_text_entry_key(GtkEventControllerKey *controller,
   return FALSE;
 }
 
-static void apply_text_entry_style(ShaulaPreviewState *state,
-                                   GtkWidget *entry) {
-  GtkCssProvider *provider = gtk_css_provider_new();
-  const char *family =
-      state->text_is_handdrawn ? "Caveat, Sans" : "Geist, Geist Sans, Sans";
-  gchar *css = g_strdup_printf(
-      ".shaula-text-editor {"
-      "  color: rgba(%d,%d,%d,%.3f);"
-      "  font-family: %s;"
-      "  font-size: %.1fpx;"
-      "  font-weight: %s;"
-      "  background: transparent;"
-      "  border: 1px solid alpha(currentColor, 0.4);"
-      "  border-radius: 6px;"
-      "  padding: 0;"
-      "}"
-      ".shaula-text-editor text {"
-      "  color: rgba(%d,%d,%d,%.3f);"
-      "  background: transparent;"
-      "  padding: 0;"
-      "  margin: 0;"
-      "  min-height: 0;"
-      "}",
-      (int)round(state->text_color.r * 255.0),
-      (int)round(state->text_color.g * 255.0),
-      (int)round(state->text_color.b * 255.0), state->text_color.a, family,
-      state->text_font_size * state->zoom *
-          (state->text_is_handdrawn
-               ? 1.4
-               : 1.3), /* Handdrawn fonts sometimes render slightly smaller on
-                          screen than cairo */
-      state->text_is_handdrawn ? "normal" : "bold",
-      (int)round(state->text_color.r * 255.0),
-      (int)round(state->text_color.g * 255.0),
-      (int)round(state->text_color.b * 255.0), state->text_color.a);
-  gtk_css_provider_load_from_data(provider, css, -1);
-  gtk_style_context_add_provider(gtk_widget_get_style_context(entry),
-                                 GTK_STYLE_PROVIDER(provider),
-                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-  g_free(css);
-  g_object_unref(provider);
+static void on_text_buffer_changed(GtkTextBuffer *buffer, gpointer data) {
+  (void)buffer;
+  shaula_preview_queue_draw(data);
 }
 
 static void begin_text_entry(ShaulaPreviewState *state,
@@ -732,57 +735,38 @@ static void begin_text_entry(ShaulaPreviewState *state,
   if (state->canvas_overlay == NULL)
     return;
   shaula_preview_cancel_operation(state);
-  ShaulaPoint screen =
-      shaula_preview_canvas_image_to_screen(state, image_point);
   GtkWidget *entry = gtk_text_view_new();
   state->text_entry = entry;
   state->text_anchor_image = image_point;
   state->operation = SHAULA_OPERATION_TEXT;
 
+  /* The GtkTextView is only the input buffer. The visible draft is rendered
+   * as an annotation in image coordinates so it cannot drift from commit.
+   */
+  gtk_widget_set_opacity(entry, 0.0);
+  gtk_widget_set_size_request(entry, 1, 1);
   gtk_text_view_set_accepts_tab(GTK_TEXT_VIEW(entry), FALSE);
   gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(entry), GTK_WRAP_NONE);
   gtk_text_view_set_left_margin(GTK_TEXT_VIEW(entry), 0);
   gtk_text_view_set_right_margin(GTK_TEXT_VIEW(entry), 0);
   gtk_text_view_set_top_margin(GTK_TEXT_VIEW(entry), 0);
   gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(entry), 0);
-  GtkJustification justification = GTK_JUSTIFY_LEFT;
-  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
-    justification = GTK_JUSTIFY_CENTER;
-  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
-    justification = GTK_JUSTIFY_RIGHT;
-  gtk_text_view_set_justification(GTK_TEXT_VIEW(entry), justification);
-  gtk_widget_add_css_class(entry, "shaula-text-editor");
-  apply_text_entry_style(state, entry);
-
-  int image_w = shaula_preview_image_width(state);
-  double available_image_width = (double)image_w - image_point.x;
-  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
-    available_image_width =
-        2.0 * MIN(image_point.x, (double)image_w - image_point.x);
-  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
-    available_image_width = image_point.x;
-  int editor_width =
-      MAX(80, (int)floor(MAX(1.0, available_image_width) * state->zoom));
-  int editor_height =
-      MAX(24, (int)ceil(state->text_font_size * state->zoom * 1.35));
-  gtk_widget_set_size_request(entry, editor_width, editor_height);
   gtk_widget_set_hexpand(entry, FALSE);
   gtk_widget_set_vexpand(entry, FALSE);
   gtk_widget_set_halign(entry, GTK_ALIGN_START);
   gtk_widget_set_valign(entry, GTK_ALIGN_START);
-  double x = screen.x;
-  if (state->text_align == SHAULA_TEXT_ALIGN_CENTER)
-    x -= editor_width / 2.0;
-  else if (state->text_align == SHAULA_TEXT_ALIGN_RIGHT)
-    x -= editor_width;
-  gtk_widget_set_margin_start(entry, MAX(0, (int)x));
-  gtk_widget_set_margin_top(entry, MAX(0, (int)screen.y));
+  gtk_widget_set_margin_start(entry, 0);
+  gtk_widget_set_margin_top(entry, 0);
   gtk_overlay_add_overlay(GTK_OVERLAY(state->canvas_overlay), entry);
 
+  GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(entry));
+  g_signal_connect(buffer, "changed", G_CALLBACK(on_text_buffer_changed),
+                   state);
   GtkEventController *keys = gtk_event_controller_key_new();
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_text_entry_key), state);
   gtk_widget_add_controller(entry, keys);
   gtk_widget_grab_focus(entry);
+  shaula_preview_queue_draw(state);
 }
 
 static void start_pan(ShaulaPreviewState *state, double x, double y) {
@@ -1493,7 +1477,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   } else {
     finish_shape_annotation(state);
   }
-  if (state->operation != SHAULA_OPERATION_CROP)
+  if (state->operation != SHAULA_OPERATION_CROP &&
+      state->operation != SHAULA_OPERATION_TEXT)
     state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
   state->active_resize_handle = SHAULA_RESIZE_HANDLE_NONE;

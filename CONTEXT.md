@@ -366,17 +366,24 @@ and the working diff.
   copy/export rendering on the annotation draw path.
 - `shaula-text-symbolic` Text: implemented. Text uses the same orange default
   as arrows, opens a floating Text HUD for color, size, and left/center/right
-  alignment, and stores alignment on the annotation. The edit preview is a
-  styled multiline `GtkTextView`; committed rendering uses the same Pango/Cairo
-  text path as export/copy so preview and final output share font weight,
-  size, color, multiline layout, and alignment semantics. The editor scales its
-  CSS font size by the current preview zoom, uses the visible image width as
-  its editing line box, and zeros all GtkTextView internal margins so the
-  editor text position matches the committed Pango render without vertical
-  drift. `Enter` inserts a newline while the text editor is active; the global
-  `Enter` save shortcut is suppressed by the focus-is-editable-text guard so
-  it cannot fire during editing. `Escape` cancels text entry, and clicking
-  back on the canvas commits non-empty text without closing. After a
+  alignment, and stores alignment on the annotation. Active text input keeps a
+  hidden `GtkTextView` only as the keyboard buffer; the visible draft is drawn
+  as a temporary text annotation through the same Pango/Cairo
+  `shaula_annotation_draw` path used by committed annotations, export, and
+  copy. Draft and commit therefore share image-coordinate anchoring, zoom/pan
+  transform, font family/weight, size, color, opacity, multiline layout,
+  alignment, and text bounds. Text anchoring uses Pango ink extents, not
+  logical layout origin, so the clicked point matches the visible top-left of
+  the first glyph instead of an internal font padding offset. Empty drafts draw
+  a canvas caret at the anchor with a contrast halo for immediate placement
+  feedback. Text HUD changes during an active draft update the draft state and
+  do not mutate a previously selected committed text annotation. Drag release
+  must keep `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks
+  draft rendering and click-to-commit flow because the draft path is
+  operation-gated.
+  `Enter` commits non-empty text, `Shift+Enter` inserts a newline,
+  `Escape` cancels text entry, and clicking back on the canvas commits
+  non-empty text without closing. After a
   canvas-only text commit, Text returns to Select mode with the new annotation
   selected so it can be moved immediately.
 - `shaula-measure-symbolic` Measure: implemented.

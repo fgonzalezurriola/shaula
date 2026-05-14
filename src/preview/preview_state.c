@@ -1645,8 +1645,10 @@ void shaula_preview_set_text_color(ShaulaPreviewState *state,
     return;
   color.a = 1.0;
   state->text_color = color;
-  ShaulaAnnotation *text =
-      selected_annotation_of_type(state, SHAULA_ANNOTATION_TEXT);
+  ShaulaAnnotation *text = state->text_entry == NULL
+                               ? selected_annotation_of_type(
+                                     state, SHAULA_ANNOTATION_TEXT)
+                               : NULL;
   if (text != NULL && !colors_equal(text->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     text->color = color;
@@ -1661,8 +1663,10 @@ void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
   if (state == NULL)
     return;
   state->text_font_size = CLAMP(font_size, 12.0, 72.0);
-  ShaulaAnnotation *text =
-      selected_annotation_of_type(state, SHAULA_ANNOTATION_TEXT);
+  ShaulaAnnotation *text = state->text_entry == NULL
+                               ? selected_annotation_of_type(
+                                     state, SHAULA_ANNOTATION_TEXT)
+                               : NULL;
   if (text != NULL &&
       fabs(text->data.text.font_size - state->text_font_size) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1679,8 +1683,10 @@ void shaula_preview_set_text_align(ShaulaPreviewState *state,
   if (state == NULL)
     return;
   state->text_align = align;
-  ShaulaAnnotation *text =
-      selected_annotation_of_type(state, SHAULA_ANNOTATION_TEXT);
+  ShaulaAnnotation *text = state->text_entry == NULL
+                               ? selected_annotation_of_type(
+                                     state, SHAULA_ANNOTATION_TEXT)
+                               : NULL;
   if (text != NULL && text->data.text.align != align) {
     begin_property_history_if_targeted(state, TRUE);
     text->data.text.align = align;
@@ -1696,8 +1702,10 @@ void shaula_preview_set_text_is_handdrawn(ShaulaPreviewState *state,
   if (state == NULL)
     return;
   state->text_is_handdrawn = is_handdrawn;
-  ShaulaAnnotation *text =
-      selected_annotation_of_type(state, SHAULA_ANNOTATION_TEXT);
+  ShaulaAnnotation *text = state->text_entry == NULL
+                               ? selected_annotation_of_type(
+                                     state, SHAULA_ANNOTATION_TEXT)
+                               : NULL;
   if (text != NULL && text->data.text.is_handdrawn != is_handdrawn) {
     begin_property_history_if_targeted(state, TRUE);
     text->data.text.is_handdrawn = is_handdrawn;
