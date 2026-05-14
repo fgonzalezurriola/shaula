@@ -379,6 +379,47 @@ static void draw_rectangle_selection(cairo_t *cr, ShaulaRect rect,
   cairo_restore(cr);
 }
 
+static void draw_square_handle(cairo_t *cr, ShaulaPoint point) {
+  double size = 8.0;
+  cairo_save(cr);
+  cairo_rectangle(cr, point.x - size / 2.0, point.y - size / 2.0, size, size);
+  cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+  cairo_fill_preserve(cr);
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.9);
+  cairo_set_line_width(cr, 1.5);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
+static void draw_round_handle(cairo_t *cr, ShaulaPoint point) {
+  cairo_save(cr);
+  cairo_arc(cr, point.x, point.y, 4.5, 0, 2 * G_PI);
+  cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+  cairo_fill_preserve(cr);
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.9);
+  cairo_set_line_width(cr, 1.5);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
+static void draw_rectangle_handles(cairo_t *cr, ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  double x0 = rect.x;
+  double y0 = rect.y;
+  double x1 = rect.x + rect.width;
+  double y1 = rect.y + rect.height;
+  double cx = rect.x + rect.width / 2.0;
+  double cy = rect.y + rect.height / 2.0;
+  draw_square_handle(cr, (ShaulaPoint){x0, y0});
+  draw_square_handle(cr, (ShaulaPoint){cx, y0});
+  draw_square_handle(cr, (ShaulaPoint){x1, y0});
+  draw_square_handle(cr, (ShaulaPoint){x1, cy});
+  draw_square_handle(cr, (ShaulaPoint){x1, y1});
+  draw_square_handle(cr, (ShaulaPoint){cx, y1});
+  draw_square_handle(cr, (ShaulaPoint){x0, y1});
+  draw_square_handle(cr, (ShaulaPoint){x0, cy});
+}
+
 static double path_distance_to_point(ShaulaPenPath path, ShaulaPoint point) {
   if (path.len <= 0)
     return G_MAXDOUBLE;
@@ -801,6 +842,7 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       rectangle_path(cr, annotation->data.rectangle.rect,
                      annotation->data.rectangle.corners);
       cairo_stroke(cr);
+      draw_rectangle_handles(cr, annotation->data.rectangle.rect);
     } else if (annotation->type != SHAULA_ANNOTATION_ARROW) {
       draw_selection(cr, annotation->bounds);
     }
@@ -824,6 +866,8 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       cairo_set_line_width(cr, 1.5);
       cairo_stroke(cr);
       cairo_restore(cr);
+      draw_round_handle(cr, p0);
+      draw_round_handle(cr, p2);
     }
   }
 

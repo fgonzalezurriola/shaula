@@ -813,6 +813,7 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
     return;
   state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
+  state->active_resize_handle = SHAULA_RESIZE_HANDLE_NONE;
   shaula_preview_cancel_history_gesture(state);
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;

@@ -36,6 +36,7 @@ typedef enum {
   SHAULA_OPERATION_PAN,
   SHAULA_OPERATION_MOVE,
   SHAULA_OPERATION_BEND_ARROW,
+  SHAULA_OPERATION_RESIZE_ANNOTATION,
   SHAULA_OPERATION_SELECT_REGION,
   SHAULA_OPERATION_CROP,
   SHAULA_OPERATION_ARROW,
@@ -64,6 +65,21 @@ typedef enum {
   SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE,
   SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE
 } ShaulaSpotlightShape;
+
+typedef enum {
+  SHAULA_RESIZE_HANDLE_NONE,
+  SHAULA_RESIZE_HANDLE_RECT_NW,
+  SHAULA_RESIZE_HANDLE_RECT_N,
+  SHAULA_RESIZE_HANDLE_RECT_NE,
+  SHAULA_RESIZE_HANDLE_RECT_E,
+  SHAULA_RESIZE_HANDLE_RECT_SE,
+  SHAULA_RESIZE_HANDLE_RECT_S,
+  SHAULA_RESIZE_HANDLE_RECT_SW,
+  SHAULA_RESIZE_HANDLE_RECT_W,
+  SHAULA_RESIZE_HANDLE_ARROW_START,
+  SHAULA_RESIZE_HANDLE_ARROW_END,
+  SHAULA_RESIZE_HANDLE_ARROW_CONTROL
+} ShaulaAnnotationResizeHandle;
 
 typedef struct {
   /* Document effect entry: copied/saved output must use these stored values,
@@ -169,6 +185,12 @@ typedef struct {
   double drag_start_y;
   double pan_origin_x;
   double pan_origin_y;
+  ShaulaAnnotationResizeHandle active_resize_handle;
+  ShaulaRect resize_origin_rect;
+  ShaulaPoint resize_origin_arrow_start;
+  ShaulaPoint resize_origin_arrow_end;
+  ShaulaPoint resize_origin_arrow_control;
+  gboolean resize_origin_arrow_curved;
 
   gboolean has_crop_draft;
   ShaulaRect crop_draft;

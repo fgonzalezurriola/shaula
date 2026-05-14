@@ -357,7 +357,9 @@ and the working diff.
   Arrow is geometry-based: straight arrows hit near the visible shaft/head,
   curved arrows sample the curve path instead of accepting the whole bounds,
   and the selected bend handle keeps explicit priority. Selected arrows draw
-  path-following selection chrome and repaint the arrow above it.
+  path-following selection chrome and repaint the arrow above it. Selected
+  arrows expose resize handles at start/end plus the curve control handle;
+  dragging the shaft moves the arrow, dragging handles reshapes it.
 - Arrow stroke style: implemented in the Arrow properties HUD. Selecting an
   arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
   selected arrow annotation, pushes undo before the document change, and keeps
@@ -369,16 +371,14 @@ and the working diff.
   text path as export/copy so preview and final output share font weight,
   size, color, multiline layout, and alignment semantics. The editor scales its
   CSS font size by the current preview zoom, uses the visible image width as
-  its editing line box, and fixes the editor to a one-line visual height while
-  typing so the GTK overlay does not resize the canvas chrome on each glyph.
-  In Text editing and normal preview focus, `Enter` saves the
-  current preview output to the current image path and closes the preview;
-  `Shift+Enter` saves, copies that output to the image clipboard, and closes.
-  While editing text, both shortcuts first commit non-empty text into the
-  document. `Escape` cancels text entry, and clicking back on the canvas commits
-  non-empty text without closing. After a canvas-only text commit, Text returns
-  to Select mode with the new annotation selected so it can be moved
-  immediately.
+  its editing line box, and zeros all GtkTextView internal margins so the
+  editor text position matches the committed Pango render without vertical
+  drift. `Enter` inserts a newline while the text editor is active; the global
+  `Enter` save shortcut is suppressed by the focus-is-editable-text guard so
+  it cannot fire during editing. `Escape` cancels text entry, and clicking
+  back on the canvas commits non-empty text without closing. After a
+  canvas-only text commit, Text returns to Select mode with the new annotation
+  selected so it can be moved immediately.
 - `shaula-measure-symbolic` Measure: implemented.
 - `shaula-rectangle-symbolic` Rectangle: implemented as a one-shot creation
   tool matching Arrow's post-create flow. After a valid rectangle is drawn,
@@ -398,7 +398,8 @@ and the working diff.
   The selection resolver ranks handles/strokes above visible fills and text
   bounds before applying z-order, so empty rectangle interiors pass through to
   objects behind them. Selected rectangles draw border-following selection chrome
-  instead of a generic expanded bounds box.
+  instead of a generic expanded bounds box and expose eight resize handles in
+  Select mode.
 - `shaula-highlight-symbolic` Highlight: implemented.
 - `shaula-pen-symbolic` Pen: implemented.
 - Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes
