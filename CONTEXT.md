@@ -164,7 +164,9 @@ and the working diff.
   matching the drag draft exactly. Do not route Spotlight creation through the
   crop/blur/erase pixel helper; that helper may round to integer pixels and is
   only for raster mutations. Default Spotlight border is the same strong orange
-  used by arrow/text/measure defaults.
+  used by arrow/text/measure defaults. Preview/export composition applies
+  Spotlight effects to the captured image before drawing annotations, so text
+  and vector marks added after Spotlights remain visible above the dimming.
 - Direct Spotlight drag does not use `region_selection_rect`; that state belongs
   to Select-mode temporary region actions. Spotlight draft and commit both use
   `drag_start_image` plus `drag_current_image` so multiple or nested Spotlights
@@ -351,7 +353,11 @@ and the working diff.
   After a valid arrow is drawn, preview selects the new arrow, opens the Arrow
   properties HUD, and returns to Select mode. Moving and bend editing for
   existing arrows belong to Select mode; clicking Arrow again always prepares a
-  new arrow instead of editing the selected one.
+  new arrow instead of editing the selected one. Select-mode hit testing for
+  Arrow is geometry-based: straight arrows hit near the visible shaft/head,
+  curved arrows sample the curve path instead of accepting the whole bounds,
+  and the selected bend handle keeps explicit priority. Selected arrows draw
+  path-following selection chrome and repaint the arrow above it.
 - Arrow stroke style: implemented in the Arrow properties HUD. Selecting an
   arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
   selected arrow annotation, pushes undo before the document change, and keeps
@@ -362,9 +368,10 @@ and the working diff.
   styled multiline `GtkTextView`; committed rendering uses the same Pango/Cairo
   text path as export/copy so preview and final output share font weight,
   size, color, multiline layout, and alignment semantics. The editor scales its
-  CSS font size by the current preview zoom and uses the visible image width as
-  its editing line box so typed text does not reflow or clip differently at
-  commit time. In Text editing and normal preview focus, `Enter` saves the
+  CSS font size by the current preview zoom, uses the visible image width as
+  its editing line box, and fixes the editor to a one-line visual height while
+  typing so the GTK overlay does not resize the canvas chrome on each glyph.
+  In Text editing and normal preview focus, `Enter` saves the
   current preview output to the current image path and closes the preview;
   `Shift+Enter` saves, copies that output to the image clipboard, and closes.
   While editing text, both shortcuts first commit non-empty text into the
@@ -429,7 +436,10 @@ and the working diff.
   image pixels, keeps the last valid sample when the pointer leaves the image,
   and samples the composited document pixel for the base image, stored
   annotations, and Spotlight effects while excluding GTK chrome, selection
-  handles, temporary drafts, and floating HUDs.
+  handles, temporary drafts, and floating HUDs. `shaula_color_to_hex` writes a
+  null-terminated `#RRGGBB` into the fixed eight-byte C buffer; missing
+  termination corrupts the GTK metadata label and can make the headerbar width
+  jump while the invalid bytes disappear.
 - `Tab to copy` is exposed beside the hex readout. `Tab` is routed through the
   shared preview shortcut map as
   `SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR`; it copies `#RRGGBB` only when a

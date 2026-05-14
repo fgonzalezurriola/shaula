@@ -41,6 +41,7 @@ char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
   cairo_save(cr);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_clip(cr);
+  shaula_preview_draw_spotlight_effect(state, cr);
   for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
        i++) {
     ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
@@ -49,7 +50,6 @@ char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
     shaula_annotation_draw(cr, annotation);
     annotation->selected = selected;
   }
-  shaula_preview_draw_spotlight_effect(state, cr);
   cairo_restore(cr);
 
   cairo_destroy(cr);

@@ -31,7 +31,11 @@ export fn shaula_color_to_hex(color: ShaulaColor, out: [*]u8) void {
     const r = colorChannel(color.r);
     const g = colorChannel(color.g);
     const b = colorChannel(color.b);
-    _ = std.fmt.bufPrint(out[0..8], "#{X:0>2}{X:0>2}{X:0>2}", .{ r, g, b }) catch {};
+    const written = std.fmt.bufPrint(out[0..7], "#{X:0>2}{X:0>2}{X:0>2}", .{ r, g, b }) catch {
+        out[0] = 0;
+        return;
+    };
+    out[written.len] = 0;
 }
 
 export fn shaula_rect_from_points(a: ShaulaPoint, b: ShaulaPoint) ShaulaRect {

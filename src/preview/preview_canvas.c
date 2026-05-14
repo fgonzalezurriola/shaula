@@ -163,6 +163,7 @@ static gboolean sample_composited_pixel(ShaulaPreviewState *state, int px,
   cairo_save(cr);
   cairo_rectangle(cr, px, py, 1, 1);
   cairo_clip(cr);
+  shaula_preview_draw_spotlight_effect(state, cr);
   for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
        i++) {
     ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
@@ -171,7 +172,6 @@ static gboolean sample_composited_pixel(ShaulaPreviewState *state, int px,
     shaula_annotation_draw(cr, annotation);
     annotation->selected = selected;
   }
-  shaula_preview_draw_spotlight_effect(state, cr);
   cairo_restore(cr);
   cairo_destroy(cr);
 
@@ -319,10 +319,10 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
 
   cairo_rectangle(cr, 0, 0, image_w, image_h);
   cairo_clip(cr);
+  shaula_preview_draw_spotlight_effect(state, cr);
   for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
        i++)
     shaula_annotation_draw(cr, g_ptr_array_index(state->annotations, i));
-  shaula_preview_draw_spotlight_effect(state, cr);
   cairo_restore(cr);
 
   if (state->is_dark) {
@@ -745,7 +745,11 @@ static void begin_text_entry(ShaulaPreviewState *state, ShaulaPoint image_point)
     available_image_width = image_point.x;
   int editor_width =
       MAX(80, (int)floor(MAX(1.0, available_image_width) * state->zoom));
-  gtk_widget_set_size_request(entry, editor_width, -1);
+  int editor_height =
+      MAX(32, (int)ceil(state->text_font_size * state->zoom * 1.35) + 8);
+  gtk_widget_set_size_request(entry, editor_width, editor_height);
+  gtk_widget_set_hexpand(entry, FALSE);
+  gtk_widget_set_vexpand(entry, FALSE);
   gtk_widget_set_halign(entry, GTK_ALIGN_START);
   gtk_widget_set_valign(entry, GTK_ALIGN_START);
   double x = screen.x;
@@ -796,6 +800,24 @@ static void start_operation(ShaulaPreviewState *state,
   }
 }
 
+static gboolean selected_arrow_bend_handle_hit(ShaulaPreviewState *state,
+                                               ShaulaPoint image_point,
+                                               double tolerance) {
+  ShaulaAnnotation *arrow = state != NULL ? state->selected_annotation : NULL;
+  if (arrow == NULL || arrow->type != SHAULA_ANNOTATION_ARROW)
+    return FALSE;
+
+  ShaulaPoint p0 = arrow->data.arrow.start;
+  ShaulaPoint p2 = arrow->data.arrow.end;
+  ShaulaPoint p1 = arrow->data.arrow.is_curved
+                       ? arrow->data.arrow.control
+                       : (ShaulaPoint){(p0.x + p2.x) / 2.0,
+                                       (p0.y + p2.y) / 2.0};
+  ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
+                     0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
+  return shaula_point_distance(image_point, mid) <= tolerance;
+}
+
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                           gpointer data) {
   ShaulaPreviewState *state = data;
@@ -830,11 +852,16 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     start_pan(state, x, y);
     break;
   case SHAULA_TOOL_SELECT: {
-    ShaulaAnnotationHit hit_result =
-        inside ? shaula_annotations_hit_test_ranked(
-                     state->annotations, image_point,
-                     MAX(4.0, 8.0 / state->zoom))
-               : (ShaulaAnnotationHit){NULL, SHAULA_ANNOTATION_HIT_NONE};
+    double hit_tolerance = MAX(4.0, 8.0 / state->zoom);
+    ShaulaAnnotationHit hit_result = {NULL, SHAULA_ANNOTATION_HIT_NONE};
+    if (inside && selected_arrow_bend_handle_hit(
+                      state, image_point, MAX(8.0, 16.0 / state->zoom))) {
+      hit_result = (ShaulaAnnotationHit){state->selected_annotation,
+                                         SHAULA_ANNOTATION_HIT_HANDLE};
+    } else if (inside) {
+      hit_result = shaula_annotations_hit_test_ranked(
+          state->annotations, image_point, hit_tolerance);
+    }
     ShaulaAnnotation *hit = hit_result.annotation;
     if (hit != NULL) {
       shaula_preview_select_annotation(state, hit);
@@ -846,7 +873,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
         ShaulaPoint p2 = hit->data.arrow.end;
         ShaulaPoint p1 = hit->data.arrow.is_curved ? hit->data.arrow.control : (ShaulaPoint){(p0.x+p2.x)/2.0, (p0.y+p2.y)/2.0};
         ShaulaPoint mid = { 0.25*p0.x + 0.5*p1.x + 0.25*p2.x, 0.25*p0.y + 0.5*p1.y + 0.25*p2.y };
-        if (shaula_point_distance(image_point, mid) <= MAX(8.0, 16.0 / state->zoom)) {
+        if (hit_result.kind == SHAULA_ANNOTATION_HIT_HANDLE ||
+            shaula_point_distance(image_point, mid) <=
+                MAX(8.0, 16.0 / state->zoom)) {
           is_bend = TRUE;
         }
       }
@@ -1035,11 +1064,16 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
 		ShaulaPoint image_point =
 			shaula_preview_canvas_screen_to_image(state, x, y);
 		gboolean inside = image_point_is_inside(state, image_point);
-		ShaulaAnnotationHit hit =
-			inside ? shaula_annotations_hit_test_ranked(
-					state->annotations, image_point,
-					MAX(4.0, 8.0 / state->zoom))
-			       : (ShaulaAnnotationHit){NULL, SHAULA_ANNOTATION_HIT_NONE};
+		ShaulaAnnotationHit hit = {NULL, SHAULA_ANNOTATION_HIT_NONE};
+		if (inside && selected_arrow_bend_handle_hit(
+				      state, image_point, MAX(8.0, 16.0 / state->zoom))) {
+			hit = (ShaulaAnnotationHit){state->selected_annotation,
+						    SHAULA_ANNOTATION_HIT_HANDLE};
+		} else if (inside) {
+			hit = shaula_annotations_hit_test_ranked(
+				state->annotations, image_point,
+				MAX(4.0, 8.0 / state->zoom));
+		}
 		gtk_widget_set_cursor_from_name(
 			state->area,
 			hit.annotation != NULL
