@@ -71,7 +71,8 @@ jobs:
 
           test -x zig-out/bin/shaula
           tar -C zig-out -czf dist/shaula-linux-x86_64.tar.gz bin share
-          tar -tzf dist/shaula-linux-x86_64.tar.gz | grep -Eq '(^|/)bin/shaula$'
+          tar -tzf dist/shaula-linux-x86_64.tar.gz > dist/TARCONTENTS
+          grep -Eq '(^|/)bin/shaula$' dist/TARCONTENTS
 
           (
             cd dist
