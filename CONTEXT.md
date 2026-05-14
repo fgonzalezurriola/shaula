@@ -384,7 +384,14 @@ and the working diff.
   This grouped 'linked' UI pattern is also used in Arrow, Text, and Spotlight HUDs
   for related option toggles. Fill uses the selected stroke color at low alpha in
   the draw/export path so filled rectangles mark an area without fully hiding
-  screenshot content.
+  screenshot content. Select-mode hit testing for Rectangle is geometry-based:
+  bounding boxes are broad-phase only, stroke-only or visually transparent
+  rectangles hit only near the four visible edges with human tolerance, and
+  filled interiors are active only when the drawn fill alpha is at least `0.10`.
+  The selection resolver ranks handles/strokes above visible fills and text
+  bounds before applying z-order, so empty rectangle interiors pass through to
+  objects behind them. Selected rectangles draw border-following selection chrome
+  instead of a generic expanded bounds box.
 - `shaula-highlight-symbolic` Highlight: implemented.
 - `shaula-pen-symbolic` Pen: implemented.
 - Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes

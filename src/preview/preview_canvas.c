@@ -830,10 +830,12 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     start_pan(state, x, y);
     break;
   case SHAULA_TOOL_SELECT: {
-    ShaulaAnnotation *hit = inside ? shaula_annotations_hit_test(
-                                         state->annotations, image_point,
-                                         MAX(4.0, 8.0 / state->zoom))
-                                   : NULL;
+    ShaulaAnnotationHit hit_result =
+        inside ? shaula_annotations_hit_test_ranked(
+                     state->annotations, image_point,
+                     MAX(4.0, 8.0 / state->zoom))
+               : (ShaulaAnnotationHit){NULL, SHAULA_ANNOTATION_HIT_NONE};
+    ShaulaAnnotation *hit = hit_result.annotation;
     if (hit != NULL) {
       shaula_preview_select_annotation(state, hit);
       shaula_preview_begin_history_gesture(state);
@@ -1025,6 +1027,25 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
 	(void)controller;
 	ShaulaPreviewState *state = data;
 	update_hover_color(state, x, y);
+
+	if (state->active_tool == SHAULA_TOOL_SELECT &&
+		state->operation == SHAULA_OPERATION_NONE &&
+		state->area != NULL &&
+		state->image != NULL) {
+		ShaulaPoint image_point =
+			shaula_preview_canvas_screen_to_image(state, x, y);
+		gboolean inside = image_point_is_inside(state, image_point);
+		ShaulaAnnotationHit hit =
+			inside ? shaula_annotations_hit_test_ranked(
+					state->annotations, image_point,
+					MAX(4.0, 8.0 / state->zoom))
+			       : (ShaulaAnnotationHit){NULL, SHAULA_ANNOTATION_HIT_NONE};
+		gtk_widget_set_cursor_from_name(
+			state->area,
+			hit.annotation != NULL
+				? "grab"
+				: cursor_name_for_tool(state->active_tool));
+	}
 
 	if (state->active_tool == SHAULA_TOOL_MEASURE &&
 		state->operation == SHAULA_OPERATION_NONE &&

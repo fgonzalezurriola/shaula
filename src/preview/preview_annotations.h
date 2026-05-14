@@ -32,6 +32,14 @@ typedef enum {
   SHAULA_TEXT_ALIGN_RIGHT,
 } ShaulaTextAlign;
 
+typedef enum {
+  SHAULA_ANNOTATION_HIT_NONE,
+  SHAULA_ANNOTATION_HIT_TEXT_BOUNDS,
+  SHAULA_ANNOTATION_HIT_FILL,
+  SHAULA_ANNOTATION_HIT_STROKE,
+  SHAULA_ANNOTATION_HIT_HANDLE,
+} ShaulaAnnotationHitKind;
+
 typedef struct {
   ShaulaPoint *points;
   int len;
@@ -77,6 +85,11 @@ typedef struct ShaulaAnnotation {
   } data;
 } ShaulaAnnotation;
 
+typedef struct {
+  ShaulaAnnotation *annotation;
+  ShaulaAnnotationHitKind kind;
+} ShaulaAnnotationHit;
+
 ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
                                               ShaulaPoint end,
                                               ShaulaColor color,
@@ -107,6 +120,9 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx,
                             double dy);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
+ShaulaAnnotationHit shaula_annotations_hit_test_ranked(GPtrArray *annotations,
+                                                       ShaulaPoint point,
+                                                       double tolerance);
 ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
                                               ShaulaPoint point,
                                               double tolerance);

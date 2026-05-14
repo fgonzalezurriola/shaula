@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+static void rectangle_path(cairo_t *cr, ShaulaRect rect,
+                           PreviewRectangleCorners corners);
+
 static ShaulaAnnotation *annotation_alloc(ShaulaAnnotationType type,
                                           ShaulaColor color,
                                           double stroke_width) {
@@ -354,6 +357,28 @@ static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   cairo_restore(cr);
 }
 
+static void draw_rectangle_selection(cairo_t *cr, ShaulaRect rect,
+                                     PreviewRectangleCorners corners,
+                                     double stroke_width) {
+  rect = shaula_rect_normalized(rect);
+  cairo_save(cr);
+  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+
+  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.62);
+  cairo_set_line_width(cr, MAX(stroke_width + 8.0, 10.0));
+  rectangle_path(cr, rect, corners);
+  cairo_stroke(cr);
+
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
+  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
+  double dashes[] = {4.0, 3.0};
+  cairo_set_dash(cr, dashes, 2, 0);
+  rectangle_path(cr, rect, corners);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
 static double path_distance_to_point(ShaulaPenPath path, ShaulaPoint point) {
   if (path.len <= 0)
     return G_MAXDOUBLE;
@@ -369,6 +394,30 @@ static double path_distance_to_point(ShaulaPenPath path, ShaulaPoint point) {
       best = distance;
   }
   return best;
+}
+
+static double rectangle_edge_distance_to_point(ShaulaRect rect,
+                                               ShaulaPoint point) {
+  rect = shaula_rect_normalized(rect);
+  ShaulaPoint top_left = {rect.x, rect.y};
+  ShaulaPoint top_right = {rect.x + rect.width, rect.y};
+  ShaulaPoint bottom_right = {rect.x + rect.width, rect.y + rect.height};
+  ShaulaPoint bottom_left = {rect.x, rect.y + rect.height};
+  double best = shaula_point_distance_to_segment(point, top_left, top_right);
+  best = MIN(best,
+             shaula_point_distance_to_segment(point, top_right, bottom_right));
+  best = MIN(best, shaula_point_distance_to_segment(point, bottom_right,
+                                                    bottom_left));
+  best =
+      MIN(best, shaula_point_distance_to_segment(point, bottom_left, top_left));
+  return best;
+}
+
+static double rectangle_visible_fill_alpha(const ShaulaAnnotation *annotation) {
+  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_RECTANGLE ||
+      !annotation->data.rectangle.filled)
+    return 0.0;
+  return annotation->color.a * 0.22;
 }
 
 static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
@@ -679,6 +728,17 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       set_annotation_color(cr, annotation->color, 1.0);
       cairo_set_line_width(cr, annotation->stroke_width);
       draw_pen_path(cr, annotation->data.highlight);
+    } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+      draw_rectangle_selection(cr, annotation->data.rectangle.rect,
+                               annotation->data.rectangle.corners,
+                               annotation->stroke_width);
+      set_annotation_color(cr, annotation->color, 1.0);
+      cairo_set_line_width(cr, annotation->stroke_width);
+      apply_arrow_stroke_style(cr, annotation->data.rectangle.stroke_style,
+                               annotation->stroke_width);
+      rectangle_path(cr, annotation->data.rectangle.rect,
+                     annotation->data.rectangle.corners);
+      cairo_stroke(cr);
     } else {
       draw_selection(cr, annotation->bounds);
     }
@@ -704,51 +764,101 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
   cairo_restore(cr);
 }
 
+static int hit_kind_priority(ShaulaAnnotationHitKind kind) {
+  switch (kind) {
+  case SHAULA_ANNOTATION_HIT_HANDLE:
+    return 4;
+  case SHAULA_ANNOTATION_HIT_STROKE:
+    return 3;
+  case SHAULA_ANNOTATION_HIT_FILL:
+    return 2;
+  case SHAULA_ANNOTATION_HIT_TEXT_BOUNDS:
+    return 1;
+  case SHAULA_ANNOTATION_HIT_NONE:
+    return 0;
+  }
+  return 0;
+}
+
+/* Selection contract: bounding boxes are only broad-phase rejection for
+ * stroke-like annotations. Transparent rectangle interiors intentionally
+ * return NONE so visually empty space can pass through to annotations behind.
+ */
+static ShaulaAnnotationHitKind annotation_hit_kind(
+    ShaulaAnnotation *annotation, ShaulaPoint point, double tolerance) {
+  if (annotation == NULL)
+    return SHAULA_ANNOTATION_HIT_NONE;
+  switch (annotation->type) {
+  case SHAULA_ANNOTATION_ARROW:
+    if (annotation->data.arrow.is_curved) {
+      if (shaula_rect_contains_point(
+              shaula_rect_expanded(annotation->bounds, tolerance), point))
+        return SHAULA_ANNOTATION_HIT_STROKE;
+    } else if (shaula_point_distance_to_segment(
+                   point, annotation->data.arrow.start,
+                   annotation->data.arrow.end) <= tolerance) {
+      return SHAULA_ANNOTATION_HIT_STROKE;
+    }
+    break;
+  case SHAULA_ANNOTATION_MEASURE:
+    if (shaula_point_distance_to_segment(point, annotation->data.measure.start,
+                                         annotation->data.measure.end) <=
+        tolerance)
+      return SHAULA_ANNOTATION_HIT_STROKE;
+    break;
+  case SHAULA_ANNOTATION_RECTANGLE: {
+    double stroke_tolerance =
+        MAX(tolerance, annotation->stroke_width / 2.0 + 3.0);
+    if (!shaula_rect_contains_point(
+            shaula_rect_expanded(annotation->bounds, stroke_tolerance), point))
+      return SHAULA_ANNOTATION_HIT_NONE;
+    if (rectangle_edge_distance_to_point(annotation->data.rectangle.rect,
+                                         point) <= stroke_tolerance)
+      return SHAULA_ANNOTATION_HIT_STROKE;
+    if (rectangle_visible_fill_alpha(annotation) >= 0.10 &&
+        shaula_rect_contains_point(
+            shaula_rect_normalized(annotation->data.rectangle.rect), point))
+      return SHAULA_ANNOTATION_HIT_FILL;
+    break;
+  }
+  case SHAULA_ANNOTATION_TEXT:
+    if (shaula_rect_contains_point(
+            shaula_rect_expanded(annotation->bounds, tolerance), point))
+      return SHAULA_ANNOTATION_HIT_TEXT_BOUNDS;
+    break;
+  case SHAULA_ANNOTATION_HIGHLIGHT:
+    if (path_distance_to_point(annotation->data.highlight, point) <=
+        MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
+      return SHAULA_ANNOTATION_HIT_STROKE;
+    break;
+  case SHAULA_ANNOTATION_PEN:
+    if (path_distance_to_point(annotation->data.pen, point) <=
+        MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
+      return SHAULA_ANNOTATION_HIT_STROKE;
+    break;
+  }
+  return SHAULA_ANNOTATION_HIT_NONE;
+}
+
+ShaulaAnnotationHit shaula_annotations_hit_test_ranked(GPtrArray *annotations,
+                                                       ShaulaPoint point,
+                                                       double tolerance) {
+  ShaulaAnnotationHit best = {NULL, SHAULA_ANNOTATION_HIT_NONE};
+  if (annotations == NULL)
+    return best;
+  for (gint i = (gint)annotations->len - 1; i >= 0; i--) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(annotations, (guint)i);
+    ShaulaAnnotationHitKind kind =
+        annotation_hit_kind(annotation, point, tolerance);
+    if (hit_kind_priority(kind) > hit_kind_priority(best.kind))
+      best = (ShaulaAnnotationHit){annotation, kind};
+  }
+  return best;
+}
+
 ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
                                               ShaulaPoint point,
                                               double tolerance) {
-  if (annotations == NULL)
-    return NULL;
-  for (gint i = (gint)annotations->len - 1; i >= 0; i--) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(annotations, (guint)i);
-    if (annotation == NULL)
-      continue;
-    switch (annotation->type) {
-    case SHAULA_ANNOTATION_ARROW:
-      if (annotation->data.arrow.is_curved) {
-        if (shaula_rect_contains_point(
-                shaula_rect_expanded(annotation->bounds, tolerance), point))
-          return annotation;
-      } else {
-        if (shaula_point_distance_to_segment(point, annotation->data.arrow.start,
-                                             annotation->data.arrow.end) <=
-            tolerance)
-          return annotation;
-      }
-      break;
-    case SHAULA_ANNOTATION_MEASURE:
-      if (shaula_point_distance_to_segment(point, annotation->data.measure.start,
-                                           annotation->data.measure.end) <=
-          tolerance)
-        return annotation;
-      break;
-    case SHAULA_ANNOTATION_RECTANGLE:
-    case SHAULA_ANNOTATION_TEXT:
-      if (shaula_rect_contains_point(
-              shaula_rect_expanded(annotation->bounds, tolerance), point))
-        return annotation;
-      break;
-    case SHAULA_ANNOTATION_HIGHLIGHT:
-      if (path_distance_to_point(annotation->data.highlight, point) <=
-          MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
-        return annotation;
-      break;
-    case SHAULA_ANNOTATION_PEN:
-      if (path_distance_to_point(annotation->data.pen, point) <=
-          MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
-        return annotation;
-      break;
-    }
-  }
-  return NULL;
+  return shaula_annotations_hit_test_ranked(annotations, point, tolerance)
+      .annotation;
 }
