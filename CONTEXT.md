@@ -17,7 +17,8 @@ and the working diff.
   `zig build -Doptimize=ReleaseSafe -Dstrip`, packages `zig-out/bin` and
   `zig-out/share` as `shaula-linux-x86_64.tar.gz`, writes and verifies
   `SHA256SUMS`, and publishes/replaces release assets with `gh`. The publish job
-  uses `contents: write`, does not run on PRs, and does not use shared caches.
+  uses `contents: write`, does not run on PRs, does not use shared caches, and
+  sets a tag-specific `run-name` for release runs.
 - The public repository currently uses `master` as the default branch, so README
   installer snippets use `raw.githubusercontent.com/.../master/scripts/install.sh`.
 - First installer foundation is now present in `scripts/install.sh` and
