@@ -397,6 +397,13 @@ static void set_annotation_color(cairo_t *cr, ShaulaColor color, double alpha) {
   cairo_set_source_rgba(cr, color.r, color.g, color.b, color.a * alpha);
 }
 
+static double screen_px_to_user(cairo_t *cr, double px) {
+  double dx = px;
+  double dy = 0.0;
+  cairo_device_to_user_distance(cr, &dx, &dy);
+  return fabs(dx);
+}
+
 static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   bounds = shaula_rect_normalized(bounds);
   cairo_save(cr);
@@ -423,29 +430,34 @@ static void draw_rectangle_selection(cairo_t *cr, ShaulaRect rect,
   cairo_save(cr);
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+  cairo_set_dash(cr, NULL, 0, 0);
 
-  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.62);
-  cairo_set_line_width(cr, MAX(stroke_width + 8.0, 10.0));
-  rectangle_path(cr, rect, corners);
+  double px = screen_px_to_user(cr, 1.0);
+  double offset = stroke_width * 0.5 + 5.0 * px;
+  ShaulaRect aura = shaula_rect_expanded(rect, offset);
+
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.24);
+  cairo_set_line_width(cr, MAX(1.0 * px, 0.5));
+  rectangle_path(cr, aura, corners);
   cairo_stroke(cr);
 
-  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.98);
-  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
-  double dashes[] = {4.0, 3.0};
-  cairo_set_dash(cr, dashes, 2, 0);
-  rectangle_path(cr, rect, corners);
+  aura = shaula_rect_expanded(rect, offset + 2.0 * px);
+  cairo_set_source_rgba(cr, 0.96, 0.97, 0.98, 0.18);
+  cairo_set_line_width(cr, MAX(1.5 * px, 0.75));
+  rectangle_path(cr, aura, corners);
   cairo_stroke(cr);
   cairo_restore(cr);
 }
 
 static void draw_square_handle(cairo_t *cr, ShaulaPoint point) {
-  double size = 8.0;
+  double px = screen_px_to_user(cr, 1.0);
+  double size = 7.0 * px;
   cairo_save(cr);
   cairo_rectangle(cr, point.x - size / 2.0, point.y - size / 2.0, size, size);
-  cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
+  cairo_set_source_rgba(cr, 0.98, 0.98, 0.98, 0.92);
   cairo_fill_preserve(cr);
-  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.9);
-  cairo_set_line_width(cr, 1.5);
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.82);
+  cairo_set_line_width(cr, MAX(1.25 * px, 0.6));
   cairo_stroke(cr);
   cairo_restore(cr);
 }

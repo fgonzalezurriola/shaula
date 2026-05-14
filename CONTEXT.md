@@ -438,7 +438,11 @@ and the working diff.
   bounds before applying z-order, so empty rectangle interiors pass through to
   objects behind them. Selected rectangles draw border-following selection chrome
   instead of a generic expanded bounds box and expose eight resize handles in
-  Select mode.
+  Select mode. Rectangle selection chrome must stay subtle UI: draw a low-alpha
+  external solid aura, redraw the real annotation stroke above it, and use
+  compact screen-pixel-stable handles as the primary selected affordance. Do
+  not draw a dashed white selection outline over rectangle borders, because it
+  visually replaces dashed orange content.
 - `shaula-highlight-symbolic` Highlight: implemented. Its icon is the
   highlighter glyph, not the Spotlight/filter glyph.
 - `shaula-pen-symbolic` Pen: implemented.
