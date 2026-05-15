@@ -85,9 +85,9 @@ NIconButton {
   function executeAction(action) {
     var command = "";
     if (action === "capture-quick") {
-      command = "shaula capture quick --json";
+      command = "shaula capture quick --json --copy --no-preview";
     } else if (action === "capture-area") {
-      command = "shaula capture area --json";
+      command = "shaula capture area --json --copy --no-preview";
     } else if (action === "capture-fullscreen") {
       command = "shaula capture fullscreen --json --copy";
     } else if (action === "capture-all-screens") {

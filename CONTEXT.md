@@ -172,9 +172,10 @@ and the working diff.
   post-capture pipeline to touch the system clipboard. Area/all-in-one still
   open preview by default so the user can choose Copy, Save, Save As, or
   Discard.
-- Noctalia fullscreen/all-screens menu actions and installed Niri hotkeys pass
-  `--copy`; these direct, no-preview flows rely on the post-capture pipeline for
-  clipboard publication and the copied/failed desktop notification.
+- Noctalia quick/area/fullscreen/all-screens menu actions and installed Niri
+  hotkeys pass `--copy` for direct no-preview copy flows. Area-style launchers
+  also pass `--no-preview` so the post-capture pipeline owns the thumbnail
+  copied/failed desktop notification instead of opening preview.
 - Preview metadata readouts that update while interacting must reserve stable
   width. The color hex and zoom percentage labels both use fixed code-style
   widths so hover color sampling and zoom changes do not shift the toolbar.
