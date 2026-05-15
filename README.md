@@ -58,6 +58,14 @@ On Arch/CachyOS:
 sudo pacman -S grim wl-clipboard gtk4 gtk4-layer-shell
 ```
 
+## Fonts
+
+Shaula uses **Geist** (normal) and **Excalifont** (sketch).
+
+```bash
+paru -S ttf-geist ttf-excalifont
+```
+
 ## Usage
 
 Main usage is tied with the Noctalia-Shell menu installed. Shaula can be call through the terminal
