@@ -17,8 +17,10 @@
    SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL)
 
 /* History tracks the editable document that affects exported/copied pixels:
- * the current image buffer while crop remains destructive, annotation objects,
- * and annotation id allocation. View-only state such as zoom, pan, fit mode,
+ * the current immutable image reference, annotation objects, and annotation id
+ * allocation. Pixel-mutating edits replace state->image before changing pixels,
+ * so annotation-only snapshots can share the base pixbuf without keeping one
+ * full image copy per undo entry. View-only state such as zoom, pan, fit mode,
  * active tool, hover, menus, and crop/text drafts is intentionally excluded.
  * Selection is restored only because annotations currently carry that flag; any
  * restored pointer is rebuilt from cloned annotations to avoid stale ownership.
@@ -40,7 +42,8 @@ static GArray *spotlight_regions_clone(GArray *regions) {
 
 static ShaulaPreviewSnapshot *snapshot_new(ShaulaPreviewState *state) {
   ShaulaPreviewSnapshot *snapshot = g_new0(ShaulaPreviewSnapshot, 1);
-  snapshot->image = state->image != NULL ? gdk_pixbuf_copy(state->image) : NULL;
+  snapshot->image =
+      state->image != NULL ? GDK_PIXBUF(g_object_ref(state->image)) : NULL;
   snapshot->annotations = shaula_annotations_clone_array(state->annotations);
   snapshot->spotlight_regions =
       spotlight_regions_clone(state->spotlight_regions);
@@ -754,7 +757,8 @@ static void restore_snapshot(ShaulaPreviewState *state,
   if (state->image != NULL)
     g_object_unref(state->image);
   state->image =
-      snapshot->image != NULL ? gdk_pixbuf_copy(snapshot->image) : NULL;
+      snapshot->image != NULL ? GDK_PIXBUF(g_object_ref(snapshot->image))
+                              : NULL;
   shaula_preview_replace_annotations(
       state, shaula_annotations_clone_array(snapshot->annotations));
   if (state->spotlight_regions != NULL)

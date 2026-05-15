@@ -525,8 +525,9 @@ and the working diff.
 ## Preview History
 
 - `ShaulaHistoryStack` lives in `preview_state.*` and stores bounded document
-  snapshots with undo/redo arrays and a default capacity of 24 while snapshots
-  include full image buffers.
+  snapshots with undo/redo arrays and a default capacity of 24. Snapshots hold a
+  referenced immutable `GdkPixbuf`; pixel-mutating edits replace the image
+  before mutation so annotation-only undo entries do not deep-copy full images.
 - History tracks state that affects copied/saved output: current image buffer,
   annotations, spotlight regions, annotation ids, and modified status.
 - History intentionally excludes view-only state: zoom, pan, fit mode, active
