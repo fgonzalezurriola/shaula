@@ -5,10 +5,16 @@ pub fn resolveCaptureDimensions(
     io: std.Io,
     output_path: []const u8,
 ) !struct { width: u32, height: u32 } {
-    const header = try std.Io.Dir.cwd().readFileAlloc(io, output_path, allocator, .unlimited);
-    defer allocator.free(header);
+    _ = allocator;
 
-    if (header.len < 24) return error.BackendUnavailable;
+    var file = if (std.fs.path.isAbsolute(output_path))
+        try std.Io.Dir.openFileAbsolute(io, output_path, .{ .mode = .read_only })
+    else
+        try std.Io.Dir.cwd().openFile(io, output_path, .{ .mode = .read_only });
+    defer file.close(io);
+
+    var header: [24]u8 = undefined;
+    if (try file.readPositionalAll(io, &header, 0) != header.len) return error.BackendUnavailable;
     if (!std.mem.eql(u8, header[0..8], "\x89PNG\r\n\x1a\n")) return error.BackendUnavailable;
     if (!std.mem.eql(u8, header[12..16], "IHDR")) return error.BackendUnavailable;
 
