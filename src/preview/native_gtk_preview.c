@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <gtk/gtk.h>
+#include <glib/gstdio.h>
 #include <stdio.h>
 
 #include "preview_canvas.h"
@@ -8,6 +9,50 @@
 #include "preview_toolbar.h"
 
 static ShaulaPreviewState state;
+
+static void sweep_stale_temp_dir(const char *dir, gint64 now_us,
+                                 gint64 ttl_us) {
+  if (dir == NULL || dir[0] == '\0')
+    return;
+
+  GDir *handle = g_dir_open(dir, 0, NULL);
+  if (handle == NULL)
+    return;
+
+  const char *name = NULL;
+  while ((name = g_dir_read_name(handle)) != NULL) {
+    if (!(g_str_has_prefix(name, "capture-") ||
+          g_str_has_prefix(name, "shaula-preview-")) ||
+        !g_str_has_suffix(name, ".png"))
+      continue;
+
+    char *path = g_build_filename(dir, name, NULL);
+    GStatBuf st;
+    if (g_stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
+      gint64 age_us = now_us - ((gint64)st.st_mtime * G_USEC_PER_SEC);
+      if (age_us > ttl_us)
+        g_unlink(path);
+    }
+    g_free(path);
+  }
+
+  g_dir_close(handle);
+}
+
+static void sweep_stale_shaula_temps(void) {
+  const gint64 ttl_us = ((gint64)24) * 60 * 60 * G_USEC_PER_SEC;
+  const gint64 now_us = g_get_real_time();
+  sweep_stale_temp_dir("/tmp/shaula/captures", now_us, ttl_us);
+  sweep_stale_temp_dir(g_get_tmp_dir(), now_us, ttl_us);
+
+  const char *runtime_dir = g_getenv("XDG_RUNTIME_DIR");
+  if (runtime_dir != NULL && runtime_dir[0] != '\0') {
+    char *runtime_captures =
+        g_build_filename(runtime_dir, "shaula", "captures", NULL);
+    sweep_stale_temp_dir(runtime_captures, now_us, ttl_us);
+    g_free(runtime_captures);
+  }
+}
 
 static void print_json_string(const char *value) {
   fputc('"', stdout);
@@ -86,6 +131,8 @@ static void on_activate(GtkApplication *app, gpointer data) {
 }
 
 int main(int argc, char **argv) {
+  sweep_stale_shaula_temps();
+
   const char *path = argc >= 2 ? argv[1] : getenv("SHAULA_PREVIEW_PATH");
   if (path == NULL || path[0] == '\0') {
     fprintf(stderr, "shaula-preview requires an image path\n");

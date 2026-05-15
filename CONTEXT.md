@@ -162,6 +162,9 @@ and the working diff.
   `--save` still prefers `~/Pictures/shaula` (lowercase) and falls back to
   `~/shaula`; explicit `--output` still bypasses default resolution as a user
   save decision.
+- v1.0.1 hardening: preview records the original implicit capture temp path and
+  unlinks it on close when safe; copy notification thumbnail paths are preserved
+  for notification daemons and cleaned by a conservative stale-temp sweep.
 - `shaula directory screenshots [--open] [--json]` is the shared resolver for
   the durable screenshot folder. Noctalia's Open Screenshots Folder action
   calls this command instead of duplicating fallback path rules.

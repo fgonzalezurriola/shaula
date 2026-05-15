@@ -1,5 +1,6 @@
 #include "preview_state.h"
 
+#include <glib/gstdio.h>
 #include <math.h>
 #include <string.h>
 
@@ -162,6 +163,31 @@ static gboolean rect_fits_image(ShaulaRect rect, double image_width,
          rect.y + rect.height <= image_height;
 }
 
+static gboolean path_has_prefix_dir(const char *path, const char *dir) {
+  if (path == NULL || dir == NULL || dir[0] == '\0')
+    return FALSE;
+  gsize len = strlen(dir);
+  return g_str_has_prefix(path, dir) &&
+         (path[len] == '\0' || path[len] == G_DIR_SEPARATOR);
+}
+
+static gboolean preview_path_is_temporary_capture(const char *path) {
+  if (path == NULL)
+    return FALSE;
+  if (g_str_has_prefix(path, "/tmp/shaula/captures/"))
+    return TRUE;
+  const char *runtime_dir = g_getenv("XDG_RUNTIME_DIR");
+  if (runtime_dir != NULL && runtime_dir[0] != '\0') {
+    char *runtime_captures =
+        g_build_filename(runtime_dir, "shaula", "captures", NULL);
+    gboolean temporary = path_has_prefix_dir(path, runtime_captures);
+    g_free(runtime_captures);
+    if (temporary)
+      return TRUE;
+  }
+  return FALSE;
+}
+
 static ShaulaAnnotation *
 annotation_clone_with_offset(const ShaulaAnnotation *base, double dx,
                              double dy) {
@@ -271,6 +297,8 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
                                GdkPixbuf *image) {
   memset(state, 0, sizeof(*state));
   state->path = g_strdup(path);
+  state->managed_temp_path =
+      preview_path_is_temporary_capture(path) ? g_strdup(path) : NULL;
   state->image = image;
   state->zoom = 1.0;
   state->fit_zoom = 1.0;
@@ -346,6 +374,11 @@ void shaula_preview_state_free(ShaulaPreviewState *state) {
     g_array_unref(state->draft_pen_points);
   for (int i = 0; i < state->icon_root_count; i++)
     g_free(state->icon_roots[i]);
+  if (state->managed_temp_path != NULL &&
+      !(state->copied && state->notified &&
+        g_strcmp0(state->last_action, "copy") == 0))
+    g_unlink(state->managed_temp_path);
+  g_free(state->managed_temp_path);
   g_free(state->saved_path);
   g_free(state->path);
 }

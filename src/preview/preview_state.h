@@ -260,6 +260,7 @@ typedef struct {
   gboolean notified;
   gboolean close_preview_on_save;
   char *saved_path;
+  char *managed_temp_path;
   const char *last_action;
   gboolean is_dark;
 
