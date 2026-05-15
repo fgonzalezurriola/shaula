@@ -82,7 +82,7 @@ if [[ "${MODE}" == "with-plugin" || "${MODE}" == "both" ]]; then
     .optional == true and
     .action.id == "capture-area" and
     .execution.mode == "dry-run" and
-    .action.shaula_argv == ["capture","area","--json","--copy","--no-preview"]
+    .action.shaula_argv == ["capture","area","--json"]
   ' >/dev/null || {
     echo "ERR_NOCTALIA_PLUGIN_FLOW_INVALID reason=plugin_dry_run_contract" >&2
     exit 1

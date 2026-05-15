@@ -78,8 +78,8 @@ action_label() {
 
 action_command_json() {
  case "$1" in
- capture-quick) printf '["capture","quick","--json","--copy","--no-preview"]' ;;
- capture-area) printf '["capture","area","--json","--copy","--no-preview"]' ;;
+ capture-quick) printf '["capture","quick","--json"]' ;;
+ capture-area) printf '["capture","area","--json"]' ;;
  capture-fullscreen) printf '["capture","fullscreen","--json","--copy"]' ;;
  capture-all-screens) printf '["capture","all-screens","--json","--copy"]' ;;
  capture-window) printf '["capture","window","--json"]' ;;
@@ -280,8 +280,8 @@ import sys
 
 action = sys.argv[1]
 mapping = {
-    "capture-quick": ["capture", "quick", "--json", "--copy", "--no-preview"],
-    "capture-area": ["capture", "area", "--json", "--copy", "--no-preview"],
+    "capture-quick": ["capture", "quick", "--json"],
+    "capture-area": ["capture", "area", "--json"],
     "capture-fullscreen": ["capture", "fullscreen", "--json", "--copy"],
     "capture-all-screens": ["capture", "all-screens", "--json", "--copy"],
     "capture-window": ["capture", "window", "--json"],
