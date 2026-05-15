@@ -130,7 +130,7 @@ fn notifyForDirectPipeline(
 ) !void {
     if (flags.copy) {
         if (outcome.clipboard.ok) {
-            try notify.notifyScreenshotCopied(allocator, io);
+            try notify.notifyScreenshotCopiedImage(allocator, io, path);
         } else {
             try notify.notifyScreenshotCopyFailed(allocator, io, outcome.clipboard.message orelse "Copy failed");
         }

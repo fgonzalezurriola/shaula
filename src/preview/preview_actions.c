@@ -302,9 +302,10 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
                                             "Copy failed", NULL, FALSE, 5000);
   } else {
     state->copied = TRUE;
-    state->notified = shaula_preview_notify(
-        "Shaula captured", "You can paste the image from the clipboard.",
-        source, TRUE, 2500);
+    state->notified =
+        shaula_preview_notify("Screenshot captured",
+                              "You can paste the image from the clipboard.",
+                              source, TRUE, 2500);
   }
   if (is_temp && !state->notified)
     g_unlink(source);
@@ -345,7 +346,7 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   char *display = display_path_with_tilde(target);
   char *body = g_strdup_printf("Saved to %s", display);
   state->notified =
-      shaula_preview_notify("Shaula captured", body, target, TRUE, 2500);
+      shaula_preview_notify("Screenshot captured", body, target, TRUE, 2500);
   g_free(body);
   g_free(display);
   g_free(target);
@@ -406,14 +407,14 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 
   if (state->saved && copy_to_clipboard && state->copied) {
     state->notified = shaula_preview_notify(
-        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
+        "Screenshot captured", state->saved_path, state->saved_path, TRUE, 2500);
   } else if (state->saved && !copy_to_clipboard) {
     state->notified = shaula_preview_notify(
-        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
+        "Screenshot captured", state->saved_path, state->saved_path, TRUE, 2500);
   } else if (state->saved && copy_to_clipboard && !state->copied &&
              !state->notified) {
     state->notified = shaula_preview_notify(
-        "Shaula captured", state->saved_path, state->saved_path, TRUE, 2500);
+        "Screenshot captured", state->saved_path, state->saved_path, TRUE, 2500);
   }
 
   if (is_temp)
@@ -447,7 +448,7 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
             remember_real_save_path(state, target_png);
             char *display = display_path_with_tilde(target_png);
             char *body = g_strdup_printf("Saved to %s", display);
-            state->notified = shaula_preview_notify("Shaula captured", body,
+            state->notified = shaula_preview_notify("Screenshot captured", body,
                                                     target_png, TRUE, 2500);
             g_free(body);
             g_free(display);

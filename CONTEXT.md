@@ -110,7 +110,7 @@ and the working diff.
   The GTK widget toolbar must compute placement against the monitor initial
   surface size until the drawing area has a real allocation; otherwise startup
   placement clamps to `(12,12)` before GTK measures the canvas.
-- Preview Ctrl+S and Ctrl+Shift+C success banners now use `Shaula captured`
+- Preview Ctrl+S and Ctrl+Shift+C success banners now use `Screenshot captured`
   desktop notifications with Freedesktop `image-path` screenshot thumbnails
   and `notify-send -i` fallback. The `[preview.window] close_preview_on_save`
   setting defaults to true; when true, only successful Ctrl+S quick-save
