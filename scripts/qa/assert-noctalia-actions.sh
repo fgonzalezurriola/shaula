@@ -69,8 +69,8 @@ mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula /tmp/shaula-task9-home
 
 EXPECTED_ACTIONS='[
   {"id":"capture-area","label":"Quick Capture","shaula_argv":["capture","area","--json"]},
-  {"id":"capture-fullscreen","label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json"]},
-  {"id":"capture-all-screens","label":"Capture All Screens","shaula_argv":["capture","all-screens","--json"]},
+  {"id":"capture-fullscreen","label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json","--copy"]},
+  {"id":"capture-all-screens","label":"Capture All Screens","shaula_argv":["capture","all-screens","--json","--copy"]},
   {"id":"capture-window","label":"Capture Window","shaula_argv":["capture","window","--json"]},
   {"id":"open-last","label":"Open Last","shaula_argv":["history","show","--json","--id","latest"]},
   {"id":"history","label":"History","shaula_argv":["history","list","--json"]},
@@ -80,8 +80,8 @@ EXPECTED_ACTIONS='[
 
 EXPECTED_ACTION_MAP='{
   "capture-area": {"label":"Quick Capture","shaula_argv":["capture","area","--json"]},
-  "capture-fullscreen": {"label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json"]},
-  "capture-all-screens": {"label":"Capture All Screens","shaula_argv":["capture","all-screens","--json"]},
+  "capture-fullscreen": {"label":"Capture Fullscreen","shaula_argv":["capture","fullscreen","--json","--copy"]},
+  "capture-all-screens": {"label":"Capture All Screens","shaula_argv":["capture","all-screens","--json","--copy"]},
   "capture-window": {"label":"Capture Window","shaula_argv":["capture","window","--json"]},
   "open-last": {"label":"Open Last","shaula_argv":["history","show","--json","--id","latest"]},
   "history": {"label":"History","shaula_argv":["history","list","--json"]},
@@ -160,7 +160,7 @@ fullscreen_exec_json="$({
 printf '%s\n' "${fullscreen_exec_json}" | jq -e '
   .ok == true and
   .action.id == "capture-fullscreen" and
-  .action.shaula_argv == ["capture","fullscreen","--json"] and
+  .action.shaula_argv == ["capture","fullscreen","--json","--copy"] and
   .execution.mode == "execute" and
   .execution.ok == true and
   .execution.exit_code == 0 and

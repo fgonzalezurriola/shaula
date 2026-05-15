@@ -89,9 +89,9 @@ NIconButton {
     } else if (action === "capture-area") {
       command = "shaula capture area --json";
     } else if (action === "capture-fullscreen") {
-      command = "shaula capture fullscreen --json";
+      command = "shaula capture fullscreen --json --copy";
     } else if (action === "capture-all-screens") {
-      command = "shaula capture all-screens --json";
+      command = "shaula capture all-screens --json --copy";
     } else if (action === "settings") {
       command = "shaula settings";
     } else if (action === "open-screenshots-folder") {
