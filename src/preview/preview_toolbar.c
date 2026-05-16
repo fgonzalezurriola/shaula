@@ -215,6 +215,17 @@ static int visible_secondary_count_for_width(ShaulaPreviewState *state,
                         state->toolbar_utility_action_count);
 }
 
+static gboolean preview_init_debug_enabled(void) {
+  const char *value = g_getenv("SHAULA_DEBUG_PREVIEW_INIT");
+  return value != NULL && value[0] != '\0' && g_strcmp0(value, "0") != 0;
+}
+
+static void debug_preview_init(const char *stage, int value) {
+  if (!preview_init_debug_enabled())
+    return;
+  g_printerr("[DEBUG-preview-init] %s=%d\n", stage, value);
+}
+
 static void append_separator(GtkWidget *box) {
   GtkWidget *separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_widget_set_margin_top(separator, 4);
@@ -280,6 +291,8 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
  * overflow deterministically so GTK never clips header controls on resize.
  */
 static void update_toolbar_overflow(ShaulaPreviewState *state, int width) {
+  if (width < PREVIEW_TOOLBAR_BASE_VISIBLE_W)
+    width = PREVIEW_TOOLBAR_BASE_VISIBLE_W;
   int visible_count = visible_secondary_count_for_width(state, width);
   if (visible_count == state->toolbar_overflow_visible_count)
     return;
@@ -296,26 +309,29 @@ static void update_toolbar_overflow(ShaulaPreviewState *state, int width) {
 
   rebuild_more_menu(state, visible_count);
   state->toolbar_overflow_visible_count = visible_count;
+  debug_preview_init("overflow_visible_count", visible_count);
 }
 
 static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
                                gpointer data) {
   (void)clock;
   ShaulaPreviewState *state = data;
-  int available_width = gtk_widget_get_width(widget);
+  int available_width = PREVIEW_TOOLBAR_STABLE_ACTIONS_W;
   if (state->toolbar_actions != NULL && state->toolbar_metadata != NULL) {
     graphene_rect_t toolbar_bounds;
     graphene_rect_t metadata_bounds;
     if (gtk_widget_compute_bounds(state->toolbar_actions, widget,
                                   &toolbar_bounds) &&
         gtk_widget_compute_bounds(state->toolbar_metadata, widget,
-                                  &metadata_bounds))
-      available_width =
+                                  &metadata_bounds)) {
+      int measured_width =
           (int)floorf(metadata_bounds.origin.x - toolbar_bounds.origin.x);
-  } else if (state->toolbar_metadata != NULL) {
-    available_width -= gtk_widget_get_width(state->toolbar_metadata);
+      if (measured_width >= PREVIEW_TOOLBAR_BASE_VISIBLE_W)
+        available_width = measured_width;
+    }
   }
-  update_toolbar_overflow(state, available_width);
+  if (available_width >= PREVIEW_TOOLBAR_BASE_VISIBLE_W)
+    update_toolbar_overflow(state, available_width);
   return G_SOURCE_CONTINUE;
 }
 
@@ -424,7 +440,7 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
-  gtk_widget_set_size_request(actions, PREVIEW_TOOLBAR_STABLE_ACTIONS_W, -1);
+  gtk_widget_set_size_request(actions, PREVIEW_TOOLBAR_FULL_VISIBLE_W, -1);
   state->toolbar_secondary_count = 0;
   state->toolbar_utility_action_count = 0;
   state->toolbar_overflow_visible_count = -1;
@@ -514,6 +530,9 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
              shaula_preview_image_height(state));
     state->dimensions_label = make_muted_label(size_buf);
     gtk_label_set_xalign(GTK_LABEL(state->dimensions_label), 1.0f);
+    gtk_label_set_width_chars(GTK_LABEL(state->dimensions_label), 12);
+    gtk_label_set_max_width_chars(GTK_LABEL(state->dimensions_label), 12);
+    gtk_widget_set_size_request(state->dimensions_label, 112, -1);
     PangoAttrList *dim_attrs = pango_attr_list_new();
     pango_attr_list_insert(dim_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
     pango_attr_list_insert(dim_attrs, pango_attr_family_new("monospace"));
@@ -524,6 +543,9 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
 
   state->zoom_label = make_muted_label("Zoom 100%");
   gtk_label_set_xalign(GTK_LABEL(state->zoom_label), 1.0f);
+  gtk_label_set_width_chars(GTK_LABEL(state->zoom_label), 9);
+  gtk_label_set_max_width_chars(GTK_LABEL(state->zoom_label), 9);
+  gtk_widget_set_size_request(state->zoom_label, 88, -1);
   {
     PangoAttrList *zoom_attrs = pango_attr_list_new();
     pango_attr_list_insert(zoom_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
@@ -559,10 +581,25 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), title_spacer);
   gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), toolbar);
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
-  update_toolbar_overflow(state, PREVIEW_TOOLBAR_BASE_VISIBLE_W);
+  update_toolbar_overflow(state, PREVIEW_TOOLBAR_FULL_VISIBLE_W);
+  debug_preview_init("toolbar_built", 1);
   gtk_widget_add_tick_callback(bar, on_topbar_tick, state, NULL);
 
   return bar;
+}
+
+void shaula_preview_toolbar_prepare_initial_layout(ShaulaPreviewState *state,
+                                                   int window_width) {
+  if (state == NULL || state->toolbar_actions == NULL)
+    return;
+
+  const int metadata_and_chrome_reserve = 230;
+  int available_width = window_width - metadata_and_chrome_reserve;
+  available_width = MAX(PREVIEW_TOOLBAR_BASE_VISIBLE_W, available_width);
+  available_width = MIN(PREVIEW_TOOLBAR_FULL_VISIBLE_W, available_width);
+  gtk_widget_set_size_request(state->toolbar_actions, available_width, -1);
+  update_toolbar_overflow(state, available_width);
+  debug_preview_init("initial_overflow_width", available_width);
 }
 
 void shaula_preview_toolbar_update_tool_state(ShaulaPreviewState *state) {

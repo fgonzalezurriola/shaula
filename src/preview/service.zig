@@ -68,6 +68,16 @@ pub fn runPreview(
     var loaded_config = config_loader.load(allocator, io, environ) catch null;
     defer if (loaded_config) |*loaded| loaded.deinit(allocator);
     if (loaded_config) |loaded| {
+        if (loaded.config.preview.window.width) |width| {
+            const value = try std.fmt.allocPrint(allocator, "{d}", .{width});
+            defer allocator.free(value);
+            try helper_env.put("SHAULA_PREVIEW_WINDOW_WIDTH", value);
+        }
+        if (loaded.config.preview.window.height) |height| {
+            const value = try std.fmt.allocPrint(allocator, "{d}", .{height});
+            defer allocator.free(value);
+            try helper_env.put("SHAULA_PREVIEW_WINDOW_HEIGHT", value);
+        }
         const save_folder = loaded.config.capture.after.save_folder.value();
         if (save_folder.len > 0) try helper_env.put("SHAULA_SAVE_FOLDER", save_folder);
         try helper_env.put("SHAULA_NOTIFY_SUCCESS", if (loaded.config.notifications.success) "1" else "0");

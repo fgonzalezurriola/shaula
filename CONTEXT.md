@@ -223,7 +223,23 @@ and the working diff.
   to resize the floating window.
 - Preview toolbar overflow keeps the action group at a stable requested width.
   Hidden/revealed toolbar buttons must not change the headerbar natural width or
-  trigger a floating-window resize after the preview appears.
+  trigger a floating-window resize after the preview appears. The pre-present
+  overflow pass uses the intended default window width; post-present resize
+  handling may use measured headerbar-to-metadata bounds only after a sane
+  allocation exists. The three supported preview size presets are 900x600,
+  1100x720, and 1400x900; the smallest preset is expected to fit the complete
+  primary toolbar, so overflow thresholds must be based on the real compact
+  button width, not conservative titlebar estimates.
+- Preview startup is gated by visual readiness: load/register the custom icon
+  theme, build the complete primary toolbar, reserve metadata widths, compute
+  the configured preset/default window size and initial fit zoom, then apply the
+  initial overflow layout before `gtk_window_present()`. Post-present toolbar
+  updates may change sensitivity/active/menu state, but must not add primary
+  toolbar buttons or expand the titlebar natural width.
+- Selected Rectangle annotations intentionally do not draw an extra selection
+  aura/border. The rectangle's own stroke plus resize handles are the only
+  selection affordances, so selecting a dashed rectangle does not visually add a
+  second outline.
 - Pan and Crop are fixed navigation/utility tools after Copy, Save, Undo, and
   Redo. Numbered canvas tools are ordered Select `1`, Rectangle `2`, Arrow `3`,
   reserved Line `4`, Text `5`, Pen `6`, Highlight `7`, Measure `8`, and

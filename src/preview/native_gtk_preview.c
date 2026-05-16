@@ -2,6 +2,7 @@
 #include <gtk/gtk.h>
 #include <glib/gstdio.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "preview_canvas.h"
 #include "preview_icons.h"
@@ -9,6 +10,74 @@
 #include "preview_toolbar.h"
 
 static ShaulaPreviewState state;
+
+static gboolean preview_init_debug_enabled(void) {
+  const char *value = g_getenv("SHAULA_DEBUG_PREVIEW_INIT");
+  return value != NULL && value[0] != '\0' && g_strcmp0(value, "0") != 0;
+}
+
+static void debug_preview_init(const char *stage, int value) {
+  if (!preview_init_debug_enabled())
+    return;
+  g_printerr("[DEBUG-preview-init] %s=%d\n", stage, value);
+}
+
+static int positive_env_int(const char *name, int fallback) {
+  const char *raw = g_getenv(name);
+  if (raw == NULL || raw[0] == '\0')
+    return fallback;
+
+  char *end = NULL;
+  long value = strtol(raw, &end, 10);
+  if (end == raw || *end != '\0' || value <= 0 || value > G_MAXINT)
+    return fallback;
+  return (int)value;
+}
+
+/* The preview must be mapped only after GTK has a stable first-frame contract:
+ * loaded pixbuf, full toolbar structure, default size, fit zoom, and initial
+ * overflow state. The configured preview preset is the primary size contract;
+ * image dimensions only affect fit zoom inside that stable window.
+ */
+static void compute_initial_window_size(int *out_w, int *out_h) {
+  int width = MAX(PREVIEW_READY_DEFAULT_MIN_W,
+                  positive_env_int("SHAULA_PREVIEW_WINDOW_WIDTH", 1100));
+  int height =
+      MAX(PREVIEW_MIN_H, positive_env_int("SHAULA_PREVIEW_WINDOW_HEIGHT", 720));
+
+  GdkDisplay *display = gdk_display_get_default();
+  if (display != NULL) {
+    GListModel *monitors = gdk_display_get_monitors(display);
+    if (monitors != NULL && g_list_model_get_n_items(monitors) > 0) {
+      GdkMonitor *monitor = g_list_model_get_item(monitors, 0);
+      if (monitor != NULL) {
+        GdkRectangle geometry;
+        gdk_monitor_get_geometry(monitor, &geometry);
+        width = MIN(width, MAX(PREVIEW_MIN_W, geometry.width - 96));
+        height = MIN(height, MAX(PREVIEW_MIN_H, geometry.height - 96));
+        g_object_unref(monitor);
+      }
+    }
+  }
+
+  *out_w = width;
+  *out_h = height;
+}
+
+static void seed_initial_fit(int window_w, int window_h) {
+  int image_w = MAX(1, shaula_preview_image_width(&state));
+  int image_h = MAX(1, shaula_preview_image_height(&state));
+  int area_w = MAX(1, window_w);
+  int area_h = MAX(1, window_h - PREVIEW_HEADER_ESTIMATED_H);
+  double scale_x = (double)MAX(1, area_w - 48) / (double)image_w;
+  double scale_y = (double)MAX(1, area_h - 48) / (double)image_h;
+
+  state.fit_mode = TRUE;
+  state.fit_zoom = MIN(1.0, MAX(0.05, MIN(scale_x, scale_y)));
+  state.zoom = state.fit_zoom;
+  state.pan_x = ((double)area_w - (double)image_w * state.zoom) / 2.0;
+  state.pan_y = ((double)area_h - (double)image_h * state.zoom) / 2.0;
+}
 
 static void sweep_stale_temp_dir(const char *dir, gint64 now_us,
                                  gint64 ttl_us) {
@@ -111,23 +180,31 @@ static void on_activate(GtkApplication *app, gpointer data) {
   (void)data;
   state.app = app;
   shaula_preview_register_custom_icons(&state);
+  debug_preview_init("icon_theme_loaded", state.icon_root_count);
 
   GtkWidget *window = gtk_application_window_new(app);
   state.window = window;
   gtk_window_set_title(GTK_WINDOW(window), "Shaula Preview");
   gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
-  gtk_window_set_default_size(GTK_WINDOW(window), PREVIEW_DEFAULT_W,
-                              PREVIEW_DEFAULT_H);
+  int initial_w = PREVIEW_DEFAULT_W;
+  int initial_h = PREVIEW_DEFAULT_H;
+  compute_initial_window_size(&initial_w, &initial_h);
+  gtk_window_set_default_size(GTK_WINDOW(window), initial_w, initial_h);
+  debug_preview_init("default_width", initial_w);
+  debug_preview_init("default_height", initial_h);
   gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
   GtkWidget *canvas = shaula_preview_canvas_build(&state);
   GtkWidget *topbar = shaula_preview_toolbar_build(&state);
+  seed_initial_fit(initial_w, initial_h);
+  shaula_preview_update_zoom_label(&state);
+  shaula_preview_toolbar_prepare_initial_layout(&state, initial_w);
   gtk_window_set_titlebar(GTK_WINDOW(window), topbar);
   gtk_window_set_child(GTK_WINDOW(window), canvas);
 
   gtk_window_present(GTK_WINDOW(window));
+  debug_preview_init("window_presented", 1);
   gtk_widget_grab_focus(state.area);
-  shaula_preview_set_fit_mode(&state, TRUE);
 }
 
 int main(int argc, char **argv) {
@@ -148,6 +225,7 @@ int main(int argc, char **argv) {
     }
     return 43;
   }
+  debug_preview_init("pixbuf_loaded", 1);
 
   shaula_preview_state_init(&state, path, image);
   const char *close_on_save = getenv("SHAULA_PREVIEW_CLOSE_ON_SAVE");

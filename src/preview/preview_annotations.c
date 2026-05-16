@@ -423,32 +423,6 @@ static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
   cairo_restore(cr);
 }
 
-static void draw_rectangle_selection(cairo_t *cr, ShaulaRect rect,
-                                     PreviewRectangleCorners corners,
-                                     double stroke_width) {
-  rect = shaula_rect_normalized(rect);
-  cairo_save(cr);
-  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-  cairo_set_dash(cr, NULL, 0, 0);
-
-  double px = screen_px_to_user(cr, 1.0);
-  double offset = stroke_width * 0.5 + 5.0 * px;
-  ShaulaRect aura = shaula_rect_expanded(rect, offset);
-
-  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.24);
-  cairo_set_line_width(cr, MAX(1.0 * px, 0.5));
-  rectangle_path(cr, aura, corners);
-  cairo_stroke(cr);
-
-  aura = shaula_rect_expanded(rect, offset + 2.0 * px);
-  cairo_set_source_rgba(cr, 0.96, 0.97, 0.98, 0.18);
-  cairo_set_line_width(cr, MAX(1.5 * px, 0.75));
-  rectangle_path(cr, aura, corners);
-  cairo_stroke(cr);
-  cairo_restore(cr);
-}
-
 static void draw_square_handle(cairo_t *cr, ShaulaPoint point) {
   double px = screen_px_to_user(cr, 1.0);
   double size = 7.0 * px;
@@ -896,9 +870,6 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       cairo_set_line_width(cr, annotation->stroke_width);
       draw_pen_path(cr, annotation->data.highlight);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-      draw_rectangle_selection(cr, annotation->data.rectangle.rect,
-                               annotation->data.rectangle.corners,
-                               annotation->stroke_width);
       set_annotation_color(cr, annotation->color, 1.0);
       cairo_set_line_width(cr, annotation->stroke_width);
       apply_arrow_stroke_style(cr, annotation->data.rectangle.stroke_style,
