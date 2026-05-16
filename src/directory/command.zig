@@ -2,6 +2,7 @@ const std = @import("std");
 
 const output_path = @import("../backends/capture_backend_output_path.zig");
 const cli_json = @import("../cli/json.zig");
+const config_loader = @import("../config/loader.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
@@ -39,7 +40,11 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    const dir = output_path.resolveSavedOutputDir(allocator, io, environ) catch {
+    var loaded_config = config_loader.load(allocator, io, environ) catch null;
+    defer if (loaded_config) |*loaded| loaded.deinit(allocator);
+    const save_folder = if (loaded_config) |loaded| loaded.config.capture.after.save_folder.value() else null;
+
+    const dir = output_path.resolveSavedOutputDir(allocator, io, environ, save_folder) catch {
         try cli_json.writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "screenshot directory is not writable", false);
         return recovery_policy.exitCodeFor("ERR_OUTPUT_PATH_INVALID");
     };

@@ -1,6 +1,7 @@
 const std = @import("std");
 const capture_backend = @import("capture_backend.zig");
 const capture_types = @import("../capture/types.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 
 const EnvPair = struct {
     key: []const u8,
@@ -41,6 +42,27 @@ fn createExecutableHelper(io: std.Io, path: []const u8, script: []const u8) !voi
     try file.writeStreamingAll(io, script);
 
     try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o755), .{});
+}
+
+fn resolved(backend: runtime_capabilities.BackendKind) capture_backend.ResolvedExecution {
+    return .{
+        .runtime = .{
+            .compositor_supported = true,
+            .backend = backend,
+            .capture = .{ .area = true, .fullscreen = true, .all_screens = true, .window = false },
+        },
+        .focused_output_name = "test-output",
+    };
+}
+
+fn unsupportedResolved() capture_backend.ResolvedExecution {
+    return .{
+        .runtime = .{
+            .compositor_supported = false,
+            .backend = .portal_screenshot,
+            .capture = .{ .area = false, .fullscreen = false, .all_screens = false, .window = false },
+        },
+    };
 }
 
 const GeometryFixtureCase = struct {
@@ -138,7 +160,7 @@ test "window mode unresolved target returns deterministic failure" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .window });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .window });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -165,7 +187,7 @@ test "runtime capture helper missing maps to backend unavailable" {
     const output_path = "/tmp/shaula/test-runtime-helper-missing.png";
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .output_path = output_path });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .area, .output_path = output_path });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -192,7 +214,7 @@ test "implicit output path resolves under temporary captures directory" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .area });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -227,7 +249,7 @@ test "saved output path falls back to HOME shaula when Pictures path is unusable
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .save_requested = true });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .area, .save_requested = true });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -252,7 +274,7 @@ test "saved output path without HOME returns OutputPathInvalid" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .save_requested = true });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .area, .save_requested = true });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -275,7 +297,7 @@ test "injected unknown failure maps deterministically" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .area });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -297,7 +319,7 @@ test "non-niri compositor rejects capture without fallback success" {
     const allocator = gpa.allocator();
 
     const io = std.testing.io;
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, unsupportedResolved(), .{ .mode = .area });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -325,7 +347,7 @@ test "forcing stub backend fails deterministically and writes no file" {
     const output_path = "/tmp/shaula/test-forced-stub-backend.png";
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .area, .output_path = output_path });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.stub), .{ .mode = .area, .output_path = output_path });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -367,7 +389,7 @@ test "runtime capture output does not match stub signature" {
     const output_path = "/tmp/shaula/test-runtime-backend-output.png";
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .fullscreen, .output_path = output_path });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -427,7 +449,7 @@ test "runtime helper nonzero exit maps to backend unavailable and no output" {
     const output_path = "/tmp/shaula/test-runtime-backend-fail-output.png";
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .fullscreen, .output_path = output_path });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     switch (outcome) {
@@ -463,7 +485,7 @@ test "real backend without helper requires grim binary" {
     const output_path = "/tmp/shaula/test-runtime-backend-real-requires-grim.png";
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
 
-    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, .{ .mode = .fullscreen, .output_path = output_path });
+    var outcome = try capture_backend.execute(allocator, io, test_environ.environ, resolved(.niri_wayland_direct), .{ .mode = .all_screens, .output_path = output_path });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     if (std.Io.Dir.accessAbsolute(io, "/usr/bin/grim", .{}) == error.FileNotFound and

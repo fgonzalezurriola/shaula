@@ -1,178 +1,43 @@
 const std = @import("std");
-const root = @import("root");
 
 const runtime_exec = @import("capture_backend_runtime_exec.zig");
 const execution_plan = @import("capture_execution_plan.zig");
 const output_path = @import("capture_backend_output_path.zig");
 const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
-
-const standalone_capture_types = struct {
-    pub const CaptureMode = enum {
-        area,
-        fullscreen,
-        all_screens,
-        focused,
-        window,
-    };
-
-    pub const AreaGeometry = struct {
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-    };
-
-    pub const CaptureRequest = struct {
-        mode: CaptureMode,
-        output_path: ?[]const u8 = null,
-        save_requested: bool = false,
-        window_id: ?[]const u8 = null,
-        area_geometry: ?AreaGeometry = null,
-    };
-
-    pub const Dimensions = struct {
-        width: u32,
-        height: u32,
-    };
-
-    pub const CaptureSuccess = struct {
-        mode: CaptureMode,
-        path: []const u8,
-        mime: []const u8,
-        dimensions: Dimensions,
-        backend_used: []const u8,
-        latency_ms: u32,
-        degraded: bool,
-    };
-
-    pub const CaptureFailure = struct {
-        mode: CaptureMode,
-        code: []const u8,
-        message: []const u8,
-        retryable: bool,
-        degraded: bool,
-        backend_used: ?[]const u8,
-    };
-
-    pub const CaptureOutcome = union(enum) {
-        success: CaptureSuccess,
-        failure: CaptureFailure,
-    };
-
-    pub fn formatAreaGeometryArg(area_geometry: ?AreaGeometry, buffer: []u8) ?[]const u8 {
-        const geometry = area_geometry orelse return null;
-        if (geometry.width == 0 or geometry.height == 0) return null;
-
-        return std.fmt.bufPrint(buffer, "{d},{d} {d}x{d}", .{ geometry.x, geometry.y, geometry.width, geometry.height }) catch null;
-    }
-
-    pub fn modeString(mode: CaptureMode) []const u8 {
-        return switch (mode) {
-            .area => "area",
-            .fullscreen => "fullscreen",
-            .all_screens => "all-screens",
-            .focused => "fullscreen",
-            .window => "window",
-        };
-    }
-};
-
-const standalone_preflight_probe = struct {
-    pub fn detectCompositor(environ: std.process.Environ) []const u8 {
-        if (environ.getPosix("SHAULA_COMPOSITOR")) |value| {
-            const explicit = std.mem.sliceTo(value, 0);
-            if (std.ascii.eqlIgnoreCase(explicit, "niri")) return "niri";
-            return "unsupported";
-        }
-
-        if (environ.getPosix("NIRI_SOCKET") != null) {
-            return "niri";
-        }
-
-        return "unsupported";
-    }
-};
-
-const capture_types = if (@hasDecl(root, "capture_types_module"))
-    root.capture_types_module
-else
-    standalone_capture_types;
-
-const preflight = if (@hasDecl(root, "preflight_probe_module"))
-    root.preflight_probe_module
-else
-    standalone_preflight_probe;
-
-const standalone_runtime_capabilities = struct {
-    const Self = @This();
-
-    pub const BackendKind = enum {
-        niri_wayland_direct,
-        portal_screenshot,
-        stub,
-    };
-
-    pub fn resolveBackend(environ: std.process.Environ) Self.BackendKind {
-        if (environ.getPosix("SHAULA_CAPTURE_BACKEND")) |value| {
-            const token = std.mem.sliceTo(value, 0);
-            if (std.mem.eql(u8, token, "__stub__")) {
-                return .stub;
-            }
-        }
-
-        if (environ.getPosix("SHAULA_CAPTURE_FORCE_PORTAL")) |value| {
-            const token = std.mem.sliceTo(value, 0);
-            if (std.mem.eql(u8, token, "1") or std.ascii.eqlIgnoreCase(token, "true")) {
-                return .portal_screenshot;
-            }
-        }
-
-        const compositor = preflight.detectCompositor(environ);
-        if (std.mem.eql(u8, compositor, "niri")) {
-            return .niri_wayland_direct;
-        }
-
-        return .portal_screenshot;
-    }
-
-    pub fn backendLabel(kind: Self.BackendKind) []const u8 {
-        return switch (kind) {
-            .niri_wayland_direct => "niri-wayland-direct",
-            .portal_screenshot => "portal-screenshot",
-            .stub => "__stub__",
-        };
-    }
-};
-
-const runtime_capabilities = if (@hasDecl(root, "runtime_capabilities_module"))
-    root.runtime_capabilities_module
-else
-    standalone_runtime_capabilities;
+const capture_types = @import("../capture/types.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 
 pub const BackendKind = runtime_capabilities.BackendKind;
+pub const RuntimeDecision = runtime_capabilities.RuntimeDecision;
+
+pub const ResolvedExecution = struct {
+    runtime: RuntimeDecision,
+    focused_output_name: ?[]const u8 = null,
+};
 
 /// Execute a single backend capture request and return deterministic outcome.
 ///
 /// This function is a core runtime boundary. It must preserve taxonomy stability
 /// (`ERR_*`) and JSON contract expectations used by QA, history persistence, and
-/// release-readiness checks.
+/// release-readiness checks. Runtime/backend/focused-output decisions are
+/// resolved upstream and passed in so this boundary only executes capture.
 pub fn execute(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
+    resolved: ResolvedExecution,
     request: capture_types.CaptureRequest,
 ) !capture_types.CaptureOutcome {
     if (environ.getPosix("SHAULA_INJECT_UNKNOWN_FAILURE") != null) {
         return failure.unknown(capture_types, request.mode, null, "injected unknown failure");
     }
 
-    const compositor = preflight.detectCompositor(environ);
-    if (!std.mem.eql(u8, compositor, "niri")) {
+    if (!resolved.runtime.compositor_supported) {
         return failure.outcome(capture_types, request.mode, "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, false, null);
     }
 
-    const backend = resolveBackend(environ);
+    const backend = resolved.runtime.backend;
     const backend_used = backendString(backend);
     const degraded_backend = backend == .portal_screenshot;
 
@@ -192,6 +57,7 @@ pub fn execute(
         environ,
         request.output_path,
         request.save_requested,
+        request.save_folder,
     ) catch |err| switch (err) {
         error.OutputPathInvalid => {
             return failure.outcome(capture_types, request.mode, "ERR_OUTPUT_PATH_INVALID", "output path is not writable", false, false, backend_used);
@@ -215,6 +81,7 @@ pub fn execute(
         mode_string,
         operationForMode(request.mode),
         area_geometry,
+        resolved.focused_output_name,
         resolved_output_path,
     ) catch |err| switch (err) {
         error.BackendUnavailable => {
@@ -251,10 +118,6 @@ pub fn deinitOutcome(allocator: std.mem.Allocator, outcome: *capture_types.Captu
         .success => |success| allocator.free(success.path),
         .failure => {},
     }
-}
-
-fn resolveBackend(environ: std.process.Environ) BackendKind {
-    return runtime_capabilities.resolveBackend(environ);
 }
 
 fn backendString(kind: BackendKind) []const u8 {

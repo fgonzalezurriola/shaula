@@ -21,6 +21,12 @@ pub fn notifyScreenshotSaved(allocator: std.mem.Allocator, io: std.Io, path: []c
     try notifyWithImage(allocator, io, "Screenshot captured", body, path, .normal, 2500, true);
 }
 
+pub fn notifyScreenshotSavedText(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
+    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{path});
+    defer allocator.free(body);
+    try notifyWithImage(allocator, io, "Screenshot captured", body, null, .normal, 2500, true);
+}
+
 pub fn notifyScreenshotCopied(allocator: std.mem.Allocator, io: std.Io) !void {
     try notifyWithImage(allocator, io, "Screenshot captured", "You can paste the image from the clipboard.", null, .normal, 2500, true);
 }

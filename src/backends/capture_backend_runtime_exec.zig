@@ -11,6 +11,7 @@ pub fn writeRuntimeCapture(
     mode_string: []const u8,
     operation: execution_plan.Operation,
     area_geometry: ?[]const u8,
+    focused_output_name: ?[]const u8,
     output_path: []const u8,
 ) !void {
     if (std.fs.path.dirname(output_path)) |parent| {
@@ -22,10 +23,10 @@ pub fn writeRuntimeCapture(
         .mode_string = mode_string,
         .operation = operation,
         .area_geometry = area_geometry,
+        .focused_output_name = focused_output_name,
         .output_path = output_path,
     }) catch |err| switch (err) {
         error.BackendUnavailable => return error.BackendUnavailable,
-        else => return err,
     };
     defer plan.deinit(std.heap.smp_allocator);
 

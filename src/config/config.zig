@@ -7,10 +7,47 @@ pub const preview_title = "Shaula Preview";
 pub const Config = struct {
     capture: CaptureConfig = .{},
     preview: PreviewConfig = .{},
+    notifications: NotificationsConfig = .{},
 };
 
 pub const CaptureConfig = struct {
     region_capture_mode: core_capture_mode.RegionCaptureMode = .live,
+    after: CaptureAfterConfig = .{},
+};
+
+pub const CaptureAfterConfig = struct {
+    quick: CaptureAfterModeConfig = .{},
+    area: CaptureAfterModeConfig = .{},
+    fullscreen: CaptureAfterModeConfig = .{ .skip_preview = true, .copy_to_clipboard = true },
+    all_screens: CaptureAfterModeConfig = .{ .skip_preview = true, .copy_to_clipboard = true },
+    save_folder: SaveFolderConfig = .{},
+};
+
+pub const CaptureAfterModeConfig = struct {
+    skip_preview: bool = false,
+    copy_to_clipboard: bool = false,
+    save_to_folder: bool = false,
+};
+
+pub const SaveFolderConfig = struct {
+    bytes: [4096]u8 = undefined,
+    len: usize = 0,
+
+    pub fn value(self: *const SaveFolderConfig) []const u8 {
+        return self.bytes[0..self.len];
+    }
+
+    pub fn set(self: *SaveFolderConfig, value_text: []const u8) !void {
+        if (value_text.len > self.bytes.len) return error.SaveFolderTooLong;
+        @memcpy(self.bytes[0..value_text.len], value_text);
+        self.len = value_text.len;
+    }
+};
+
+pub const NotificationsConfig = struct {
+    success: bool = true,
+    errors: bool = true,
+    thumbnails: bool = true,
 };
 
 pub const PreviewConfig = struct {
@@ -110,4 +147,16 @@ pub fn parseFloatingRelativeTo(value: []const u8) ?FloatingRelativeTo {
     if (std.mem.eql(u8, value, "bottom-right")) return .bottom_right;
     if (std.mem.eql(u8, value, "center")) return .center;
     return null;
+}
+
+pub fn validateCaptureAfter(config: CaptureAfterConfig) bool {
+    return validateCaptureAfterMode(config.quick) and
+        validateCaptureAfterMode(config.area) and
+        validateCaptureAfterMode(config.fullscreen) and
+        validateCaptureAfterMode(config.all_screens);
+}
+
+pub fn validateCaptureAfterMode(mode: CaptureAfterModeConfig) bool {
+    if (!mode.skip_preview) return true;
+    return mode.copy_to_clipboard or mode.save_to_folder;
 }

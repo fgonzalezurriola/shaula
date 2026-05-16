@@ -2,7 +2,10 @@ const std = @import("std");
 
 const capture_backend = @import("../backends/capture_backend.zig");
 const capture_types = @import("types.zig");
+const compositor_focused_output = @import("../compositor/focused_output.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 const config_loader = @import("../config/loader.zig");
+const config_types = @import("../config/config.zig");
 const core_capture_mode = @import("../core/capture_mode.zig");
 const flags = @import("command_flags.zig");
 const guards = @import("command_guards.zig");
@@ -38,10 +41,27 @@ fn executeLifecycle(
         settleAfterLiveOverlay(io, environ, region_capture_mode);
     }
 
+    var loaded_config = config_loader.load(allocator, io, environ) catch null;
+    defer if (loaded_config) |*loaded| loaded.deinit(allocator);
+    const config = if (loaded_config) |loaded| loaded.config else config_types.Config{};
+    var resolved_options = options;
+    resolved_options.post_flags = resolvePostCaptureFlags(options.reported_mode, options.post_flags, config.capture.after);
+    resolved_options.post_flags.show_success_notifications = config.notifications.success;
+    resolved_options.post_flags.show_error_notifications = config.notifications.errors;
+    resolved_options.post_flags.include_notification_thumbnail = config.notifications.thumbnails;
+
+    const runtime = runtime_capabilities.resolve(environ);
+    const focused_output_name = try resolveFocusedOutputForCapture(allocator, io, environ, runtime, options.request_mode);
+    defer if (focused_output_name) |name| allocator.free(name);
+
     var outcome = try capture_backend.execute(allocator, io, environ, .{
+        .runtime = runtime,
+        .focused_output_name = focused_output_name,
+    }, .{
         .mode = options.request_mode,
         .output_path = options.output_path,
-        .save_requested = options.post_flags.save,
+        .save_requested = resolved_options.post_flags.save,
+        .save_folder = config.capture.after.save_folder.value(),
         .window_id = options.window_id,
         .area_geometry = options.area_geometry,
     });
@@ -54,7 +74,53 @@ fn executeLifecycle(
         }
     }
 
-    return writeCaptureOutcome(allocator, io, environ, options.command, options.reported_mode, &outcome, options.post_flags, precondition_warning);
+    return writeCaptureOutcome(allocator, io, environ, resolved_options.command, resolved_options.reported_mode, &outcome, resolved_options.post_flags, precondition_warning);
+}
+
+fn resolvePostCaptureFlags(
+    mode: []const u8,
+    explicit: invocation.PostCaptureFlags,
+    after: config_types.CaptureAfterConfig,
+) invocation.PostCaptureFlags {
+    const mode_after = if (std.mem.eql(u8, mode, "quick"))
+        after.quick
+    else if (std.mem.eql(u8, mode, "area"))
+        after.area
+    else if (std.mem.eql(u8, mode, "fullscreen"))
+        after.fullscreen
+    else if (std.mem.eql(u8, mode, "all-screens"))
+        after.all_screens
+    else
+        config_types.CaptureAfterModeConfig{};
+
+    const preview = if (explicit.preview_explicit)
+        explicit.preview
+    else
+        !mode_after.skip_preview;
+
+    return .{
+        .preview = preview,
+        .copy = explicit.copy or (!preview and mode_after.copy_to_clipboard),
+        .save = explicit.save or (!preview and mode_after.save_to_folder),
+        .copy_explicit = explicit.copy_explicit,
+        .save_explicit = explicit.save_explicit,
+        .preview_explicit = explicit.preview_explicit,
+        .show_success_notifications = true,
+        .show_error_notifications = true,
+        .include_notification_thumbnail = true,
+    };
+}
+
+fn resolveFocusedOutputForCapture(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    runtime: runtime_capabilities.RuntimeDecision,
+    mode: capture_types.CaptureMode,
+) !?[]u8 {
+    if (!runtime.compositor_supported) return null;
+    if (mode != .fullscreen and mode != .focused) return null;
+    return compositor_focused_output.resolveName(allocator, io, environ);
 }
 
 /// Execute `capture all-in-one` through the shared capture lifecycle.

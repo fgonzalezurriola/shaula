@@ -166,6 +166,53 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             save_options_seen = true;
             continue;
         }
+        if (std.mem.eql(u8, arg, "--after-quick-skip-preview") or
+            std.mem.eql(u8, arg, "--after-area-skip-preview") or
+            std.mem.eql(u8, arg, "--after-fullscreen-skip-preview") or
+            std.mem.eql(u8, arg, "--after-all-screens-skip-preview") or
+            std.mem.eql(u8, arg, "--after-quick-copy") or
+            std.mem.eql(u8, arg, "--after-area-copy") or
+            std.mem.eql(u8, arg, "--after-fullscreen-copy") or
+            std.mem.eql(u8, arg, "--after-all-screens-copy") or
+            std.mem.eql(u8, arg, "--after-quick-save") or
+            std.mem.eql(u8, arg, "--after-area-save") or
+            std.mem.eql(u8, arg, "--after-fullscreen-save") or
+            std.mem.eql(u8, arg, "--after-all-screens-save") or
+            std.mem.eql(u8, arg, "--notifications-success") or
+            std.mem.eql(u8, arg, "--notifications-errors") or
+            std.mem.eql(u8, arg, "--notifications-thumbnails"))
+        {
+            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "after-capture setting requires a boolean value", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            }
+            i += 1;
+            const value = parseBoolArg(argToSlice(argv[i])) orelse {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid after-capture boolean", false, null, null, arg);
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            };
+            applyBoolSetting(&save_config, arg, value);
+            save_options_seen = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--save-folder")) {
+            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--save-folder is supported only for save and requires a value", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            }
+            i += 1;
+            const folder = argToSlice(argv[i]);
+            if (!validSaveFolderArg(folder)) {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --save-folder", false, null, null, "save_folder");
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            }
+            save_config.capture.after.save_folder.set(argToSlice(argv[i])) catch {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --save-folder", false, null, null, "save_folder");
+                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+            };
+            save_options_seen = true;
+            continue;
+        }
         if (std.mem.eql(u8, arg, "--path")) {
             if (!std.mem.eql(u8, subcommand, "niri-install") or i + 1 >= argv.len) {
                 try writeErrorJson(io, command, "ERR_CLI_USAGE", "--path is supported only for niri-install and requires a value", false, null, null, null);
@@ -203,6 +250,10 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     if (std.mem.eql(u8, subcommand, "save")) {
         if (!save_options_seen) {
             try writeErrorJson(io, command, "ERR_CLI_USAGE", "config save requires at least one setting flag", false, null, null, null);
+            return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+        }
+        if (!config_types.validateCaptureAfter(save_config.capture.after)) {
+            try writeErrorJson(io, command, "ERR_CLI_USAGE", "skip preview requires copy or save", false, null, null, "capture.after");
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
         var result = manager.saveConfig(allocator, io, environ, .{
@@ -308,6 +359,32 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     }
     try writeNiriRuleJson(allocator, io, command, loaded, rendered);
     return 0;
+}
+
+fn validSaveFolderArg(value: []const u8) bool {
+    if (value.len == 0) return true;
+    if (std.mem.indexOfAny(u8, value, "\"\\") != null) return false;
+    if (std.mem.eql(u8, value, "~")) return true;
+    if (std.mem.startsWith(u8, value, "~/")) return true;
+    return std.fs.path.isAbsolute(value);
+}
+
+fn applyBoolSetting(config: *config_types.Config, arg: []const u8, value: bool) void {
+    if (std.mem.eql(u8, arg, "--after-quick-skip-preview")) config.capture.after.quick.skip_preview = value;
+    if (std.mem.eql(u8, arg, "--after-area-skip-preview")) config.capture.after.area.skip_preview = value;
+    if (std.mem.eql(u8, arg, "--after-fullscreen-skip-preview")) config.capture.after.fullscreen.skip_preview = value;
+    if (std.mem.eql(u8, arg, "--after-all-screens-skip-preview")) config.capture.after.all_screens.skip_preview = value;
+    if (std.mem.eql(u8, arg, "--after-quick-copy")) config.capture.after.quick.copy_to_clipboard = value;
+    if (std.mem.eql(u8, arg, "--after-area-copy")) config.capture.after.area.copy_to_clipboard = value;
+    if (std.mem.eql(u8, arg, "--after-fullscreen-copy")) config.capture.after.fullscreen.copy_to_clipboard = value;
+    if (std.mem.eql(u8, arg, "--after-all-screens-copy")) config.capture.after.all_screens.copy_to_clipboard = value;
+    if (std.mem.eql(u8, arg, "--after-quick-save")) config.capture.after.quick.save_to_folder = value;
+    if (std.mem.eql(u8, arg, "--after-area-save")) config.capture.after.area.save_to_folder = value;
+    if (std.mem.eql(u8, arg, "--after-fullscreen-save")) config.capture.after.fullscreen.save_to_folder = value;
+    if (std.mem.eql(u8, arg, "--after-all-screens-save")) config.capture.after.all_screens.save_to_folder = value;
+    if (std.mem.eql(u8, arg, "--notifications-success")) config.notifications.success = value;
+    if (std.mem.eql(u8, arg, "--notifications-errors")) config.notifications.errors = value;
+    if (std.mem.eql(u8, arg, "--notifications-thumbnails")) config.notifications.thumbnails = value;
 }
 
 fn writeInitJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, result: manager.InitResult) !void {
@@ -417,7 +494,7 @@ fn writeSaveJson(
     } else try allocator.dupe(u8, "{\"applied\":false,\"changed\":false}");
     defer allocator.free(niri_json);
 
-    var stdout_buffer: [8192]u8 = undefined;
+    var stdout_buffer: [16384]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"created\":{s},\"changed\":{s},\"dry_run\":{s},\"niri\":{s}}},\"warnings\":{s}}}\n",
@@ -508,12 +585,22 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
     defer allocator.free(x_json);
     const y_json = try nullableI32Json(allocator, config.preview.window.floating_position.y);
     defer allocator.free(y_json);
+    const save_folder_json = try jsonStringAlloc(allocator, config.capture.after.save_folder.value());
+    defer allocator.free(save_folder_json);
 
     return std.fmt.allocPrint(
         allocator,
-        "{{\"capture\":{{\"region_capture_mode\":{s}}},\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"close_preview_on_save\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
+        "{{\"capture\":{{\"region_capture_mode\":{s},\"after\":{{\"save_folder\":{s},\"quick\":{s},\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s}}}}},\"notifications\":{{\"success\":{s},\"errors\":{s},\"thumbnails\":{s}}},\"preview\":{{\"window\":{{\"app_id\":{s},\"title\":{s},\"mode\":{s},\"focused\":{s},\"close_preview_on_save\":{s},\"width\":{s},\"height\":{s},\"default_column_display\":{s},\"floating_position\":{{\"x\":{s},\"y\":{s},\"relative_to\":{s}}}}}}}}}",
         .{
             region_capture_mode_json,
+            save_folder_json,
+            afterModeJson(config.capture.after.quick),
+            afterModeJson(config.capture.after.area),
+            afterModeJson(config.capture.after.fullscreen),
+            afterModeJson(config.capture.after.all_screens),
+            if (config.notifications.success) "true" else "false",
+            if (config.notifications.errors) "true" else "false",
+            if (config.notifications.thumbnails) "true" else "false",
             app_id_json,
             title_json,
             mode_json,
@@ -527,6 +614,24 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
             relative_json,
         },
     );
+}
+
+fn afterModeJson(mode: config_types.CaptureAfterModeConfig) []const u8 {
+    if (mode.skip_preview and mode.copy_to_clipboard and mode.save_to_folder)
+        return "{\"skip_preview\":true,\"copy_to_clipboard\":true,\"save_to_folder\":true}";
+    if (mode.skip_preview and mode.copy_to_clipboard and !mode.save_to_folder)
+        return "{\"skip_preview\":true,\"copy_to_clipboard\":true,\"save_to_folder\":false}";
+    if (mode.skip_preview and !mode.copy_to_clipboard and mode.save_to_folder)
+        return "{\"skip_preview\":true,\"copy_to_clipboard\":false,\"save_to_folder\":true}";
+    if (!mode.skip_preview and mode.copy_to_clipboard and mode.save_to_folder)
+        return "{\"skip_preview\":false,\"copy_to_clipboard\":true,\"save_to_folder\":true}";
+    if (!mode.skip_preview and mode.copy_to_clipboard and !mode.save_to_folder)
+        return "{\"skip_preview\":false,\"copy_to_clipboard\":true,\"save_to_folder\":false}";
+    if (!mode.skip_preview and !mode.copy_to_clipboard and mode.save_to_folder)
+        return "{\"skip_preview\":false,\"copy_to_clipboard\":false,\"save_to_folder\":true}";
+    if (mode.skip_preview)
+        return "{\"skip_preview\":true,\"copy_to_clipboard\":false,\"save_to_folder\":false}";
+    return "{\"skip_preview\":false,\"copy_to_clipboard\":false,\"save_to_folder\":false}";
 }
 
 fn nullableU32Json(allocator: std.mem.Allocator, value: ?u32) ![]u8 {

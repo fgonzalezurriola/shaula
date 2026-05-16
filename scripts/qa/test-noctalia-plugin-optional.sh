@@ -69,7 +69,7 @@ if [[ "${MODE}" == "with-plugin" || "${MODE}" == "both" ]]; then
     .optional == true and
     .menu.minimal == true and
     (.menu.actions | length == 8) and
-    any(.menu.actions[]; .id == "capture-all-screens" and .shaula_argv == ["capture","all-screens","--json","--copy"])
+    any(.menu.actions[]; .id == "capture-all-screens" and .shaula_argv == ["capture","all-screens","--json"])
   ' >/dev/null || {
     echo "ERR_NOCTALIA_PLUGIN_FLOW_INVALID reason=plugin_present_contract" >&2
     exit 1

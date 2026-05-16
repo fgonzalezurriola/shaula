@@ -17,6 +17,12 @@ pub const PostCaptureFlags = struct {
     save: bool,
     copy: bool,
     preview: bool,
+    save_explicit: bool = false,
+    copy_explicit: bool = false,
+    preview_explicit: bool = false,
+    show_success_notifications: bool = true,
+    show_error_notifications: bool = true,
+    include_notification_thumbnail: bool = true,
 };
 
 pub const Invocation = struct {
@@ -45,7 +51,7 @@ pub fn area(parsed: flags.AreaFlags, region_capture_mode: core_capture_mode.Regi
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
-        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(mode, parsed),
         .persist_previous_area = geometry,
         .settle_region_mode = region_capture_mode,
     };
@@ -60,7 +66,7 @@ pub fn quick(parsed: flags.QuickFlags, region_capture_mode: core_capture_mode.Re
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
-        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(mode, parsed),
         .persist_previous_area = geometry,
         .settle_region_mode = region_capture_mode,
     };
@@ -75,7 +81,7 @@ pub fn allInOne(parsed: flags.AllInOneFlags, region_capture_mode: core_capture_m
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
-        .post_flags = postFlags(reported_mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(reported_mode, parsed),
         .persist_previous_area = geometry,
         .settle_region_mode = region_capture_mode,
     };
@@ -89,7 +95,7 @@ pub fn fullscreen(parsed: flags.FullscreenFlags) Invocation {
         .backend_mode = core_capture_mode.backendModeToken(.fullscreen) orelse mode,
         .request_mode = backendRequestMode(.fullscreen),
         .output_path = parsed.output,
-        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(mode, parsed),
     };
 }
 
@@ -101,7 +107,7 @@ pub fn allScreens(parsed: flags.AllScreensFlags) Invocation {
         .backend_mode = core_capture_mode.backendModeToken(.all_screens) orelse reported_mode,
         .request_mode = backendRequestMode(.all_screens),
         .output_path = parsed.output,
-        .post_flags = postFlags(reported_mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(reported_mode, parsed),
     };
 }
 
@@ -113,7 +119,7 @@ pub fn focused(parsed: flags.FocusedFlags) Invocation {
         .backend_mode = mode,
         .request_mode = backendRequestMode(.focused),
         .output_path = parsed.output,
-        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(mode, parsed),
     };
 }
 
@@ -126,7 +132,7 @@ pub fn window(parsed: flags.WindowFlags) Invocation {
         .request_mode = .window,
         .output_path = parsed.output,
         .window_id = parsed.window_id,
-        .post_flags = postFlags(mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(mode, parsed),
     };
 }
 
@@ -139,15 +145,18 @@ pub fn previousArea(parsed: flags.PreviousAreaFlags, geometry: capture_types.Are
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
-        .post_flags = postFlags(reported_mode, parsed.save, parsed.copy, parsed.preview),
+        .post_flags = postFlags(reported_mode, parsed),
         .persist_previous_area = geometry,
     };
 }
 
-pub fn postFlags(mode: []const u8, save: bool, copy: bool, preview: ?bool) PostCaptureFlags {
+pub fn postFlags(mode: []const u8, parsed: anytype) PostCaptureFlags {
     return .{
-        .save = save,
-        .copy = copy,
-        .preview = flags.resolvePreviewDefault(mode, preview),
+        .save = parsed.save,
+        .copy = parsed.copy,
+        .preview = flags.resolvePreviewDefault(mode, parsed.preview),
+        .save_explicit = if (@hasField(@TypeOf(parsed), "save_explicit")) parsed.save_explicit else false,
+        .copy_explicit = if (@hasField(@TypeOf(parsed), "copy_explicit")) parsed.copy_explicit else false,
+        .preview_explicit = if (@hasField(@TypeOf(parsed), "preview_explicit")) parsed.preview_explicit else false,
     };
 }

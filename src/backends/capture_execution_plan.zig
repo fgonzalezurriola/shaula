@@ -1,12 +1,11 @@
 const std = @import("std");
 
-const process_exec = @import("../runtime/process_exec.zig");
-
 pub const Options = struct {
     backend_label: []const u8,
     mode_string: []const u8,
     operation: Operation,
     area_geometry: ?[]const u8,
+    focused_output_name: ?[]const u8,
     output_path: []const u8,
 };
 
@@ -17,21 +16,15 @@ pub const Operation = enum {
     window,
 };
 
-const NiriFocusedOutput = struct {
-    name: []const u8,
-};
-
 pub const Plan = struct {
     argv_storage: [9][]const u8 = undefined,
     argv_len: usize = 0,
-    owned_focused_output: ?[]u8 = null,
-
     pub fn argv(self: *const Plan) []const []const u8 {
         return self.argv_storage[0..self.argv_len];
     }
 
     pub fn deinit(self: *Plan, allocator: std.mem.Allocator) void {
-        if (self.owned_focused_output) |name| allocator.free(name);
+        _ = allocator;
         self.* = .{};
     }
 };
@@ -39,15 +32,16 @@ pub const Plan = struct {
 /// Resolve the concrete runtime capture command before process execution.
 ///
 /// Contract constraints: this Module owns helper/grim argv shape, all-output vs
-/// current-output selection, and focused output lookup; callers retain process
-/// spawning and deterministic `ERR_*` mapping so taxonomy remains stable at the
-/// backend seam.
+/// current-output command mapping from already-resolved inputs; compositor
+/// probing stays in `compositor/focused_output.zig` so deterministic `ERR_*`
+/// mapping remains at the backend seam.
 pub fn resolve(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
     options: Options,
 ) !Plan {
+    _ = allocator;
     if (configuredRuntimeCaptureHelper(environ)) |helper_path| {
         return helperPlan(helper_path, options);
     }
@@ -59,10 +53,8 @@ pub fn resolve(
             break :blk staticPlan(&.{ grim_path, "-g", geometry, options.output_path });
         },
         .current_output => blk: {
-            const focused_output = try resolveFocusedOutput(allocator, io);
-            errdefer allocator.free(focused_output);
-            var plan = staticPlan(&.{ grim_path, "-o", focused_output, options.output_path });
-            plan.owned_focused_output = focused_output;
+            const focused_output = options.focused_output_name orelse return error.BackendUnavailable;
+            const plan = staticPlan(&.{ grim_path, "-o", focused_output, options.output_path });
             break :blk plan;
         },
         .all_outputs, .window => staticPlan(&.{ grim_path, options.output_path }),
@@ -111,22 +103,6 @@ fn configuredRuntimeCaptureHelper(environ: std.process.Environ) ?[]const u8 {
     }
 
     return null;
-}
-
-fn resolveFocusedOutput(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    const niri_msg_result = process_exec.run(allocator, io, &.{ "niri", "msg", "--json", "focused-output" }, 65536, 0) catch {
-        return error.BackendUnavailable;
-    };
-    defer niri_msg_result.deinit(allocator);
-    if (!niri_msg_result.exitedZero()) return error.BackendUnavailable;
-
-    const parsed = std.json.parseFromSlice(NiriFocusedOutput, allocator, niri_msg_result.stdout, .{
-        .ignore_unknown_fields = true,
-    }) catch return error.BackendUnavailable;
-    defer parsed.deinit();
-    if (parsed.value.name.len == 0) return error.BackendUnavailable;
-
-    return allocator.dupe(u8, parsed.value.name);
 }
 
 fn findGrimBinary(io: std.Io) ?[]const u8 {

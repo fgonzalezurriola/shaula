@@ -110,18 +110,22 @@ fn parseCommonFlag(
     }
     if (std.mem.eql(u8, arg, "--save")) {
         parsed.save = true;
+        if (comptime @hasField(@TypeOf(parsed.*), "save_explicit")) parsed.save_explicit = true;
         return true;
     }
     if (std.mem.eql(u8, arg, "--copy")) {
         parsed.copy = true;
+        if (comptime @hasField(@TypeOf(parsed.*), "copy_explicit")) parsed.copy_explicit = true;
         return true;
     }
     if (std.mem.eql(u8, arg, "--preview")) {
         parsed.preview = true;
+        if (comptime @hasField(@TypeOf(parsed.*), "preview_explicit")) parsed.preview_explicit = true;
         return true;
     }
     if (std.mem.eql(u8, arg, "--no-preview")) {
         parsed.preview = false;
+        if (comptime @hasField(@TypeOf(parsed.*), "preview_explicit")) parsed.preview_explicit = true;
         return true;
     }
     return false;

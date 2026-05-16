@@ -52,6 +52,22 @@ const ShaulaSettingsConfig = extern struct {
     floating_y: CInt,
     floating_relative_to: ?[*:0]u8,
     position_preset: PositionPreset,
+    quick_skip_preview: CInt,
+    quick_copy: CInt,
+    quick_save: CInt,
+    area_skip_preview: CInt,
+    area_copy: CInt,
+    area_save: CInt,
+    fullscreen_skip_preview: CInt,
+    fullscreen_copy: CInt,
+    fullscreen_save: CInt,
+    all_screens_skip_preview: CInt,
+    all_screens_copy: CInt,
+    all_screens_save: CInt,
+    save_folder: ?[*:0]u8,
+    notifications_success: CInt,
+    notifications_errors: CInt,
+    notifications_thumbnails: CInt,
 };
 
 export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) void {
@@ -69,14 +85,32 @@ export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) vo
         .floating_y = 0,
         .floating_relative_to = dupZ("top-left"),
         .position_preset = .centered,
+        .quick_skip_preview = FALSE,
+        .quick_copy = FALSE,
+        .quick_save = FALSE,
+        .area_skip_preview = FALSE,
+        .area_copy = FALSE,
+        .area_save = FALSE,
+        .fullscreen_skip_preview = TRUE,
+        .fullscreen_copy = TRUE,
+        .fullscreen_save = FALSE,
+        .all_screens_skip_preview = TRUE,
+        .all_screens_copy = TRUE,
+        .all_screens_save = FALSE,
+        .save_folder = dupZ("~/Pictures/shaula"),
+        .notifications_success = TRUE,
+        .notifications_errors = TRUE,
+        .notifications_thumbnails = TRUE,
     };
 }
 
 export fn shaula_settings_config_clear(config: *ShaulaSettingsConfig) void {
     g_free(config.column_display);
     g_free(config.floating_relative_to);
+    g_free(config.save_folder);
     config.column_display = null;
     config.floating_relative_to = null;
+    config.save_folder = null;
 }
 
 export fn shaula_settings_region_mode_text(mode: RegionMode) [*:0]const u8 {
@@ -205,7 +239,29 @@ export fn shaula_settings_config_from_show_json(json_z: ?[*:0]const u8, config: 
     }
 
     config.position_preset = classifyPosition(config);
+
+    parseAfterMode(json, "\"quick\":{", &config.quick_skip_preview, &config.quick_copy, &config.quick_save);
+    parseAfterMode(json, "\"area\":{", &config.area_skip_preview, &config.area_copy, &config.area_save);
+    parseAfterMode(json, "\"fullscreen\":{", &config.fullscreen_skip_preview, &config.fullscreen_copy, &config.fullscreen_save);
+    parseAfterMode(json, "\"all_screens\":{", &config.all_screens_skip_preview, &config.all_screens_copy, &config.all_screens_save);
+    if (jsonStringAfter(json, "\"save_folder\":\"")) |folder| {
+        g_free(config.save_folder);
+        config.save_folder = folder;
+    }
+    config.notifications_success = jsonBoolAfter(json, "\"success\":", config.notifications_success);
+    config.notifications_errors = jsonBoolAfter(json, "\"errors\":", config.notifications_errors);
+    config.notifications_thumbnails = jsonBoolAfter(json, "\"thumbnails\":", config.notifications_thumbnails);
     return TRUE;
+}
+
+fn parseAfterMode(json: []const u8, object_needle: []const u8, skip: *CInt, copy: *CInt, save: *CInt) void {
+    const start = std.mem.indexOf(u8, json, object_needle) orelse return;
+    const body_start = start + object_needle.len;
+    const rel_end = std.mem.indexOfScalar(u8, json[body_start..], '}') orelse return;
+    const body = json[body_start .. body_start + rel_end];
+    skip.* = jsonBoolAfter(body, "\"skip_preview\":", skip.*);
+    copy.* = jsonBoolAfter(body, "\"copy_to_clipboard\":", copy.*);
+    save.* = jsonBoolAfter(body, "\"save_to_folder\":", save.*);
 }
 
 fn parseWindowMode(value: []const u8) WindowMode {

@@ -6,8 +6,11 @@ pub const AreaFlags = struct {
     dry_run: bool = false,
     simulate_cancel: bool = false,
     save: bool = false,
+    save_explicit: bool = false,
     copy: bool = false,
+    copy_explicit: bool = false,
     preview: ?bool = null,
+    preview_explicit: bool = false,
     aspect: ?[]const u8 = null,
     output: ?[]const u8 = null,
     region_capture_mode: ?[]const u8 = null,
@@ -18,8 +21,11 @@ pub const QuickFlags = AreaFlags;
 pub const FullscreenFlags = struct {
     json_mode: bool = false,
     save: bool = false,
+    save_explicit: bool = false,
     copy: bool = false,
+    copy_explicit: bool = false,
     preview: ?bool = null,
+    preview_explicit: bool = false,
     output: ?[]const u8 = null,
 };
 
@@ -28,16 +34,22 @@ pub const AllScreensFlags = FullscreenFlags;
 pub const FocusedFlags = struct {
     json_mode: bool = false,
     save: bool = false,
+    save_explicit: bool = false,
     copy: bool = true,
+    copy_explicit: bool = false,
     preview: ?bool = null,
+    preview_explicit: bool = false,
     output: ?[]const u8 = null,
 };
 
 pub const WindowFlags = struct {
     json_mode: bool = false,
     save: bool = false,
+    save_explicit: bool = false,
     copy: bool = false,
+    copy_explicit: bool = false,
     preview: ?bool = null,
+    preview_explicit: bool = false,
     output: ?[]const u8 = null,
     window_id: ?[]const u8 = null,
 };
@@ -45,8 +57,11 @@ pub const WindowFlags = struct {
 pub const PreviousAreaFlags = struct {
     json_mode: bool = false,
     save: bool = false,
+    save_explicit: bool = false,
     copy: bool = false,
+    copy_explicit: bool = false,
     preview: ?bool = null,
+    preview_explicit: bool = false,
     output: ?[]const u8 = null,
 };
 

@@ -48,6 +48,7 @@ pub const CaptureRequest = struct {
     mode: CaptureMode,
     output_path: ?[]const u8 = null,
     save_requested: bool = false,
+    save_folder: ?[]const u8 = null,
     window_id: ?[]const u8 = null,
     area_geometry: ?AreaGeometry = null,
 };

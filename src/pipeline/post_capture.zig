@@ -13,6 +13,9 @@ pub const PipelineFlags = struct {
     save: bool,
     copy: bool,
     preview: bool,
+    show_success_notifications: bool = true,
+    show_error_notifications: bool = true,
+    include_notification_thumbnail: bool = true,
 };
 
 /// Emit the post-capture JSON envelope after optional save/copy/preview work.
@@ -130,18 +133,30 @@ fn notifyForDirectPipeline(
 ) !void {
     if (flags.copy) {
         if (outcome.clipboard.ok) {
-            try notify.notifyScreenshotCopiedImage(allocator, io, path);
+            if (flags.show_success_notifications) {
+                if (flags.include_notification_thumbnail)
+                    try notify.notifyScreenshotCopiedImage(allocator, io, path)
+                else
+                    try notify.notifyScreenshotCopied(allocator, io);
+            }
         } else {
-            try notify.notifyScreenshotCopyFailed(allocator, io, outcome.clipboard.message orelse "Copy failed");
+            if (flags.show_error_notifications)
+                try notify.notifyScreenshotCopyFailed(allocator, io, outcome.clipboard.message orelse "Copy failed");
         }
         return;
     }
 
     if (flags.save) {
         if (outcome.saved.ok) {
-            try notify.notifyScreenshotSaved(allocator, io, path);
+            if (flags.show_success_notifications) {
+                if (flags.include_notification_thumbnail)
+                    try notify.notifyScreenshotSaved(allocator, io, path)
+                else
+                    try notify.notifyScreenshotSavedText(allocator, io, path);
+            }
         } else {
-            try notify.notifyScreenshotSaveFailed(allocator, io, outcome.saved.message orelse "Save failed");
+            if (flags.show_error_notifications)
+                try notify.notifyScreenshotSaveFailed(allocator, io, outcome.saved.message orelse "Save failed");
         }
     }
 }

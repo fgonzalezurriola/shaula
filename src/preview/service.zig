@@ -62,6 +62,15 @@ pub fn runPreview(
         "SHAULA_PREVIEW_CLOSE_ON_SAVE",
         if (closePreviewOnSave(allocator, io, environ)) "1" else "0",
     );
+    var loaded_config = config_loader.load(allocator, io, environ) catch null;
+    defer if (loaded_config) |*loaded| loaded.deinit(allocator);
+    if (loaded_config) |loaded| {
+        const save_folder = loaded.config.capture.after.save_folder.value();
+        if (save_folder.len > 0) try helper_env.put("SHAULA_SAVE_FOLDER", save_folder);
+        try helper_env.put("SHAULA_NOTIFY_SUCCESS", if (loaded.config.notifications.success) "1" else "0");
+        try helper_env.put("SHAULA_NOTIFY_ERRORS", if (loaded.config.notifications.errors) "1" else "0");
+        try helper_env.put("SHAULA_NOTIFY_THUMBNAILS", if (loaded.config.notifications.thumbnails) "1" else "0");
+    }
 
     const result = process_exec.runWithEnv(allocator, io, &.{ helper_bin, path }, 4096, 4096, &helper_env) catch {
         return .{ .failure = .{

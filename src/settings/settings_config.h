@@ -44,6 +44,22 @@ typedef struct {
   int floating_y;
   char *floating_relative_to;
   PositionPreset position_preset;
+  gboolean quick_skip_preview;
+  gboolean quick_copy;
+  gboolean quick_save;
+  gboolean area_skip_preview;
+  gboolean area_copy;
+  gboolean area_save;
+  gboolean fullscreen_skip_preview;
+  gboolean fullscreen_copy;
+  gboolean fullscreen_save;
+  gboolean all_screens_skip_preview;
+  gboolean all_screens_copy;
+  gboolean all_screens_save;
+  char *save_folder;
+  gboolean notifications_success;
+  gboolean notifications_errors;
+  gboolean notifications_thumbnails;
 } ShaulaSettingsConfig;
 
 

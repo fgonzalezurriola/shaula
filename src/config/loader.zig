@@ -16,6 +16,12 @@ pub const ConfigLoadResult = struct {
 const Section = enum {
     root,
     capture,
+    capture_after,
+    capture_after_quick,
+    capture_after_area,
+    capture_after_fullscreen,
+    capture_after_all_screens,
+    notifications,
     preview_window,
     preview_window_floating_position,
 };
@@ -104,6 +110,18 @@ pub fn parseTomlSubset(allocator: std.mem.Allocator, bytes: []const u8) !config_
             const name = std.mem.trim(u8, line[1 .. line.len - 1], " \t");
             if (std.mem.eql(u8, name, "capture")) {
                 section = .capture;
+            } else if (std.mem.eql(u8, name, "capture.after")) {
+                section = .capture_after;
+            } else if (std.mem.eql(u8, name, "capture.after.quick")) {
+                section = .capture_after_quick;
+            } else if (std.mem.eql(u8, name, "capture.after.area")) {
+                section = .capture_after_area;
+            } else if (std.mem.eql(u8, name, "capture.after.fullscreen")) {
+                section = .capture_after_fullscreen;
+            } else if (std.mem.eql(u8, name, "capture.after.all_screens")) {
+                section = .capture_after_all_screens;
+            } else if (std.mem.eql(u8, name, "notifications")) {
+                section = .notifications;
             } else if (std.mem.eql(u8, name, "preview.window")) {
                 section = .preview_window;
             } else if (std.mem.eql(u8, name, "preview.window.floating_position")) {
@@ -122,11 +140,18 @@ pub fn parseTomlSubset(allocator: std.mem.Allocator, bytes: []const u8) !config_
         switch (section) {
             .root => return error.ConfigInvalid,
             .capture => try parseCaptureField(&parsed, key, value),
+            .capture_after => try parseCaptureAfterField(&parsed, key, value),
+            .capture_after_quick => try parseCaptureAfterModeField(&parsed.capture.after.quick, key, value),
+            .capture_after_area => try parseCaptureAfterModeField(&parsed.capture.after.area, key, value),
+            .capture_after_fullscreen => try parseCaptureAfterModeField(&parsed.capture.after.fullscreen, key, value),
+            .capture_after_all_screens => try parseCaptureAfterModeField(&parsed.capture.after.all_screens, key, value),
+            .notifications => try parseNotificationsField(&parsed, key, value),
             .preview_window => try parsePreviewWindowField(&parsed, key, value),
             .preview_window_floating_position => try parseFloatingPositionField(&parsed, key, value),
         }
     }
 
+    if (!config_types.validateCaptureAfter(parsed.capture.after)) return error.ConfigInvalid;
     return parsed;
 }
 
@@ -158,6 +183,56 @@ fn parseCaptureField(parsed: *config_types.Config, key: []const u8, value: []con
         return;
     }
     return error.ConfigInvalid;
+}
+
+fn parseCaptureAfterField(parsed: *config_types.Config, key: []const u8, value: []const u8) !void {
+    if (std.mem.eql(u8, key, "save_folder")) {
+        const text = try parseString(value);
+        if (!validSaveFolder(text)) return error.ConfigInvalid;
+        parsed.capture.after.save_folder.set(text) catch return error.ConfigInvalid;
+        return;
+    }
+    return error.ConfigInvalid;
+}
+
+fn parseCaptureAfterModeField(mode: *config_types.CaptureAfterModeConfig, key: []const u8, value: []const u8) !void {
+    if (std.mem.eql(u8, key, "skip_preview")) {
+        mode.skip_preview = try parseBool(value);
+        return;
+    }
+    if (std.mem.eql(u8, key, "copy_to_clipboard")) {
+        mode.copy_to_clipboard = try parseBool(value);
+        return;
+    }
+    if (std.mem.eql(u8, key, "save_to_folder")) {
+        mode.save_to_folder = try parseBool(value);
+        return;
+    }
+    return error.ConfigInvalid;
+}
+
+fn parseNotificationsField(parsed: *config_types.Config, key: []const u8, value: []const u8) !void {
+    if (std.mem.eql(u8, key, "success")) {
+        parsed.notifications.success = try parseBool(value);
+        return;
+    }
+    if (std.mem.eql(u8, key, "errors")) {
+        parsed.notifications.errors = try parseBool(value);
+        return;
+    }
+    if (std.mem.eql(u8, key, "thumbnails")) {
+        parsed.notifications.thumbnails = try parseBool(value);
+        return;
+    }
+    return error.ConfigInvalid;
+}
+
+fn validSaveFolder(value: []const u8) bool {
+    if (value.len == 0) return true;
+    if (std.mem.indexOfAny(u8, value, "\"\\") != null) return false;
+    if (std.mem.eql(u8, value, "~")) return true;
+    if (std.mem.startsWith(u8, value, "~/")) return true;
+    return std.fs.path.isAbsolute(value);
 }
 
 fn parsePreviewWindowField(parsed: *config_types.Config, key: []const u8, value: []const u8) !void {

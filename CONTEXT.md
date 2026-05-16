@@ -138,6 +138,11 @@ and the working diff.
   compositor seam. `preflight` and `capabilities list` error details include
   detected compositor labels, and focused-output resolution is adapter-backed
   (`niri msg -j focused-output` for Niri, no fabricated output for others).
+- Capture runtime resolution is upstream-owned: `capabilities/runtime.zig`
+  selects the backend/runtime decision, `compositor/focused_output.zig`
+  resolves focused-output names, and `capture/lifecycle.zig` passes those
+  resolved values into `capture_backend.execute`. Backend execution and
+  `capture_execution_plan.zig` no longer probe compositor/backend state.
 - Runtime process seam was deepened: `runtime/process_exec.zig` now also owns
   stdin-pipe execution (`runWithPipeInput`), and preview/notify/clipboard
   command execution now routes through runtime process adapters.
@@ -172,9 +177,9 @@ and the working diff.
   post-capture pipeline to touch the system clipboard. Area/all-in-one still
   open preview by default so the user can choose Copy, Save, Save As, or
   Discard.
-- Noctalia fullscreen/all-screens menu actions and installed Niri hotkeys pass
-  `--copy`; these direct, no-preview flows rely on the post-capture pipeline for
-  clipboard publication and the copied/failed desktop notification.
+- Noctalia and generated Niri capture actions use plain `shaula capture ...
+  --json` commands by default so `[capture.after.*]` settings decide whether
+  preview opens, clipboard copy runs, or the Shaula directory receives a file.
 - Preview metadata readouts that update while interacting must reserve stable
   width. The color hex and zoom percentage labels both use fixed code-style
   widths so hover color sampling and zoom changes do not shift the toolbar.
@@ -227,6 +232,9 @@ and the working diff.
 - `backends/capture_backend_failure.zig` centralizes backend `CaptureOutcome`
   failure construction so `capture_backend.execute` keeps one external seam
   while preserving deterministic `ERR_*` attributes at each failure site.
+- `capture_backend.execute` receives a resolved runtime decision and optional
+  focused output name. Tests should pass explicit decisions; do not reintroduce
+  backend-local compositor/backend probes for test injection.
 - `capture/lifecycle.zig` owns the common capture lifecycle after mode-specific
   inputs are resolved: enforce capability support, enforce pre-capture guard,
   optionally settle after live overlay, execute the backend, persist previous

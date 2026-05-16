@@ -7,6 +7,7 @@ pub fn resolveOutputPath(
     environ: std.process.Environ,
     output_path: ?[]const u8,
     save_requested: bool,
+    save_folder: ?[]const u8,
 ) ![]u8 {
     if (output_path) |custom_path| {
         if (std.mem.indexOf(u8, custom_path, "::invalid::") != null) {
@@ -19,7 +20,7 @@ pub fn resolveOutputPath(
         return resolveTemporaryOutputPath(allocator, io, mode_string, environ);
     }
 
-    const output_dir = resolveSavedOutputDir(allocator, io, environ) catch return error.OutputPathInvalid;
+    const output_dir = resolveSavedOutputDir(allocator, io, environ, save_folder) catch return error.OutputPathInvalid;
     defer allocator.free(output_dir);
 
     const ts = std.Io.Timestamp.now(io, .real);
@@ -39,6 +40,7 @@ pub fn resolveSavedOutputDir(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
+    save_folder: ?[]const u8,
 ) ![]u8 {
     const home = blk: {
         const home_z = environ.getPosix("HOME") orelse return error.OutputPathInvalid;
@@ -47,12 +49,28 @@ pub fn resolveSavedOutputDir(
         break :blk value;
     };
 
+    if (save_folder) |folder| {
+        if (folder.len > 0) {
+            const resolved = try expandSaveFolder(allocator, home, folder);
+            errdefer allocator.free(resolved);
+            try ensureDirectoryWritable(allocator, io, resolved);
+            return resolved;
+        }
+    }
+
     const preferred_dir = try std.fmt.allocPrint(allocator, "{s}/Pictures/shaula", .{home});
     defer allocator.free(preferred_dir);
     const fallback_dir = try std.fmt.allocPrint(allocator, "{s}/shaula", .{home});
     defer allocator.free(fallback_dir);
 
     return chooseOutputDir(allocator, io, preferred_dir, fallback_dir);
+}
+
+fn expandSaveFolder(allocator: std.mem.Allocator, home: []const u8, folder: []const u8) ![]u8 {
+    if (std.mem.eql(u8, folder, "~")) return allocator.dupe(u8, home);
+    if (std.mem.startsWith(u8, folder, "~/")) return std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, folder[2..] });
+    if (std.fs.path.isAbsolute(folder)) return allocator.dupe(u8, folder);
+    return error.OutputPathInvalid;
 }
 
 /// Resolve a non-durable capture artifact path for preview/copy-only flows.

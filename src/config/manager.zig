@@ -9,6 +9,34 @@ pub const default_config_toml =
     \\# screen while selecting for transient states.
     \\region_capture_mode = "live"
     \\
+    \\[capture.after]
+    \\save_folder = "~/Pictures/shaula"
+    \\
+    \\[capture.after.quick]
+    \\skip_preview = false
+    \\copy_to_clipboard = false
+    \\save_to_folder = false
+    \\
+    \\[capture.after.area]
+    \\skip_preview = false
+    \\copy_to_clipboard = false
+    \\save_to_folder = false
+    \\
+    \\[capture.after.fullscreen]
+    \\skip_preview = true
+    \\copy_to_clipboard = true
+    \\save_to_folder = false
+    \\
+    \\[capture.after.all_screens]
+    \\skip_preview = true
+    \\copy_to_clipboard = true
+    \\save_to_folder = false
+    \\
+    \\[notifications]
+    \\success = true
+    \\errors = true
+    \\thumbnails = true
+    \\
     \\[preview.window]
     \\mode = "floating"
     \\focused = true
@@ -192,6 +220,34 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
         \\# screen while selecting for transient states.
         \\region_capture_mode = "{s}"
         \\
+        \\[capture.after]
+        \\save_folder = "{s}"
+        \\
+        \\[capture.after.quick]
+        \\skip_preview = {s}
+        \\copy_to_clipboard = {s}
+        \\save_to_folder = {s}
+        \\
+        \\[capture.after.area]
+        \\skip_preview = {s}
+        \\copy_to_clipboard = {s}
+        \\save_to_folder = {s}
+        \\
+        \\[capture.after.fullscreen]
+        \\skip_preview = {s}
+        \\copy_to_clipboard = {s}
+        \\save_to_folder = {s}
+        \\
+        \\[capture.after.all_screens]
+        \\skip_preview = {s}
+        \\copy_to_clipboard = {s}
+        \\save_to_folder = {s}
+        \\
+        \\[notifications]
+        \\success = {s}
+        \\errors = {s}
+        \\thumbnails = {s}
+        \\
         \\[preview.window]
         \\mode = "{s}"
         \\focused = {s}
@@ -207,6 +263,22 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
         \\
     , .{
         config.capture.region_capture_mode.asString(),
+        config.capture.after.save_folder.value(),
+        boolText(config.capture.after.quick.skip_preview),
+        boolText(config.capture.after.quick.copy_to_clipboard),
+        boolText(config.capture.after.quick.save_to_folder),
+        boolText(config.capture.after.area.skip_preview),
+        boolText(config.capture.after.area.copy_to_clipboard),
+        boolText(config.capture.after.area.save_to_folder),
+        boolText(config.capture.after.fullscreen.skip_preview),
+        boolText(config.capture.after.fullscreen.copy_to_clipboard),
+        boolText(config.capture.after.fullscreen.save_to_folder),
+        boolText(config.capture.after.all_screens.skip_preview),
+        boolText(config.capture.after.all_screens.copy_to_clipboard),
+        boolText(config.capture.after.all_screens.save_to_folder),
+        boolText(config.notifications.success),
+        boolText(config.notifications.errors),
+        boolText(config.notifications.thumbnails),
         window.mode.asString(),
         if (window.focused) "true" else "false",
         if (window.close_preview_on_save) "true" else "false",
@@ -221,12 +293,25 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
 const ConfigSection = enum {
     root,
     capture,
+    capture_after,
+    capture_after_quick,
+    capture_after_area,
+    capture_after_fullscreen,
+    capture_after_all_screens,
+    notifications,
     preview_window,
     preview_window_floating_position,
 };
 
 const SeenConfigFields = struct {
     region_mode: bool = false,
+    save_folder: bool = false,
+    after_skip_preview: bool = false,
+    after_copy: bool = false,
+    after_save: bool = false,
+    notifications_success: bool = false,
+    notifications_errors: bool = false,
+    notifications_thumbnails: bool = false,
     preview_mode: bool = false,
     focused: bool = false,
     close_preview_on_save: bool = false,
@@ -245,6 +330,12 @@ fn patchConfigText(allocator: std.mem.Allocator, current: []const u8, config: co
     var section: ConfigSection = .root;
     var seen_sections = struct {
         capture: bool = false,
+        capture_after: bool = false,
+        capture_after_quick: bool = false,
+        capture_after_area: bool = false,
+        capture_after_fullscreen: bool = false,
+        capture_after_all_screens: bool = false,
+        notifications: bool = false,
         preview_window: bool = false,
         floating: bool = false,
     }{};
@@ -258,9 +349,28 @@ fn patchConfigText(allocator: std.mem.Allocator, current: []const u8, config: co
         const trimmed_no_comment = std.mem.trim(u8, stripComment(line), " \t\r");
         if (trimmed_no_comment.len > 0 and trimmed_no_comment[0] == '[') {
             try appendMissingFields(allocator, &out, section, &seen, config);
+            seen = .{};
             if (std.mem.eql(u8, trimmed_no_comment, "[capture]")) {
                 section = .capture;
                 seen_sections.capture = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[capture.after]")) {
+                section = .capture_after;
+                seen_sections.capture_after = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[capture.after.quick]")) {
+                section = .capture_after_quick;
+                seen_sections.capture_after_quick = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[capture.after.area]")) {
+                section = .capture_after_area;
+                seen_sections.capture_after_area = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[capture.after.fullscreen]")) {
+                section = .capture_after_fullscreen;
+                seen_sections.capture_after_fullscreen = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[capture.after.all_screens]")) {
+                section = .capture_after_all_screens;
+                seen_sections.capture_after_all_screens = true;
+            } else if (std.mem.eql(u8, trimmed_no_comment, "[notifications]")) {
+                section = .notifications;
+                seen_sections.notifications = true;
             } else if (std.mem.eql(u8, trimmed_no_comment, "[preview.window]")) {
                 section = .preview_window;
                 seen_sections.preview_window = true;
@@ -284,14 +394,47 @@ fn patchConfigText(allocator: std.mem.Allocator, current: []const u8, config: co
 
     try appendMissingFields(allocator, &out, section, &seen, config);
     if (!seen_sections.capture) {
+        seen = .{};
         try out.appendSlice(allocator, "\n[capture]\n");
         try appendMissingFields(allocator, &out, .capture, &seen, config);
     }
+    if (!seen_sections.capture_after) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[capture.after]\n");
+        try appendMissingFields(allocator, &out, .capture_after, &seen, config);
+    }
+    if (!seen_sections.capture_after_quick) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[capture.after.quick]\n");
+        try appendMissingFields(allocator, &out, .capture_after_quick, &seen, config);
+    }
+    if (!seen_sections.capture_after_area) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[capture.after.area]\n");
+        try appendMissingFields(allocator, &out, .capture_after_area, &seen, config);
+    }
+    if (!seen_sections.capture_after_fullscreen) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[capture.after.fullscreen]\n");
+        try appendMissingFields(allocator, &out, .capture_after_fullscreen, &seen, config);
+    }
+    if (!seen_sections.capture_after_all_screens) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[capture.after.all_screens]\n");
+        try appendMissingFields(allocator, &out, .capture_after_all_screens, &seen, config);
+    }
+    if (!seen_sections.notifications) {
+        seen = .{};
+        try out.appendSlice(allocator, "\n[notifications]\n");
+        try appendMissingFields(allocator, &out, .notifications, &seen, config);
+    }
     if (!seen_sections.preview_window) {
+        seen = .{};
         try out.appendSlice(allocator, "\n[preview.window]\n");
         try appendMissingFields(allocator, &out, .preview_window, &seen, config);
     }
     if (!seen_sections.floating) {
+        seen = .{};
         try out.appendSlice(allocator, "\n[preview.window.floating_position]\n");
         try appendMissingFields(allocator, &out, .preview_window_floating_position, &seen, config);
     }
@@ -306,6 +449,30 @@ fn appendMissingFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), se
             if (!seen.region_mode) {
                 try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config.capture.region_capture_mode.asString()});
                 seen.region_mode = true;
+            }
+        },
+        .capture_after => {
+            if (!seen.save_folder) {
+                try out.print(allocator, "save_folder = \"{s}\"\n", .{config.capture.after.save_folder.value()});
+                seen.save_folder = true;
+            }
+        },
+        .capture_after_quick => try appendAfterModeMissing(allocator, out, seen, config.capture.after.quick),
+        .capture_after_area => try appendAfterModeMissing(allocator, out, seen, config.capture.after.area),
+        .capture_after_fullscreen => try appendAfterModeMissing(allocator, out, seen, config.capture.after.fullscreen),
+        .capture_after_all_screens => try appendAfterModeMissing(allocator, out, seen, config.capture.after.all_screens),
+        .notifications => {
+            if (!seen.notifications_success) {
+                try out.print(allocator, "success = {s}\n", .{boolText(config.notifications.success)});
+                seen.notifications_success = true;
+            }
+            if (!seen.notifications_errors) {
+                try out.print(allocator, "errors = {s}\n", .{boolText(config.notifications.errors)});
+                seen.notifications_errors = true;
+            }
+            if (!seen.notifications_thumbnails) {
+                try out.print(allocator, "thumbnails = {s}\n", .{boolText(config.notifications.thumbnails)});
+                seen.notifications_thumbnails = true;
             }
         },
         .preview_window => {
@@ -356,6 +523,21 @@ fn appendMissingFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), se
     }
 }
 
+fn appendAfterModeMissing(allocator: std.mem.Allocator, out: *std.ArrayList(u8), seen: *SeenConfigFields, mode: config_types.CaptureAfterModeConfig) !void {
+    if (!seen.after_skip_preview) {
+        try out.print(allocator, "skip_preview = {s}\n", .{boolText(mode.skip_preview)});
+        seen.after_skip_preview = true;
+    }
+    if (!seen.after_copy) {
+        try out.print(allocator, "copy_to_clipboard = {s}\n", .{boolText(mode.copy_to_clipboard)});
+        seen.after_copy = true;
+    }
+    if (!seen.after_save) {
+        try out.print(allocator, "save_to_folder = {s}\n", .{boolText(mode.save_to_folder)});
+        seen.after_save = true;
+    }
+}
+
 fn maybeAppendPatchedField(
     allocator: std.mem.Allocator,
     out: *std.ArrayList(u8),
@@ -371,6 +553,34 @@ fn maybeAppendPatchedField(
             if (std.mem.eql(u8, key, "region_capture_mode")) {
                 try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config.capture.region_capture_mode.asString()});
                 seen.region_mode = true;
+                return true;
+            }
+        },
+        .capture_after => {
+            if (std.mem.eql(u8, key, "save_folder")) {
+                try out.print(allocator, "save_folder = \"{s}\"\n", .{config.capture.after.save_folder.value()});
+                seen.save_folder = true;
+                return true;
+            }
+        },
+        .capture_after_quick => if (try maybeAppendAfterModePatched(allocator, out, seen, key, config.capture.after.quick)) return true,
+        .capture_after_area => if (try maybeAppendAfterModePatched(allocator, out, seen, key, config.capture.after.area)) return true,
+        .capture_after_fullscreen => if (try maybeAppendAfterModePatched(allocator, out, seen, key, config.capture.after.fullscreen)) return true,
+        .capture_after_all_screens => if (try maybeAppendAfterModePatched(allocator, out, seen, key, config.capture.after.all_screens)) return true,
+        .notifications => {
+            if (std.mem.eql(u8, key, "success")) {
+                try out.print(allocator, "success = {s}\n", .{boolText(config.notifications.success)});
+                seen.notifications_success = true;
+                return true;
+            }
+            if (std.mem.eql(u8, key, "errors")) {
+                try out.print(allocator, "errors = {s}\n", .{boolText(config.notifications.errors)});
+                seen.notifications_errors = true;
+                return true;
+            }
+            if (std.mem.eql(u8, key, "thumbnails")) {
+                try out.print(allocator, "thumbnails = {s}\n", .{boolText(config.notifications.thumbnails)});
+                seen.notifications_thumbnails = true;
                 return true;
             }
         },
@@ -430,6 +640,35 @@ fn maybeAppendPatchedField(
         .root => {},
     }
     return false;
+}
+
+fn maybeAppendAfterModePatched(
+    allocator: std.mem.Allocator,
+    out: *std.ArrayList(u8),
+    seen: *SeenConfigFields,
+    key: []const u8,
+    mode: config_types.CaptureAfterModeConfig,
+) !bool {
+    if (std.mem.eql(u8, key, "skip_preview")) {
+        try out.print(allocator, "skip_preview = {s}\n", .{boolText(mode.skip_preview)});
+        seen.after_skip_preview = true;
+        return true;
+    }
+    if (std.mem.eql(u8, key, "copy_to_clipboard")) {
+        try out.print(allocator, "copy_to_clipboard = {s}\n", .{boolText(mode.copy_to_clipboard)});
+        seen.after_copy = true;
+        return true;
+    }
+    if (std.mem.eql(u8, key, "save_to_folder")) {
+        try out.print(allocator, "save_to_folder = {s}\n", .{boolText(mode.save_to_folder)});
+        seen.after_save = true;
+        return true;
+    }
+    return false;
+}
+
+fn boolText(value: bool) []const u8 {
+    return if (value) "true" else "false";
 }
 
 fn lineKey(line: []const u8) ?[]const u8 {

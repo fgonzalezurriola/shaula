@@ -9,6 +9,7 @@ typedef struct {
   GtkWidget *content;
   GtkWidget *error_box;
   GtkWidget *form_box;
+  GtkWidget *form_scroller;
   GtkWidget *status_label;
   GtkWidget *path_label;
   GtkDropDown *region_combo;
@@ -19,6 +20,22 @@ typedef struct {
   GtkSpinButton *height_spin;
   GtkSwitch *focused_switch;
   GtkSwitch *close_preview_on_save_switch;
+  GtkSwitch *quick_skip_switch;
+  GtkSwitch *quick_copy_switch;
+  GtkSwitch *quick_save_switch;
+  GtkSwitch *area_skip_switch;
+  GtkSwitch *area_copy_switch;
+  GtkSwitch *area_save_switch;
+  GtkSwitch *fullscreen_skip_switch;
+  GtkSwitch *fullscreen_copy_switch;
+  GtkSwitch *fullscreen_save_switch;
+  GtkSwitch *all_screens_skip_switch;
+  GtkSwitch *all_screens_copy_switch;
+  GtkSwitch *all_screens_save_switch;
+  GtkEntry *save_folder_entry;
+  GtkSwitch *notifications_success_switch;
+  GtkSwitch *notifications_errors_switch;
+  GtkSwitch *notifications_thumbnails_switch;
   GtkWidget *apply_button;
   GtkWidget *open_button;
   GtkWidget *reset_button;
@@ -89,6 +106,31 @@ static void read_controls(ShaulaSettingsConfig *config) {
       (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
   if (position != POSITION_CUSTOM)
     shaula_settings_apply_position_preset(config, position);
+  config->quick_skip_preview = gtk_switch_get_active(state.quick_skip_switch);
+  config->quick_copy = gtk_switch_get_active(state.quick_copy_switch);
+  config->quick_save = gtk_switch_get_active(state.quick_save_switch);
+  config->area_skip_preview = gtk_switch_get_active(state.area_skip_switch);
+  config->area_copy = gtk_switch_get_active(state.area_copy_switch);
+  config->area_save = gtk_switch_get_active(state.area_save_switch);
+  config->fullscreen_skip_preview =
+      gtk_switch_get_active(state.fullscreen_skip_switch);
+  config->fullscreen_copy = gtk_switch_get_active(state.fullscreen_copy_switch);
+  config->fullscreen_save = gtk_switch_get_active(state.fullscreen_save_switch);
+  config->all_screens_skip_preview =
+      gtk_switch_get_active(state.all_screens_skip_switch);
+  config->all_screens_copy =
+      gtk_switch_get_active(state.all_screens_copy_switch);
+  config->all_screens_save =
+      gtk_switch_get_active(state.all_screens_save_switch);
+  g_free(config->save_folder);
+  config->save_folder =
+      g_strdup(gtk_editable_get_text(GTK_EDITABLE(state.save_folder_entry)));
+  config->notifications_success =
+      gtk_switch_get_active(state.notifications_success_switch);
+  config->notifications_errors =
+      gtk_switch_get_active(state.notifications_errors_switch);
+  config->notifications_thumbnails =
+      gtk_switch_get_active(state.notifications_thumbnails_switch);
 }
 
 static void update_dynamic_controls(void) {
@@ -102,6 +144,24 @@ static void update_dynamic_controls(void) {
                            floating && custom_size);
   gtk_widget_set_sensitive(GTK_WIDGET(state.height_spin),
                            floating && custom_size);
+  gtk_widget_set_sensitive(GTK_WIDGET(state.quick_copy_switch),
+                           gtk_switch_get_active(state.quick_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.quick_save_switch),
+                           gtk_switch_get_active(state.quick_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.area_copy_switch),
+                           gtk_switch_get_active(state.area_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.area_save_switch),
+                           gtk_switch_get_active(state.area_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.fullscreen_copy_switch),
+                           gtk_switch_get_active(state.fullscreen_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.fullscreen_save_switch),
+                           gtk_switch_get_active(state.fullscreen_skip_switch));
+  gtk_widget_set_sensitive(
+      GTK_WIDGET(state.all_screens_copy_switch),
+      gtk_switch_get_active(state.all_screens_skip_switch));
+  gtk_widget_set_sensitive(
+      GTK_WIDGET(state.all_screens_save_switch),
+      gtk_switch_get_active(state.all_screens_skip_switch));
 }
 
 static void on_control_changed(GtkWidget *widget, gpointer data) {
@@ -116,6 +176,7 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   ShaulaSettingsConfig next = state.config;
   next.column_display = g_strdup(state.config.column_display);
   next.floating_relative_to = g_strdup(state.config.floating_relative_to);
+  next.save_folder = g_strdup(state.config.save_folder);
   read_controls(&next);
 
   char *focused = g_strdup(next.focused ? "true" : "false");
@@ -123,6 +184,26 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
       g_strdup(next.close_preview_on_save ? "true" : "false");
   char *width = g_strdup_printf("%d", next.width);
   char *height = g_strdup_printf("%d", next.height);
+  char *quick_skip = g_strdup(next.quick_skip_preview ? "true" : "false");
+  char *quick_copy = g_strdup(next.quick_copy ? "true" : "false");
+  char *quick_save = g_strdup(next.quick_save ? "true" : "false");
+  char *area_skip = g_strdup(next.area_skip_preview ? "true" : "false");
+  char *area_copy = g_strdup(next.area_copy ? "true" : "false");
+  char *area_save = g_strdup(next.area_save ? "true" : "false");
+  char *fullscreen_skip =
+      g_strdup(next.fullscreen_skip_preview ? "true" : "false");
+  char *fullscreen_copy = g_strdup(next.fullscreen_copy ? "true" : "false");
+  char *fullscreen_save = g_strdup(next.fullscreen_save ? "true" : "false");
+  char *all_screens_skip =
+      g_strdup(next.all_screens_skip_preview ? "true" : "false");
+  char *all_screens_copy = g_strdup(next.all_screens_copy ? "true" : "false");
+  char *all_screens_save = g_strdup(next.all_screens_save ? "true" : "false");
+  char *notifications_success =
+      g_strdup(next.notifications_success ? "true" : "false");
+  char *notifications_errors =
+      g_strdup(next.notifications_errors ? "true" : "false");
+  char *notifications_thumbnails =
+      g_strdup(next.notifications_thumbnails ? "true" : "false");
   char *argv[] = {
       state.shaula_bin,
       "config",
@@ -142,6 +223,38 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
       height,
       "--floating-position",
       (char *)shaula_settings_position_arg(&next),
+      "--after-quick-skip-preview",
+      quick_skip,
+      "--after-quick-copy",
+      quick_copy,
+      "--after-quick-save",
+      quick_save,
+      "--after-area-skip-preview",
+      area_skip,
+      "--after-area-copy",
+      area_copy,
+      "--after-area-save",
+      area_save,
+      "--after-fullscreen-skip-preview",
+      fullscreen_skip,
+      "--after-fullscreen-copy",
+      fullscreen_copy,
+      "--after-fullscreen-save",
+      fullscreen_save,
+      "--after-all-screens-skip-preview",
+      all_screens_skip,
+      "--after-all-screens-copy",
+      all_screens_copy,
+      "--after-all-screens-save",
+      all_screens_save,
+      "--save-folder",
+      next.save_folder != NULL ? next.save_folder : "",
+      "--notifications-success",
+      notifications_success,
+      "--notifications-errors",
+      notifications_errors,
+      "--notifications-thumbnails",
+      notifications_thumbnails,
       "--apply-niri",
       NULL,
   };
@@ -153,6 +266,21 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   g_free(close_preview_on_save);
   g_free(width);
   g_free(height);
+  g_free(quick_skip);
+  g_free(quick_copy);
+  g_free(quick_save);
+  g_free(area_skip);
+  g_free(area_copy);
+  g_free(area_save);
+  g_free(fullscreen_skip);
+  g_free(fullscreen_copy);
+  g_free(fullscreen_save);
+  g_free(all_screens_skip);
+  g_free(all_screens_copy);
+  g_free(all_screens_save);
+  g_free(notifications_success);
+  g_free(notifications_errors);
+  g_free(notifications_thumbnails);
 
   if (exit_code != 0) {
     char *message =
@@ -262,7 +390,7 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
   state.config = defaults;
   state.config_invalid = FALSE;
   gtk_widget_set_visible(state.error_box, FALSE);
-  gtk_widget_set_visible(state.form_box, TRUE);
+  gtk_widget_set_visible(state.form_scroller, TRUE);
   set_status("Reset to defaults. Use Save to update the Niri rule.", FALSE);
 }
 
@@ -328,6 +456,81 @@ static GtkWidget *labeled_description_row(const char *label,
   gtk_box_append(GTK_BOX(row), text_box);
   gtk_box_append(GTK_BOX(control_slot), child);
   gtk_box_append(GTK_BOX(row), control_slot);
+  return row;
+}
+
+static GtkSwitch *make_switch(gboolean active) {
+  GtkSwitch *sw = GTK_SWITCH(gtk_switch_new());
+  gtk_switch_set_active(sw, active);
+  g_signal_connect(sw, "notify::active", G_CALLBACK(on_control_changed), NULL);
+  return sw;
+}
+
+static void append_after_mode(GtkWidget *box, const char *title,
+                              GtkSwitch **skip, GtkSwitch **copy,
+                              GtkSwitch **save, gboolean skip_value,
+                              gboolean copy_value, gboolean save_value) {
+  GtkWidget *label = gtk_label_new(title);
+  gtk_widget_add_css_class(label, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+  gtk_box_append(GTK_BOX(box), label);
+
+  *skip = make_switch(skip_value);
+  *copy = make_switch(copy_value);
+  *save = make_switch(save_value);
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Skip Shaula Preview", GTK_WIDGET(*skip)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Always Copy to Clipboard", GTK_WIDGET(*copy)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Save to Shaula Directory", GTK_WIDGET(*save)));
+}
+
+static void on_folder_response(GtkNativeDialog *dialog, int response,
+                               gpointer data) {
+  (void)data;
+  if (response == GTK_RESPONSE_ACCEPT) {
+    GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
+    GFile *file = gtk_file_chooser_get_file(chooser);
+    if (file != NULL) {
+      char *path = g_file_get_path(file);
+      if (path != NULL)
+        gtk_editable_set_text(GTK_EDITABLE(state.save_folder_entry), path);
+      g_free(path);
+      g_object_unref(file);
+    }
+  }
+  g_object_unref(dialog);
+}
+
+static void on_select_folder_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
+      "Select Shaula Directory", GTK_WINDOW(state.window),
+      GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, "Select", "Cancel");
+  g_signal_connect(dialog, "response", G_CALLBACK(on_folder_response), NULL);
+  gtk_native_dialog_show(GTK_NATIVE_DIALOG(dialog));
+}
+
+static GtkWidget *folder_row(void) {
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_add_css_class(row, "settings-row");
+  GtkWidget *label = gtk_label_new("Shaula Directory");
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+  gtk_widget_set_hexpand(label, TRUE);
+  state.save_folder_entry = GTK_ENTRY(gtk_entry_new());
+  gtk_editable_set_text(GTK_EDITABLE(state.save_folder_entry),
+                        state.config.save_folder != NULL
+                            ? state.config.save_folder
+                            : "~/Pictures/shaula");
+  gtk_widget_set_hexpand(GTK_WIDGET(state.save_folder_entry), TRUE);
+  GtkWidget *button = gtk_button_new_with_label("Select Directory");
+  g_signal_connect(button, "clicked", G_CALLBACK(on_select_folder_clicked),
+                   NULL);
+  gtk_box_append(GTK_BOX(row), label);
+  gtk_box_append(GTK_BOX(row), GTK_WIDGET(state.save_folder_entry));
+  gtk_box_append(GTK_BOX(row), button);
   return row;
 }
 
@@ -406,6 +609,52 @@ static GtkWidget *build_form(void) {
                      "Close the preview window after a successful Ctrl+S save.",
                      GTK_WIDGET(state.close_preview_on_save_switch)));
 
+  GtkWidget *after_title = gtk_label_new("After Capture");
+  gtk_widget_add_css_class(after_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(after_title), 0.0);
+  gtk_box_append(GTK_BOX(box), after_title);
+
+  append_after_mode(box, "Quick Capture", &state.quick_skip_switch,
+                    &state.quick_copy_switch, &state.quick_save_switch,
+                    state.config.quick_skip_preview, state.config.quick_copy,
+                    state.config.quick_save);
+  append_after_mode(box, "Capture Area", &state.area_skip_switch,
+                    &state.area_copy_switch, &state.area_save_switch,
+                    state.config.area_skip_preview, state.config.area_copy,
+                    state.config.area_save);
+  append_after_mode(box, "Capture Fullscreen", &state.fullscreen_skip_switch,
+                    &state.fullscreen_copy_switch,
+                    &state.fullscreen_save_switch,
+                    state.config.fullscreen_skip_preview,
+                    state.config.fullscreen_copy, state.config.fullscreen_save);
+  append_after_mode(box, "Capture All Screens", &state.all_screens_skip_switch,
+                    &state.all_screens_copy_switch,
+                    &state.all_screens_save_switch,
+                    state.config.all_screens_skip_preview,
+                    state.config.all_screens_copy,
+                    state.config.all_screens_save);
+  gtk_box_append(GTK_BOX(box), folder_row());
+
+  GtkWidget *notifications_title = gtk_label_new("Notifications");
+  gtk_widget_add_css_class(notifications_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(notifications_title), 0.0);
+  gtk_box_append(GTK_BOX(box), notifications_title);
+  state.notifications_success_switch =
+      make_switch(state.config.notifications_success);
+  state.notifications_errors_switch =
+      make_switch(state.config.notifications_errors);
+  state.notifications_thumbnails_switch =
+      make_switch(state.config.notifications_thumbnails);
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Show Success Notifications",
+                             GTK_WIDGET(state.notifications_success_switch)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Show Error Notifications",
+                             GTK_WIDGET(state.notifications_errors_switch)));
+  gtk_box_append(GTK_BOX(box),
+                 labeled_row("Include Thumbnail",
+                             GTK_WIDGET(state.notifications_thumbnails_switch)));
+
   GtkWidget *advanced_title = gtk_label_new("Advanced");
   gtk_widget_add_css_class(advanced_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(advanced_title), 0.0);
@@ -476,7 +725,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
   state.window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(state.window), "Shaula Settings");
-  gtk_window_set_default_size(GTK_WINDOW(state.window), 560, 620);
+  gtk_window_set_default_size(GTK_WINDOW(state.window), 680, 760);
   gtk_window_set_resizable(GTK_WINDOW(state.window), TRUE);
 
   GtkWidget *titlebar = gtk_header_bar_new();
@@ -489,7 +738,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
   GtkWidget *center_wrapper = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_halign(center_wrapper, GTK_ALIGN_CENTER);
-  gtk_widget_set_size_request(center_wrapper, 560, -1);
+  gtk_widget_set_size_request(center_wrapper, 680, -1);
   gtk_box_append(GTK_BOX(root), center_wrapper);
 
   state.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
@@ -501,10 +750,14 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
   state.error_box = build_error_box();
   state.form_box = build_form();
+  state.form_scroller = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(state.form_scroller),
+                                state.form_box);
+  gtk_widget_set_vexpand(state.form_scroller, TRUE);
   gtk_box_append(GTK_BOX(state.content), state.error_box);
-  gtk_box_append(GTK_BOX(state.content), state.form_box);
+  gtk_box_append(GTK_BOX(state.content), state.form_scroller);
   gtk_widget_set_visible(state.error_box, state.config_invalid);
-  gtk_widget_set_visible(state.form_box, !state.config_invalid);
+  gtk_widget_set_visible(state.form_scroller, !state.config_invalid);
 
   state.status_label = gtk_label_new(
       state.config_invalid ? "Open the config file or reset to defaults."
