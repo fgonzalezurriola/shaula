@@ -1598,7 +1598,9 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
       shaula_preview_apply_crop(state);
       return TRUE;
     }
-    shaula_preview_action_accept(state, (modifiers & GDK_SHIFT_MASK) != 0);
+    if (state->operation != SHAULA_OPERATION_NONE)
+      return FALSE;
+    shaula_preview_execute_command(state, SHAULA_PREVIEW_COMMAND_DONE);
     return TRUE;
   }
 

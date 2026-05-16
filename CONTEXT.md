@@ -134,10 +134,12 @@ and the working diff.
   placement clamps to `(12,12)` before GTK measures the canvas.
 - Preview Ctrl+S and Ctrl+Shift+C success banners now use `Screenshot captured`
   desktop notifications with Freedesktop `image-path` screenshot thumbnails
-  and `notify-send -i` fallback. The `[preview.window] close_preview_on_save`
-  setting defaults to true; when true, only successful Ctrl+S quick-save
-  closes the preview after triggering the notification. Ctrl+Shift+S notifies
-  after success but stays conservative and does not close the preview.
+  and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint and keeps
+  the preview open; Save As/Ctrl+Shift+S also keeps the preview open. The Done
+  headerbar action is the final action: it saves/promotes the current result if
+  needed, emits the normal saved notification, and closes the preview. Enter
+  maps to Done only when text/editable/crop/region/modal interaction does not
+  own Enter.
 - Copy-only screenshot notifications must not expose implicit runtime capture
   artifacts as clickable files. Captures without `--save`/`--output` still write
   an internal PNG under `$XDG_RUNTIME_DIR/shaula/captures` or
@@ -148,6 +150,10 @@ and the working diff.
   temporary PNG into the durable save folder (`save_folder`, default
   `~/Pictures/shaula`) before notifying. Never report `/run/user/.../captures`
   as a saved screenshot path; preview cleanup removes those staging files.
+- The preview right headerbar cluster order is metadata, Done, then the normal
+  window close X. Done is built during initial toolbar construction, uses
+  `shaula-done-symbolic`, and carries GTK `suggested-action`; Save remains
+  neutral and is not a final/closing action.
 - Saved-screenshot notifications are actionable by default, with no setting.
   `src/notify.zig` owns the shared success path and publishes the freedesktop
   default action `default` labeled `Show in folder`; the listener still accepts

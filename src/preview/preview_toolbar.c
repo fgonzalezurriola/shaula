@@ -86,6 +86,9 @@ static void install_toolbar_css(void) {
                     "headerbar.shaula-preview-toolbar button.flat:disabled {"
                     "  opacity: 0.42;"
                     "}"
+                    "headerbar.shaula-preview-toolbar button.suggested-action {"
+                    "  border-radius: 7px;"
+                    "}"
                     ".shaula-shortcut-badge {"
                     "  min-width: 0;"
                     "  min-height: 0;"
@@ -122,6 +125,15 @@ static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 32, 32);
   g_signal_connect(button, "clicked", callback, state);
+  return button;
+}
+
+static GtkWidget *make_done_button(ShaulaPreviewState *state) {
+  GtkWidget *button =
+      make_toolbar_button(state, "shaula-done-symbolic", "Done",
+                          G_CALLBACK(shaula_preview_on_done_clicked));
+  gtk_widget_remove_css_class(button, "flat");
+  gtk_widget_add_css_class(button, "suggested-action");
   return button;
 }
 
@@ -561,6 +573,14 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   return metadata;
 }
 
+static GtkWidget *build_right_group(ShaulaPreviewState *state) {
+  GtkWidget *group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_set_valign(group, GTK_ALIGN_CENTER);
+  gtk_box_append(GTK_BOX(group), build_metadata_group(state));
+  gtk_box_append(GTK_BOX(group), make_done_button(state));
+  return group;
+}
+
 GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   install_toolbar_css();
   GtkWidget *bar = gtk_header_bar_new();
@@ -571,7 +591,7 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   gtk_widget_set_halign(toolbar, GTK_ALIGN_START);
   gtk_widget_set_valign(toolbar, GTK_ALIGN_CENTER);
 
-  GtkWidget *right_group = build_metadata_group(state);
+  GtkWidget *right_group = build_right_group(state);
   state->toolbar_metadata = right_group;
   gtk_widget_set_halign(right_group, GTK_ALIGN_END);
   gtk_widget_set_valign(right_group, GTK_ALIGN_CENTER);

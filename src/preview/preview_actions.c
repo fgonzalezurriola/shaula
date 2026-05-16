@@ -482,9 +482,6 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   else
     state->notified = TRUE;
   g_free(target);
-
-  if (state->close_preview_on_save && state->app != NULL)
-    g_application_quit(G_APPLICATION(state->app));
 }
 
 void shaula_preview_action_accept(ShaulaPreviewState *state,
@@ -581,6 +578,10 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 
   if (state->app != NULL)
     g_application_quit(G_APPLICATION(state->app));
+}
+
+void shaula_preview_action_done(ShaulaPreviewState *state) {
+  shaula_preview_action_accept(state, FALSE);
 }
 
 static void on_save_response(GtkNativeDialog *dialog, int response,
@@ -734,6 +735,11 @@ void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
 void shaula_preview_on_save_as_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SAVE_AS);
+}
+
+void shaula_preview_on_done_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_DONE);
 }
 
 void shaula_preview_on_undo_clicked(GtkButton *button, gpointer data) {
