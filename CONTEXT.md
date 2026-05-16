@@ -14,11 +14,15 @@ and the working diff.
   the capture-mode note, last 3 commits, and working diff.
 - GitHub Releases are published by `.github/workflows/release.yml` on `v*` tag
   pushes. The release job builds from the tag with
-  `zig build -Doptimize=ReleaseSafe -Dstrip`, packages `zig-out/bin` and
-  `zig-out/share` as `shaula-linux-x86_64.tar.gz`, writes and verifies
-  `SHA256SUMS`, and publishes/replaces release assets with `gh`. The publish job
-  uses `contents: write`, does not run on PRs, does not use shared caches, and
-  sets a tag-specific `run-name` for release runs.
+  `zig build -Doptimize=ReleaseSafe -Dstrip`, runs existing tests under
+  ReleaseSafe, packages `zig-out/bin` and `zig-out/share` as
+  `shaula-linux-x86_64.tar.gz`, writes and verifies `SHA256SUMS`, verifies the
+  archive contains all helper binaries, preview toolbar icons, and the Noctalia
+  widget payload, then installs from the local tarball into fake XDG paths to
+  validate desktop/icon/config/Niri/Noctalia UX before publishing/replacing
+  release assets with `gh`. The publish job uses `contents: write`, does not
+  run on PRs, does not use shared caches, and sets a tag-specific `run-name` for
+  release runs.
 - The public repository currently uses `master` as the default branch, so README
   installer snippets use `raw.githubusercontent.com/.../master/scripts/install.sh`.
 - First installer foundation is now present in `scripts/install.sh` and
@@ -63,6 +67,9 @@ and the working diff.
   Noctalia JSON config. The user-facing Noctalia menu should expose capture,
   Settings, screenshots-folder, and bug-report actions; keep `shaula doctor`
   out of that menu because it is a diagnostic/development command.
+- Installer Niri and Noctalia detection must honor `XDG_CONFIG_HOME` first and
+  keep the old `~/.config/...` fallbacks, so release installs work correctly for
+  users with custom XDG layouts and for CI install-smoke verification.
 - `shaula doctor` and `shaula doctor --json` now provide read-only diagnostics
   for installed paths, config/generated files, Wayland env, Niri candidates,
   Noctalia detection paths, Shaula Noctalia plugin install/enabled state,
@@ -285,6 +292,15 @@ and the working diff.
   limits, and process failure mapping before `overlay/helper_protocol.zig`
   parses the helper envelope. `HelperRunResult` exposes both `stdout` and `stderr` from the helper process.
 - Debug overlay latency: `SHAULA_DEBUG_OVERLAY_LATENCY=1` measures CLI-to-overlay-UI-visible time. The parent records a launch timestamp before spawning the helper, passes the env var through, and the GTK overlay helper writes `SHAULA_OVERLAY_READY_TS=<epoch_ms>` to stderr after `gtk_window_present`. After the helper exits, the parent parses the ready timestamp and reports `[DEBUG-overlay-latency] launch_to_ui_visible=<ms>` to stderr. This is purely a debug/diagnostic feature gated behind an env var; it never ships active in production.
+- Overlay launch latency fix: the native GTK helper now creates a direct
+  `GtkWindow` and owns a `GMainLoop` instead of registering a
+  `GtkApplication` for the short-lived selection surface. It also defaults
+  `GSK_RENDERER=cairo` before `gtk_init` unless the caller already set
+  `GSK_RENDERER`; the overlay's first frame is Cairo-drawn, so this avoids
+  GL/Vulkan renderer startup on the layer-shell hot path. The helper stdout
+  envelope remains unchanged, close requests still emit deterministic cancel
+  JSON, and measured standalone `launch_to_ready` on the local Niri output
+  dropped from roughly 690-1066ms to mostly 78-90ms with one 147ms outlier.
 - `overlay/overlay.zig` is now a facade. `overlay/selection_session.zig` owns
   helper environment preparation, optional frozen background, deterministic
   dry-run/test payload handling, helper protocol mapping, and accepted-selection

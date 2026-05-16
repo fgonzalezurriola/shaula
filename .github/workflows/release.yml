@@ -65,6 +65,9 @@ jobs:
       - name: Build release
         run: zig build -Doptimize=ReleaseSafe -Dstrip
 
+      - name: Run release checks
+        run: zig build test -Doptimize=ReleaseSafe
+
       - name: Package release assets
         run: |
           set -euo pipefail
@@ -73,13 +76,95 @@ jobs:
           test -x zig-out/bin/shaula
           tar -C zig-out -czf dist/shaula-linux-x86_64.tar.gz bin share
           tar -tzf dist/shaula-linux-x86_64.tar.gz > dist/TARCONTENTS
-          grep -Eq '(^|/)bin/shaula$' dist/TARCONTENTS
+
+          required_paths=(
+            "bin/shaula"
+            "bin/shaula-overlay"
+            "bin/shaula-preview"
+            "bin/shaula-settings"
+            "share/icons/hicolor/index.theme"
+            "share/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
+            "share/icons/hicolor/scalable/actions/shaula-save-symbolic.svg"
+            "share/icons/hicolor/scalable/actions/shaula-spotlight-symbolic.svg"
+            "share/shaula/integrations/noctalia/shaula/manifest.json"
+            "share/shaula/integrations/noctalia/shaula/BarWidget.qml"
+            "share/shaula/integrations/noctalia/shaula/README.md"
+          )
+          for path in "${required_paths[@]}"; do
+            grep -Fxq "${path}" dist/TARCONTENTS || {
+              echo "missing release payload path: ${path}" >&2
+              exit 1
+            }
+          done
+
+          top_level="$(awk -F/ 'NF { print $1 }' dist/TARCONTENTS | sort -u | tr '\n' ' ')"
+          test "${top_level}" = "bin share "
 
           (
             cd dist
             sha256sum shaula-linux-x86_64.tar.gz > SHA256SUMS
             sha256sum -c SHA256SUMS
           )
+
+      - name: Verify release install UX
+        run: |
+          set -euo pipefail
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+
+          home_dir="${tmp_dir}/home"
+          xdg_bin="${tmp_dir}/bin"
+          xdg_data="${tmp_dir}/share"
+          xdg_config="${tmp_dir}/config"
+          mkdir -p \
+            "${home_dir}" \
+            "${xdg_bin}" \
+            "${xdg_data}" \
+            "${xdg_config}/niri" \
+            "${xdg_config}/noctalia"
+
+          printf '// fake niri config for installer detection\n' > "${xdg_config}/niri/config.kdl"
+          printf '{"version":2,"states":{}}\n' > "${xdg_config}/noctalia/plugins.json"
+          printf '{"bar":{"widgets":{"left":[],"center":[],"right":[]}}}\n' > "${xdg_config}/noctalia/settings.json"
+
+          env \
+            HOME="${home_dir}" \
+            XDG_BIN_HOME="${xdg_bin}" \
+            XDG_DATA_HOME="${xdg_data}" \
+            XDG_CONFIG_HOME="${xdg_config}" \
+            SHAULA_RELEASE_ASSET_URL="file://${PWD}/dist/shaula-linux-x86_64.tar.gz" \
+            SHAULA_SHA256SUMS_URL="file://${PWD}/dist/SHA256SUMS" \
+            scripts/install.sh --yes
+
+          for binary in shaula shaula-overlay shaula-preview shaula-settings; do
+            test -x "${xdg_bin}/${binary}"
+          done
+          test -f "${xdg_data}/applications/shaula.desktop"
+          test -f "${xdg_data}/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
+          test -f "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
+          test -f "${xdg_config}/shaula/config.toml"
+          test -f "${xdg_config}/shaula/generated/niri-shaula.kdl"
+          grep -q "${xdg_bin}/shaula" "${xdg_config}/shaula/generated/niri-shaula.kdl"
+          test -f "${xdg_config}/noctalia/plugins/shaula/manifest.json"
+          jq -e '.states.shaula.enabled == true' "${xdg_config}/noctalia/plugins.json" >/dev/null
+          jq -e '.bar.widgets.right | any(.id == "plugin:shaula")' "${xdg_config}/noctalia/settings.json" >/dev/null
+
+          env \
+            HOME="${home_dir}" \
+            XDG_BIN_HOME="${xdg_bin}" \
+            XDG_DATA_HOME="${xdg_data}" \
+            XDG_CONFIG_HOME="${xdg_config}" \
+            "${xdg_bin}/shaula" doctor --json \
+            | jq -e '.ok == true and .paths.config_exists == true and .paths.niri_snippet_exists == true and .noctalia.plugin_installed == true' >/dev/null
+
+          env \
+            HOME="${home_dir}" \
+            XDG_BIN_HOME="${xdg_bin}" \
+            XDG_DATA_HOME="${xdg_data}" \
+            XDG_CONFIG_HOME="${xdg_config}" \
+            "${xdg_bin}/shaula" capture area --dry-run --json \
+            | jq -e '.ok == true and .command == "capture area" and .selection.cancelled == false' >/dev/null
 
       - name: Publish GitHub Release
         env:

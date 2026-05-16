@@ -105,7 +105,7 @@ typedef enum {
 } ShaulaCursorShape;
 
 typedef struct {
-  GtkApplication *app;
+  GMainLoop *main_loop;
   GtkWidget *window;
   GtkWidget *area;
   GdkPixbuf *background;
@@ -146,6 +146,8 @@ static ShaulaPoint initial_surface_size(void);
 static void open_custom_aspect_dialog(void);
 static void reposition_toolbar_widget(void);
 static void update_aspect_label(void);
+static void prefer_fast_overlay_renderer(void);
+static void setup_overlay_window(void);
 
 static gboolean capture_on_release(void) {
   return state.interaction_mode == INTERACTION_QUICK;
@@ -239,6 +241,17 @@ static void install_transparent_overlay_css(void) {
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   }
   g_object_unref(provider);
+}
+
+static void prefer_fast_overlay_renderer(void) {
+  /* The overlay draws its critical first frame with Cairo and simple GTK
+   * widgets. Prefer GTK's Cairo renderer to avoid GL/Vulkan startup before
+   * the layer-shell surface is visible, while preserving explicit user
+   * overrides for renderer debugging.
+   */
+  if (g_getenv("GSK_RENDERER") == NULL) {
+    g_setenv("GSK_RENDERER", "cairo", FALSE);
+  }
 }
 
 static int clamp_int(int value, int low, int high) {
@@ -884,8 +897,8 @@ static void confirm(void) {
          state.selection.y + state.output_origin.y, state.selection.width,
          state.selection.height);
   fflush(stdout);
-  if (state.app != NULL)
-    g_application_quit(G_APPLICATION(state.app));
+  if (state.main_loop != NULL)
+    g_main_loop_quit(state.main_loop);
 }
 
 static void cancel(void) {
@@ -901,8 +914,8 @@ static void cancel(void) {
            "\"error\":null}\n");
   }
   fflush(stdout);
-  if (state.app != NULL)
-    g_application_quit(G_APPLICATION(state.app));
+  if (state.main_loop != NULL)
+    g_main_loop_quit(state.main_loop);
 }
 
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
@@ -1391,15 +1404,23 @@ static GtkWidget *build_widget_toolbar(void) {
   return box;
 }
 
-static void on_activate(GtkApplication *app, gpointer data) {
+static gboolean on_close_request(GtkWindow *window, gpointer data) {
+  (void)window;
   (void)data;
-  GtkWidget *window = gtk_application_window_new(app);
+  cancel();
+  return TRUE;
+}
+
+static void setup_overlay_window(void) {
+  GtkWidget *window = gtk_window_new();
   state.window = window;
 
   gtk_window_set_title(GTK_WINDOW(window), "shaula-overlay");
   gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
   gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
   gtk_widget_add_css_class(window, "shaula-overlay-window");
+  g_signal_connect(window, "close-request", G_CALLBACK(on_close_request),
+                   NULL);
 
   gtk_layer_init_for_window(GTK_WINDOW(window));
   gtk_layer_set_namespace(GTK_WINDOW(window), "shaula-overlay");
@@ -1480,17 +1501,17 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_window_present(GTK_WINDOW(window));
   gtk_widget_grab_focus(area);
 
-    /* Debug: emit overlay-ready timestamp so the parent can measure
-       CLI-to-UI-visible latency. Gated by SHAULA_DEBUG_OVERLAY_LATENCY
-       so it never ships active in production. */
-    if (getenv("SHAULA_DEBUG_OVERLAY_LATENCY") != NULL) {
-        struct timespec ts;
-        if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
-            long long ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-            fprintf(stderr, "SHAULA_OVERLAY_READY_TS=%lld\n", ms);
-            fflush(stderr);
-        }
+  /* Debug: emit overlay-ready timestamp so the parent can measure
+     CLI-to-UI-visible latency. Gated by SHAULA_DEBUG_OVERLAY_LATENCY
+     so it never ships active in production. */
+  if (getenv("SHAULA_DEBUG_OVERLAY_LATENCY") != NULL) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+      long long ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+      fprintf(stderr, "SHAULA_OVERLAY_READY_TS=%lld\n", ms);
+      fflush(stderr);
     }
+  }
 }
 
 int shaula_native_gtk_overlay_run(void) {
@@ -1520,6 +1541,7 @@ int shaula_native_gtk_overlay_run(void) {
     return 36;
   }
 
+  prefer_fast_overlay_renderer();
   gtk_init();
   memset(&state, 0, sizeof(state));
   state.toolbar = (ShaulaPoint){.x = PADDING, .y = PADDING};
@@ -1540,24 +1562,23 @@ int shaula_native_gtk_overlay_run(void) {
     return 36;
   }
 
-  GtkApplication *app =
-      gtk_application_new("dev.shaula.overlay", G_APPLICATION_DEFAULT_FLAGS);
-  if (app == NULL) {
+  state.main_loop = g_main_loop_new(NULL, FALSE);
+  if (state.main_loop == NULL) {
     printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
            "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"gtk "
-           "application could not be created\"}}\n");
+           "main loop could not be created\"}}\n");
     fflush(stdout);
     if (state.background != NULL)
       g_object_unref(state.background);
     return 36;
   }
-  state.app = app;
-  g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);
-  int rc = g_application_run(G_APPLICATION(app), 0, NULL);
-  g_object_unref(app);
+  setup_overlay_window();
+  g_main_loop_run(state.main_loop);
+  g_main_loop_unref(state.main_loop);
+  state.main_loop = NULL;
   if (state.background != NULL)
     g_object_unref(state.background);
-  return rc > 255 ? 255 : rc;
+  return 0;
 }
 
 #ifdef SHAULA_OVERLAY_STANDALONE

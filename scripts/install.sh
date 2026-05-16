@@ -286,6 +286,8 @@ detect_niri_config() {
     return 0
   fi
   for path in \
+    "${XDG_CONFIG_HOME}/niri/config.kdl" \
+    "${XDG_CONFIG_HOME}/niri/cfg" \
     "${HOME}/.config/niri/config.kdl" \
     "${HOME}/.config/niri/cfg" \
     "/etc/niri/config.kdl"
@@ -300,6 +302,10 @@ detect_niri_config() {
 
 detect_noctalia() {
   for path in \
+    "${NOCTALIA_CONFIG_DIR}" \
+    "${NOCTALIA_PLUGINS_DIR}" \
+    "${NOCTALIA_PLUGINS_JSON}" \
+    "${NOCTALIA_SETTINGS_JSON}" \
     "${HOME}/.config/noctalia" \
     "${HOME}/.config/noctalia/plugins" \
     "${HOME}/.config/noctalia/plugins.json" \
