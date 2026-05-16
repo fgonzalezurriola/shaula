@@ -221,6 +221,9 @@ and the working diff.
   width. Contextual Select actions live in a floating canvas HUD, like the
   Pen/Highlight property HUDs, so selecting tools or regions cannot ask GTK/Niri
   to resize the floating window.
+- Preview toolbar overflow keeps the action group at a stable requested width.
+  Hidden/revealed toolbar buttons must not change the headerbar natural width or
+  trigger a floating-window resize after the preview appears.
 - Pan and Crop are fixed navigation/utility tools after Copy, Save, Undo, and
   Redo. Numbered canvas tools are ordered Select `1`, Rectangle `2`, Arrow `3`,
   reserved Line `4`, Text `5`, Pen `6`, Highlight `7`, Measure `8`, and
@@ -328,6 +331,9 @@ and the working diff.
   button (accent color), and an Esc cancel button. The toolbar floats below or
   above the selection and repositions itself with the same logic as the old
   Cairo toolbar. Capture is only enabled when there is a valid selection.
+- Overlay Enter/Return is handled in key-capture phase by the overlay window:
+  even when the aspect dropdown was just used or remains open, Enter closes the
+  dropdown if needed and confirms the capture instead of reopening the menu.
 - Area overlay hit-testing is intentionally border-biased: resize handles and
   the immediate edge keep resize cursors, an inner 24px rim keeps move behavior,
   and dragging in the selection interior starts a new region. This makes it

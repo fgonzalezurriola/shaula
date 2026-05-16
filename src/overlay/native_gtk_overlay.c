@@ -1117,7 +1117,6 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     if (state.aspect_popover != NULL &&
         gtk_widget_get_visible(state.aspect_popover)) {
       gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
-      return TRUE;
     }
     confirm();
     return TRUE;
@@ -1510,6 +1509,7 @@ static void setup_overlay_window(void) {
   gtk_widget_add_controller(area, motion);
 
   GtkEventController *keys = gtk_event_controller_key_new();
+  gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), NULL);
   gtk_widget_add_controller(window, keys);
 

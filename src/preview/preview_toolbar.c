@@ -424,6 +424,7 @@ static void draw_swatch(GtkDrawingArea *area, cairo_t *cr, int w, int h,
 static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
   gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(actions, PREVIEW_TOOLBAR_STABLE_ACTIONS_W, -1);
   state->toolbar_secondary_count = 0;
   state->toolbar_utility_action_count = 0;
   state->toolbar_overflow_visible_count = -1;

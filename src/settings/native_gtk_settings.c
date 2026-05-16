@@ -825,6 +825,7 @@ static GtkWidget *folder_row(void) {
 static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_add_css_class(box, "settings-form");
+  gtk_widget_set_margin_end(box, 24);
 
   GtkWidget *capture_title = gtk_label_new("Capture");
   gtk_widget_add_css_class(capture_title, "section-title");
