@@ -12,9 +12,11 @@ pub const OverlayRuntimeError = error{
 
 pub const HelperRunResult = struct {
     stdout: []u8,
+    stderr: []u8,
 
     pub fn deinit(self: HelperRunResult, allocator: std.mem.Allocator) void {
         allocator.free(self.stdout);
+        allocator.free(self.stderr);
     }
 };
 
@@ -38,7 +40,10 @@ pub fn runSelectionHelper(
     defer helper.deinit(allocator);
 
     if (!helper.exitedZero()) return error.Unavailable;
-    return .{ .stdout = allocator.dupe(u8, helper.stdout) catch return error.Unavailable };
+    return .{
+        .stdout = allocator.dupe(u8, helper.stdout) catch return error.Unavailable,
+        .stderr = allocator.dupe(u8, helper.stderr) catch return error.Unavailable,
+    };
 }
 
 /// Resolves the overlay helper executable used by local builds and installs.

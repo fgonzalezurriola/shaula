@@ -160,9 +160,11 @@ const HelperSelection = struct {
     result: selection.SelectionResult,
     final_aspect_known: bool = false,
     final_aspect: ?[]u8 = null,
+    debug_stderr: ?[]const u8 = null,
 
     fn deinit(self: HelperSelection, allocator: std.mem.Allocator) void {
         if (self.final_aspect) |aspect| allocator.free(aspect);
+        if (self.debug_stderr) |stderr| allocator.free(stderr);
     }
 };
 
@@ -222,6 +224,12 @@ fn runHelperSelectionAttempt(
         try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY", initial_geometry);
     }
 
+    const debug_latency = helper_protocol.envFlagEnabled(environ, "SHAULA_DEBUG_OVERLAY_LATENCY");
+    if (debug_latency) {
+        try helper_env.put("SHAULA_DEBUG_OVERLAY_LATENCY", "1");
+    }
+    const launch_ts: i64 = if (debug_latency) std.Io.Timestamp.now(io, .real).toMilliseconds() else 0;
+
     const helper = overlay_runtime.runSelectionHelper(allocator, io, environ, &helper_env) catch {
         return .unavailable;
     };
@@ -231,18 +239,28 @@ fn runHelperSelectionAttempt(
         return .unavailable;
     }
 
+    if (debug_latency) {
+        reportOverlayLatency(io, launch_ts, helper.stderr);
+    }
+
     const result = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint);
     const aspect_override = try helper_protocol.parseAspectOverrideAlloc(allocator, helper.stdout);
     defer aspect_override.deinit(allocator);
 
-    return .{ .selection = .{
-        .result = result,
-        .final_aspect_known = !result.cancelled,
-        .final_aspect = if (!result.cancelled)
-            try finalAspectForConfirmedSelection(allocator, helper_aspect, aspect_override)
-        else
-            null,
-    } };
+    const owned_stderr = if (debug_latency) try allocator.dupe(u8, helper.stderr) else null;
+    errdefer if (owned_stderr) |s| allocator.free(s);
+
+    return .{
+        .selection = .{
+            .result = result,
+            .final_aspect_known = !result.cancelled,
+            .final_aspect = if (!result.cancelled)
+                try finalAspectForConfirmedSelection(allocator, helper_aspect, aspect_override)
+            else
+                null,
+            .debug_stderr = owned_stderr,
+        },
+    };
 }
 
 fn finalAspectForConfirmedSelection(
@@ -349,6 +367,35 @@ fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.Selec
         .geometry = null,
         .cancelled = true,
     };
+}
+
+/// Reports CLI-to-overlay-UI-visible latency when SHAULA_DEBUG_OVERLAY_LATENCY is set.
+///
+/// The helper writes `SHAULA_OVERLAY_READY_TS=<epoch_ms>` to stderr after
+/// `gtk_window_present`; we parse it and compute the delta from the launch timestamp.
+fn reportOverlayLatency(io: std.Io, launch_ts: i64, helper_stderr: []const u8) void {
+    var stderr_buffer: [512]u8 = undefined;
+    var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
+    const ready_ts = parseReadyTimestamp(helper_stderr) orelse {
+        stderr_writer.interface.print("[DEBUG-overlay-latency] launch_ts={d}ms but no SHAULA_OVERLAY_READY_TS found in helper stderr\n", .{launch_ts}) catch {};
+        stderr_writer.interface.flush() catch {};
+        return;
+    };
+    const delta_ms = ready_ts - launch_ts;
+    stderr_writer.interface.print("[DEBUG-overlay-latency] launch_to_ui_visible={d}ms (launch={d}, ready={d})\n", .{ delta_ms, launch_ts, ready_ts }) catch {};
+    stderr_writer.interface.flush() catch {};
+}
+
+fn parseReadyTimestamp(helper_stderr: []const u8) ?i64 {
+    const marker = "SHAULA_OVERLAY_READY_TS=";
+    const start = std.mem.indexOf(u8, helper_stderr, marker) orelse return null;
+    const value_start = start + marker.len;
+    var value_end = value_start;
+    while (value_end < helper_stderr.len and helper_stderr[value_end] != '\n' and helper_stderr[value_end] != '\r') {
+        value_end += 1;
+    }
+    const value = helper_stderr[value_start..value_end];
+    return std.fmt.parseInt(i64, value, 10) catch null;
 }
 
 test "helper envelope maps ok capture to geometry" {

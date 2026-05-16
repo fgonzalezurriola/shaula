@@ -283,7 +283,8 @@ and the working diff.
 - The production overlay helper stdio run now goes through
   `overlay/runtime.zig`, which owns helper binary resolution, stdout/stderr
   limits, and process failure mapping before `overlay/helper_protocol.zig`
-  parses the helper envelope.
+  parses the helper envelope. `HelperRunResult` exposes both `stdout` and `stderr` from the helper process.
+- Debug overlay latency: `SHAULA_DEBUG_OVERLAY_LATENCY=1` measures CLI-to-overlay-UI-visible time. The parent records a launch timestamp before spawning the helper, passes the env var through, and the GTK overlay helper writes `SHAULA_OVERLAY_READY_TS=<epoch_ms>` to stderr after `gtk_window_present`. After the helper exits, the parent parses the ready timestamp and reports `[DEBUG-overlay-latency] launch_to_ui_visible=<ms>` to stderr. This is purely a debug/diagnostic feature gated behind an env var; it never ships active in production.
 - `overlay/overlay.zig` is now a facade. `overlay/selection_session.zig` owns
   helper environment preparation, optional frozen background, deterministic
   dry-run/test payload handling, helper protocol mapping, and accepted-selection

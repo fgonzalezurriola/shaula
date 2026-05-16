@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
+#include <time.h>
 
 enum {
   TOOLBAR_W = 280,
@@ -1478,6 +1479,18 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
   gtk_window_present(GTK_WINDOW(window));
   gtk_widget_grab_focus(area);
+
+    /* Debug: emit overlay-ready timestamp so the parent can measure
+       CLI-to-UI-visible latency. Gated by SHAULA_DEBUG_OVERLAY_LATENCY
+       so it never ships active in production. */
+    if (getenv("SHAULA_DEBUG_OVERLAY_LATENCY") != NULL) {
+        struct timespec ts;
+        if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+            long long ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+            fprintf(stderr, "SHAULA_OVERLAY_READY_TS=%lld\n", ms);
+            fflush(stderr);
+        }
+    }
 }
 
 int shaula_native_gtk_overlay_run(void) {
