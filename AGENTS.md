@@ -39,3 +39,17 @@ For interactive overlay UX changes, ask the user to run:
 ## Updates after changes
 
 After making changes, update CONTEXT.md, add relevant and compact context to upload to chatgpt.com (my prompter).
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `fgonzalezurriola/shaula` using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage label vocabulary for agent workflows. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo: read root `CONTEXT.md` and `docs/adr/` when relevant. See `docs/agents/domain.md`.

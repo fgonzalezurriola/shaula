@@ -5,6 +5,10 @@ and the working diff.
 
 ## Current focus
 
+- Agent skill configuration is documented in `AGENTS.md` and `docs/agents/`.
+  Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
+  default canonical triage labels, and Shaula's single-context domain layout:
+  root `CONTEXT.md` plus `docs/adr/` for durable architectural decisions.
 - v1.0.0 release prep: README install examples now point at `v1.0.0`, the
   roadmap copy no longer describes Shaula as early software, and the optional
   Noctalia widget manifest is aligned to `1.0.0`.
@@ -134,6 +138,16 @@ and the working diff.
   setting defaults to true; when true, only successful Ctrl+S quick-save
   closes the preview after triggering the notification. Ctrl+Shift+S notifies
   after success but stays conservative and does not close the preview.
+- Copy-only screenshot notifications must not expose implicit runtime capture
+  artifacts as clickable files. Captures without `--save`/`--output` still write
+  an internal PNG under `$XDG_RUNTIME_DIR/shaula/captures` or
+  `/tmp/shaula/captures` so preview/copy have real bytes, but those paths are
+  not user-visible saved screenshots and must not become notification thumbnails
+  or reveal targets.
+- Preview `Enter` accept/save on an implicit runtime capture must promote the
+  temporary PNG into the durable save folder (`save_folder`, default
+  `~/Pictures/shaula`) before notifying. Never report `/run/user/.../captures`
+  as a saved screenshot path; preview cleanup removes those staging files.
 - Saved-screenshot notifications are actionable by default, with no setting.
   `src/notify.zig` owns the shared success path and publishes the freedesktop
   default action `default` labeled `Show in folder`; the listener still accepts

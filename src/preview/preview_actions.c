@@ -435,10 +435,12 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
       state->notified = TRUE;
   } else {
     state->copied = TRUE;
+    const char *thumbnail_path =
+        is_temporary_capture_path(source) ? NULL : thumbnail_path_or_null(source);
     if (success_notifications_enabled())
       state->notified = shaula_preview_notify(
           "Screenshot captured", "You can paste the image from the clipboard.",
-          thumbnail_path_or_null(source), TRUE, 2500);
+          thumbnail_path, TRUE, 2500);
     else
       state->notified = TRUE;
   }
@@ -514,25 +516,29 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
     return;
   }
 
-  char *target = shaula_image_io_with_png_extension(state->path);
+  char *target = NULL;
+  if (is_temporary_capture_path(state->path))
+    target = timestamped_quick_save_path(&error);
+  else
+    target = shaula_image_io_with_png_extension(state->path);
   if (target == NULL) {
-    if (error_notifications_enabled())
-      state->notified = shaula_preview_notify("Could not save screenshot",
-                                              "Save failed", NULL, FALSE, 6000);
-    else
-      state->notified = TRUE;
+    notify_save_failure(state, "accept save target", error);
+    if (is_temp)
+      g_unlink(source);
+    g_free(source);
+    if (state->app != NULL)
+      g_application_quit(G_APPLICATION(state->app));
+    return;
   } else if (g_strcmp0(source, target) == 0) {
     state->saved = TRUE;
-    g_free(state->saved_path);
-    state->saved_path = g_strdup(target);
+    remember_real_save_path(state, target);
   } else if (!shaula_image_io_copy_file_bytes(source, target, &error)) {
     report_error("accept save", error);
     state->notified = shaula_preview_notify("Could not save screenshot",
                                             "Save failed", NULL, FALSE, 6000);
   } else {
     state->saved = TRUE;
-    g_free(state->saved_path);
-    state->saved_path = g_strdup(target);
+    remember_real_save_path(state, target);
   }
 
   if (copy_to_clipboard && state->saved_path != NULL) {
