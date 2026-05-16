@@ -147,6 +147,99 @@ static gboolean shaula_preview_notify(const char *summary, const char *body,
   return ok;
 }
 
+static char *shaula_notify_action_log_path(void) {
+  const char *configured = g_getenv("SHAULA_NOTIFY_ACTION_LOG");
+  if (configured != NULL && configured[0] != '\0')
+    return g_strdup(configured);
+
+  const char *state_home = g_getenv("XDG_STATE_HOME");
+  if (state_home != NULL && state_home[0] != '\0') {
+    char *dir = g_build_filename(state_home, "shaula", NULL);
+    g_mkdir_with_parents(dir, 0700);
+    char *path = g_build_filename(dir, "notify-actions.log", NULL);
+    g_free(dir);
+    return path;
+  }
+
+  const char *home = g_get_home_dir();
+  if (home != NULL && home[0] != '\0') {
+    char *dir = g_build_filename(home, ".local", "state", "shaula", NULL);
+    g_mkdir_with_parents(dir, 0700);
+    char *path = g_build_filename(dir, "notify-actions.log", NULL);
+    g_free(dir);
+    return path;
+  }
+
+  return g_strdup("/tmp/shaula-notify-actions.log");
+}
+
+static gboolean shaula_preview_notify_saved(const char *path,
+                                            const char *image_path,
+                                            gboolean transient,
+                                            int timeout_ms) {
+  char *absolute_path = g_canonicalize_filename(path, NULL);
+  char *body = g_strdup_printf("Saved to %s", absolute_path);
+  const char *shaula_bin = g_getenv("SHAULA_BIN");
+  if (shaula_bin == NULL || shaula_bin[0] == '\0') {
+    gboolean fallback_ok = shaula_preview_notify(
+        "Screenshot captured", body, image_path, transient, timeout_ms);
+    g_free(body);
+    g_free(absolute_path);
+    return fallback_ok;
+  }
+
+  char *log_path = shaula_notify_action_log_path();
+
+  (void)timeout_ms;
+  gchar *argv[12];
+  int argc = 0;
+  argv[argc++] = "sh";
+  argv[argc++] = "-c";
+  argv[argc++] = "log=\"$1\"; shift; exec \"$@\" >/dev/null 2>>\"$log\" &";
+  argv[argc++] = "shaula-preview-notify-action-listener";
+  argv[argc++] = (gchar *)log_path;
+  argv[argc++] = (gchar *)shaula_bin;
+  argv[argc++] = "notify";
+  argv[argc++] = "__saved-action-listener";
+  argv[argc++] = absolute_path;
+  if (image_path != NULL && image_path[0] != '\0')
+    argv[argc++] = (gchar *)image_path;
+  argv[argc] = NULL;
+
+  gint status = 1;
+  GError *error = NULL;
+  gboolean spawned =
+      g_spawn_sync(NULL, argv, NULL,
+                   G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
+                   NULL, NULL, NULL, NULL, &status, &error);
+  if (!spawned) {
+    if (error != NULL)
+      g_error_free(error);
+    gboolean fallback_ok = shaula_preview_notify(
+        "Screenshot captured", body, image_path, transient, timeout_ms);
+    g_free(log_path);
+    g_free(body);
+    g_free(absolute_path);
+    return fallback_ok;
+  }
+  if (error != NULL)
+    g_error_free(error);
+
+  gboolean ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+  if (!ok) {
+    gboolean fallback_ok = shaula_preview_notify(
+        "Screenshot captured", body, image_path, transient, timeout_ms);
+    g_free(log_path);
+    g_free(body);
+    g_free(absolute_path);
+    return fallback_ok;
+  }
+  g_free(log_path);
+  g_free(body);
+  g_free(absolute_path);
+  return TRUE;
+}
+
 static gboolean path_has_prefix_dir(const char *path, const char *dir) {
   if (path == NULL || dir == NULL || dir[0] == '\0')
     return FALSE;
@@ -251,17 +344,6 @@ static char *timestamped_quick_save_path(GError **error) {
   g_free(stamp);
   g_free(dir);
   return path;
-}
-
-static char *display_path_with_tilde(const char *path) {
-  const char *home = g_get_home_dir();
-  if (home != NULL && home[0] != '\0' && path_has_prefix_dir(path, home)) {
-    gsize home_len = strlen(home);
-    if (path[home_len] == '\0')
-      return g_strdup("~");
-    return g_strdup_printf("~%s", path + home_len);
-  }
-  return g_strdup(path);
 }
 
 static gboolean save_rendered_png_to_path(ShaulaPreviewState *state,
@@ -396,15 +478,11 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
 
   state->saved = TRUE;
   remember_real_save_path(state, target);
-  char *display = display_path_with_tilde(target);
-  char *body = g_strdup_printf("Saved to %s", display);
   if (success_notifications_enabled())
-    state->notified = shaula_preview_notify(
-        "Screenshot captured", body, thumbnail_path_or_null(target), TRUE, 2500);
+    state->notified = shaula_preview_notify_saved(
+        target, thumbnail_path_or_null(target), TRUE, 6000);
   else
     state->notified = TRUE;
-  g_free(body);
-  g_free(display);
   g_free(target);
 
   if (state->close_preview_on_save && state->app != NULL)
@@ -472,24 +550,24 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 
   if (state->saved && copy_to_clipboard && state->copied) {
     if (success_notifications_enabled())
-      state->notified = shaula_preview_notify(
-          "Screenshot captured", state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 2500);
+      state->notified = shaula_preview_notify_saved(
+          state->saved_path,
+          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
   } else if (state->saved && !copy_to_clipboard) {
     if (success_notifications_enabled())
-      state->notified = shaula_preview_notify(
-          "Screenshot captured", state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 2500);
+      state->notified = shaula_preview_notify_saved(
+          state->saved_path,
+          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
   } else if (state->saved && copy_to_clipboard && !state->copied &&
              !state->notified) {
     if (success_notifications_enabled())
-      state->notified = shaula_preview_notify(
-          "Screenshot captured", state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 2500);
+      state->notified = shaula_preview_notify_saved(
+          state->saved_path,
+          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
   }
@@ -523,16 +601,12 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
           } else {
             state->saved = TRUE;
             remember_real_save_path(state, target_png);
-            char *display = display_path_with_tilde(target_png);
-            char *body = g_strdup_printf("Saved to %s", display);
             if (success_notifications_enabled())
-              state->notified = shaula_preview_notify(
-                  "Screenshot captured", body, thumbnail_path_or_null(target_png),
-                  TRUE, 2500);
+              state->notified = shaula_preview_notify_saved(
+                  target_png, thumbnail_path_or_null(target_png),
+                  TRUE, 6000);
             else
               state->notified = TRUE;
-            g_free(body);
-            g_free(display);
           }
           g_free(target_png);
         } else {

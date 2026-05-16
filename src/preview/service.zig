@@ -55,9 +55,12 @@ pub fn runPreview(
 
     const helper_bin = try resolvePreviewBinary(allocator, io, environ);
     defer allocator.free(helper_bin);
+    const shaula_bin = try std.process.executablePathAlloc(io, allocator);
+    defer allocator.free(shaula_bin);
 
     var helper_env = try std.process.Environ.createMap(environ, allocator);
     defer helper_env.deinit();
+    try helper_env.put("SHAULA_BIN", shaula_bin);
     try helper_env.put(
         "SHAULA_PREVIEW_CLOSE_ON_SAVE",
         if (closePreviewOnSave(allocator, io, environ)) "1" else "0",

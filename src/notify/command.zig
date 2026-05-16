@@ -18,6 +18,16 @@ const TestKind = enum {
 /// - this is a Niri-friendly freedesktop notification probe, not Niri IPC.
 /// - notification delivery failures are reported to stdout but remain non-fatal.
 pub fn run(allocator: std.mem.Allocator, io: std.Io, argv: []const [*:0]const u8) !u8 {
+    if (argv.len >= 4 and std.mem.eql(u8, argToSlice(argv[2]), "__saved-action-listener")) {
+        const image_path = if (argv.len >= 5) argToSlice(argv[4]) else null;
+        notify.runSavedNotificationActionListener(allocator, io, argToSlice(argv[3]), image_path) catch {};
+        return 0;
+    }
+    if (argv.len >= 4 and std.mem.eql(u8, argToSlice(argv[2]), "reveal-file")) {
+        notify.revealFileInManager(allocator, io, argToSlice(argv[3])) catch {};
+        return 0;
+    }
+
     if (argv.len < 3 or !std.mem.eql(u8, argToSlice(argv[2]), "test")) {
         try writeErrorJson(io, "notify test", "ERR_CLI_USAGE", "usage: shaula notify test [--kind copied|saved|error]", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");

@@ -134,6 +134,17 @@ and the working diff.
   setting defaults to true; when true, only successful Ctrl+S quick-save
   closes the preview after triggering the notification. Ctrl+Shift+S notifies
   after success but stays conservative and does not close the preview.
+- Saved-screenshot notifications are actionable by default, with no setting.
+  `src/notify.zig` owns the shared success path and publishes the freedesktop
+  default action `default` labeled `Show in folder`; the listener still accepts
+  `show-in-folder` and `reveal-file` for compatibility. Preview helpers receive
+  `SHAULA_BIN` and route canonical absolute saved paths through the same
+  listener process. Activating the action tries
+  `org.freedesktop.FileManager1.ShowItems` with a percent-encoded absolute
+  `file://` URI, then falls back to `xdg-open` on the parent directory. Reveal
+  failures are non-fatal and log the screenshot path, attempted method, and
+  error from the listener under `$XDG_STATE_HOME/shaula/notify-actions.log`,
+  `~/.local/state/shaula/notify-actions.log`, or `/tmp` as a last resort.
 - Capture runtime terminology: internal capture planning now names
   `current-output` and `all-outputs` lanes separately from CLI compatibility
   tokens. Direct no-preview captures emit best-effort save/copy notifications

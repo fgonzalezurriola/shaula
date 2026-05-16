@@ -1,6 +1,8 @@
 const std = @import("std");
 const process_exec = @import("runtime/process_exec.zig");
 
+const saved_screenshot_notification_timeout_ms: u32 = 6000;
+
 pub const NotifyUrgency = enum {
     low,
     normal,
@@ -16,15 +18,23 @@ pub const NotifyUrgency = enum {
 };
 
 pub fn notifyScreenshotSaved(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
-    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{path});
+    const absolute_path = try absolutePathForNotification(allocator, io, path);
+    defer allocator.free(absolute_path);
+    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
     defer allocator.free(body);
-    try notifyWithImage(allocator, io, "Screenshot captured", body, path, .normal, 2500, true);
+    spawnSavedNotificationActionListener(allocator, io, absolute_path, absolute_path) catch {
+        try notifyWithImage(allocator, io, "Screenshot captured", body, absolute_path, .normal, saved_screenshot_notification_timeout_ms, true);
+    };
 }
 
 pub fn notifyScreenshotSavedText(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
-    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{path});
+    const absolute_path = try absolutePathForNotification(allocator, io, path);
+    defer allocator.free(absolute_path);
+    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
     defer allocator.free(body);
-    try notifyWithImage(allocator, io, "Screenshot captured", body, null, .normal, 2500, true);
+    spawnSavedNotificationActionListener(allocator, io, absolute_path, null) catch {
+        try notifyWithImage(allocator, io, "Screenshot captured", body, null, .normal, saved_screenshot_notification_timeout_ms, true);
+    };
 }
 
 pub fn notifyScreenshotCopied(allocator: std.mem.Allocator, io: std.Io) !void {
@@ -164,4 +174,234 @@ fn fallbackNotifyIcon(
     const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
+}
+
+/// Shows the saved-screenshot notification and handles the freedesktop action.
+///
+/// Contract constraints:
+/// - the freedesktop default action is always `default` with visible label
+///   `Show in folder`;
+/// - reveal failures are logged and non-fatal because capture already
+///   succeeded;
+/// - action handling stays in this shared notify path, not per capture mode.
+pub fn runSavedNotificationActionListener(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    path: []const u8,
+    image_path: ?[]const u8,
+) !void {
+    const absolute_path = try absolutePathForNotification(allocator, io, path);
+    defer allocator.free(absolute_path);
+    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
+    defer allocator.free(body);
+
+    const action = notifySavedWithAction(allocator, io, "Screenshot captured", body, image_path, .normal, saved_screenshot_notification_timeout_ms, true) catch |err| {
+        logRevealFailure("notify-action", absolute_path, err);
+        return err;
+    };
+    defer allocator.free(action);
+
+    if (std.mem.eql(u8, action, "default") or std.mem.eql(u8, action, "show-in-folder") or std.mem.eql(u8, action, "reveal-file")) {
+        revealFileInManager(allocator, io, absolute_path) catch |err| {
+            logRevealFailure("reveal-file", absolute_path, err);
+        };
+    }
+}
+
+pub fn revealFileInManager(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
+    const absolute_path = try absolutePathForNotification(allocator, io, path);
+    defer allocator.free(absolute_path);
+
+    revealViaFileManager1(allocator, io, absolute_path) catch |dbus_err| {
+        logRevealFailure("org.freedesktop.FileManager1.ShowItems", absolute_path, dbus_err);
+        openParentDirectory(allocator, io, absolute_path) catch |xdg_err| {
+            logRevealFailure("xdg-open parent directory", absolute_path, xdg_err);
+            return xdg_err;
+        };
+    };
+}
+
+fn notifySavedWithAction(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    summary: []const u8,
+    body: []const u8,
+    image_path: ?[]const u8,
+    urgency: NotifyUrgency,
+    timeout_ms: u32,
+    transient: bool,
+) ![]u8 {
+    const timeout = try std.fmt.allocPrint(allocator, "{d}", .{timeout_ms});
+    defer allocator.free(timeout);
+    const image_uri = if (image_path) |image| try fileUriAlloc(allocator, io, image) else null;
+    defer if (image_uri) |uri| allocator.free(uri);
+    const image_hint = if (image_uri) |uri| try std.fmt.allocPrint(allocator, "string:image-path:{s}", .{uri}) else null;
+    defer if (image_hint) |hint| allocator.free(hint);
+
+    var argv: [15][]const u8 = undefined;
+    argv[0] = "notify-send";
+    argv[1] = "--app-name=Shaula";
+    argv[2] = "--urgency";
+    argv[3] = urgency.asNotifySendArg();
+    argv[4] = "--expire-time";
+    argv[5] = timeout;
+    var argv_len: usize = 6;
+    if (transient) {
+        argv[argv_len] = "--transient";
+        argv_len += 1;
+    }
+    if (image_hint) |hint| {
+        argv[argv_len] = "--hint";
+        argv_len += 1;
+        argv[argv_len] = hint;
+        argv_len += 1;
+    }
+    argv[argv_len] = "--action=default=Show in folder";
+    argv_len += 1;
+    argv[argv_len] = summary;
+    argv_len += 1;
+    argv[argv_len] = body;
+    argv_len += 1;
+
+    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return fallbackSavedActionNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+    defer result.deinit(allocator);
+    if (result.term == .exited and result.term.exited == 0) {
+        return trimActionOutput(allocator, result.stdout);
+    }
+    return fallbackSavedActionNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+}
+
+fn fallbackSavedActionNotifyIcon(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    summary: []const u8,
+    body: []const u8,
+    image_path: ?[]const u8,
+    urgency: NotifyUrgency,
+    timeout: []const u8,
+    transient: bool,
+) ![]u8 {
+    var argv: [14][]const u8 = undefined;
+    argv[0] = "notify-send";
+    argv[1] = "--app-name=Shaula";
+    argv[2] = "--urgency";
+    argv[3] = urgency.asNotifySendArg();
+    argv[4] = "--expire-time";
+    argv[5] = timeout;
+    var argv_len: usize = 6;
+    if (transient) {
+        argv[argv_len] = "--transient";
+        argv_len += 1;
+    }
+    if (image_path) |image| {
+        argv[argv_len] = "-i";
+        argv_len += 1;
+        argv[argv_len] = image;
+        argv_len += 1;
+    }
+    argv[argv_len] = "--action=default=Show in folder";
+    argv_len += 1;
+    argv[argv_len] = summary;
+    argv_len += 1;
+    argv[argv_len] = body;
+    argv_len += 1;
+
+    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    defer result.deinit(allocator);
+    if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
+    return trimActionOutput(allocator, result.stdout);
+}
+
+fn spawnSavedNotificationActionListener(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    path: []const u8,
+    image_path: ?[]const u8,
+) !void {
+    const exe = try std.process.executablePathAlloc(io, allocator);
+    defer allocator.free(exe);
+
+    var argv: [9][]const u8 = undefined;
+    argv[0] = "sh";
+    argv[1] = "-c";
+    argv[2] = "if [ -n \"$XDG_STATE_HOME\" ]; then dir=\"$XDG_STATE_HOME/shaula\"; elif [ -n \"$HOME\" ]; then dir=\"$HOME/.local/state/shaula\"; else dir=\"/tmp\"; fi; log=\"$dir/notify-actions.log\"; mkdir -p \"$dir\" 2>/dev/null || log=\"/tmp/shaula-notify-actions.log\"; exec \"$@\" >/dev/null 2>>\"$log\" &";
+    argv[3] = "shaula-notify-action-listener";
+    argv[4] = exe;
+    argv[5] = "notify";
+    argv[6] = "__saved-action-listener";
+    argv[7] = path;
+    var argv_len: usize = 8;
+    if (image_path) |image| {
+        argv[argv_len] = image;
+        argv_len += 1;
+    }
+
+    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return error.NotificationUnavailable;
+}
+
+fn revealViaFileManager1(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
+    const uri = try fileUriAlloc(allocator, io, path);
+    defer allocator.free(uri);
+    const items = try std.fmt.allocPrint(allocator, "['{s}']", .{uri});
+    defer allocator.free(items);
+
+    const result = process_exec.run(allocator, io, &.{
+        "gdbus",
+        "call",
+        "--session",
+        "--dest",
+        "org.freedesktop.FileManager1",
+        "--object-path",
+        "/org/freedesktop/FileManager1",
+        "--method",
+        "org.freedesktop.FileManager1.ShowItems",
+        items,
+        "",
+    }, 4096, 4096) catch return error.RevealFileUnavailable;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return error.RevealFileUnavailable;
+}
+
+fn openParentDirectory(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
+    const parent = std.fs.path.dirname(path) orelse "/";
+    const result = process_exec.run(allocator, io, &.{ "xdg-open", parent }, 4096, 4096) catch return error.RevealFileUnavailable;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return error.RevealFileUnavailable;
+}
+
+fn fileUriAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
+    const absolute = try absolutePathForNotification(allocator, io, path);
+    defer allocator.free(absolute);
+
+    var out = std.ArrayList(u8).empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, "file://");
+    for (absolute) |byte| {
+        if (byte == '/' or std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_' or byte == '.' or byte == '~') {
+            try out.append(allocator, byte);
+        } else {
+            try out.print(allocator, "%{X:0>2}", .{byte});
+        }
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn absolutePathForNotification(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
+    if (std.fs.path.isAbsolute(path)) return allocator.dupe(u8, path);
+    const result = process_exec.run(allocator, io, &.{ "pwd", "-P" }, 4096, 1024) catch return error.NotificationUnavailable;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return error.NotificationUnavailable;
+    const cwd = std.mem.trim(u8, result.stdout, " \t\r\n");
+    if (cwd.len == 0) return error.NotificationUnavailable;
+    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ cwd, path });
+}
+
+fn trimActionOutput(allocator: std.mem.Allocator, stdout: []const u8) ![]u8 {
+    return allocator.dupe(u8, std.mem.trim(u8, stdout, " \t\r\n"));
+}
+
+fn logRevealFailure(method: []const u8, path: []const u8, err: anyerror) void {
+    std.debug.print("shaula reveal-file failed path=\"{s}\" method=\"{s}\" error={s}\n", .{ path, method, @errorName(err) });
 }
