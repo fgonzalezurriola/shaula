@@ -16,8 +16,6 @@ Useful commands:
 ./dev frozen
 ./dev context
 ./dev doctor
-./dev strategies
-./dev bench
 ```
 
 ## Runtime Setup

@@ -21,13 +21,7 @@ Run these after every code change:
 git diff --check
 ```
 
-For overlay, capture, clipboard, GTK, Wayland, or Niri behavior changes, also run the relevant targeted command:
-
-```bash
-./dev doctor
-./dev strategies
-./dev bench
-```
+For overlay, capture, clipboard, GTK, Wayland, or Niri behavior changes, run a relevant targeted manual check through `./dev run ...` when the changed behavior cannot be covered by `./dev check`.
 
 For interactive overlay UX changes, ask the user to run:
 

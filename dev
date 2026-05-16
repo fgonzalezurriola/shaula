@@ -46,12 +46,6 @@ App:
 
 QA:
   qa             Run non-intrusive QA suite
-  qa-full        Run full non-intrusive QA suite
-  qa-ui          Run QA suite with SHAULA_QA_ALLOW_INTRUSIVE_UI=1
-  bench          Run non-intrusive performance gates
-  bench-ui       Run performance gates with intrusive UI enabled
-  strategies     Report GTK overlay backend readiness
-  strategies-ui  Report GTK overlay backend readiness with intrusive UI enabled
 
 Pass-through:
   run <args...>  Build, then run ./zig-out/bin/shaula <args...>
@@ -62,7 +56,6 @@ Examples:
   ./dev stage tiling
   ./dev stage floating
   ./dev run capture area --json --aspect 16:9
-  ./dev bench-ui
 EOF
 }
 
@@ -458,26 +451,6 @@ all)
     ;;
   qa)
     SHAULA_QA_PROFILE="${QA_PROFILE}" SHAULA_QA_ALLOW_INTRUSIVE_UI=0 bash scripts/qa/run-all-tests.sh "$@"
-    ;;
-  qa-full)
-    SHAULA_QA_PROFILE=full SHAULA_QA_ALLOW_INTRUSIVE_UI=0 bash scripts/qa/run-all-tests.sh "$@"
-    ;;
-  qa-ui)
-    SHAULA_QA_PROFILE="${QA_PROFILE}" SHAULA_QA_ALLOW_INTRUSIVE_UI=1 bash scripts/qa/run-all-tests.sh "$@"
-    ;;
-  bench)
-    SHAULA_QA_ALLOW_INTRUSIVE_UI=0 bash scripts/qa/run-performance-gates.sh "$@"
-    ;;
-  bench-ui)
-    SHAULA_QA_ALLOW_INTRUSIVE_UI=1 bash scripts/qa/run-performance-gates.sh "$@"
-    ;;
-  strategies)
-    SHAULA_QA_ALLOW_INTRUSIVE_UI=0 bash scripts/qa/benchmark-overlay-strategies.sh "$@"
-    jq '.decision,.strategies' .qa/evidence/task-18-overlay-strategy-compare.json
-    ;;
-  strategies-ui)
-    SHAULA_QA_ALLOW_INTRUSIVE_UI=1 bash scripts/qa/benchmark-overlay-strategies.sh "$@"
-    jq '.decision,.strategies' .qa/evidence/task-18-overlay-strategy-compare.json
     ;;
   *)
     echo "unknown dev command: ${cmd}" >&2

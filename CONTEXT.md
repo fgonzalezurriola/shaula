@@ -5,6 +5,18 @@ and the working diff.
 
 ## Current focus
 
+- The `./dev bench`, `./dev bench-ui`, `./dev strategies`, and
+  `./dev strategies-ui` shortcuts were removed from the developer wrapper
+  because they had become stale routine checks. `./dev check` and
+  `git diff --check` remain the after-change verification baseline; targeted
+  runtime checks should be invoked explicitly through `./dev run ...` or the
+  underlying QA scripts when a change needs them.
+- `./dev qa` is now a lightweight QA wrapper for deterministic local contracts:
+  negative Wayland/Niri preflight plus unit QA. It no longer runs integration,
+  E2E Niri, performance gates, or release-readiness evidence checks; several of
+  those deeper scripts still encode stale backend/output assumptions and remain
+  available under `scripts/qa/` for explicit investigation before they are
+  refreshed or retired. The `qa-full`/`qa-ui` wrapper aliases were removed.
 - Agent skill configuration is documented in `AGENTS.md` and `docs/agents/`.
   Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
   default canonical triage labels, and Shaula's single-context domain layout:
