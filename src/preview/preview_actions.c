@@ -178,12 +178,11 @@ static gboolean shaula_preview_notify_saved(const char *path,
                                             gboolean transient,
                                             int timeout_ms) {
   char *absolute_path = g_canonicalize_filename(path, NULL);
-  char *body = g_strdup_printf("Saved to %s", absolute_path);
+  const char *body = "Saved to screenshots folder.";
   const char *shaula_bin = g_getenv("SHAULA_BIN");
   if (shaula_bin == NULL || shaula_bin[0] == '\0') {
     gboolean fallback_ok = shaula_preview_notify(
         "Screenshot captured", body, image_path, transient, timeout_ms);
-    g_free(body);
     g_free(absolute_path);
     return fallback_ok;
   }
@@ -218,7 +217,6 @@ static gboolean shaula_preview_notify_saved(const char *path,
     gboolean fallback_ok = shaula_preview_notify(
         "Screenshot captured", body, image_path, transient, timeout_ms);
     g_free(log_path);
-    g_free(body);
     g_free(absolute_path);
     return fallback_ok;
   }
@@ -230,12 +228,10 @@ static gboolean shaula_preview_notify_saved(const char *path,
     gboolean fallback_ok = shaula_preview_notify(
         "Screenshot captured", body, image_path, transient, timeout_ms);
     g_free(log_path);
-    g_free(body);
     g_free(absolute_path);
     return fallback_ok;
   }
   g_free(log_path);
-  g_free(body);
   g_free(absolute_path);
   return TRUE;
 }

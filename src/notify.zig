@@ -2,6 +2,7 @@ const std = @import("std");
 const process_exec = @import("runtime/process_exec.zig");
 
 const saved_screenshot_notification_timeout_ms: u32 = 6000;
+const saved_screenshot_notification_body = "Saved to screenshots folder.";
 
 pub const NotifyUrgency = enum {
     low,
@@ -20,20 +21,16 @@ pub const NotifyUrgency = enum {
 pub fn notifyScreenshotSaved(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
     const absolute_path = try absolutePathForNotification(allocator, io, path);
     defer allocator.free(absolute_path);
-    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
-    defer allocator.free(body);
     spawnSavedNotificationActionListener(allocator, io, absolute_path, absolute_path) catch {
-        try notifyWithImage(allocator, io, "Screenshot captured", body, absolute_path, .normal, saved_screenshot_notification_timeout_ms, true);
+        try notifyWithImage(allocator, io, "Screenshot captured", saved_screenshot_notification_body, absolute_path, .normal, saved_screenshot_notification_timeout_ms, true);
     };
 }
 
 pub fn notifyScreenshotSavedText(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
     const absolute_path = try absolutePathForNotification(allocator, io, path);
     defer allocator.free(absolute_path);
-    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
-    defer allocator.free(body);
     spawnSavedNotificationActionListener(allocator, io, absolute_path, null) catch {
-        try notifyWithImage(allocator, io, "Screenshot captured", body, null, .normal, saved_screenshot_notification_timeout_ms, true);
+        try notifyWithImage(allocator, io, "Screenshot captured", saved_screenshot_notification_body, null, .normal, saved_screenshot_notification_timeout_ms, true);
     };
 }
 
@@ -193,10 +190,8 @@ pub fn runSavedNotificationActionListener(
 ) !void {
     const absolute_path = try absolutePathForNotification(allocator, io, path);
     defer allocator.free(absolute_path);
-    const body = try std.fmt.allocPrint(allocator, "Saved to {s}", .{absolute_path});
-    defer allocator.free(body);
 
-    const action = notifySavedWithAction(allocator, io, "Screenshot captured", body, image_path, .normal, saved_screenshot_notification_timeout_ms, true) catch |err| {
+    const action = notifySavedWithAction(allocator, io, "Screenshot captured", saved_screenshot_notification_body, image_path, .normal, saved_screenshot_notification_timeout_ms, true) catch |err| {
         logRevealFailure("notify-action", absolute_path, err);
         return err;
     };

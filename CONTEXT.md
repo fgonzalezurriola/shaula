@@ -152,6 +152,8 @@ and the working diff.
   `src/notify.zig` owns the shared success path and publishes the freedesktop
   default action `default` labeled `Show in folder`; the listener still accepts
   `show-in-folder` and `reveal-file` for compatibility. Preview helpers receive
+  the real path for the action listener but the visible notification body must
+  stay generic (`Saved to screenshots folder.`), without filename or full path.
   `SHAULA_BIN` and route canonical absolute saved paths through the same
   listener process. Activating the action tries
   `org.freedesktop.FileManager1.ShowItems` with a percent-encoded absolute
