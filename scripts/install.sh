@@ -9,6 +9,7 @@ ASSUME_YES=0
 INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
 INSTALL_ICON=1
+INSTALL_NIRI_KEYBINDS=0
 UNINSTALL=0
 RELEASE_EXTRACT_DIR=""
 INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
@@ -40,6 +41,7 @@ Options:
   --no-integrations   Skip generated integration snippets.
   --no-desktop        Skip the desktop entry.
   --no-icon           Skip the hicolor app icon.
+  --niri-keybinds     Install recommended Shaula Niri keyboard shortcuts.
   --uninstall         Remove files installed by this script.
 
 Environment:
@@ -100,6 +102,31 @@ confirm_noctalia_widget() {
   read answer
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+confirm_niri_keybinds() {
+  if [ "$INSTALL_NIRI_KEYBINDS" -eq 1 ]; then
+    return 0
+  fi
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    return 1
+  fi
+  if [ "$INSTALL_CONTEXT" = "release" ]; then
+    return 1
+  fi
+  if [ "$INSTALL_CONTEXT" = "dev" ]; then
+    printf 'Install recommended Shaula Niri shortcuts (CTRL+Shift+1/2/3/4)? [y/N] '
+  else
+    printf 'Install recommended Shaula Niri shortcuts? [y/N] '
+  fi
+  read answer
+  case "$answer" in
+    y|Y|yes|YES)
+      INSTALL_NIRI_KEYBINDS=1
+      return 0
+      ;;
     *) return 1 ;;
   esac
 }
@@ -522,6 +549,43 @@ EOF
   log "generated $dest"
 }
 
+install_niri_keybinds() {
+  shaula_bin="${XDG_BIN_HOME}/shaula"
+  if [ ! -x "$shaula_bin" ]; then
+    warn "shaula binary not found at $shaula_bin; skipping keybinds install."
+    return 1
+  fi
+  output="$("$shaula_bin" config niri-keybinds-install --json 2>&1)" || {
+    if printf '%s' "$output" | grep -q "ERR_NIRI_KEYBIND_CONFLICT"; then
+      warn "Niri keybind conflicts detected. Run with --force or resolve manually:"
+      warn "  $shaula_bin config niri-keybinds-install --json --force"
+      printf '%s\n' "$output" >&2
+    else
+      warn "Niri keybinds install failed: $output"
+    fi
+    return 1
+  }
+  log "installed Niri keybinds (CTRL+Shift+1/2/3/4)"
+}
+
+uninstall_niri_keybinds() {
+  if niri_path="$(detect_niri_config)"; then
+    begin_marker="// BEGIN SHAULA MANAGED KEYBINDS"
+    end_marker="// END SHAULA MANAGED KEYBINDS"
+    if grep -q "$begin_marker" "$niri_path" 2>/dev/null; then
+      backup_file "$niri_path" ""
+      tmp_file="${niri_path}.shaula-tmp"
+      awk -v begin="$begin_marker" -v end="$end_marker" '
+        $0 ~ begin { skip=1; next }
+        $0 ~ end { skip=0; next }
+        !skip { print }
+      ' "$niri_path" > "$tmp_file"
+      mv "$tmp_file" "$niri_path"
+      log "removed Shaula keybinds block from $niri_path"
+    fi
+  fi
+}
+
 warn_runtime_tools() {
   for tool in grim slurp wl-copy niri quickshell; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -600,6 +664,14 @@ install_release() {
         log "skipped Noctalia Bar Widget install."
       fi
     fi
+
+    if niri_path="$(detect_niri_config)"; then
+      if confirm_niri_keybinds; then
+        install_niri_keybinds
+      else
+        log "skipped Niri keybinds install."
+      fi
+    fi
   fi
 
   log "Shaula install complete."
@@ -614,6 +686,7 @@ remove_path() {
 }
 
 run_uninstall() {
+  uninstall_niri_keybinds
   remove_path "${XDG_BIN_HOME}/shaula"
   remove_path "${XDG_BIN_HOME}/shaula-overlay"
   remove_path "${XDG_BIN_HOME}/shaula-preview"
@@ -647,6 +720,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --no-icon)
       INSTALL_ICON=0
+      ;;
+    --niri-keybinds)
+      INSTALL_NIRI_KEYBINDS=1
       ;;
     --uninstall)
       UNINSTALL=1

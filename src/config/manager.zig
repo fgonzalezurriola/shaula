@@ -2,6 +2,7 @@ const std = @import("std");
 
 const loader = @import("loader.zig");
 const config_types = @import("config.zig");
+const niri_keybinds = @import("niri_keybinds.zig");
 
 pub const default_config_toml =
     \\[capture]
@@ -730,6 +731,25 @@ pub fn installNiriRule(
     kdl: []const u8,
     options: InstallOptions,
 ) !InstallResult {
+    return installManagedBlock(allocator, io, environ, kdl, managed_block_begin, managed_block_end, options);
+}
+
+/// Install or replace a managed block with the given markers.
+///
+/// Contract constraints:
+/// - only text between the given markers is replaced.
+/// - malformed markers fail with ConfigInvalid before backup/write.
+/// - existing files get a timestamped backup before mutation.
+/// - repeated installs with identical content are no-ops.
+pub fn installManagedBlock(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    kdl: []const u8,
+    begin_marker: []const u8,
+    end_marker: []const u8,
+    options: InstallOptions,
+) !InstallResult {
     const path = if (options.path_override) |override|
         try allocator.dupe(u8, override)
     else
@@ -742,10 +762,10 @@ pub fn installNiriRule(
         try allocator.dupe(u8, "");
     defer allocator.free(current);
 
-    const block = try managedBlock(allocator, kdl);
+    const block = try managedBlock(allocator, kdl, begin_marker, end_marker);
     defer allocator.free(block);
 
-    const replacement = try replaceOrAppendManagedBlock(allocator, current, block);
+    const replacement = try replaceOrAppendManagedBlock(allocator, current, block, begin_marker, end_marker);
     defer allocator.free(replacement.content);
 
     if (std.mem.eql(u8, current, replacement.content)) {
@@ -778,12 +798,193 @@ pub fn installNiriRule(
     };
 }
 
-fn managedBlock(allocator: std.mem.Allocator, kdl: []const u8) ![]u8 {
+/// Install or replace Shaula's managed Niri keybinds block.
+///
+/// Contract constraints:
+/// - uses separate markers from the window-rule block.
+/// - same idempotent, backup, and conflict-safe guarantees as `installManagedBlock`.
+pub fn installNiriKeybinds(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    kdl: []const u8,
+    options: InstallOptions,
+) !InstallResult {
+    return installManagedBlock(allocator, io, environ, kdl, niri_keybinds.managed_keybinds_begin, niri_keybinds.managed_keybinds_end, options);
+}
+
+pub const RemoveResult = struct {
+    path: []u8,
+    backup_path: ?[]u8,
+    removed: bool,
+    changed: bool,
+    dry_run: bool,
+
+    pub fn deinit(self: *RemoveResult, allocator: std.mem.Allocator) void {
+        allocator.free(self.path);
+        if (self.backup_path) |path| allocator.free(path);
+    }
+};
+
+/// Remove Shaula's managed Niri keybinds block.
+///
+/// Contract constraints:
+/// - only the block between the keybind markers is removed.
+/// - surrounding config is preserved unchanged.
+/// - existing files get a timestamped backup before mutation.
+/// - if no managed block exists, returns removed=false.
+pub fn removeNiriKeybinds(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    options: InstallOptions,
+) !RemoveResult {
+    const path = if (options.path_override) |override|
+        try allocator.dupe(u8, override)
+    else
+        try defaultNiriConfigPath(allocator, environ);
+    errdefer allocator.free(path);
+
+    const current = if (pathExists(io, path))
+        try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024))
+    else
+        try allocator.dupe(u8, "");
+    defer allocator.free(current);
+
+    const begin_marker = niri_keybinds.managed_keybinds_begin;
+    const end_marker = niri_keybinds.managed_keybinds_end;
+    const begin_count = countOccurrences(current, begin_marker);
+    const end_count = countOccurrences(current, end_marker);
+
+    if (begin_count == 0 and end_count == 0) {
+        return .{
+            .path = path,
+            .backup_path = null,
+            .removed = false,
+            .changed = false,
+            .dry_run = options.dry_run,
+        };
+    }
+
+    if (begin_count != 1 or end_count != 1) return error.ConfigInvalid;
+
+    const begin = std.mem.indexOf(u8, current, begin_marker).?;
+    const end = std.mem.indexOf(u8, current, end_marker).?;
+    if (end < begin) return error.ConfigInvalid;
+
+    var end_after = end + end_marker.len;
+    if (end_after < current.len and current[end_after] == '\n') {
+        end_after += 1;
+    }
+    const prefix = current[0..begin];
+    const suffix = current[end_after..];
+    const next = try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, suffix });
+    defer allocator.free(next);
+
+    if (std.mem.eql(u8, current, next)) {
+        return .{
+            .path = path,
+            .backup_path = null,
+            .removed = true,
+            .changed = false,
+            .dry_run = options.dry_run,
+        };
+    }
+
+    var backup_path: ?[]u8 = null;
+    if (!options.dry_run) {
+        try ensureParentDir(io, path);
+        if (current.len > 0) {
+            backup_path = try backupExisting(allocator, io, path, current);
+        }
+        try writeFileAtomic(io, path, next);
+    }
+
+    return .{
+        .path = path,
+        .backup_path = backup_path,
+        .removed = true,
+        .changed = true,
+        .dry_run = options.dry_run,
+    };
+}
+
+/// Scan the Niri config for CTRL+Shift+[1-4] conflicts outside the managed keybinds block.
+///
+/// Follows `include` directives to scan all referenced config files.
+/// Returns owned Conflict slices; caller must free each Conflict and the slice.
+pub fn detectKeybindConflicts(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    path_override: ?[]const u8,
+) ![]const niri_keybinds.Conflict {
+    const path = if (path_override) |override|
+        try allocator.dupe(u8, override)
+    else
+        try defaultNiriConfigPath(allocator, environ);
+    defer allocator.free(path);
+
+    var all_content = std.ArrayList(u8).empty;
+    defer all_content.deinit(allocator);
+
+    try collectConfigWithIncludes(allocator, io, path, &all_content, 0);
+
+    return niri_keybinds.detectConflicts(allocator, all_content.items);
+}
+
+const max_include_depth = 8;
+
+/// Recursively read a Niri config file and its includes into a single buffer.
+fn collectConfigWithIncludes(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    path: []const u8,
+    out: *std.ArrayList(u8),
+    depth: u32,
+) !void {
+    if (depth >= max_include_depth) return;
+
+    const content = if (pathExists(io, path))
+        try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024))
+    else
+        return;
+    defer allocator.free(content);
+
+    try out.appendSlice(allocator, content);
+    if (content.len > 0 and content[content.len - 1] != '\n') {
+        try out.append(allocator, '\n');
+    }
+
+    const dir = std.fs.path.dirname(path) orelse ".";
+    var lines = std.mem.splitScalar(u8, content, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        if (!std.mem.startsWith(u8, trimmed, "include ")) continue;
+
+        const after_include = std.mem.trim(u8, trimmed["include ".len..], " \t");
+        if (after_include.len < 2) continue;
+        if (after_include[0] != '"') continue;
+
+        const end_quote = std.mem.indexOfScalar(u8, after_include[1..], '"') orelse continue;
+        const raw_path = after_include[1 .. 1 + end_quote];
+
+        const resolved = if (std.fs.path.isAbsolute(raw_path))
+            try allocator.dupe(u8, raw_path)
+        else
+            try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, raw_path });
+        defer allocator.free(resolved);
+
+        try collectConfigWithIncludes(allocator, io, resolved, out, depth + 1);
+    }
+}
+
+fn managedBlock(allocator: std.mem.Allocator, kdl: []const u8, begin_marker: []const u8, end_marker: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{s}\n{s}{s}{s}\n", .{
-        managed_block_begin,
+        begin_marker,
         kdl,
         if (std.mem.endsWith(u8, kdl, "\n")) "" else "\n",
-        managed_block_end,
+        end_marker,
     });
 }
 
@@ -792,9 +993,9 @@ const ManagedReplaceResult = struct {
     replaced: bool,
 };
 
-fn replaceOrAppendManagedBlock(allocator: std.mem.Allocator, current: []const u8, block: []const u8) !ManagedReplaceResult {
-    const begin_count = countOccurrences(current, managed_block_begin);
-    const end_count = countOccurrences(current, managed_block_end);
+fn replaceOrAppendManagedBlock(allocator: std.mem.Allocator, current: []const u8, block: []const u8, begin_marker: []const u8, end_marker: []const u8) !ManagedReplaceResult {
+    const begin_count = countOccurrences(current, begin_marker);
+    const end_count = countOccurrences(current, end_marker);
 
     if (begin_count == 0 and end_count == 0) {
         const separator = if (current.len == 0 or std.mem.endsWith(u8, current, "\n")) "" else "\n";
@@ -806,11 +1007,11 @@ fn replaceOrAppendManagedBlock(allocator: std.mem.Allocator, current: []const u8
 
     if (begin_count != 1 or end_count != 1) return error.ConfigInvalid;
 
-    const begin = std.mem.indexOf(u8, current, managed_block_begin).?;
-    const end = std.mem.indexOf(u8, current, managed_block_end).?;
+    const begin = std.mem.indexOf(u8, current, begin_marker).?;
+    const end = std.mem.indexOf(u8, current, end_marker).?;
     if (end < begin) return error.ConfigInvalid;
 
-    var end_after = end + managed_block_end.len;
+    var end_after = end + end_marker.len;
     if (end_after < current.len and current[end_after] == '\n') {
         end_after += 1;
     }
@@ -874,7 +1075,7 @@ fn writeFileExclusive(io: std.Io, path: []const u8, contents: []const u8) !void 
     file_open = false;
 }
 
-fn pathExists(io: std.Io, path: []const u8) bool {
+pub fn pathExists(io: std.Io, path: []const u8) bool {
     std.Io.Dir.cwd().access(io, path, .{}) catch return false;
     return true;
 }
@@ -911,9 +1112,9 @@ fn writeFileAtomic(io: std.Io, path: []const u8, contents: []const u8) !void {
 }
 
 test "managed block appends when missing" {
-    const block = try managedBlock(std.testing.allocator, "window-rule {}\n");
+    const block = try managedBlock(std.testing.allocator, "window-rule {}\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    const result = try replaceOrAppendManagedBlock(std.testing.allocator, "input\n", block);
+    const result = try replaceOrAppendManagedBlock(std.testing.allocator, "input\n", block, managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(result.content);
     try std.testing.expect(!result.replaced);
     try std.testing.expect(std.mem.indexOf(u8, result.content, managed_block_begin) != null);
@@ -928,9 +1129,9 @@ test "managed block replaces existing block only" {
         \\after
         \\
     ;
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    const result = try replaceOrAppendManagedBlock(std.testing.allocator, old, block);
+    const result = try replaceOrAppendManagedBlock(std.testing.allocator, old, block, managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(result.content);
     try std.testing.expect(result.replaced);
     try std.testing.expect(std.mem.indexOf(u8, result.content, "before") != null);
@@ -940,25 +1141,25 @@ test "managed block replaces existing block only" {
 }
 
 test "managed block replacement is idempotent" {
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    const first = try replaceOrAppendManagedBlock(std.testing.allocator, "input\n", block);
+    const first = try replaceOrAppendManagedBlock(std.testing.allocator, "input\n", block, managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(first.content);
-    const second = try replaceOrAppendManagedBlock(std.testing.allocator, first.content, block);
+    const second = try replaceOrAppendManagedBlock(std.testing.allocator, first.content, block, managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(second.content);
     try std.testing.expectEqualStrings(first.content, second.content);
 }
 
 test "managed block rejects begin without end" {
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, managed_block_begin, block));
+    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, managed_block_begin, block, managed_block_begin, managed_block_end));
 }
 
 test "managed block rejects end without begin" {
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, managed_block_end, block));
+    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, managed_block_end, block, managed_block_begin, managed_block_end));
 }
 
 test "managed block rejects end before begin" {
@@ -968,9 +1169,9 @@ test "managed block rejects end before begin" {
         \\// BEGIN SHAULA PREVIEW WINDOW RULE
         \\
     ;
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block));
+    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block, managed_block_begin, managed_block_end));
 }
 
 test "managed block rejects duplicate begin markers" {
@@ -981,9 +1182,9 @@ test "managed block rejects duplicate begin markers" {
         \\// END SHAULA PREVIEW WINDOW RULE
         \\
     ;
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block));
+    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block, managed_block_begin, managed_block_end));
 }
 
 test "managed block rejects duplicate end markers" {
@@ -994,9 +1195,9 @@ test "managed block rejects duplicate end markers" {
         \\// END SHAULA PREVIEW WINDOW RULE
         \\
     ;
-    const block = try managedBlock(std.testing.allocator, "new\n");
+    const block = try managedBlock(std.testing.allocator, "new\n", managed_block_begin, managed_block_end);
     defer std.testing.allocator.free(block);
-    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block));
+    try std.testing.expectError(error.ConfigInvalid, replaceOrAppendManagedBlock(std.testing.allocator, current, block, managed_block_begin, managed_block_end));
 }
 
 test "backup creation never overwrites existing backup path" {

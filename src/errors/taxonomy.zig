@@ -77,6 +77,7 @@ const specs = [_]ErrorSpec{
     .{ .code = "ERR_OUTPUT_PATH_INVALID", .message = "output path is not writable", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 51 },
     .{ .code = "ERR_CONFIG_UNREADABLE", .message = "configuration file is unreadable", .retryable = false, .class = .output, .action = .fail_fast, .exit_code = 60 },
     .{ .code = "ERR_CONFIG_INVALID", .message = "invalid configuration file", .retryable = false, .class = .cli, .action = .fail_fast, .exit_code = 61 },
+    .{ .code = "ERR_NIRI_KEYBIND_CONFLICT", .message = "existing Niri keybind conflict detected", .retryable = false, .class = .cli, .action = .fail_fast, .exit_code = 62 },
     .{ .code = "ERR_UNKNOWN_UNMAPPED", .message = "unmapped internal failure class", .retryable = false, .class = .unknown, .action = .fail_fast, .exit_code = 99 },
 };
 

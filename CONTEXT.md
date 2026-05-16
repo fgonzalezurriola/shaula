@@ -40,6 +40,12 @@ and the working diff.
   `~/.config/noctalia` exists, `dev-install` restarts Noctalia after a real
   install by trying `noctalia.service`, then `qs`, then `quickshell`; it skips
   restart for `--help`, `--uninstall`, and `--no-integrations`.
+- `./dev dev-install --yes` does not opt into Niri keybind installation by
+  itself; use `./dev dev-install --yes --niri-keybinds` or the Settings
+  shortcut installer. Managed CTRL+Shift+1/2/3/4 Niri keybinds must spawn
+  `shaula capture <mode> --json`; capture commands reject non-JSON invocations
+  with `ERR_CLI_USAGE`, which makes compositor-spawned shortcuts appear to do
+  nothing.
 - Installer integration behavior is intentionally conservative: it detects Niri
   config candidates and generates
   `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The

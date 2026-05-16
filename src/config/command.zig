@@ -6,11 +6,12 @@ const recovery_policy = @import("../recovery/policy.zig");
 const config_types = @import("config.zig");
 const loader = @import("loader.zig");
 const niri_rule = @import("niri_rule.zig");
+const niri_keybinds = @import("niri_keybinds.zig");
 const manager = @import("manager.zig");
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     if (argv.len < 3) {
-        try writeErrorJson(io, "config", "ERR_CLI_USAGE", "usage: shaula config <show|init|save|niri-window-rule|niri-install> --json", false, null, null, null);
+        try writeErrorJson(io, "config", "ERR_CLI_USAGE", "usage: shaula config <show|init|save|niri-window-rule|niri-install|niri-keybinds|niri-keybinds-install|niri-keybinds-remove|niri-keybinds-status> --json", false, null, null, null);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -25,6 +26,14 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         "config niri-window-rule"
     else if (std.mem.eql(u8, subcommand, "niri-install"))
         "config niri-install"
+    else if (std.mem.eql(u8, subcommand, "niri-keybinds"))
+        "config niri-keybinds"
+    else if (std.mem.eql(u8, subcommand, "niri-keybinds-install"))
+        "config niri-keybinds-install"
+    else if (std.mem.eql(u8, subcommand, "niri-keybinds-remove"))
+        "config niri-keybinds-remove"
+    else if (std.mem.eql(u8, subcommand, "niri-keybinds-status"))
+        "config niri-keybinds-status"
     else {
         try writeErrorJson(io, "config", "ERR_CLI_USAGE", "unsupported config subcommand", false, null, null, null);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
@@ -214,8 +223,12 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             continue;
         }
         if (std.mem.eql(u8, arg, "--path")) {
-            if (!std.mem.eql(u8, subcommand, "niri-install") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--path is supported only for niri-install and requires a value", false, null, null, null);
+            const path_supported = std.mem.eql(u8, subcommand, "niri-install") or
+                std.mem.eql(u8, subcommand, "niri-keybinds-install") or
+                std.mem.eql(u8, subcommand, "niri-keybinds-remove") or
+                std.mem.eql(u8, subcommand, "niri-keybinds-status");
+            if (!path_supported or i + 1 >= argv.len) {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--path is supported only for niri-install, niri-keybinds-install, niri-keybinds-remove, and niri-keybinds-status", false, null, null, null);
                 return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
             }
             i += 1;
@@ -311,6 +324,119 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         }
         defer if (niri_result) |*value| value.deinit(allocator);
         try writeSaveJson(allocator, io, command, result, niri_result, niri_warnings);
+        return 0;
+    }
+
+    if (std.mem.eql(u8, subcommand, "niri-keybinds")) {
+        const bin_path = try std.process.executablePathAlloc(io, allocator);
+        defer allocator.free(bin_path);
+        var rendered = try niri_keybinds.renderKeybinds(allocator, bin_path);
+        defer rendered.deinit(allocator);
+        try writeKeybindsJson(allocator, io, command, rendered);
+        return 0;
+    }
+
+    if (std.mem.eql(u8, subcommand, "niri-keybinds-install")) {
+        const bin_path = try std.process.executablePathAlloc(io, allocator);
+        defer allocator.free(bin_path);
+        var rendered = try niri_keybinds.renderKeybinds(allocator, bin_path);
+        defer rendered.deinit(allocator);
+
+        if (!force) {
+            const conflicts = manager.detectKeybindConflicts(allocator, io, environ, path_override) catch |err| switch (err) {
+                error.ConfigUnreadable => {
+                    try writeErrorJson(io, command, "ERR_CONFIG_UNREADABLE", "Niri configuration path could not be resolved", false, null, null, null);
+                    return recovery_policy.exitCodeFor("ERR_CONFIG_UNREADABLE");
+                },
+                else => return err,
+            };
+            defer {
+                for (conflicts) |c| {
+                    allocator.free(c.key);
+                    allocator.free(c.action);
+                    allocator.free(c.context);
+                }
+                allocator.free(conflicts);
+            }
+            if (conflicts.len > 0) {
+                try writeKeybindsConflictJson(allocator, io, command, conflicts);
+                return recovery_policy.exitCodeFor("ERR_NIRI_KEYBIND_CONFLICT");
+            }
+        }
+
+        var result = manager.installNiriKeybinds(allocator, io, environ, rendered.kdl, .{
+            .path_override = path_override,
+            .dry_run = dry_run,
+        }) catch |err| switch (err) {
+            error.ConfigInvalid => {
+                try writeErrorJson(io, command, "ERR_CONFIG_INVALID", "invalid Niri configuration managed block", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CONFIG_INVALID");
+            },
+            error.ConfigUnreadable => {
+                try writeErrorJson(io, command, "ERR_CONFIG_UNREADABLE", "Niri configuration path could not be resolved", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CONFIG_UNREADABLE");
+            },
+            else => return err,
+        };
+        defer result.deinit(allocator);
+        try writeKeybindsInstallJson(allocator, io, command, result);
+        return 0;
+    }
+
+    if (std.mem.eql(u8, subcommand, "niri-keybinds-remove")) {
+        var result = manager.removeNiriKeybinds(allocator, io, environ, .{
+            .path_override = path_override,
+            .dry_run = dry_run,
+        }) catch |err| switch (err) {
+            error.ConfigInvalid => {
+                try writeErrorJson(io, command, "ERR_CONFIG_INVALID", "invalid Niri configuration managed block", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CONFIG_INVALID");
+            },
+            error.ConfigUnreadable => {
+                try writeErrorJson(io, command, "ERR_CONFIG_UNREADABLE", "Niri configuration path could not be resolved", false, null, null, null);
+                return recovery_policy.exitCodeFor("ERR_CONFIG_UNREADABLE");
+            },
+            else => return err,
+        };
+        defer result.deinit(allocator);
+        try writeKeybindsRemoveJson(allocator, io, command, result);
+        return 0;
+    }
+
+    if (std.mem.eql(u8, subcommand, "niri-keybinds-status")) {
+        const niri_path = manager.defaultNiriConfigPath(allocator, environ) catch null;
+        defer if (niri_path) |p| allocator.free(p);
+
+        const niri_detected = niri_path != null;
+        const config_path = niri_path;
+
+        var installed = false;
+        if (config_path) |cp| {
+            const content = if (manager.pathExists(io, cp))
+                std.Io.Dir.cwd().readFileAlloc(io, cp, allocator, .limited(1024 * 1024)) catch null
+            else
+                null;
+            if (content) |c| {
+                defer allocator.free(c);
+                installed = std.mem.indexOf(u8, c, niri_keybinds.managed_keybinds_begin) != null and
+                    std.mem.indexOf(u8, c, niri_keybinds.managed_keybinds_end) != null;
+            }
+        }
+
+        const conflicts = if (config_path != null)
+            manager.detectKeybindConflicts(allocator, io, environ, path_override) catch &.{}
+        else
+            &[_]niri_keybinds.Conflict{};
+        defer {
+            for (conflicts) |c| {
+                allocator.free(c.key);
+                allocator.free(c.action);
+                allocator.free(c.context);
+            }
+            allocator.free(conflicts);
+        }
+
+        try writeKeybindsStatusJson(allocator, io, command, niri_detected, config_path, installed, conflicts);
         return 0;
     }
 
@@ -562,6 +688,161 @@ fn writeNiriRuleJson(allocator: std.mem.Allocator, io: std.Io, command: []const 
         .{ protocol.contract_version, command_json, ts_json, path_json, if (loaded.loaded) "true" else "false", app_id_json, title_json, kdl_json, warnings_json },
     );
     try stdout.interface.flush();
+}
+
+fn writeKeybindsJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, rendered: niri_keybinds.RenderedKeybinds) !void {
+    const ts = try nowIso8601(allocator, io);
+    defer allocator.free(ts);
+    const command_json = try jsonStringAlloc(allocator, command);
+    defer allocator.free(command_json);
+    const ts_json = try jsonStringAlloc(allocator, ts);
+    defer allocator.free(ts_json);
+    const kdl_json = try jsonStringAlloc(allocator, rendered.kdl);
+    defer allocator.free(kdl_json);
+
+    var stdout_buffer: [8192]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.print(
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"kdl\":{s}}},\"warnings\":[]}}\n",
+        .{ protocol.contract_version, command_json, ts_json, kdl_json },
+    );
+    try stdout.interface.flush();
+}
+
+fn writeKeybindsInstallJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, result: manager.InstallResult) !void {
+    const ts = try nowIso8601(allocator, io);
+    defer allocator.free(ts);
+    const command_json = try jsonStringAlloc(allocator, command);
+    defer allocator.free(command_json);
+    const ts_json = try jsonStringAlloc(allocator, ts);
+    defer allocator.free(ts_json);
+    const path_json = try jsonStringAlloc(allocator, result.path);
+    defer allocator.free(path_json);
+    const backup_path_json = try jsonNullableStringAlloc(allocator, result.backup_path);
+    defer allocator.free(backup_path_json);
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.print(
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"installed\":{s},\"replaced\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":[]}}\n",
+        .{
+            protocol.contract_version,
+            command_json,
+            ts_json,
+            path_json,
+            backup_path_json,
+            if (result.installed) "true" else "false",
+            if (result.replaced) "true" else "false",
+            if (result.changed) "true" else "false",
+            if (result.dry_run) "true" else "false",
+        },
+    );
+    try stdout.interface.flush();
+}
+
+fn writeKeybindsRemoveJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, result: manager.RemoveResult) !void {
+    const ts = try nowIso8601(allocator, io);
+    defer allocator.free(ts);
+    const command_json = try jsonStringAlloc(allocator, command);
+    defer allocator.free(command_json);
+    const ts_json = try jsonStringAlloc(allocator, ts);
+    defer allocator.free(ts_json);
+    const path_json = try jsonStringAlloc(allocator, result.path);
+    defer allocator.free(path_json);
+    const backup_path_json = try jsonNullableStringAlloc(allocator, result.backup_path);
+    defer allocator.free(backup_path_json);
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.print(
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"removed\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":[]}}\n",
+        .{
+            protocol.contract_version,
+            command_json,
+            ts_json,
+            path_json,
+            backup_path_json,
+            if (result.removed) "true" else "false",
+            if (result.changed) "true" else "false",
+            if (result.dry_run) "true" else "false",
+        },
+    );
+    try stdout.interface.flush();
+}
+
+fn writeKeybindsStatusJson(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    command: []const u8,
+    niri_detected: bool,
+    config_path: ?[]const u8,
+    installed: bool,
+    conflicts: []const niri_keybinds.Conflict,
+) !void {
+    const ts = try nowIso8601(allocator, io);
+    defer allocator.free(ts);
+    const command_json = try jsonStringAlloc(allocator, command);
+    defer allocator.free(command_json);
+    const ts_json = try jsonStringAlloc(allocator, ts);
+    defer allocator.free(ts_json);
+    const path_json = try jsonNullableStringAlloc(allocator, config_path);
+    defer allocator.free(path_json);
+
+    var conflicts_json = std.ArrayList(u8).empty;
+    defer conflicts_json.deinit(allocator);
+    try conflicts_json.append(allocator, '[');
+    for (conflicts, 0..) |conflict, idx| {
+        if (idx > 0) try conflicts_json.append(allocator, ',');
+        const key_json = try jsonStringAlloc(allocator, conflict.key);
+        defer allocator.free(key_json);
+        const action_json = try jsonStringAlloc(allocator, conflict.action);
+        defer allocator.free(action_json);
+        const context_json = try jsonStringAlloc(allocator, conflict.context);
+        defer allocator.free(context_json);
+        try conflicts_json.print(allocator, "{{\"key\":{s},\"action\":{s},\"context\":{s}}}", .{ key_json, action_json, context_json });
+    }
+    try conflicts_json.append(allocator, ']');
+
+    var stdout_buffer: [8192]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.print(
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"niri_detected\":{s},\"config_path\":{s},\"installed\":{s},\"conflicts\":{s}}},\"warnings\":[]}}\n",
+        .{
+            protocol.contract_version,
+            command_json,
+            ts_json,
+            if (niri_detected) "true" else "false",
+            path_json,
+            if (installed) "true" else "false",
+            conflicts_json.items,
+        },
+    );
+    try stdout.interface.flush();
+}
+
+fn writeKeybindsConflictJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, conflicts: []const niri_keybinds.Conflict) !void {
+    var conflicts_json = std.ArrayList(u8).empty;
+    defer conflicts_json.deinit(allocator);
+    try conflicts_json.append(allocator, '[');
+    for (conflicts, 0..) |conflict, idx| {
+        if (idx > 0) try conflicts_json.append(allocator, ',');
+        const key_json = try jsonStringAlloc(allocator, conflict.key);
+        defer allocator.free(key_json);
+        const action_json = try jsonStringAlloc(allocator, conflict.action);
+        defer allocator.free(action_json);
+        const context_json = try jsonStringAlloc(allocator, conflict.context);
+        defer allocator.free(context_json);
+        try conflicts_json.print(allocator, "{{\"key\":{s},\"action\":{s},\"context\":{s}}}", .{ key_json, action_json, context_json });
+    }
+    try conflicts_json.append(allocator, ']');
+
+    const details_json = try std.fmt.allocPrint(
+        allocator,
+        "{{\"conflicts\":{s}}}",
+        .{conflicts_json.items},
+    );
+    defer allocator.free(details_json);
+    try cli_json.writeErrorWithDetails(io, command, "ERR_NIRI_KEYBIND_CONFLICT", "existing keybind conflicts detected; use --force to overwrite", false, details_json);
 }
 
 fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
