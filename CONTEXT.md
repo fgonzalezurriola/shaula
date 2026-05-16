@@ -46,6 +46,11 @@ and the working diff.
   `shaula capture <mode> --json`; capture commands reject non-JSON invocations
   with `ERR_CLI_USAGE`, which makes compositor-spawned shortcuts appear to do
   nothing.
+- Installer icon handling copies the packaged `share/icons/hicolor` tree into
+  `~/.local/share/icons/hicolor`, not only the desktop app icon. Preview helper
+  toolbar icons are runtime-loaded from `../share/icons` relative to the
+  installed helper, so missing `scalable/actions/shaula-*-symbolic.svg` files
+  show as GTK missing-icon glyphs in installed previews.
 - Installer integration behavior is intentionally conservative: it detects Niri
   config candidates and generates
   `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The

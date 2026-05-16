@@ -216,6 +216,16 @@ install_file_if_present() {
   fi
 }
 
+install_dir_if_present() {
+  source="$1"
+  dest="$2"
+  if [ -d "$source" ]; then
+    mkdir -p "$dest"
+    cp -R "$source"/. "$dest"/
+    log "installed $dest"
+  fi
+}
+
 find_file() {
   root="$1"
   name="$2"
@@ -636,6 +646,10 @@ install_release() {
     write_desktop_file
   fi
   if [ "$INSTALL_ICON" -eq 1 ]; then
+    bundled_icon_theme="$(find "$extract_dir" -type d -path '*/icons/hicolor' | head -n 1)"
+    if [ -n "$bundled_icon_theme" ]; then
+      install_dir_if_present "$bundled_icon_theme" "${XDG_DATA_HOME}/icons/hicolor"
+    fi
     bundled_icon="$(find "$extract_dir" -type f -path '*/icons/hicolor/scalable/apps/shaula.svg' | head -n 1)"
     if [ -n "$bundled_icon" ]; then
       install_file_if_present "$bundled_icon" "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg" 0644
