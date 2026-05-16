@@ -22,6 +22,7 @@ enum {
   DROPDOWN_PADDING = 6,
   DROPDOWN_RADIUS = 10,
   RESIZE_HIT_RADIUS = 10,
+  MOVE_HIT_RADIUS = 24,
   CREATE_THRESHOLD = 6,
 };
 
@@ -96,7 +97,7 @@ typedef enum {
   CURSOR_DEFAULT,
   CURSOR_CROSSHAIR,
   CURSOR_POINTER,
-  CURSOR_MOVE,
+  CURSOR_GRAB,
   CURSOR_GRABBING,
   CURSOR_RESIZE_EW,
   CURSOR_RESIZE_NS,
@@ -291,6 +292,19 @@ static gboolean point_in_selection(ShaulaRect selection, ShaulaPoint point) {
          point.y >= selection.y && point.y <= selection.y + selection.height;
 }
 
+static gboolean point_near_selection_border(ShaulaRect selection,
+                                            ShaulaPoint point, int radius) {
+  if (!point_in_selection(selection, point))
+    return FALSE;
+
+  int left = selection.x;
+  int top = selection.y;
+  int right = selection.x + selection.width;
+  int bottom = selection.y + selection.height;
+  return abs(point.x - left) <= radius || abs(point.x - right) <= radius ||
+         abs(point.y - top) <= radius || abs(point.y - bottom) <= radius;
+}
+
 static gboolean point_near(ShaulaPoint a, ShaulaPoint b, int radius) {
   return abs(a.x - b.x) <= radius && abs(a.y - b.y) <= radius;
 }
@@ -308,8 +322,8 @@ static const char *cursor_name(ShaulaCursorShape shape) {
     return "crosshair";
   case CURSOR_POINTER:
     return "pointer";
-  case CURSOR_MOVE:
-    return "move";
+  case CURSOR_GRAB:
+    return "grab";
   case CURSOR_GRABBING:
     return "grabbing";
   case CURSOR_RESIZE_EW:
@@ -653,8 +667,8 @@ static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
     ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
     if (handle != HANDLE_NONE)
       return cursor_for_handle(handle);
-    if (point_in_selection(state.selection, p))
-      return CURSOR_MOVE;
+    if (point_near_selection_border(state.selection, p, MOVE_HIT_RADIUS))
+      return CURSOR_GRAB;
   }
   return CURSOR_CROSSHAIR;
 }
@@ -946,7 +960,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
       return;
     }
   }
-  if (state.has_selection && point_in_selection(state.selection, p)) {
+  if (state.has_selection &&
+      point_near_selection_border(state.selection, p, MOVE_HIT_RADIUS)) {
     state.drag_mode = DRAG_MOVE;
     apply_cursor(CURSOR_GRABBING);
   } else {

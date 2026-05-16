@@ -317,6 +317,11 @@ and the working diff.
   button (accent color), and an Esc cancel button. The toolbar floats below or
   above the selection and repositions itself with the same logic as the old
   Cairo toolbar. Capture is only enabled when there is a valid selection.
+- Area overlay hit-testing is intentionally border-biased: resize handles and
+  the immediate edge keep resize cursors, an inner 24px rim keeps move behavior,
+  and dragging in the selection interior starts a new region. This makes it
+  cheap to recover from a too-large selection without hunting for empty screen
+  space.
 - Overlay selection stays output-local while the GTK layer-shell helper is
   interactive, then adds the selected monitor origin when emitting helper JSON
   for backend capture. Persisted initial geometry subtracts that origin before
