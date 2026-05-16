@@ -143,6 +143,7 @@ static const ShaulaPreviewCommandSpec command_specs[] = {
     {SHAULA_PREVIEW_COMMAND_COPY_PATH, FALSE, SHAULA_TOOL_SELECT, 0, 0, NULL},
     {SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER, FALSE, SHAULA_TOOL_SELECT,
      0, 0, NULL},
+    {SHAULA_PREVIEW_COMMAND_CLOSE, FALSE, SHAULA_TOOL_SELECT, 0, 0, NULL},
     {SHAULA_PREVIEW_COMMAND_DISCARD, FALSE, SHAULA_TOOL_SELECT, 0, 0, NULL},
     {SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT, TRUE, SHAULA_TOOL_SELECT, 0, 0,
      NULL},
@@ -223,6 +224,7 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return state->path != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
     return state->image != NULL;
+  case SHAULA_PREVIEW_COMMAND_CLOSE:
   case SHAULA_PREVIEW_COMMAND_DISCARD:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND:
@@ -297,6 +299,9 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
     shaula_preview_action_open_containing_folder(state);
+    return TRUE;
+  case SHAULA_PREVIEW_COMMAND_CLOSE:
+    shaula_preview_action_close(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_DISCARD:
     shaula_preview_action_discard(state);

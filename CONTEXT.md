@@ -154,6 +154,12 @@ and the working diff.
   window close X. Done is built during initial toolbar construction, uses
   `shaula-done-symbolic`, and carries GTK `suggested-action`; Save remains
   neutral and is not a final/closing action.
+- Preview toolbar is application content, not window decoration. It must not be
+  installed with `gtk_window_set_titlebar()` because fullscreen compositors can
+  hide titlebars/decorations. The helper builds a root content container with
+  the compact toolbar above the canvas so the same toolbar remains visible in
+  floating and fullscreen modes; empty toolbar spacer drag can begin a native
+  window move in floating mode, while button drags remain normal UI input.
 - Saved-screenshot notifications are actionable by default, with no setting.
   `src/notify.zig` owns the shared success path and publishes the freedesktop
   default action `default` labeled `Show in folder`; the listener still accepts

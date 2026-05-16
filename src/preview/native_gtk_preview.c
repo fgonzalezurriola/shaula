@@ -79,6 +79,17 @@ static void seed_initial_fit(int window_w, int window_h) {
   state.pan_y = ((double)area_h - (double)image_h * state.zoom) / 2.0;
 }
 
+static GtkWidget *build_preview_root(GtkWidget *topbar, GtkWidget *canvas) {
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_hexpand(root, TRUE);
+  gtk_widget_set_vexpand(root, TRUE);
+  gtk_widget_set_hexpand(topbar, TRUE);
+  gtk_widget_set_vexpand(canvas, TRUE);
+  gtk_box_append(GTK_BOX(root), topbar);
+  gtk_box_append(GTK_BOX(root), canvas);
+  return root;
+}
+
 static void sweep_stale_temp_dir(const char *dir, gint64 now_us,
                                  gint64 ttl_us) {
   if (dir == NULL || dir[0] == '\0')
@@ -199,8 +210,7 @@ static void on_activate(GtkApplication *app, gpointer data) {
   seed_initial_fit(initial_w, initial_h);
   shaula_preview_update_zoom_label(&state);
   shaula_preview_toolbar_prepare_initial_layout(&state, initial_w);
-  gtk_window_set_titlebar(GTK_WINDOW(window), topbar);
-  gtk_window_set_child(GTK_WINDOW(window), canvas);
+  gtk_window_set_child(GTK_WINDOW(window), build_preview_root(topbar, canvas));
 
   gtk_window_present(GTK_WINDOW(window));
   debug_preview_init("window_presented", 1);

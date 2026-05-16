@@ -53,6 +53,41 @@ static const MenuActionSpec utility_actions[] = {
 
 static GtkWidget *make_muted_label(const char *text);
 
+static void on_toolbar_move_drag_begin(GtkGestureDrag *gesture, double x,
+                                       double y, gpointer data) {
+  ShaulaPreviewState *state = data;
+  if (state == NULL || state->window == NULL)
+    return;
+
+  GtkWidget *widget =
+      gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+  GtkNative *native = gtk_widget_get_native(state->window);
+  GdkSurface *surface = native != NULL ? gtk_native_get_surface(native) : NULL;
+  GdkDevice *device =
+      gtk_event_controller_get_current_event_device(GTK_EVENT_CONTROLLER(gesture));
+  guint32 timestamp =
+      gtk_event_controller_get_current_event_time(GTK_EVENT_CONTROLLER(gesture));
+  guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture));
+  graphene_point_t local = GRAPHENE_POINT_INIT((float)x, (float)y);
+  graphene_point_t window_point = GRAPHENE_POINT_INIT((float)x, (float)y);
+  if (widget != NULL &&
+      !gtk_widget_compute_point(widget, state->window, &local, &window_point))
+    window_point = local;
+
+  if (GDK_IS_TOPLEVEL(surface) && device != NULL && button > 0)
+    gdk_toplevel_begin_move(GDK_TOPLEVEL(surface), device, (int)button,
+                            window_point.x, window_point.y, timestamp);
+}
+
+static void add_toolbar_move_gesture(ShaulaPreviewState *state,
+                                     GtkWidget *widget) {
+  GtkGesture *drag = gtk_gesture_drag_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), GDK_BUTTON_PRIMARY);
+  g_signal_connect(drag, "drag-begin",
+                   G_CALLBACK(on_toolbar_move_drag_begin), state);
+  gtk_widget_add_controller(widget, GTK_EVENT_CONTROLLER(drag));
+}
+
 static void install_toolbar_css(void) {
   static gboolean installed = FALSE;
   if (installed)
@@ -135,6 +170,11 @@ static GtkWidget *make_done_button(ShaulaPreviewState *state) {
   gtk_widget_remove_css_class(button, "flat");
   gtk_widget_add_css_class(button, "suggested-action");
   return button;
+}
+
+static GtkWidget *make_close_button(ShaulaPreviewState *state) {
+  return make_toolbar_button(state, "shaula-close-symbolic", "Close",
+                             G_CALLBACK(shaula_preview_on_close_clicked));
 }
 
 static GtkWidget *make_icon_with_badge(ShaulaPreviewState *state,
@@ -578,6 +618,7 @@ static GtkWidget *build_right_group(ShaulaPreviewState *state) {
   gtk_widget_set_valign(group, GTK_ALIGN_CENTER);
   gtk_box_append(GTK_BOX(group), build_metadata_group(state));
   gtk_box_append(GTK_BOX(group), make_done_button(state));
+  gtk_box_append(GTK_BOX(group), make_close_button(state));
   return group;
 }
 
@@ -585,6 +626,8 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   install_toolbar_css();
   GtkWidget *bar = gtk_header_bar_new();
   gtk_widget_add_css_class(bar, "shaula-preview-toolbar");
+  gtk_header_bar_set_show_title_buttons(GTK_HEADER_BAR(bar), FALSE);
+  gtk_widget_set_size_request(bar, -1, PREVIEW_HEADER_ESTIMATED_H);
 
   GtkWidget *toolbar = build_tool_group(state);
   state->toolbar_actions = toolbar;
@@ -598,6 +641,7 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
 
   GtkWidget *title_spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_set_hexpand(title_spacer, TRUE);
+  add_toolbar_move_gesture(state, title_spacer);
   gtk_header_bar_set_title_widget(GTK_HEADER_BAR(bar), title_spacer);
   gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), toolbar);
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
