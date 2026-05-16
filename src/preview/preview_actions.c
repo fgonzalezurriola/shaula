@@ -334,11 +334,24 @@ static char *timestamped_quick_save_path(GError **error) {
                     : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
   if (now != NULL)
     g_date_time_unref(now);
-  char *filename = g_strdup_printf("shaula-%s.png", stamp);
-  char *path = g_build_filename(dir, filename, NULL);
-  g_free(filename);
+  char *path = NULL;
+  for (int attempt = 0; attempt < 1000; attempt += 1) {
+    char *filename = attempt == 0
+                         ? g_strdup_printf("shaula-%s.png", stamp)
+                         : g_strdup_printf("shaula-%s-%03d.png", stamp,
+                                           attempt);
+    path = g_build_filename(dir, filename, NULL);
+    g_free(filename);
+    if (!g_file_test(path, G_FILE_TEST_EXISTS))
+      break;
+    g_free(path);
+    path = NULL;
+  }
   g_free(stamp);
   g_free(dir);
+  if (path == NULL)
+    g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_EXIST,
+                "Could not allocate a unique screenshot filename");
   return path;
 }
 
@@ -454,14 +467,7 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   state->notified = FALSE;
 
   GError *error = NULL;
-  const char *real_path =
-      state->saved_path != NULL ? state->saved_path : state->path;
-  char *target = NULL;
-  if (real_path != NULL && !is_temporary_capture_path(real_path)) {
-    target = shaula_image_io_with_png_extension(real_path);
-  } else {
-    target = timestamped_quick_save_path(&error);
-  }
+  char *target = timestamped_quick_save_path(&error);
 
   if (target == NULL) {
     notify_save_failure(state, "quick save target", error);
