@@ -17,8 +17,6 @@ typedef struct {
   GtkDropDown *window_combo;
   GtkDropDown *size_combo;
   GtkDropDown *position_combo;
-  GtkSpinButton *width_spin;
-  GtkSpinButton *height_spin;
   GtkSwitch *focused_switch;
   GtkSwitch *close_preview_on_save_switch;
   GtkSwitch *quick_skip_switch;
@@ -109,16 +107,10 @@ static void read_controls(ShaulaSettingsConfig *config) {
   config->close_preview_on_save =
       gtk_switch_get_active(state.close_preview_on_save_switch);
   SizePreset size = (SizePreset)gtk_drop_down_get_selected(state.size_combo);
-  if (size == SIZE_CUSTOM) {
-    config->width = gtk_spin_button_get_value_as_int(state.width_spin);
-    config->height = gtk_spin_button_get_value_as_int(state.height_spin);
-  } else {
-    shaula_settings_apply_size_preset(config, size);
-  }
+  shaula_settings_apply_size_preset(config, size);
   PositionPreset position =
       (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
-  if (position != POSITION_CUSTOM)
-    shaula_settings_apply_position_preset(config, position);
+  shaula_settings_apply_position_preset(config, position);
   config->quick_skip_preview = gtk_switch_get_active(state.quick_skip_switch);
   config->quick_copy = gtk_switch_get_active(state.quick_copy_switch);
   config->quick_save = gtk_switch_get_active(state.quick_save_switch);
@@ -149,14 +141,8 @@ static void read_controls(ShaulaSettingsConfig *config) {
 static void update_dynamic_controls(void) {
   gboolean floating =
       gtk_drop_down_get_selected(state.window_combo) == WINDOW_FLOATING;
-  gboolean custom_size =
-      gtk_drop_down_get_selected(state.size_combo) == SIZE_CUSTOM;
   gtk_widget_set_sensitive(GTK_WIDGET(state.size_combo), floating);
   gtk_widget_set_sensitive(GTK_WIDGET(state.position_combo), floating);
-  gtk_widget_set_sensitive(GTK_WIDGET(state.width_spin),
-                           floating && custom_size);
-  gtk_widget_set_sensitive(GTK_WIDGET(state.height_spin),
-                           floating && custom_size);
   gtk_widget_set_sensitive(GTK_WIDGET(state.quick_copy_switch),
                            gtk_switch_get_active(state.quick_skip_switch));
   gtk_widget_set_sensitive(GTK_WIDGET(state.quick_save_switch),
@@ -851,31 +837,15 @@ static GtkWidget *build_form(void) {
   gtk_box_append(GTK_BOX(box),
                  labeled_row("Window mode", GTK_WIDGET(state.window_combo)));
 
-  const char *sizes[] = {"Small", "Medium", "Large", "Custom", NULL};
+  const char *sizes[] = {"Small", "Medium", "Large", NULL};
   state.size_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(sizes));
   gtk_drop_down_set_selected(
       state.size_combo, shaula_settings_size_preset_for_config(&state.config));
   gtk_box_append(GTK_BOX(box),
                  labeled_row("Preview size", GTK_WIDGET(state.size_combo)));
 
-  state.width_spin =
-      GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(320, 7680, 10));
-  gtk_spin_button_set_value(state.width_spin, state.config.width);
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Custom width", GTK_WIDGET(state.width_spin)));
-
-  state.height_spin =
-      GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(240, 4320, 10));
-  gtk_spin_button_set_value(state.height_spin, state.config.height);
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Custom height", GTK_WIDGET(state.height_spin)));
-
-  const char *positions_all[] = {"Centered", "Top Left", "Top Right", "Custom",
-                                 NULL};
-  const char *positions_std[] = {"Centered", "Top Left", "Top Right", NULL};
-  state.position_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(
-      state.config.position_preset == POSITION_CUSTOM ? positions_all
-                                                      : positions_std));
+  const char *positions[] = {"Centered", "Top Left", "Top Right", NULL};
+  state.position_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(positions));
   gtk_drop_down_set_selected(state.position_combo,
                              state.config.position_preset);
   gtk_box_append(GTK_BOX(box), labeled_row("Floating position",

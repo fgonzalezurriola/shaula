@@ -36,19 +36,17 @@ typedef enum {
   ASPECT_9_16,
   ASPECT_4_5,
   ASPECT_3_4,
-  ASPECT_CUSTOM,
   ASPECT_COUNT,
 } ShaulaAspectChoice;
 
 static const char *ASPECT_LABELS[ASPECT_COUNT] = {
     "Free",          "1:1 Square",   "16:9 Widescreen",
     "4:3 Standard",  "3:2 Photo",    "16:10 Desktop",
-    "9:16 Vertical", "4:5 Portrait", "3:4 Phone photo",
-    "Custom..."};
+    "9:16 Vertical", "4:5 Portrait", "3:4 Phone photo"};
 
-static const int ASPECT_WIDTHS[ASPECT_COUNT] = {0, 1, 16, 4, 3, 16, 9, 4, 3, 0};
+static const int ASPECT_WIDTHS[ASPECT_COUNT] = {0, 1, 16, 4, 3, 16, 9, 4, 3};
 static const int ASPECT_HEIGHTS[ASPECT_COUNT] = {0,  1,  9, 3, 2,
-                                                 10, 16, 5, 4, 0};
+                                                 10, 16, 5, 4};
 
 typedef enum {
   INTERACTION_QUICK,
@@ -125,7 +123,6 @@ typedef struct {
   ShaulaRect drag_origin;
   gboolean dropdown_open;
   ShaulaAspectChoice aspect_choice;
-  char aspect_custom_label[32];
   char aspect_output_label[32];
   gboolean suppress_pointer_drag;
   ShaulaCursorShape cursor_shape;
@@ -144,7 +141,6 @@ static ShaulaOverlayState state;
 
 static GdkMonitor *monitor_for_output(void);
 static ShaulaPoint initial_surface_size(void);
-static void open_custom_aspect_dialog(void);
 static void reposition_toolbar_widget(void);
 static void update_aspect_label(void);
 static void prefer_fast_overlay_renderer(void);
@@ -697,12 +693,7 @@ static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
 static void apply_aspect_choice(void) {
   if (state.aspect_choice == ASPECT_FREE) {
     state.has_aspect = FALSE;
-    state.aspect_custom_label[0] = '\0';
     state.aspect_output_label[0] = '\0';
-  } else if (state.aspect_choice == ASPECT_CUSTOM) {
-    state.has_aspect = TRUE;
-    snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
-             "%d:%d", state.aspect.width, state.aspect.height);
   } else {
     state.has_aspect = TRUE;
     state.aspect = (ShaulaAspect){
@@ -723,62 +714,6 @@ static void apply_aspect_choice(void) {
   state.dropdown_open = FALSE;
   if (state.aspect_popover != NULL)
     gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
-}
-
-static gboolean parse_custom_aspect(const char *raw, ShaulaAspect *out) {
-  if (raw == NULL)
-    return FALSE;
-  int w = 0;
-  int h = 0;
-  char tail = '\0';
-  if (sscanf(raw, " %d : %d %c", &w, &h, &tail) != 2 || w <= 0 || h <= 0)
-    return FALSE;
-  *out = (ShaulaAspect){.width = w, .height = h};
-  return TRUE;
-}
-
-static void custom_aspect_response(GtkDialog *dialog, int response_id,
-                                   gpointer data) {
-  GtkEntry *entry = GTK_ENTRY(data);
-  if (response_id == GTK_RESPONSE_ACCEPT) {
-    ShaulaAspect next;
-    const char *raw = gtk_editable_get_text(GTK_EDITABLE(entry));
-    if (parse_custom_aspect(raw, &next)) {
-      state.aspect = next;
-      state.aspect_choice = ASPECT_CUSTOM;
-      state.has_aspect = TRUE;
-      snprintf(state.aspect_custom_label, sizeof(state.aspect_custom_label),
-               "%d:%d", next.width, next.height);
-      snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
-               "%d:%d", next.width, next.height);
-      apply_aspect_choice();
-      update_aspect_label();
-      queue_draw();
-    }
-  }
-  gtk_window_destroy(GTK_WINDOW(dialog));
-}
-
-static void custom_aspect_entry_activate(GtkEntry *entry, gpointer data) {
-  custom_aspect_response(GTK_DIALOG(data), GTK_RESPONSE_ACCEPT, entry);
-}
-
-static void open_custom_aspect_dialog(void) {
-  GtkWidget *dialog = gtk_dialog_new_with_buttons(
-      "Custom aspect", GTK_WINDOW(state.window), GTK_DIALOG_MODAL, "Cancel",
-      GTK_RESPONSE_CANCEL, "Apply", GTK_RESPONSE_ACCEPT, NULL);
-  GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-  GtkWidget *entry = gtk_entry_new();
-  gtk_editable_set_text(GTK_EDITABLE(entry),
-                        state.has_aspect ? state.aspect_output_label : "16:9");
-  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "W:H");
-  gtk_box_append(GTK_BOX(content), entry);
-  g_signal_connect(dialog, "response", G_CALLBACK(custom_aspect_response),
-                   entry);
-  g_signal_connect(entry, "activate", G_CALLBACK(custom_aspect_entry_activate),
-                   dialog);
-  gtk_window_present(GTK_WINDOW(dialog));
-  gtk_widget_grab_focus(entry);
 }
 
 static void draw_background(cairo_t *cr, int width, int height) {
@@ -1198,24 +1133,20 @@ static gboolean load_aspect(void) {
   if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
     state.has_aspect = FALSE;
     state.aspect_choice = ASPECT_FREE;
-    state.aspect_custom_label[0] = '\0';
     state.aspect_output_label[0] = '\0';
     return FALSE;
   }
   state.aspect = (ShaulaAspect){.width = w, .height = h};
   state.has_aspect = TRUE;
-  state.aspect_choice = ASPECT_CUSTOM;
-  snprintf(state.aspect_custom_label, sizeof(state.aspect_custom_label),
-           "%d:%d", w, h);
   snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
            "%d:%d", w, h);
   for (int i = 1; i < ASPECT_COUNT; i += 1) {
     if (ASPECT_WIDTHS[i] == w && ASPECT_HEIGHTS[i] == h) {
       state.aspect_choice = (ShaulaAspectChoice)i;
-      state.aspect_custom_label[0] = '\0';
-      break;
+      return TRUE;
     }
   }
+  state.aspect_choice = ASPECT_FREE;
   return TRUE;
 }
 
@@ -1363,12 +1294,6 @@ static void update_aspect_label(void) {
 static void on_aspect_item_clicked(GtkButton *button, gpointer data) {
   (void)button;
   int idx = GPOINTER_TO_INT(data);
-  if ((ShaulaAspectChoice)idx == ASPECT_CUSTOM) {
-    if (state.aspect_popover != NULL)
-      gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
-    open_custom_aspect_dialog();
-    return;
-  }
   state.aspect_choice = (ShaulaAspectChoice)idx;
   apply_aspect_choice();
   update_aspect_label();

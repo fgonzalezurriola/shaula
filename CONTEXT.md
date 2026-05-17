@@ -546,7 +546,10 @@ and the working diff.
   do not reinterpret it as changing ink top-left. `text_line_metrics` computes
   the layout draw origin, ink/logical union bounds, and line advance once, then
   committed rendering, selected bounds, draft editing bounds, and draft caret
-  reuse those metrics. Active drafts always draw a canvas caret with a contrast
+  reuse those metrics. Select-mode text hit testing must use the exact
+  annotation bounds that draw the selected dashed box; do not add click slop
+  around text because adjacent labels then steal invisible clicks. Active drafts
+  always draw a canvas caret with a contrast
   halo, including non-empty text. The caret rect comes from the committed text
   layout path via `shaula_annotation_text_cursor_rect`, using the hidden
   buffer's UTF-8 insert byte index and `pango_layout_get_cursor_pos`;

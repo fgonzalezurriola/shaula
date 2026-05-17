@@ -20,14 +20,12 @@ typedef enum {
   SIZE_SMALL = 0,
   SIZE_MEDIUM,
   SIZE_LARGE,
-  SIZE_CUSTOM,
 } SizePreset;
 
 typedef enum {
   POSITION_CENTERED = 0,
   POSITION_TOP_LEFT,
   POSITION_TOP_RIGHT,
-  POSITION_CUSTOM,
 } PositionPreset;
 
 typedef struct {

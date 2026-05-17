@@ -1045,8 +1045,10 @@ static ShaulaAnnotationHitKind annotation_hit_kind(ShaulaAnnotation *annotation,
     break;
   }
   case SHAULA_ANNOTATION_TEXT:
-    if (shaula_rect_contains_point(
-            shaula_rect_expanded(annotation->bounds, tolerance), point))
+    /* Text selection should match the visible dashed selection bounds. Extra
+     * hit slop makes adjacent labels steal clicks from each other.
+     */
+    if (shaula_rect_contains_point(annotation->bounds, point))
       return SHAULA_ANNOTATION_HIT_TEXT_BOUNDS;
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
