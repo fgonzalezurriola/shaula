@@ -61,11 +61,11 @@ static char *render_or_original_png(ShaulaPreviewState *state,
                                     gboolean *is_temp, GError **error) {
   *is_temp = FALSE;
   if (shaula_preview_state_has_modifications(state) ||
-      !shaula_image_io_path_has_png_extension(state->path)) {
+      !shaula_image_io_path_has_png_extension(state->document.path)) {
     *is_temp = TRUE;
     return shaula_render_composited_png_temp(state, error);
   }
-  return g_strdup(state->path);
+  return g_strdup(state->document.path);
 }
 
 /// Runtime boundary for immediate preview notifications.
@@ -378,10 +378,10 @@ static gboolean save_rendered_png_to_path(ShaulaPreviewState *state,
 
 static void remember_real_save_path(ShaulaPreviewState *state,
                                     const char *target) {
-  g_free(state->saved_path);
-  state->saved_path = g_strdup(target);
-  g_free(state->path);
-  state->path = g_strdup(target);
+  g_free(state->document.saved_path);
+  state->document.saved_path = g_strdup(target);
+  g_free(state->document.path);
+  state->document.path = g_strdup(target);
 }
 
 void shaula_preview_action_set_tool(ShaulaPreviewState *state,
@@ -426,7 +426,7 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
   state->last_action = "copy";
-  state->copied = FALSE;
+  state->document.copied = FALSE;
   state->notified = FALSE;
   gboolean is_temp = FALSE;
   GError *error = NULL;
@@ -448,7 +448,7 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
     else
       state->notified = TRUE;
   } else {
-    state->copied = TRUE;
+    state->document.copied = TRUE;
     const char *thumbnail_path =
         is_temporary_capture_path(source) ? NULL : thumbnail_path_or_null(source);
     if (success_notifications_enabled())
@@ -464,11 +464,11 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_action_save(ShaulaPreviewState *state) {
-  if (state == NULL || state->image == NULL)
+  if (state == NULL || state->document.image == NULL)
     return;
 
   state->last_action = "save";
-  state->saved = FALSE;
+  state->document.saved = FALSE;
   state->notified = FALSE;
 
   GError *error = NULL;
@@ -485,7 +485,7 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
     return;
   }
 
-  state->saved = TRUE;
+  state->document.saved = TRUE;
   remember_real_save_path(state, target);
   if (success_notifications_enabled())
     state->notified = shaula_preview_notify_saved(
@@ -497,12 +497,12 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
 
 void shaula_preview_action_accept(ShaulaPreviewState *state,
                                   gboolean copy_to_clipboard) {
-  if (state == NULL || state->path == NULL)
+  if (state == NULL || state->document.path == NULL)
     return;
 
   state->last_action = copy_to_clipboard ? "copy" : "save";
-  state->saved = FALSE;
-  state->copied = FALSE;
+  state->document.saved = FALSE;
+  state->document.copied = FALSE;
   state->notified = FALSE;
 
   gboolean is_temp = FALSE;
@@ -521,10 +521,10 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   }
 
   char *target = NULL;
-  if (is_temporary_capture_path(state->path))
+  if (is_temporary_capture_path(state->document.path))
     target = timestamped_quick_save_path(&error);
   else
-    target = shaula_image_io_with_png_extension(state->path);
+    target = shaula_image_io_with_png_extension(state->document.path);
   if (target == NULL) {
     notify_save_failure(state, "accept save target", error);
     if (is_temp)
@@ -534,19 +534,19 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
       g_application_quit(G_APPLICATION(state->app));
     return;
   } else if (g_strcmp0(source, target) == 0) {
-    state->saved = TRUE;
+    state->document.saved = TRUE;
     remember_real_save_path(state, target);
   } else if (!shaula_image_io_copy_file_bytes(source, target, &error)) {
     report_error("accept save", error);
     state->notified = shaula_preview_notify("Could not save screenshot",
                                             "Save failed", NULL, FALSE, 6000);
   } else {
-    state->saved = TRUE;
+    state->document.saved = TRUE;
     remember_real_save_path(state, target);
   }
 
-  if (copy_to_clipboard && state->saved_path != NULL) {
-    if (!shaula_clipboard_copy_png_file(state->saved_path, &error)) {
+  if (copy_to_clipboard && state->document.saved_path != NULL) {
+    if (!shaula_clipboard_copy_png_file(state->document.saved_path, &error)) {
       report_error("accept copy", error);
       if (error_notifications_enabled())
         state->notified = shaula_preview_notify("Could not copy screenshot",
@@ -554,30 +554,30 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
       else
         state->notified = TRUE;
     } else {
-      state->copied = TRUE;
+      state->document.copied = TRUE;
     }
   }
 
-  if (state->saved && copy_to_clipboard && state->copied) {
+  if (state->document.saved && copy_to_clipboard && state->document.copied) {
     if (success_notifications_enabled())
       state->notified = shaula_preview_notify_saved(
-          state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
+          state->document.saved_path,
+          thumbnail_path_or_null(state->document.saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
-  } else if (state->saved && !copy_to_clipboard) {
+  } else if (state->document.saved && !copy_to_clipboard) {
     if (success_notifications_enabled())
       state->notified = shaula_preview_notify_saved(
-          state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
+          state->document.saved_path,
+          thumbnail_path_or_null(state->document.saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
-  } else if (state->saved && copy_to_clipboard && !state->copied &&
+  } else if (state->document.saved && copy_to_clipboard && !state->document.copied &&
              !state->notified) {
     if (success_notifications_enabled())
       state->notified = shaula_preview_notify_saved(
-          state->saved_path,
-          thumbnail_path_or_null(state->saved_path), TRUE, 6000);
+          state->document.saved_path,
+          thumbnail_path_or_null(state->document.saved_path), TRUE, 6000);
     else
       state->notified = TRUE;
   }
@@ -613,7 +613,7 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
     if (file != NULL) {
       char *target = g_file_get_path(file);
       state->last_action = "save";
-      state->saved = FALSE;
+      state->document.saved = FALSE;
       state->notified = FALSE;
       if (target != NULL) {
         char *target_png = shaula_image_io_with_png_extension(target);
@@ -622,7 +622,7 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
           if (!save_rendered_png_to_path(state, target_png, &error)) {
             notify_save_failure(state, "save", error);
           } else {
-            state->saved = TRUE;
+            state->document.saved = TRUE;
             remember_real_save_path(state, target_png);
             if (success_notifications_enabled())
               state->notified = shaula_preview_notify_saved(
@@ -657,8 +657,8 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
   GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
       "Save Shaula Preview", GTK_WINDOW(state->window),
       GTK_FILE_CHOOSER_ACTION_SAVE, "Save", "Cancel");
-  if (state->path != NULL) {
-    char *basename = g_path_get_basename(state->path);
+  if (state->document.path != NULL) {
+    char *basename = g_path_get_basename(state->document.path);
     char *png_name = shaula_image_io_with_png_extension(basename);
     gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog),
                                       png_name != NULL ? png_name : basename);
@@ -719,10 +719,10 @@ void shaula_preview_action_crop_selected(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_action_copy_path(ShaulaPreviewState *state) {
-  if (state == NULL || state->path == NULL)
+  if (state == NULL || state->document.path == NULL)
     return;
   GError *error = NULL;
-  if (!shaula_clipboard_copy_text(state->path, &error))
+  if (!shaula_clipboard_copy_text(state->document.path, &error))
     report_error("copy path", error);
 }
 
@@ -735,10 +735,10 @@ void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state) {
-  if (state == NULL || state->path == NULL)
+  if (state == NULL || state->document.path == NULL)
     return;
   GError *error = NULL;
-  if (!shaula_image_io_open_containing_folder(state->path, &error))
+  if (!shaula_image_io_open_containing_folder(state->document.path, &error))
     report_error("open containing folder", error);
 }
 

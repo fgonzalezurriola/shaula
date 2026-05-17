@@ -228,8 +228,10 @@ and the working diff.
   `src/preview/preview_clipboard.zig`. The GTK helpers still call the existing
   C headers, but `build.zig` builds Zig objects and links them into the native
   helpers. The old C implementations and scratch GTK test file were removed.
-  Remaining C should be treated as GTK UI/rendering surface unless a later pass
-  first extracts the Preview document model from `ShaulaPreviewState`.
+  Remaining C should be treated as GTK UI/rendering surface. Preview now has a
+  `ShaulaPreviewDocument` seam for output-affecting model state while GTK
+  widgets, view state, tools, gestures, and rendering stay in the C preview
+  surface.
 - Overlay runtime cleanup: legacy unused `OverlayRuntime` lifecycle scaffolding
   was removed from `overlay/runtime.zig`; production overlay execution keeps a
   single helper stdio seam via `runSelectionHelper`.
@@ -656,10 +658,15 @@ and the working diff.
 
 ## Preview History
 
-- `ShaulaHistoryStack` lives in `preview_state.*` and stores bounded document
-  snapshots with undo/redo arrays and a default capacity of 24. Snapshots hold a
-  referenced immutable `GdkPixbuf`; pixel-mutating edits replace the image
-  before mutation so annotation-only undo entries do not deep-copy full images.
+- `ShaulaPreviewDocument` lives in `preview_document.*` and owns
+  output-affecting model state: current image buffer/path, annotations,
+  Spotlight regions, preview-local annotation clipboard, next annotation id,
+  modified/copied/saved flags, saved path, and history.
+- `ShaulaHistoryStack` now belongs to `ShaulaPreviewDocument` and stores
+  bounded document snapshots with undo/redo arrays and a default capacity of
+  24. Snapshots hold a referenced immutable `GdkPixbuf`; pixel-mutating edits
+  replace the image before mutation so annotation-only undo entries do not
+  deep-copy full images.
 - History tracks state that affects copied/saved output: current image buffer,
   annotations, spotlight regions, annotation ids, and modified status.
 - History intentionally excludes view-only state: zoom, pan, fit mode, active

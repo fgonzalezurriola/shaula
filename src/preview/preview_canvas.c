@@ -158,16 +158,16 @@ static gboolean sample_composited_pixel(ShaulaPreviewState *state, int px,
 
   cairo_t *cr = cairo_create(surface);
   cairo_translate(cr, -(double)px, -(double)py);
-  gdk_cairo_set_source_pixbuf(cr, state->image, 0, 0);
+  gdk_cairo_set_source_pixbuf(cr, state->document.image, 0, 0);
   cairo_paint(cr);
 
   cairo_save(cr);
   cairo_rectangle(cr, px, py, 1, 1);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
+  for (guint i = 0; state->document.annotations != NULL && i < state->document.annotations->len;
        i++) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
     gboolean selected = annotation->selected;
     annotation->selected = FALSE;
     shaula_annotation_draw(cr, annotation);
@@ -199,7 +199,7 @@ static gboolean sample_composited_pixel(ShaulaPreviewState *state, int px,
 
 static gboolean update_hover_color(ShaulaPreviewState *state, double x,
                                    double y) {
-  if (state == NULL || state->image == NULL)
+  if (state == NULL || state->document.image == NULL)
     return FALSE;
   ShaulaPoint image_point = shaula_preview_canvas_screen_to_image(state, x, y);
   int px = 0;
@@ -314,15 +314,15 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_save(cr);
   cairo_translate(cr, state->pan_x, state->pan_y);
   cairo_scale(cr, state->zoom, state->zoom);
-  gdk_cairo_set_source_pixbuf(cr, state->image, 0, 0);
+  gdk_cairo_set_source_pixbuf(cr, state->document.image, 0, 0);
   cairo_paint(cr);
 
   cairo_rectangle(cr, 0, 0, image_w, image_h);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
+  for (guint i = 0; state->document.annotations != NULL && i < state->document.annotations->len;
        i++)
-    shaula_annotation_draw(cr, g_ptr_array_index(state->annotations, i));
+    shaula_annotation_draw(cr, g_ptr_array_index(state->document.annotations, i));
   cairo_restore(cr);
 
   if (state->is_dark) {
@@ -669,7 +669,7 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   shaula_preview_update_fit_zoom(state);
 
   draw_checker_background(state, cr, width, height);
-  if (state->image == NULL)
+  if (state->document.image == NULL)
     return;
   draw_image_frame(state, cr);
   draw_drafts(state, cr);
@@ -680,7 +680,7 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
   (void)controller;
   (void)dx;
   ShaulaPreviewState *state = data;
-  if (state->image == NULL)
+  if (state->document.image == NULL)
     return TRUE;
   if (state->active_tool == SHAULA_TOOL_MEASURE &&
       state->operation == SHAULA_OPERATION_NONE) {
@@ -984,7 +984,7 @@ static void resize_selected_rectangle(ShaulaPreviewState *state,
     return;
   annotation->data.rectangle.rect = next;
   shaula_annotation_update_bounds(annotation);
-  state->modified = TRUE;
+  state->document.modified = TRUE;
 }
 
 static void resize_selected_arrow(ShaulaPreviewState *state,
@@ -1029,13 +1029,13 @@ static void resize_selected_arrow(ShaulaPreviewState *state,
   annotation->data.arrow.control = control;
   annotation->data.arrow.is_curved = is_curved;
   shaula_annotation_update_bounds(annotation);
-  state->modified = TRUE;
+  state->document.modified = TRUE;
 }
 
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                           gpointer data) {
   ShaulaPreviewState *state = data;
-  if (state->image == NULL)
+  if (state->document.image == NULL)
     return;
   state->drag_start_x = x;
   state->drag_start_y = y;
@@ -1076,7 +1076,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                                          SHAULA_ANNOTATION_HIT_HANDLE};
     } else if (inside) {
       hit_result = shaula_annotations_hit_test_ranked(
-          state->annotations, image_point, hit_tolerance);
+          state->document.annotations, image_point, hit_tolerance);
     }
     ShaulaAnnotation *hit = hit_result.annotation;
     if (hit != NULL) {
@@ -1217,7 +1217,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
       state->operation_changed = TRUE;
     if (state->selected_annotation != NULL && state->operation_changed) {
       shaula_annotation_move(state->selected_annotation, mx, my);
-      state->modified = TRUE;
+      state->document.modified = TRUE;
     }
     state->drag_last_image = raw;
     break;
@@ -1238,7 +1238,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
       state->selected_annotation->data.arrow.control.y =
           2.0 * raw.y - 0.5 * p0.y - 0.5 * p2.y;
       shaula_annotation_update_bounds(state->selected_annotation);
-      state->modified = TRUE;
+      state->document.modified = TRUE;
     }
     state->drag_last_image = raw;
     break;
@@ -1312,7 +1312,7 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
 
   if (state->active_tool == SHAULA_TOOL_SELECT &&
       state->operation == SHAULA_OPERATION_NONE && state->area != NULL &&
-      state->image != NULL) {
+      state->document.image != NULL) {
     ShaulaPoint image_point =
         shaula_preview_canvas_screen_to_image(state, x, y);
     gboolean inside = image_point_is_inside(state, image_point);
@@ -1325,7 +1325,7 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
       hit = (ShaulaAnnotationHit){state->selected_annotation,
                                   SHAULA_ANNOTATION_HIT_HANDLE};
     } else if (inside) {
-      hit = shaula_annotations_hit_test_ranked(state->annotations, image_point,
+      hit = shaula_annotations_hit_test_ranked(state->document.annotations, image_point,
                                                MAX(4.0, 8.0 / state->zoom));
     }
     gtk_widget_set_cursor_from_name(
@@ -1337,7 +1337,7 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
   }
 
   if (state->active_tool == SHAULA_TOOL_MEASURE &&
-      state->operation == SHAULA_OPERATION_NONE && state->image != NULL) {
+      state->operation == SHAULA_OPERATION_NONE && state->document.image != NULL) {
     ShaulaPoint image_point =
         shaula_preview_canvas_screen_to_image(state, x, y);
     int px = 0;
@@ -1345,7 +1345,7 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
     if (image_point_to_pixel(state, image_point, &px, &py)) {
       ShaulaMeasureResult prev = state->measure_result;
       shaula_measure_detect_edges(
-          state->image, px, py, state->measure_tolerance,
+          state->document.image, px, py, state->measure_tolerance,
           state->measure_compare, state->measure_mode,
           state->measure_outer_bounds, &state->measure_result);
       state->measure_has_live = TRUE;
@@ -1439,7 +1439,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     /* Open arrow HUD targeting the just-created arrow. */
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
       shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.arrow_index = (int)state->annotations->len - 1;
+      state->properties_hud.arrow_index = (int)state->document.annotations->len - 1;
       state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ARROW;
       state->active_tool = SHAULA_TOOL_SELECT;
       shaula_preview_toolbar_update_tool_state(state);
@@ -1448,7 +1448,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
       shaula_preview_toolbar_update_selection_state(state);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.rectangle_index = (int)state->annotations->len - 1;
+      state->properties_hud.rectangle_index = (int)state->document.annotations->len - 1;
       state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
       state->active_tool = SHAULA_TOOL_SELECT;
       shaula_preview_toolbar_update_tool_state(state);

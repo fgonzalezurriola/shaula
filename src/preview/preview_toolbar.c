@@ -575,7 +575,7 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   GtkWidget *info_stack = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_valign(info_stack, GTK_ALIGN_CENTER);
 
-  if (state->image != NULL) {
+  if (state->document.image != NULL) {
     char size_buf[32];
     snprintf(size_buf, sizeof(size_buf), "%dw\xc3\x97%dh",
              shaula_preview_image_width(state),

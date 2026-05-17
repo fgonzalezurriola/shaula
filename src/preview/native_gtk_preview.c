@@ -176,10 +176,11 @@ static void emit_preview_result(void) {
   fputs("{\"closed\":true,\"action\":", stdout);
   print_json_string(action);
   fprintf(stdout, ",\"copied\":%s,\"saved\":%s,\"notified\":%s,\"saved_path\":",
-          state.copied ? "true" : "false", state.saved ? "true" : "false",
+          state.document.copied ? "true" : "false",
+          state.document.saved ? "true" : "false",
           state.notified ? "true" : "false");
-  if (state.saved_path != NULL) {
-    print_json_string(state.saved_path);
+  if (state.document.saved_path != NULL) {
+    print_json_string(state.document.saved_path);
   } else {
     fputs("null", stdout);
   }

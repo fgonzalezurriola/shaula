@@ -17,7 +17,7 @@ static GQuark render_error_quark(void) {
  */
 char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
                                         GError **error) {
-  if (state == NULL || state->image == NULL) {
+  if (state == NULL || state->document.image == NULL) {
     g_set_error(error, render_error_quark(), 1, "preview image is missing");
     return NULL;
   }
@@ -35,16 +35,16 @@ char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
   cairo_t *cr = cairo_create(surface);
   cairo_set_source_rgba(cr, 0, 0, 0, 0);
   cairo_paint(cr);
-  gdk_cairo_set_source_pixbuf(cr, state->image, 0, 0);
+  gdk_cairo_set_source_pixbuf(cr, state->document.image, 0, 0);
   cairo_paint(cr);
 
   cairo_save(cr);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  for (guint i = 0; state->annotations != NULL && i < state->annotations->len;
+  for (guint i = 0; state->document.annotations != NULL && i < state->document.annotations->len;
        i++) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
     gboolean selected = annotation->selected;
     annotation->selected = FALSE;
     shaula_annotation_draw(cr, annotation);

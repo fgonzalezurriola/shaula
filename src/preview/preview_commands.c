@@ -207,23 +207,23 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_ERASE_REGION:
   case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
     return state->active_tool == SHAULA_TOOL_SELECT &&
-           state->has_region_selection && state->image != NULL;
+           state->has_region_selection && state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP:
-    return state->image != NULL;
+    return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY:
   case SHAULA_PREVIEW_COMMAND_SAVE:
   case SHAULA_PREVIEW_COMMAND_SAVE_AS:
   case SHAULA_PREVIEW_COMMAND_DONE:
   case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
   case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:
-    return state->image != NULL;
+    return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
-    return state->annotations != NULL && state->annotations->len > 0;
+    return state->document.annotations != NULL && state->document.annotations->len > 0;
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
-    return state->path != NULL;
+    return state->document.path != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
-    return state->image != NULL;
+    return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_CLOSE:
   case SHAULA_PREVIEW_COMMAND_DISCARD:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:

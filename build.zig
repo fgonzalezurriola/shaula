@@ -120,6 +120,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
     command.addFileArg(b.path("src/preview/preview_canvas.c"));
     command.addFileArg(b.path("src/preview/preview_commands.c"));
+    command.addFileArg(b.path("src/preview/preview_document.c"));
     command.addFileArg(b.path("src/preview/preview_document_edit.c"));
     command.addFileArg(b.path("src/preview/preview_icons.c"));
     command.addFileArg(b.path("src/preview/preview_measure.c"));

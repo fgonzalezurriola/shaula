@@ -12,7 +12,7 @@ void shaula_preview_document_begin_edit(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
   shaula_preview_push_undo(state);
-  state->modified = TRUE;
+  state->document.modified = TRUE;
 }
 
 /* Takes ownership of replacement when non-null. */
@@ -20,9 +20,9 @@ void shaula_preview_document_replace_image(ShaulaPreviewState *state,
                                            GdkPixbuf *replacement) {
   if (state == NULL || replacement == NULL)
     return;
-  if (state->image != NULL)
-    g_object_unref(state->image);
-  state->image = replacement;
+  if (state->document.image != NULL)
+    g_object_unref(state->document.image);
+  state->document.image = replacement;
 }
 
 void shaula_preview_document_finish_edit(

@@ -7,7 +7,6 @@
 #include "preview_document_edit.h"
 #include "preview_toolbar.h"
 
-#define SHAULA_HISTORY_DEFAULT_CAPACITY 24
 #define SHAULA_CROP_MIN_SIZE_PX 4
 #define SHAULA_DUPLICATE_OFFSET_PX 12.0
 #define SHAULA_PASTE_OFFSET_PX 12.0
@@ -16,145 +15,6 @@
   (SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                    \
    SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                    \
    SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL)
-
-/* History tracks the editable document that affects exported/copied pixels:
- * the current immutable image reference, annotation objects, and annotation id
- * allocation. Pixel-mutating edits replace state->image before changing pixels,
- * so annotation-only snapshots can share the base pixbuf without keeping one
- * full image copy per undo entry. View-only state such as zoom, pan, fit mode,
- * active tool, hover, menus, and crop/text drafts is intentionally excluded.
- * Selection is restored only because annotations currently carry that flag; any
- * restored pointer is rebuilt from cloned annotations to avoid stale ownership.
- */
-struct ShaulaPreviewSnapshot {
-  GdkPixbuf *image;
-  GPtrArray *annotations;
-  GArray *spotlight_regions;
-  int next_annotation_id;
-  gboolean modified;
-};
-
-static GArray *spotlight_regions_clone(GArray *regions) {
-  GArray *clone = g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
-  if (regions != NULL && regions->len > 0)
-    g_array_append_vals(clone, regions->data, regions->len);
-  return clone;
-}
-
-static ShaulaPreviewSnapshot *snapshot_new(ShaulaPreviewState *state) {
-  ShaulaPreviewSnapshot *snapshot = g_new0(ShaulaPreviewSnapshot, 1);
-  snapshot->image =
-      state->image != NULL ? GDK_PIXBUF(g_object_ref(state->image)) : NULL;
-  snapshot->annotations = shaula_annotations_clone_array(state->annotations);
-  snapshot->spotlight_regions =
-      spotlight_regions_clone(state->spotlight_regions);
-  snapshot->next_annotation_id = state->next_annotation_id;
-  snapshot->modified = state->modified;
-  return snapshot;
-}
-
-static void snapshot_free(gpointer data) {
-  ShaulaPreviewSnapshot *snapshot = data;
-  if (snapshot == NULL)
-    return;
-  if (snapshot->image != NULL)
-    g_object_unref(snapshot->image);
-  if (snapshot->annotations != NULL)
-    g_ptr_array_unref(snapshot->annotations);
-  if (snapshot->spotlight_regions != NULL)
-    g_array_unref(snapshot->spotlight_regions);
-  g_free(snapshot);
-}
-
-static void clear_stack(GPtrArray *stack) {
-  if (stack != NULL)
-    g_ptr_array_set_size(stack, 0);
-}
-
-static void history_stack_init(ShaulaHistoryStack *history, guint capacity) {
-  history->undo = g_ptr_array_new_with_free_func(snapshot_free);
-  history->redo = g_ptr_array_new_with_free_func(snapshot_free);
-  history->capacity = capacity > 0 ? capacity : SHAULA_HISTORY_DEFAULT_CAPACITY;
-}
-
-static void history_stack_free(ShaulaHistoryStack *history) {
-  if (history->undo != NULL)
-    g_ptr_array_unref(history->undo);
-  if (history->redo != NULL)
-    g_ptr_array_unref(history->redo);
-  history->undo = NULL;
-  history->redo = NULL;
-}
-
-static gboolean history_stack_can_undo(ShaulaHistoryStack *history) {
-  return history != NULL && history->undo != NULL && history->undo->len > 0;
-}
-
-static gboolean history_stack_can_redo(ShaulaHistoryStack *history) {
-  return history != NULL && history->redo != NULL && history->redo->len > 0;
-}
-
-static void history_stack_trim_to_capacity(ShaulaHistoryStack *history) {
-  if (history == NULL || history->undo == NULL || history->capacity == 0)
-    return;
-  while (history->undo->len > history->capacity)
-    g_ptr_array_remove_index(history->undo, 0);
-}
-
-static void history_stack_push_undo(ShaulaHistoryStack *history,
-                                    ShaulaPreviewSnapshot *snapshot,
-                                    gboolean clear_redo) {
-  if (history == NULL || history->undo == NULL || snapshot == NULL)
-    return;
-  g_ptr_array_add(history->undo, snapshot);
-  history_stack_trim_to_capacity(history);
-  if (clear_redo)
-    clear_stack(history->redo);
-}
-
-static ShaulaPreviewSnapshot *
-history_stack_pop_undo(ShaulaHistoryStack *history) {
-  if (!history_stack_can_undo(history))
-    return NULL;
-  return g_ptr_array_steal_index(history->undo, history->undo->len - 1);
-}
-
-static ShaulaPreviewSnapshot *
-history_stack_pop_redo(ShaulaHistoryStack *history) {
-  if (!history_stack_can_redo(history))
-    return NULL;
-  return g_ptr_array_steal_index(history->redo, history->redo->len - 1);
-}
-
-static void history_stack_push_redo(ShaulaHistoryStack *history,
-                                    ShaulaPreviewSnapshot *snapshot) {
-  if (history == NULL || history->redo == NULL || snapshot == NULL)
-    return;
-  g_ptr_array_add(history->redo, snapshot);
-}
-
-static void annotation_clipboard_init(ShaulaAnnotationClipboard *clipboard) {
-  clipboard->annotations =
-      g_ptr_array_new_with_free_func(shaula_annotation_free);
-  clipboard->last_pasted_id = 0;
-}
-
-static void annotation_clipboard_clear(ShaulaAnnotationClipboard *clipboard) {
-  if (clipboard == NULL)
-    return;
-  if (clipboard->annotations != NULL)
-    g_ptr_array_set_size(clipboard->annotations, 0);
-  clipboard->last_pasted_id = 0;
-}
-
-static void annotation_clipboard_free(ShaulaAnnotationClipboard *clipboard) {
-  if (clipboard == NULL)
-    return;
-  if (clipboard->annotations != NULL)
-    g_ptr_array_unref(clipboard->annotations);
-  clipboard->annotations = NULL;
-  clipboard->last_pasted_id = 0;
-}
 
 static gboolean rect_fits_image(ShaulaRect rect, double image_width,
                                 double image_height) {
@@ -296,10 +156,9 @@ static gboolean detect_dark_theme(void) {
 void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
                                GdkPixbuf *image) {
   memset(state, 0, sizeof(*state));
-  state->path = g_strdup(path);
+  shaula_preview_document_init(&state->document, path, image);
   state->managed_temp_path =
       preview_path_is_temporary_capture(path) ? g_strdup(path) : NULL;
-  state->image = image;
   state->zoom = 1.0;
   state->fit_zoom = 1.0;
   state->fit_mode = TRUE;
@@ -313,14 +172,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->hover_color = state->current_color;
   shaula_color_to_hex(state->hover_color, state->hover_hex);
   shaula_properties_hud_state_init(&state->properties_hud);
-  state->annotations = g_ptr_array_new_with_free_func(shaula_annotation_free);
-  annotation_clipboard_init(&state->annotation_clipboard);
-  state->spotlight_regions =
-      g_array_new(FALSE, FALSE, sizeof(ShaulaSpotlightRegion));
-  history_stack_init(&state->history, SHAULA_HISTORY_DEFAULT_CAPACITY);
-  state->pending_history_snapshot = NULL;
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
-  state->next_annotation_id = 1;
   state->measure_tolerance = 32;
   state->toolbar_overflow_visible_count = -1;
 }
@@ -328,43 +180,29 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
 void shaula_preview_state_free(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
-  if (state->image != NULL)
-    g_object_unref(state->image);
-  if (state->annotations != NULL)
-    g_ptr_array_unref(state->annotations);
-  annotation_clipboard_free(&state->annotation_clipboard);
-  if (state->spotlight_regions != NULL)
-    g_array_unref(state->spotlight_regions);
-  if (state->pending_history_snapshot != NULL)
-    snapshot_free(state->pending_history_snapshot);
-  history_stack_free(&state->history);
   if (state->draft_pen_points != NULL)
     g_array_unref(state->draft_pen_points);
   for (int i = 0; i < state->icon_root_count; i++)
     g_free(state->icon_roots[i]);
   if (state->managed_temp_path != NULL &&
-      !(state->copied && state->notified &&
+      !(state->document.copied && state->notified &&
         g_strcmp0(state->last_action, "copy") == 0))
     g_unlink(state->managed_temp_path);
   g_free(state->managed_temp_path);
-  g_free(state->saved_path);
-  g_free(state->path);
+  shaula_preview_document_free(&state->document);
 }
 
 gboolean shaula_preview_state_has_modifications(ShaulaPreviewState *state) {
-  return state != NULL && state->modified;
+  return state != NULL &&
+         shaula_preview_document_has_modifications(&state->document);
 }
 
 int shaula_preview_image_width(ShaulaPreviewState *state) {
-  return state != NULL && state->image != NULL
-             ? gdk_pixbuf_get_width(state->image)
-             : 0;
+  return state != NULL ? shaula_preview_document_width(&state->document) : 0;
 }
 
 int shaula_preview_image_height(ShaulaPreviewState *state) {
-  return state != NULL && state->image != NULL
-             ? gdk_pixbuf_get_height(state->image)
-             : 0;
+  return state != NULL ? shaula_preview_document_height(&state->document) : 0;
 }
 
 void shaula_preview_update_theme_state(ShaulaPreviewState *state) {
@@ -379,7 +217,7 @@ void shaula_preview_queue_draw(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_update_dimensions_label(ShaulaPreviewState *state) {
-  if (state->dimensions_label == NULL || state->image == NULL)
+  if (state->dimensions_label == NULL || state->document.image == NULL)
     return;
   char size_buf[32];
   snprintf(size_buf, sizeof(size_buf), "%dw\xc3\x97%dh",
@@ -398,7 +236,7 @@ void shaula_preview_update_zoom_label(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_update_fit_zoom(ShaulaPreviewState *state) {
-  if (state->area == NULL || state->image == NULL)
+  if (state->area == NULL || state->document.image == NULL)
     return;
   int area_w = MAX(1, gtk_widget_get_width(state->area));
   int area_h = MAX(1, gtk_widget_get_height(state->area));
@@ -422,7 +260,7 @@ void shaula_preview_set_fit_mode(ShaulaPreviewState *state, gboolean fit) {
 }
 
 void shaula_preview_set_actual_size(ShaulaPreviewState *state) {
-  if (state->area == NULL || state->image == NULL)
+  if (state->area == NULL || state->document.image == NULL)
     return;
   state->fit_mode = FALSE;
   state->zoom = 1.0;
@@ -438,7 +276,7 @@ void shaula_preview_set_actual_size(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor) {
-  if (state->image == NULL || state->area == NULL)
+  if (state->document.image == NULL || state->area == NULL)
     return;
   state->fit_mode = FALSE;
   double old_zoom = state->zoom;
@@ -469,9 +307,9 @@ void shaula_preview_select_annotation(ShaulaPreviewState *state,
   state->properties_hud.spotlight_index = -1;
   state->properties_hud.rectangle_index = -1;
   state->properties_hud.measure_index = -1;
-  if (state->annotations != NULL) {
-    for (guint i = 0; i < state->annotations->len; i++) {
-      ShaulaAnnotation *item = g_ptr_array_index(state->annotations, i);
+  if (state->document.annotations != NULL) {
+    for (guint i = 0; i < state->document.annotations->len; i++) {
+      ShaulaAnnotation *item = g_ptr_array_index(state->document.annotations, i);
       item->selected = FALSE;
       if (item == annotation && annotation != NULL &&
           annotation->type == SHAULA_ANNOTATION_ARROW)
@@ -546,10 +384,10 @@ static void add_annotation_without_history(ShaulaPreviewState *state,
   if (state == NULL || annotation == NULL)
     return;
   if (annotation->id <= 0)
-    annotation->id = state->next_annotation_id++;
-  g_ptr_array_add(state->annotations, annotation);
+    annotation->id = state->document.next_annotation_id++;
+  g_ptr_array_add(state->document.annotations, annotation);
   shaula_preview_select_annotation(state, annotation);
-  state->modified = TRUE;
+  state->document.modified = TRUE;
   shaula_preview_toolbar_update_history_state(state);
 }
 
@@ -582,16 +420,17 @@ gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state) {
   if (copy == NULL)
     return FALSE;
 
-  annotation_clipboard_clear(&state->annotation_clipboard);
+  shaula_preview_annotation_clipboard_clear(
+      &state->document.annotation_clipboard);
   copy->selected = FALSE;
-  g_ptr_array_add(state->annotation_clipboard.annotations, copy);
+  g_ptr_array_add(state->document.annotation_clipboard.annotations, copy);
   return TRUE;
 }
 
 gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state) {
-  return state != NULL && state->image != NULL &&
-         state->annotation_clipboard.annotations != NULL &&
-         state->annotation_clipboard.annotations->len > 0;
+  return state != NULL && state->document.image != NULL &&
+         state->document.annotation_clipboard.annotations != NULL &&
+         state->document.annotation_clipboard.annotations->len > 0;
 }
 
 gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
@@ -604,13 +443,13 @@ gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
     return FALSE;
 
   shaula_preview_push_undo(state);
-  duplicate->id = state->next_annotation_id++;
+  duplicate->id = state->document.next_annotation_id++;
   duplicate->selected = FALSE;
   shaula_annotation_move(duplicate, SHAULA_DUPLICATE_OFFSET_PX,
                          SHAULA_DUPLICATE_OFFSET_PX);
-  g_ptr_array_add(state->annotations, duplicate);
+  g_ptr_array_add(state->document.annotations, duplicate);
   shaula_preview_select_annotation(state, duplicate);
-  state->modified = TRUE;
+  state->document.modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -624,10 +463,10 @@ gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
   const ShaulaAnnotation *base = NULL;
   if (state->selected_annotation != NULL &&
       state->selected_annotation->id ==
-          state->annotation_clipboard.last_pasted_id)
+          state->document.annotation_clipboard.last_pasted_id)
     base = state->selected_annotation;
   if (base == NULL)
-    base = g_ptr_array_index(state->annotation_clipboard.annotations, 0);
+    base = g_ptr_array_index(state->document.annotation_clipboard.annotations, 0);
   if (base == NULL)
     return FALSE;
 
@@ -638,12 +477,12 @@ gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
     return FALSE;
 
   shaula_preview_push_undo(state);
-  pasted->id = state->next_annotation_id++;
+  pasted->id = state->document.next_annotation_id++;
   pasted->selected = FALSE;
-  g_ptr_array_add(state->annotations, pasted);
+  g_ptr_array_add(state->document.annotations, pasted);
   shaula_preview_select_annotation(state, pasted);
-  state->annotation_clipboard.last_pasted_id = pasted->id;
-  state->modified = TRUE;
+  state->document.annotation_clipboard.last_pasted_id = pasted->id;
+  state->document.modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -654,12 +493,12 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
   if (state == NULL || state->selected_annotation == NULL)
     return;
   ShaulaAnnotation *selected = state->selected_annotation;
-  for (guint i = 0; i < state->annotations->len; i++) {
-    if (g_ptr_array_index(state->annotations, i) == selected) {
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    if (g_ptr_array_index(state->document.annotations, i) == selected) {
       shaula_preview_push_undo(state);
       state->selected_annotation = NULL;
-      g_ptr_array_remove_index(state->annotations, i);
-      state->modified = TRUE;
+      g_ptr_array_remove_index(state->document.annotations, i);
+      state->document.modified = TRUE;
       shaula_preview_queue_draw(state);
       shaula_preview_toolbar_update_history_state(state);
       shaula_preview_toolbar_update_selection_state(state);
@@ -672,8 +511,8 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
-  if (state == NULL || state->annotations == NULL ||
-      state->annotations->len == 0)
+  if (state == NULL || state->document.annotations == NULL ||
+      state->document.annotations->len == 0)
     return;
 
   shaula_preview_cancel_operation(state);
@@ -684,8 +523,8 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
    */
   shaula_preview_push_undo(state);
   state->selected_annotation = NULL;
-  g_ptr_array_set_size(state->annotations, 0);
-  state->modified = TRUE;
+  g_ptr_array_set_size(state->document.annotations, 0);
+  state->document.modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -694,56 +533,62 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
 void shaula_preview_push_undo(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
-  history_stack_push_undo(&state->history, snapshot_new(state), TRUE);
+  shaula_preview_history_push_undo(
+      &state->document.history,
+      shaula_preview_document_snapshot_new(&state->document), TRUE);
   shaula_preview_toolbar_update_history_state(state);
 }
 
 void shaula_preview_begin_history_gesture(ShaulaPreviewState *state) {
-  if (state == NULL || state->pending_history_snapshot != NULL)
+  if (state == NULL || state->document.pending_history_snapshot != NULL)
     return;
-  state->pending_history_snapshot = snapshot_new(state);
+  state->document.pending_history_snapshot =
+      shaula_preview_document_snapshot_new(&state->document);
 }
 
 void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
                                            gboolean changed) {
-  if (state == NULL || state->pending_history_snapshot == NULL)
+  if (state == NULL || state->document.pending_history_snapshot == NULL)
     return;
   if (changed) {
-    history_stack_push_undo(&state->history, state->pending_history_snapshot,
-                            TRUE);
-    state->pending_history_snapshot = NULL;
+    shaula_preview_history_push_undo(&state->document.history,
+                                     state->document.pending_history_snapshot,
+                                     TRUE);
+    state->document.pending_history_snapshot = NULL;
     shaula_preview_toolbar_update_history_state(state);
     return;
   }
-  snapshot_free(state->pending_history_snapshot);
-  state->pending_history_snapshot = NULL;
+  shaula_preview_snapshot_free(state->document.pending_history_snapshot);
+  state->document.pending_history_snapshot = NULL;
 }
 
 void shaula_preview_cancel_history_gesture(ShaulaPreviewState *state) {
-  if (state == NULL || state->pending_history_snapshot == NULL)
+  if (state == NULL || state->document.pending_history_snapshot == NULL)
     return;
-  snapshot_free(state->pending_history_snapshot);
-  state->pending_history_snapshot = NULL;
+  shaula_preview_snapshot_free(state->document.pending_history_snapshot);
+  state->document.pending_history_snapshot = NULL;
 }
 
 gboolean shaula_preview_can_undo(ShaulaPreviewState *state) {
-  return state != NULL && (state->pending_history_snapshot != NULL ||
-                           history_stack_can_undo(&state->history));
+  return state != NULL && (state->document.pending_history_snapshot != NULL ||
+                           shaula_preview_history_can_undo(
+                               &state->document.history));
 }
 
 gboolean shaula_preview_can_redo(ShaulaPreviewState *state) {
-  return state != NULL && history_stack_can_redo(&state->history);
+  return state != NULL &&
+         shaula_preview_history_can_redo(&state->document.history);
 }
 
 void shaula_preview_replace_annotations(ShaulaPreviewState *state,
                                         GPtrArray *annotations) {
-  if (state->annotations != NULL)
-    g_ptr_array_unref(state->annotations);
-  state->annotations = annotations;
+  if (state->document.annotations != NULL)
+    g_ptr_array_unref(state->document.annotations);
+  state->document.annotations = annotations;
   state->selected_annotation = NULL;
-  if (state->annotations != NULL) {
-    for (guint i = 0; i < state->annotations->len; i++) {
-      ShaulaAnnotation *annotation = g_ptr_array_index(state->annotations, i);
+  if (state->document.annotations != NULL) {
+    for (guint i = 0; i < state->document.annotations->len; i++) {
+      ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
       if (annotation->selected) {
         state->selected_annotation = annotation;
         break;
@@ -755,19 +600,9 @@ void shaula_preview_replace_annotations(ShaulaPreviewState *state,
 
 static void restore_snapshot(ShaulaPreviewState *state,
                              ShaulaPreviewSnapshot *snapshot) {
-  if (state->image != NULL)
-    g_object_unref(state->image);
-  state->image =
-      snapshot->image != NULL ? GDK_PIXBUF(g_object_ref(snapshot->image))
-                              : NULL;
-  shaula_preview_replace_annotations(
-      state, shaula_annotations_clone_array(snapshot->annotations));
-  if (state->spotlight_regions != NULL)
-    g_array_unref(state->spotlight_regions);
-  state->spotlight_regions =
-      spotlight_regions_clone(snapshot->spotlight_regions);
-  state->next_annotation_id = snapshot->next_annotation_id;
-  state->modified = snapshot->modified;
+  shaula_preview_document_restore_snapshot(&state->document, snapshot,
+                                           &state->selected_annotation);
+  shaula_preview_toolbar_update_selection_state(state);
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
@@ -794,10 +629,13 @@ gboolean shaula_preview_undo(ShaulaPreviewState *state) {
   shaula_preview_commit_history_gesture(state, TRUE);
   if (!shaula_preview_can_undo(state))
     return FALSE;
-  ShaulaPreviewSnapshot *snapshot = history_stack_pop_undo(&state->history);
-  history_stack_push_redo(&state->history, snapshot_new(state));
+  ShaulaPreviewSnapshot *snapshot =
+      shaula_preview_history_pop_undo(&state->document.history);
+  shaula_preview_history_push_redo(
+      &state->document.history,
+      shaula_preview_document_snapshot_new(&state->document));
   restore_snapshot(state, snapshot);
-  snapshot_free(snapshot);
+  shaula_preview_snapshot_free(snapshot);
   shaula_preview_toolbar_update_history_state(state);
   return TRUE;
 }
@@ -808,10 +646,13 @@ gboolean shaula_preview_redo(ShaulaPreviewState *state) {
   shaula_preview_commit_history_gesture(state, TRUE);
   if (!shaula_preview_can_redo(state))
     return FALSE;
-  ShaulaPreviewSnapshot *snapshot = history_stack_pop_redo(&state->history);
-  history_stack_push_undo(&state->history, snapshot_new(state), FALSE);
+  ShaulaPreviewSnapshot *snapshot =
+      shaula_preview_history_pop_redo(&state->document.history);
+  shaula_preview_history_push_undo(
+      &state->document.history,
+      shaula_preview_document_snapshot_new(&state->document), FALSE);
   restore_snapshot(state, snapshot);
-  snapshot_free(snapshot);
+  shaula_preview_snapshot_free(snapshot);
   shaula_preview_toolbar_update_history_state(state);
   return TRUE;
 }
@@ -842,7 +683,7 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
 
 static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
                                     int *x, int *y, int *w, int *h) {
-  if (state == NULL || state->image == NULL)
+  if (state == NULL || state->document.image == NULL)
     return FALSE;
 
   ShaulaRect crop =
@@ -1088,7 +929,7 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
   if (!crop_rect_to_pixels(state, state->region_selection_rect, &x, &y, &w, &h))
     return FALSE;
 
-  GdkPixbuf *copy = gdk_pixbuf_copy(state->image);
+  GdkPixbuf *copy = gdk_pixbuf_copy(state->document.image);
   if (copy == NULL)
     return FALSE;
 
@@ -1111,16 +952,16 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
 static void remap_annotations_after_crop(ShaulaPreviewState *state,
                                          ShaulaRect crop,
                                          ShaulaAnnotation *remove_annotation) {
-  if (state == NULL || state->annotations == NULL)
+  if (state == NULL || state->document.annotations == NULL)
     return;
 
   state->selected_annotation = NULL;
-  for (gint i = (gint)state->annotations->len - 1; i >= 0; i--) {
+  for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
     ShaulaAnnotation *annotation =
-        g_ptr_array_index(state->annotations, (guint)i);
+        g_ptr_array_index(state->document.annotations, (guint)i);
     if (annotation == remove_annotation || annotation == NULL ||
         !shaula_rect_intersects(annotation->bounds, crop)) {
-      g_ptr_array_remove_index(state->annotations, (guint)i);
+      g_ptr_array_remove_index(state->document.annotations, (guint)i);
       continue;
     }
     annotation->selected = FALSE;
@@ -1130,18 +971,18 @@ static void remap_annotations_after_crop(ShaulaPreviewState *state,
 
 static void remap_spotlight_regions_after_crop(ShaulaPreviewState *state,
                                                ShaulaRect crop) {
-  if (state == NULL || state->spotlight_regions == NULL)
+  if (state == NULL || state->document.spotlight_regions == NULL)
     return;
 
-  for (gint i = (gint)state->spotlight_regions->len - 1; i >= 0; i--) {
+  for (gint i = (gint)state->document.spotlight_regions->len - 1; i >= 0; i--) {
     ShaulaSpotlightRegion *region = &g_array_index(
-        state->spotlight_regions, ShaulaSpotlightRegion, (guint)i);
+        state->document.spotlight_regions, ShaulaSpotlightRegion, (guint)i);
     ShaulaRect clamped = shaula_rect_clamped_c(
         (ShaulaRect){region->rect.x - crop.x, region->rect.y - crop.y,
                      region->rect.width, region->rect.height},
         crop.width, crop.height);
     if (shaula_rect_is_empty(clamped)) {
-      g_array_remove_index(state->spotlight_regions, (guint)i);
+      g_array_remove_index(state->document.spotlight_regions, (guint)i);
       continue;
     }
     region->rect = clamped;
@@ -1164,7 +1005,7 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   if (!crop_rect_to_pixels(state, rect, &x, &y, &w, &h))
     return FALSE;
 
-  GdkPixbuf *sub = gdk_pixbuf_new_subpixbuf(state->image, x, y, w, h);
+  GdkPixbuf *sub = gdk_pixbuf_new_subpixbuf(state->document.image, x, y, w, h);
   if (sub == NULL)
     return FALSE;
   GdkPixbuf *copy = gdk_pixbuf_copy(sub);
@@ -1253,7 +1094,7 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
                "stored=(%.2f,%.2f %.2fx%.2f) count_before=%u\n",
                rect.x, rect.y, rect.width, rect.height, spotlight.x,
                spotlight.y, spotlight.width, spotlight.height,
-               state->spotlight_regions != NULL ? state->spotlight_regions->len
+               state->document.spotlight_regions != NULL ? state->document.spotlight_regions->len
                                                 : 0);
   }
 
@@ -1264,11 +1105,11 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
       .border_width = MAX(0.0, state->properties_hud.spotlight_border_width),
   };
   shaula_preview_document_begin_edit(state);
-  g_array_append_val(state->spotlight_regions, region);
-  state->properties_hud.spotlight_index = (int)state->spotlight_regions->len - 1;
+  g_array_append_val(state->document.spotlight_regions, region);
+  state->properties_hud.spotlight_index = (int)state->document.spotlight_regions->len - 1;
   if (debug != NULL && debug[0] != '\0' && g_strcmp0(debug, "0") != 0)
     g_printerr("[DEBUG-spotlight] persisted index=%d count_after=%u\n",
-               state->properties_hud.spotlight_index, state->spotlight_regions->len);
+               state->properties_hud.spotlight_index, state->document.spotlight_regions->len);
   state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
   shaula_preview_document_finish_edit(
       state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});
@@ -1296,10 +1137,10 @@ static void begin_property_history_if_targeted(ShaulaPreviewState *state,
                                                gboolean has_target) {
   if (!has_target)
     return;
-  gboolean starts_transaction = state->pending_history_snapshot == NULL;
+  gboolean starts_transaction = state->document.pending_history_snapshot == NULL;
   shaula_preview_begin_history_gesture(state);
   if (starts_transaction)
-    clear_stack(state->history.redo);
+    shaula_preview_history_clear_redo(&state->document.history);
   shaula_preview_toolbar_update_history_state(state);
 }
 
@@ -1310,11 +1151,11 @@ static gboolean colors_equal(ShaulaColor a, ShaulaColor b) {
 
 static ShaulaSpotlightRegion *
 active_spotlight_region(ShaulaPreviewState *state) {
-  if (state == NULL || state->spotlight_regions == NULL ||
+  if (state == NULL || state->document.spotlight_regions == NULL ||
       state->properties_hud.spotlight_index < 0 ||
-      (guint)state->properties_hud.spotlight_index >= state->spotlight_regions->len)
+      (guint)state->properties_hud.spotlight_index >= state->document.spotlight_regions->len)
     return NULL;
-  return &g_array_index(state->spotlight_regions, ShaulaSpotlightRegion,
+  return &g_array_index(state->document.spotlight_regions, ShaulaSpotlightRegion,
                         (guint)state->properties_hud.spotlight_index);
 }
 
@@ -1327,7 +1168,7 @@ void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
   if (region != NULL && !colors_equal(region->border_color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     region->border_color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1343,7 +1184,7 @@ void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
       fabs(region->border_width - state->properties_hud.spotlight_border_width) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
     region->border_width = state->properties_hud.spotlight_border_width;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1358,7 +1199,7 @@ void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
   if (region != NULL && region->shape != shape) {
     begin_property_history_if_targeted(state, TRUE);
     region->shape = shape;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1368,12 +1209,12 @@ void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
  * NULL when no valid target exists.
  */
 static ShaulaAnnotation *active_arrow_annotation(ShaulaPreviewState *state) {
-  if (state == NULL || state->annotations == NULL ||
+  if (state == NULL || state->document.annotations == NULL ||
       state->properties_hud.arrow_index < 0 ||
-      (guint)state->properties_hud.arrow_index >= state->annotations->len)
+      (guint)state->properties_hud.arrow_index >= state->document.annotations->len)
     return NULL;
   ShaulaAnnotation *annotation =
-      g_ptr_array_index(state->annotations, (guint)state->properties_hud.arrow_index);
+      g_ptr_array_index(state->document.annotations, (guint)state->properties_hud.arrow_index);
   if (annotation != NULL && annotation->type == SHAULA_ANNOTATION_ARROW)
     return annotation;
   return NULL;
@@ -1381,12 +1222,12 @@ static ShaulaAnnotation *active_arrow_annotation(ShaulaPreviewState *state) {
 
 static ShaulaAnnotation *
 active_rectangle_annotation(ShaulaPreviewState *state) {
-  if (state == NULL || state->annotations == NULL ||
+  if (state == NULL || state->document.annotations == NULL ||
       state->properties_hud.rectangle_index < 0 ||
-      (guint)state->properties_hud.rectangle_index >= state->annotations->len)
+      (guint)state->properties_hud.rectangle_index >= state->document.annotations->len)
     return NULL;
   ShaulaAnnotation *annotation = g_ptr_array_index(
-      state->annotations, (guint)state->properties_hud.rectangle_index);
+      state->document.annotations, (guint)state->properties_hud.rectangle_index);
   if (annotation != NULL && annotation->type == SHAULA_ANNOTATION_RECTANGLE)
     return annotation;
   return NULL;
@@ -1401,7 +1242,7 @@ void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
   if (arrow != NULL && !colors_equal(arrow->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     arrow->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1418,7 +1259,7 @@ void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     arrow->stroke_width = state->properties_hud.arrow_stroke_width;
     shaula_annotation_update_bounds(arrow);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1438,7 +1279,7 @@ void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
 
   begin_property_history_if_targeted(state, TRUE);
   arrow->data.arrow.stroke_style = style;
-  state->modified = TRUE;
+  state->document.modified = TRUE;
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }
@@ -1452,7 +1293,7 @@ void shaula_preview_set_rectangle_color(ShaulaPreviewState *state,
   if (rectangle != NULL && !colors_equal(rectangle->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     rectangle->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1469,7 +1310,7 @@ void shaula_preview_set_rectangle_stroke_width(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     rectangle->stroke_width = state->properties_hud.rectangle_stroke_width;
     shaula_annotation_update_bounds(rectangle);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1485,7 +1326,7 @@ void shaula_preview_set_rectangle_stroke_style(ShaulaPreviewState *state,
   if (rectangle != NULL && rectangle->data.rectangle.stroke_style != style) {
     begin_property_history_if_targeted(state, TRUE);
     rectangle->data.rectangle.stroke_style = style;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1500,7 +1341,7 @@ void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
   if (rectangle != NULL && rectangle->data.rectangle.filled != filled) {
     begin_property_history_if_targeted(state, TRUE);
     rectangle->data.rectangle.filled = filled;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1516,7 +1357,7 @@ void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
   if (rectangle != NULL && rectangle->data.rectangle.corners != corners) {
     begin_property_history_if_targeted(state, TRUE);
     rectangle->data.rectangle.corners = corners;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1542,7 +1383,7 @@ void shaula_preview_set_pen_color(ShaulaPreviewState *state,
   if (pen != NULL && !colors_equal(pen->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     pen->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1560,7 +1401,7 @@ void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     pen->stroke_width = state->properties_hud.pen_stroke_width;
     shaula_annotation_update_bounds(pen);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1576,7 +1417,7 @@ void shaula_preview_set_pen_opacity(ShaulaPreviewState *state, double opacity) {
   if (pen != NULL && fabs(pen->color.a - state->properties_hud.pen_opacity) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
     pen->color.a = state->properties_hud.pen_opacity;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1593,7 +1434,7 @@ void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
   if (highlight != NULL && !colors_equal(highlight->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     highlight->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1611,7 +1452,7 @@ void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     highlight->stroke_width = state->properties_hud.highlight_stroke_width;
     shaula_annotation_update_bounds(highlight);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1629,7 +1470,7 @@ void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
       fabs(highlight->color.a - state->properties_hud.highlight_opacity) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
     highlight->color.a = state->properties_hud.highlight_opacity;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1648,7 +1489,7 @@ void shaula_preview_set_text_color(ShaulaPreviewState *state,
   if (text != NULL && !colors_equal(text->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     text->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1668,7 +1509,7 @@ void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     text->data.text.font_size = state->properties_hud.text_font_size;
     shaula_annotation_update_bounds(text);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1687,7 +1528,7 @@ void shaula_preview_set_text_align(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     text->data.text.align = align;
     shaula_annotation_update_bounds(text);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1708,19 +1549,19 @@ void shaula_preview_set_text_font_mode(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     text->data.text.font_mode = font_mode;
     shaula_annotation_update_bounds(text);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }
 
 static ShaulaAnnotation *active_measure_annotation(ShaulaPreviewState *state) {
-  if (state == NULL || state->annotations == NULL ||
+  if (state == NULL || state->document.annotations == NULL ||
       state->properties_hud.measure_index < 0 ||
-      (guint)state->properties_hud.measure_index >= state->annotations->len)
+      (guint)state->properties_hud.measure_index >= state->document.annotations->len)
     return NULL;
   ShaulaAnnotation *annotation =
-      g_ptr_array_index(state->annotations, (guint)state->properties_hud.measure_index);
+      g_ptr_array_index(state->document.annotations, (guint)state->properties_hud.measure_index);
   if (annotation != NULL && annotation->type == SHAULA_ANNOTATION_MEASURE)
     return annotation;
   return NULL;
@@ -1735,7 +1576,7 @@ void shaula_preview_set_measure_color(ShaulaPreviewState *state,
   if (measure != NULL && !colors_equal(measure->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     measure->color = color;
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
@@ -1752,7 +1593,7 @@ void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
     begin_property_history_if_targeted(state, TRUE);
     measure->stroke_width = state->properties_hud.measure_stroke_width;
     shaula_annotation_update_bounds(measure);
-    state->modified = TRUE;
+    state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);

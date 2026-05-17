@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 
 #include "preview_annotations.h"
+#include "preview_document.h"
 #include "preview_geometry.h"
 #include "preview_measure.h"
 #include "preview_properties_hud.h"
@@ -72,29 +73,6 @@ typedef enum {
 } ShaulaAnnotationResizeHandle;
 
 typedef struct {
-  /* Document effect entry: copied/saved output must use these stored values,
-   * not the current Spotlight toolbar settings.
-   */
-  ShaulaRect rect;
-  ShaulaSpotlightShape shape;
-  ShaulaColor border_color;
-  double border_width;
-} ShaulaSpotlightRegion;
-
-typedef struct ShaulaPreviewSnapshot ShaulaPreviewSnapshot;
-
-typedef struct {
-  GPtrArray *undo;
-  GPtrArray *redo;
-  guint capacity;
-} ShaulaHistoryStack;
-
-typedef struct {
-  GPtrArray *annotations;
-  int last_pasted_id;
-} ShaulaAnnotationClipboard;
-
-typedef struct {
   GtkApplication *app;
   GtkWidget *window;
   GtkWidget *canvas_overlay;
@@ -123,8 +101,7 @@ typedef struct {
   GtkWidget *more_menu_box;
   GtkWidget *text_entry;
 
-  GdkPixbuf *image;
-  char *path;
+  ShaulaPreviewDocument document;
 
   double zoom;
   double fit_zoom;
@@ -159,17 +136,7 @@ typedef struct {
   GArray *draft_pen_points;
   ShaulaPoint text_anchor_image;
 
-  GPtrArray *annotations;
   ShaulaAnnotation *selected_annotation;
-  /* Preview-local edit clipboard. It intentionally stays out of undo/redo and
-   * never publishes to the system clipboard; v1 copies one annotation while
-   * keeping list ownership ready for future multi-selection paste.
-   */
-  ShaulaAnnotationClipboard annotation_clipboard;
-  GArray *spotlight_regions;
-  int next_annotation_id;
-  ShaulaHistoryStack history;
-  ShaulaPreviewSnapshot *pending_history_snapshot;
 
   ShaulaColor current_color;
   /* Hover sampling is view state for the metadata readout and Tab copy. It is
@@ -182,13 +149,9 @@ typedef struct {
   char hover_hex[8];
   /* UI/config state only. Must stay out of undo history snapshots. */
   ShaulaPropertiesHudState properties_hud;
-  gboolean modified;
-  gboolean copied;
-  gboolean saved;
   /* Set when the helper already emitted the user-facing save/copy banner. */
   gboolean notified;
   gboolean close_preview_on_save;
-  char *saved_path;
   char *managed_temp_path;
   const char *last_action;
   gboolean is_dark;
