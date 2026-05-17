@@ -29,6 +29,7 @@ const _post_capture_json = @import("pipeline/post_capture_json.zig");
 const _post_capture_types = @import("pipeline/post_capture_types.zig");
 const _recovery_policy_test = @import("recovery/policy_test.zig");
 const _runtime_process_exec = @import("runtime/process_exec.zig");
+const _runtime_paths = @import("runtime/paths.zig");
 
 test {
     _ = _capture_backend_test;
@@ -58,4 +59,5 @@ test {
     _ = _post_capture_types;
     _ = _recovery_policy_test;
     _ = _runtime_process_exec;
+    _ = _runtime_paths;
 }

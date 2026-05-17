@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime_paths = @import("../runtime/paths.zig");
 
 /// Persists the last confirmed interactive Capture Area aspect.
 ///
@@ -14,9 +15,7 @@ pub fn store(
     const path = try resolvePath(allocator, environ);
     defer allocator.free(path);
 
-    if (std.fs.path.dirname(path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
+    try runtime_paths.ensureParent(io, path);
 
     var file = try std.Io.Dir.createFileAbsolute(io, path, .{ .truncate = true });
     defer file.close(io);
@@ -59,19 +58,7 @@ fn validAspect(raw: []const u8) bool {
 }
 
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_AREA_ASPECT_FILE")) |path_z| {
-        const path = std.mem.trim(u8, std.mem.sliceTo(path_z, 0), " \t\r\n");
-        if (path.len > 0) return allocator.dupe(u8, path);
-    }
-
-    if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
-        const runtime_dir = std.mem.trim(u8, std.mem.sliceTo(runtime_dir_z, 0), " \t\r\n");
-        if (runtime_dir.len > 0) {
-            return std.fmt.allocPrint(allocator, "{s}/shaula/overlay/area-aspect.v1", .{runtime_dir});
-        }
-    }
-
-    return allocator.dupe(u8, "/tmp/shaula/overlay/area-aspect.v1");
+    return runtime_paths.resolve(allocator, environ, "SHAULA_OVERLAY_AREA_ASPECT_FILE", "overlay/area-aspect.v1");
 }
 
 test "aspect store roundtrips fixed and free values" {

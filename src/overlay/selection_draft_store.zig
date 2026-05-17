@@ -1,5 +1,6 @@
 const std = @import("std");
 const capture_types = @import("../capture/types.zig");
+const runtime_paths = @import("../runtime/paths.zig");
 
 pub const DraftMode = enum {
     quick,
@@ -41,9 +42,7 @@ pub fn store(
     const path = try resolvePath(allocator, environ, mode);
     defer allocator.free(path);
 
-    if (std.fs.path.dirname(path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
+    try runtime_paths.ensureParent(io, path);
 
     var file = try std.Io.Dir.createFileAbsolute(io, path, .{ .truncate = true });
     defer file.close(io);
@@ -98,9 +97,7 @@ pub fn storeForOutput(
         try entries.append(allocator, .{ .output = owned, .geometry = geometry });
     }
 
-    if (std.fs.path.dirname(path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
+    try runtime_paths.ensureParent(io, path);
 
     var file = try std.Io.Dir.createFileAbsolute(io, path, .{ .truncate = true });
     defer file.close(io);
@@ -211,7 +208,8 @@ fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ, mode:
         .area => "SHAULA_OVERLAY_AREA_DRAFT_FILE",
         .capture => "SHAULA_OVERLAY_CAPTURE_DRAFT_FILE",
     };
-    if (environ.getPosix(override_key)) |path_z| {
+    const primary_override = environ.getPosix(override_key);
+    if (primary_override) |path_z| {
         const path = std.mem.trim(u8, std.mem.sliceTo(path_z, 0), " \t\r\n");
         if (path.len > 0) return allocator.dupe(u8, path);
     }
@@ -228,14 +226,9 @@ fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ, mode:
         .capture => "capture-draft.v1",
     };
 
-    if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
-        const runtime_dir = std.mem.trim(u8, std.mem.sliceTo(runtime_dir_z, 0), " \t\r\n");
-        if (runtime_dir.len > 0) {
-            return std.fmt.allocPrint(allocator, "{s}/shaula/overlay/{s}", .{ runtime_dir, filename });
-        }
-    }
-
-    return std.fmt.allocPrint(allocator, "/tmp/shaula/overlay/{s}", .{filename});
+    const relative = try std.fmt.allocPrint(allocator, "overlay/{s}", .{filename});
+    defer allocator.free(relative);
+    return runtime_paths.resolve(allocator, environ, null, relative);
 }
 
 fn loadV2Entries(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !std.ArrayListUnmanaged(StoredOutputArea) {

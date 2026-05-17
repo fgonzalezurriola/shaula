@@ -5,6 +5,7 @@ const helper_protocol = @import("helper_protocol.zig");
 const ui_state_store = @import("ui_state_store.zig");
 const aspect_store = @import("aspect_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
+const runtime_paths = @import("../runtime/paths.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 const overlay_runtime = @import("runtime.zig");
 const compositor_focused_output = @import("../compositor/focused_output.zig");
@@ -368,13 +369,7 @@ fn resolveOverlayOutputName(
 }
 
 fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
-        const runtime_dir = std.mem.trim(u8, std.mem.sliceTo(runtime_dir_z, 0), " \t\r\n");
-        if (runtime_dir.len > 0) {
-            return std.fmt.allocPrint(allocator, "{s}/shaula/overlay", .{runtime_dir});
-        }
-    }
-    return allocator.dupe(u8, "/tmp/shaula/overlay");
+    return runtime_paths.resolve(allocator, environ, null, "overlay");
 }
 
 fn captureAreaGeometryFromSelection(geometry: ?selection.Geometry) ?@import("../capture/types.zig").AreaGeometry {

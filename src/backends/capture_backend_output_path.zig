@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime_paths = @import("../runtime/paths.zig");
 
 pub fn resolveOutputPath(
     allocator: std.mem.Allocator,
@@ -83,13 +84,7 @@ fn resolveTemporaryOutputPath(
     mode_string: []const u8,
     environ: std.process.Environ,
 ) ![]u8 {
-    const base_dir = if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| blk: {
-        const runtime_dir = std.mem.sliceTo(runtime_dir_z, 0);
-        if (runtime_dir.len > 0) {
-            break :blk try std.fmt.allocPrint(allocator, "{s}/shaula/captures", .{runtime_dir});
-        }
-        break :blk try allocator.dupe(u8, "/tmp/shaula/captures");
-    } else try allocator.dupe(u8, "/tmp/shaula/captures");
+    const base_dir = try runtime_paths.captureArtifactDir(allocator, environ);
     defer allocator.free(base_dir);
 
     ensureDirectoryWritable(allocator, io, base_dir) catch return error.OutputPathInvalid;

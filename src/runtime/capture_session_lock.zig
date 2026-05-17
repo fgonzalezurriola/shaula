@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime_paths = @import("paths.zig");
 
 pub const CaptureSessionError = error{
     CaptureInProgress,
@@ -35,9 +36,7 @@ pub fn acquire(
     const path = try resolvePath(allocator, environ);
     errdefer allocator.free(path);
 
-    if (std.fs.path.dirname(path)) |parent| {
-        try std.Io.Dir.cwd().createDirPath(io, parent);
-    }
+    try runtime_paths.ensureParent(io, path);
 
     var file = std.Io.Dir.createFileAbsolute(io, path, .{ .exclusive = true }) catch |err| switch (err) {
         error.PathAlreadyExists => retry: {
@@ -84,17 +83,5 @@ fn clearStaleLock(allocator: std.mem.Allocator, io: std.Io, path: []const u8) bo
 }
 
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_CAPTURE_SESSION_LOCK_FILE")) |path_z| {
-        const path = std.mem.trim(u8, std.mem.sliceTo(path_z, 0), " \t\r\n");
-        if (path.len > 0) return allocator.dupe(u8, path);
-    }
-
-    if (environ.getPosix("XDG_RUNTIME_DIR")) |runtime_dir_z| {
-        const runtime_dir = std.mem.trim(u8, std.mem.sliceTo(runtime_dir_z, 0), " \t\r\n");
-        if (runtime_dir.len > 0) {
-            return std.fmt.allocPrint(allocator, "{s}/shaula/capture/session.lock", .{runtime_dir});
-        }
-    }
-
-    return allocator.dupe(u8, "/tmp/shaula/capture/session.lock");
+    return runtime_paths.resolve(allocator, environ, "SHAULA_CAPTURE_SESSION_LOCK_FILE", "capture/session.lock");
 }

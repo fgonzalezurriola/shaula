@@ -1,5 +1,6 @@
 const std = @import("std");
 const process_exec = @import("runtime/process_exec.zig");
+const runtime_paths = @import("runtime/paths.zig");
 
 const saved_screenshot_notification_timeout_ms: u32 = 6000;
 const saved_screenshot_notification_body = "Saved to screenshots folder.";
@@ -39,7 +40,7 @@ pub fn notifyScreenshotCopied(allocator: std.mem.Allocator, io: std.Io) !void {
 }
 
 pub fn notifyScreenshotCopiedImage(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
-    const image_path: ?[]const u8 = if (isRuntimeCaptureArtifact(path)) null else path;
+    const image_path: ?[]const u8 = if (runtime_paths.isRuntimeCaptureArtifact(path)) null else path;
     try notifyWithImage(allocator, io, "Screenshot captured", "You can paste the image from the clipboard.", image_path, .normal, 2500, true);
 }
 
@@ -365,12 +366,6 @@ fn openParentDirectory(allocator: std.mem.Allocator, io: std.Io, path: []const u
     const result = process_exec.run(allocator, io, &.{ "xdg-open", parent }, 4096, 4096) catch return error.RevealFileUnavailable;
     defer result.deinit(allocator);
     if (!result.exitedZero()) return error.RevealFileUnavailable;
-}
-
-fn isRuntimeCaptureArtifact(path: []const u8) bool {
-    if (std.mem.startsWith(u8, path, "/tmp/shaula/captures/")) return true;
-    if (!std.mem.startsWith(u8, path, "/run/user/")) return false;
-    return std.mem.indexOf(u8, path, "/shaula/captures/") != null;
 }
 
 fn fileUriAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
