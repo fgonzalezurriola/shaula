@@ -7,6 +7,7 @@
 #include "preview_annotations.h"
 #include "preview_geometry.h"
 #include "preview_measure.h"
+#include "preview_properties_hud.h"
 
 enum {
   PREVIEW_MIN_W = 900,
@@ -54,24 +55,6 @@ typedef enum {
   SHAULA_OPERATION_MEASURE,
   SHAULA_OPERATION_TEXT
 } ShaulaPreviewOperation;
-
-typedef enum {
-  SHAULA_PROPERTIES_PANEL_NONE,
-  SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
-  SHAULA_PROPERTIES_PANEL_ARROW,
-  SHAULA_PROPERTIES_PANEL_RECTANGLE,
-  SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
-  SHAULA_PROPERTIES_PANEL_BLUR,
-  SHAULA_PROPERTIES_PANEL_ERASE,
-  SHAULA_PROPERTIES_PANEL_PEN,
-  SHAULA_PROPERTIES_PANEL_TEXT,
-  SHAULA_PROPERTIES_PANEL_MEASURE
-} ShaulaPropertiesPanel;
-
-typedef enum {
-  SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE,
-  SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE
-} ShaulaSpotlightShape;
 
 typedef enum {
   SHAULA_RESIZE_HANDLE_NONE,
@@ -135,37 +118,6 @@ typedef struct {
   GtkWidget *erase_region_button;
   GtkWidget *spotlight_region_button;
   GtkWidget *delete_button;
-  GtkWidget *properties_box;
-  GtkWidget *spotlight_color_button;
-  GtkWidget *spotlight_width_scale;
-  GtkWidget *spotlight_sharp_button;
-  GtkWidget *spotlight_rounded_button;
-  GtkWidget *arrow_properties_box;
-  GtkWidget *arrow_color_button;
-  GtkWidget *arrow_width_scale;
-  GtkWidget *arrow_stroke_buttons[3];
-  GtkWidget *rectangle_properties_box;
-  GtkWidget *rectangle_color_button;
-  GtkWidget *rectangle_width_scale;
-  GtkWidget *rectangle_stroke_buttons[2];
-  GtkWidget *rectangle_fill_button;
-  GtkWidget *rectangle_corner_buttons[2];
-  GtkWidget *pen_properties_box;
-  GtkWidget *pen_color_button;
-  GtkWidget *pen_width_scale;
-  GtkWidget *pen_opacity_scale;
-  GtkWidget *highlight_properties_box;
-  GtkWidget *highlight_color_button;
-  GtkWidget *highlight_width_scale;
-  GtkWidget *highlight_opacity_scale;
-  GtkWidget *text_properties_box;
-  GtkWidget *text_color_button;
-  GtkWidget *text_size_buttons[4];
-  GtkWidget *text_align_buttons[3];
-  GtkWidget *text_font_mode_buttons[2];
-  GtkWidget *measure_properties_box;
-  GtkWidget *measure_color_button;
-  GtkWidget *measure_width_scale;
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
@@ -228,36 +180,8 @@ typedef struct {
   ShaulaPoint hover_image_point;
   ShaulaColor hover_color;
   char hover_hex[8];
-  /* UI/config state only. Must stay out of undo history snapshots. The active
-   * Spotlight index only points the HUD at the just-created document entry.
-   */
-  ShaulaPropertiesPanel active_properties_panel;
-  int active_spotlight_index;
-  ShaulaColor spotlight_border_color;
-  double spotlight_border_width;
-  ShaulaSpotlightShape spotlight_shape;
-  int active_arrow_index;
-  ShaulaColor arrow_color;
-  double arrow_stroke_width;
-  int active_rectangle_index;
-  ShaulaColor rectangle_color;
-  double rectangle_stroke_width;
-  PreviewArrowStrokeStyle rectangle_stroke_style;
-  gboolean rectangle_filled;
-  PreviewRectangleCorners rectangle_corners;
-  ShaulaColor pen_color;
-  double pen_stroke_width;
-  double pen_opacity;
-  ShaulaColor highlight_color;
-  double highlight_stroke_width;
-  double highlight_opacity;
-  ShaulaColor text_color;
-  double text_font_size;
-  ShaulaTextAlign text_align;
-  ShaulaTextFontMode text_font_mode;
-  int active_measure_index;
-  ShaulaColor measure_color;
-  double measure_stroke_width;
+  /* UI/config state only. Must stay out of undo history snapshots. */
+  ShaulaPropertiesHudState properties_hud;
   gboolean modified;
   gboolean copied;
   gboolean saved;

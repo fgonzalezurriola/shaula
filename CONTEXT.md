@@ -469,17 +469,18 @@ and the working diff.
   Spotlight actions.
 - Spotlight contextual properties: implemented as a floating top-right
   properties HUD built by `preview_properties_panel.*`, attached to the preview
-  `GtkOverlay`, and driven by `active_properties_panel`. Applying Spotlight
-  shows Back, color, border width, pointed-corner rectangle, and rounded-corner
-  rectangle controls over the canvas without resizing the main toolbar. The HUD
-  targets the just-created Spotlight entry through `active_spotlight_index`, so
-  color, width, and corner style update that last applied Spotlight
-  reactively while also becoming the defaults for the next Spotlight. Back uses
-  a dedicated drawn chevron, hides the floating panel, clears the active
-  Spotlight target, and returns to the normal toolbar state. While the HUD is
-  open, the transient region-selection overlay is hidden so the stored
-  Spotlight border remains visible. This panel/target state is UI/config state
-  only and is excluded from undo/redo snapshots.
+  `GtkOverlay`, and state-owned by `ShaulaPropertiesHudState` in
+  `preview_properties_hud.*`. Applying Spotlight shows Back, color, border
+  width, pointed-corner rectangle, and rounded-corner rectangle controls over
+  the canvas without resizing the main toolbar. The HUD targets the
+  just-created Spotlight entry through its `spotlight_index`, so color, width,
+  and corner style update that last applied Spotlight reactively while also
+  becoming the defaults for the next Spotlight. Back uses a dedicated drawn
+  chevron, hides the floating panel, clears the active Spotlight target, and
+  returns to the normal toolbar state. While the HUD is open, the transient
+  region-selection overlay is hidden so the stored Spotlight border remains
+  visible. This panel/target/widget/default state is UI/config state only and
+  is excluded from undo/redo snapshots.
 - The Spotlight properties HUD uses GTK symbolic theme colors for widget
   chrome: `@theme_bg_color`, `@theme_fg_color`, and `@borders`. Its custom
   Cairo-drawn back/shape icons read the widget foreground from the active GTK

@@ -404,11 +404,11 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
   }
   state->active_tool = tool;
   if (tool == SHAULA_TOOL_PEN)
-    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_PEN;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
   else if (tool == SHAULA_TOOL_HIGHLIGHT)
-    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
   else if (tool == SHAULA_TOOL_TEXT)
-    state->active_properties_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
   shaula_preview_toolbar_update_tool_state(state);
   if (state->area != NULL) {
     const char *cursor = "crosshair";
