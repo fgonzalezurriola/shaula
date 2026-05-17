@@ -250,6 +250,9 @@ static gboolean path_has_prefix_dir(const char *path, const char *dir) {
 }
 
 static gboolean is_temporary_capture_path(const char *path) {
+  /* Keep this C-side check aligned with runtime/paths.zig. It intentionally
+   * remains local until preview actions can call the Zig runtime path helper.
+   */
   if (path == NULL)
     return TRUE;
   if (g_str_has_prefix(path, "/tmp/shaula/captures/"))

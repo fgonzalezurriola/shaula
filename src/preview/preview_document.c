@@ -188,6 +188,36 @@ int shaula_preview_document_height(ShaulaPreviewDocument *document) {
              : 0;
 }
 
+void shaula_preview_document_add_annotation(ShaulaPreviewDocument *document,
+                                            ShaulaAnnotation *annotation) {
+  if (document == NULL || annotation == NULL || document->annotations == NULL)
+    return;
+  if (annotation->id <= 0)
+    annotation->id = document->next_annotation_id++;
+  g_ptr_array_add(document->annotations, annotation);
+  document->modified = TRUE;
+}
+
+gboolean shaula_preview_document_remove_annotation_at(
+    ShaulaPreviewDocument *document, guint index) {
+  if (document == NULL || document->annotations == NULL ||
+      index >= document->annotations->len)
+    return FALSE;
+  g_ptr_array_remove_index(document->annotations, index);
+  document->modified = TRUE;
+  return TRUE;
+}
+
+gboolean
+shaula_preview_document_clear_annotations(ShaulaPreviewDocument *document) {
+  if (document == NULL || document->annotations == NULL ||
+      document->annotations->len == 0)
+    return FALSE;
+  g_ptr_array_set_size(document->annotations, 0);
+  document->modified = TRUE;
+  return TRUE;
+}
+
 void shaula_preview_document_restore_snapshot(
     ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot,
     ShaulaAnnotation **selected_annotation) {

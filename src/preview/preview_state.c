@@ -32,6 +32,9 @@ static gboolean path_has_prefix_dir(const char *path, const char *dir) {
 }
 
 static gboolean preview_path_is_temporary_capture(const char *path) {
+  /* Mirrors runtime/paths.zig capture artifact detection on the C helper side
+   * until runtime-path checks can cross the C/Zig seam directly.
+   */
   if (path == NULL)
     return FALSE;
   if (g_str_has_prefix(path, "/tmp/shaula/captures/"))
@@ -383,11 +386,8 @@ static void add_annotation_without_history(ShaulaPreviewState *state,
                                            ShaulaAnnotation *annotation) {
   if (state == NULL || annotation == NULL)
     return;
-  if (annotation->id <= 0)
-    annotation->id = state->document.next_annotation_id++;
-  g_ptr_array_add(state->document.annotations, annotation);
+  shaula_preview_document_add_annotation(&state->document, annotation);
   shaula_preview_select_annotation(state, annotation);
-  state->document.modified = TRUE;
   shaula_preview_toolbar_update_history_state(state);
 }
 
@@ -443,13 +443,11 @@ gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
     return FALSE;
 
   shaula_preview_push_undo(state);
-  duplicate->id = state->document.next_annotation_id++;
   duplicate->selected = FALSE;
   shaula_annotation_move(duplicate, SHAULA_DUPLICATE_OFFSET_PX,
                          SHAULA_DUPLICATE_OFFSET_PX);
-  g_ptr_array_add(state->document.annotations, duplicate);
+  shaula_preview_document_add_annotation(&state->document, duplicate);
   shaula_preview_select_annotation(state, duplicate);
-  state->document.modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -477,12 +475,10 @@ gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
     return FALSE;
 
   shaula_preview_push_undo(state);
-  pasted->id = state->document.next_annotation_id++;
   pasted->selected = FALSE;
-  g_ptr_array_add(state->document.annotations, pasted);
+  shaula_preview_document_add_annotation(&state->document, pasted);
   shaula_preview_select_annotation(state, pasted);
   state->document.annotation_clipboard.last_pasted_id = pasted->id;
-  state->document.modified = TRUE;
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
@@ -497,8 +493,7 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
     if (g_ptr_array_index(state->document.annotations, i) == selected) {
       shaula_preview_push_undo(state);
       state->selected_annotation = NULL;
-      g_ptr_array_remove_index(state->document.annotations, i);
-      state->document.modified = TRUE;
+      shaula_preview_document_remove_annotation_at(&state->document, i);
       shaula_preview_queue_draw(state);
       shaula_preview_toolbar_update_history_state(state);
       shaula_preview_toolbar_update_selection_state(state);
@@ -523,8 +518,7 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
    */
   shaula_preview_push_undo(state);
   state->selected_annotation = NULL;
-  g_ptr_array_set_size(state->document.annotations, 0);
-  state->document.modified = TRUE;
+  shaula_preview_document_clear_annotations(&state->document);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);

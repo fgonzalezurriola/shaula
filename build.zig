@@ -78,6 +78,32 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run_unit_tests.addArgs(args);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    const preview_document_test = buildPreviewDocumentTest(b, target, optimize);
+    test_step.dependOn(&preview_document_test.step);
+}
+
+fn buildPreviewDocumentTest(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Run {
+    const preview_geometry_obj = buildZigObject(b, "preview-document-test-geometry", "src/preview/preview_geometry.zig", target, optimize);
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\out="$1"
+        \\shift
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  "$@" \
+        \\  -o "${out}" \
+        \\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo pangocairo) -lm
+        \\"${out}"
+        ,
+        "preview-document-test",
+    });
+    _ = command.addOutputFileArg("preview-document-test");
+    command.addFileArg(b.path("src/preview/preview_document_test.c"));
+    command.addFileArg(b.path("src/preview/preview_document.c"));
+    command.addFileArg(b.path("src/preview/preview_annotations.c"));
+    command.addFileArg(preview_geometry_obj);
+    return command;
 }
 
 fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {

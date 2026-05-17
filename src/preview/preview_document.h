@@ -56,6 +56,12 @@ gboolean
 shaula_preview_document_has_modifications(ShaulaPreviewDocument *document);
 int shaula_preview_document_width(ShaulaPreviewDocument *document);
 int shaula_preview_document_height(ShaulaPreviewDocument *document);
+void shaula_preview_document_add_annotation(ShaulaPreviewDocument *document,
+                                            ShaulaAnnotation *annotation);
+gboolean shaula_preview_document_remove_annotation_at(
+    ShaulaPreviewDocument *document, guint index);
+gboolean
+shaula_preview_document_clear_annotations(ShaulaPreviewDocument *document);
 
 ShaulaPreviewSnapshot *
 shaula_preview_document_snapshot_new(ShaulaPreviewDocument *document);

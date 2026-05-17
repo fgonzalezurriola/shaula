@@ -101,6 +101,9 @@ typedef struct {
   GtkWidget *more_menu_box;
   GtkWidget *text_entry;
 
+  /* Output-affecting model state. Keep GTK widgets, view state, tools, and
+   * transient gestures in ShaulaPreviewState instead of growing the document.
+   */
   ShaulaPreviewDocument document;
 
   double zoom;

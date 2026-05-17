@@ -662,6 +662,9 @@ and the working diff.
   output-affecting model state: current image buffer/path, annotations,
   Spotlight regions, preview-local annotation clipboard, next annotation id,
   modified/copied/saved flags, saved path, and history.
+- Simple annotation add/remove/clear mutations should go through
+  `preview_document.*`; selection and GTK invalidation remain in
+  `ShaulaPreviewState`.
 - `ShaulaHistoryStack` now belongs to `ShaulaPreviewDocument` and stores
   bounded document snapshots with undo/redo arrays and a default capacity of
   24. Snapshots hold a referenced immutable `GdkPixbuf`; pixel-mutating edits
