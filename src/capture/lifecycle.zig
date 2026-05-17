@@ -23,6 +23,11 @@ const CaptureSessionAcquire = struct {
     exit_code: ?u8 = null,
 };
 
+const OverlayModeSpec = struct {
+    interaction_mode: overlay.InteractionMode,
+    draft_mode: overlay.DraftMode,
+};
+
 /// Execute the shared capture lifecycle after mode-specific inputs are resolved.
 ///
 /// Contract constraints:
@@ -133,152 +138,117 @@ fn resolveFocusedOutputForCapture(
 
 /// Execute `capture all-in-one` through the shared capture lifecycle.
 pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const reported_mode = core_capture_mode.cliToken(.all_in_one);
-    const backend_mode = core_capture_mode.backendModeToken(.all_in_one) orelse reported_mode;
     const parsed = flags.parseAllInOneFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture all-in-one", "ERR_CLI_USAGE", "--json is required", false, reported_mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture all-in-one", reported_mode);
-    if (capture_session.exit_code) |code| return code;
-    var session_lock = capture_session.lock.?;
-    defer session_lock.deinit();
-
-    const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .quick, .capture, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
-    if (selection_result.exit_code) |code| return code;
-    const selected = selection_result.selection;
-
-    if (parsed.dry_run) {
-        try json.writeSelectionDryRunJson(allocator, io, "capture all-in-one", selected);
-        return 0;
-    }
-
-    const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    _ = backend_mode;
-    return executeLifecycle(allocator, io, environ, invocation.allInOne(parsed, region_capture_mode, geometry), &session_lock);
+    return runOverlayMode(allocator, io, environ, .all_in_one, parsed);
 }
 
 /// Execute `capture quick` through the capture-on-release overlay lifecycle.
 pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.quick);
     const parsed = flags.parseQuickFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture quick", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture quick", mode);
-    if (capture_session.exit_code) |code| return code;
-    var session_lock = capture_session.lock.?;
-    defer session_lock.deinit();
-
-    const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture quick", mode, .quick, .quick, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
-    if (selection_result.exit_code) |code| return code;
-    const selected = selection_result.selection;
-
-    if (parsed.dry_run) {
-        try json.writeSelectionDryRunJson(allocator, io, "capture quick", selected);
-        return 0;
-    }
-
-    const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, invocation.quick(parsed, region_capture_mode, geometry), &session_lock);
+    return runOverlayMode(allocator, io, environ, .quick, parsed);
 }
 
 /// Execute `capture area` through the shared capture lifecycle.
 pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.area);
     const parsed = flags.parseAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
+    return runOverlayMode(allocator, io, environ, .area, parsed);
+}
 
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture area", mode);
+pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const parsed = flags.parseFullscreenFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    return runDirectMode(allocator, io, environ, .fullscreen, parsed);
+}
+
+pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const parsed = flags.parseAllScreensFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    return runDirectMode(allocator, io, environ, .all_screens, parsed);
+}
+
+pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    return runDirectMode(allocator, io, environ, .focused, parsed);
+}
+
+pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+    const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+    return runDirectMode(allocator, io, environ, .window, parsed);
+}
+
+fn runOverlayMode(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    comptime mode: core_capture_mode.CaptureMode,
+    parsed: anytype,
+) !u8 {
+    const reported_mode = core_capture_mode.cliToken(mode);
+    const command = commandForMode(mode);
+
+    const capture_session = try beginJsonCaptureSession(allocator, io, environ, command, reported_mode, parsed.json_mode);
     if (capture_session.exit_code) |code| return code;
     var session_lock = capture_session.lock.?;
     defer session_lock.deinit();
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
-    const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture area", mode, .area, .area, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
+    const overlay_spec = overlaySpecForMode(mode);
+    const selection_result = try resolveOverlaySelection(
+        allocator,
+        io,
+        environ,
+        command,
+        reported_mode,
+        overlay_spec.interaction_mode,
+        overlay_spec.draft_mode,
+        parsed.aspect,
+        region_capture_mode,
+        parsed.dry_run,
+        parsed.simulate_cancel,
+    );
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 
     if (parsed.dry_run) {
-        try json.writeAreaDryRunJson(allocator, io, selected);
+        if (mode == .area) {
+            try json.writeAreaDryRunJson(allocator, io, selected);
+        } else {
+            try json.writeSelectionDryRunJson(allocator, io, command, selected);
+        }
         return 0;
     }
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, invocation.area(parsed, region_capture_mode, geometry), &session_lock);
+    const options = switch (mode) {
+        .quick => invocation.quick(parsed, region_capture_mode, geometry),
+        .area => invocation.area(parsed, region_capture_mode, geometry),
+        .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
+        else => unreachable,
+    };
+    return executeLifecycle(allocator, io, environ, options, &session_lock);
 }
 
-pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.fullscreen);
-    const parsed = flags.parseFullscreenFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture fullscreen", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
+fn runDirectMode(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    comptime mode: core_capture_mode.CaptureMode,
+    parsed: anytype,
+) !u8 {
+    const reported_mode = core_capture_mode.cliToken(mode);
+    const command = commandForMode(mode);
 
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture fullscreen", mode);
+    const capture_session = try beginJsonCaptureSession(allocator, io, environ, command, reported_mode, parsed.json_mode);
     if (capture_session.exit_code) |code| return code;
     var session_lock = capture_session.lock.?;
     defer session_lock.deinit();
 
-    return executeLifecycle(allocator, io, environ, invocation.fullscreen(parsed), &session_lock);
-}
-
-pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.all_screens);
-    const parsed = flags.parseAllScreensFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture all-screens", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture all-screens", mode);
-    if (capture_session.exit_code) |code| return code;
-    var session_lock = capture_session.lock.?;
-    defer session_lock.deinit();
-
-    return executeLifecycle(allocator, io, environ, invocation.allScreens(parsed), &session_lock);
-}
-
-pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.focused);
-    const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture focused", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture focused", mode);
-    if (capture_session.exit_code) |code| return code;
-    var session_lock = capture_session.lock.?;
-    defer session_lock.deinit();
-
-    return executeLifecycle(allocator, io, environ, invocation.focused(parsed), &session_lock);
-}
-
-pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
-    const mode = core_capture_mode.cliToken(.window);
-    const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture window", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const capture_session = try beginCaptureSession(allocator, io, environ, "capture window", mode);
-    if (capture_session.exit_code) |code| return code;
-    var session_lock = capture_session.lock.?;
-    defer session_lock.deinit();
-
-    return executeLifecycle(allocator, io, environ, invocation.window(parsed), &session_lock);
+    const options = switch (mode) {
+        .fullscreen => invocation.fullscreen(parsed),
+        .all_screens => invocation.allScreens(parsed),
+        .focused => invocation.focused(parsed),
+        .window => invocation.window(parsed),
+        else => unreachable,
+    };
+    return executeLifecycle(allocator, io, environ, options, &session_lock);
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
@@ -286,10 +256,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     const reported_mode = core_capture_mode.cliToken(.previous_area);
     const backend_mode = core_capture_mode.backendModeToken(.previous_area) orelse reported_mode;
     const parsed = flags.parsePreviousAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    if (!parsed.json_mode) {
-        try json.writeErrorJson(io, "capture previous-area", "ERR_CLI_USAGE", "--json is required", false, reported_mode, null, false, &.{});
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
+    if (try validateJsonMode(io, "capture previous-area", reported_mode, parsed.json_mode)) |code| return code;
 
     const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture previous-area", backend_mode);
     if (unsupported_rc) |code| return code;
@@ -338,6 +305,52 @@ fn beginCaptureSession(
     };
 
     return .{ .lock = lock };
+}
+
+/// Validates JSON-only capture commands and acquires the capture session gate.
+///
+/// Contract constraint: this preamble preserves the public `ERR_CLI_USAGE`
+/// shape before lock acquisition, then maps lock contention to deterministic
+/// `ERR_CAPTURE_IN_PROGRESS`.
+fn beginJsonCaptureSession(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    command: []const u8,
+    reported_mode: []const u8,
+    json_mode: bool,
+) !CaptureSessionAcquire {
+    if (try validateJsonMode(io, command, reported_mode, json_mode)) |code| return .{ .exit_code = code };
+
+    return beginCaptureSession(allocator, io, environ, command, reported_mode);
+}
+
+fn validateJsonMode(io: std.Io, command: []const u8, reported_mode: []const u8, json_mode: bool) !?u8 {
+    if (json_mode) return null;
+    try json.writeErrorJson(io, command, "ERR_CLI_USAGE", "--json is required", false, reported_mode, null, false, &.{});
+    return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+}
+
+fn commandForMode(comptime mode: core_capture_mode.CaptureMode) []const u8 {
+    return switch (mode) {
+        .quick => "capture quick",
+        .area => "capture area",
+        .fullscreen => "capture fullscreen",
+        .all_screens => "capture all-screens",
+        .focused => "capture focused",
+        .window => "capture window",
+        .previous_area => "capture previous-area",
+        .all_in_one => "capture all-in-one",
+    };
+}
+
+fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeSpec {
+    return switch (mode) {
+        .quick => .{ .interaction_mode = .quick, .draft_mode = .quick },
+        .area => .{ .interaction_mode = .area, .draft_mode = .area },
+        .all_in_one => .{ .interaction_mode = .quick, .draft_mode = .capture },
+        else => unreachable,
+    };
 }
 
 const OverlaySelectionOutcome = struct {
