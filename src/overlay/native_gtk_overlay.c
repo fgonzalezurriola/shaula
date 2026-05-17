@@ -83,9 +83,13 @@ typedef enum {
 typedef enum {
   HANDLE_NONE,
   HANDLE_TOP_LEFT,
+  HANDLE_TOP,
   HANDLE_TOP_RIGHT,
+  HANDLE_RIGHT,
   HANDLE_BOTTOM_RIGHT,
+  HANDLE_BOTTOM,
   HANDLE_BOTTOM_LEFT,
+  HANDLE_LEFT,
 } ShaulaResizeHandle;
 
 typedef enum {
@@ -338,6 +342,12 @@ static const char *cursor_name(ShaulaCursorShape shape) {
 
 static ShaulaCursorShape cursor_for_handle(ShaulaResizeHandle handle) {
   switch (handle) {
+  case HANDLE_LEFT:
+  case HANDLE_RIGHT:
+    return CURSOR_RESIZE_EW;
+  case HANDLE_TOP:
+  case HANDLE_BOTTOM:
+    return CURSOR_RESIZE_NS;
   case HANDLE_TOP_LEFT:
   case HANDLE_BOTTOM_RIGHT:
     return CURSOR_RESIZE_NWSE;
@@ -354,12 +364,20 @@ static int handle_index(ShaulaResizeHandle handle) {
   switch (handle) {
   case HANDLE_TOP_LEFT:
     return 0;
-  case HANDLE_TOP_RIGHT:
+  case HANDLE_TOP:
     return 1;
-  case HANDLE_BOTTOM_RIGHT:
+  case HANDLE_TOP_RIGHT:
     return 2;
-  case HANDLE_BOTTOM_LEFT:
+  case HANDLE_RIGHT:
     return 3;
+  case HANDLE_BOTTOM_RIGHT:
+    return 4;
+  case HANDLE_BOTTOM:
+    return 5;
+  case HANDLE_BOTTOM_LEFT:
+    return 6;
+  case HANDLE_LEFT:
+    return 7;
   case HANDLE_NONE:
   default:
     return -1;
@@ -458,17 +476,29 @@ static gboolean resize_free(ShaulaRect origin, ShaulaResizeHandle handle,
     left = point.x;
     top = point.y;
     break;
+  case HANDLE_TOP:
+    top = point.y;
+    break;
   case HANDLE_TOP_RIGHT:
     right = point.x + 1;
     top = point.y;
+    break;
+  case HANDLE_RIGHT:
+    right = point.x + 1;
     break;
   case HANDLE_BOTTOM_RIGHT:
     right = point.x + 1;
     bottom = point.y + 1;
     break;
+  case HANDLE_BOTTOM:
+    bottom = point.y + 1;
+    break;
   case HANDLE_BOTTOM_LEFT:
     left = point.x;
     bottom = point.y + 1;
+    break;
+  case HANDLE_LEFT:
+    left = point.x;
     break;
   default:
     return FALSE;
@@ -484,6 +514,10 @@ static gboolean resize_aspect(ShaulaRect origin, ShaulaResizeHandle handle,
   int top = origin.y;
   int right = origin.x + origin.width;
   int bottom = origin.y + origin.height;
+  int center_x = origin.x + origin.width / 2;
+  int center_y = origin.y + origin.height / 2;
+  int width = origin.width;
+  int height = origin.height;
 
   switch (handle) {
   case HANDLE_TOP_LEFT:
@@ -498,6 +532,27 @@ static gboolean resize_aspect(ShaulaRect origin, ShaulaResizeHandle handle,
   case HANDLE_BOTTOM_LEFT:
     return geometry_from_points((ShaulaPoint){.x = right, .y = top}, point,
                                 bounds, out);
+  case HANDLE_LEFT:
+    width = abs(right - point.x);
+    height = MAX(1, (width * state.aspect.height) / state.aspect.width);
+    return normalize_selection(right - width, center_y - height / 2, right,
+                               center_y + (height + 1) / 2, bounds, out);
+  case HANDLE_RIGHT:
+    width = abs(point.x + 1 - left);
+    height = MAX(1, (width * state.aspect.height) / state.aspect.width);
+    return normalize_selection(left, center_y - height / 2, left + width,
+                               center_y + (height + 1) / 2, bounds, out);
+  case HANDLE_TOP:
+    height = abs(bottom - point.y);
+    width = MAX(1, (height * state.aspect.width) / state.aspect.height);
+    return normalize_selection(center_x - width / 2, bottom - height,
+                               center_x + (width + 1) / 2, bottom, bounds, out);
+  case HANDLE_BOTTOM:
+    height = abs(point.y + 1 - top);
+    width = MAX(1, (height * state.aspect.width) / state.aspect.height);
+    return normalize_selection(center_x - width / 2, top,
+                               center_x + (width + 1) / 2, top + height, bounds,
+                               out);
   default:
     return FALSE;
   }
@@ -532,6 +587,8 @@ static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
   int top = s.y;
   int right = s.x + s.width;
   int bottom = s.y + s.height;
+  int mid_x = s.x + s.width / 2;
+  int mid_y = s.y + s.height / 2;
 
   if (point_near(p, (ShaulaPoint){.x = left, .y = top}, RESIZE_HIT_RADIUS))
     return HANDLE_TOP_LEFT;
@@ -541,6 +598,14 @@ static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
     return HANDLE_BOTTOM_RIGHT;
   if (point_near(p, (ShaulaPoint){.x = left, .y = bottom}, RESIZE_HIT_RADIUS))
     return HANDLE_BOTTOM_LEFT;
+  if (point_near(p, (ShaulaPoint){.x = mid_x, .y = top}, RESIZE_HIT_RADIUS))
+    return HANDLE_TOP;
+  if (point_near(p, (ShaulaPoint){.x = right, .y = mid_y}, RESIZE_HIT_RADIUS))
+    return HANDLE_RIGHT;
+  if (point_near(p, (ShaulaPoint){.x = mid_x, .y = bottom}, RESIZE_HIT_RADIUS))
+    return HANDLE_BOTTOM;
+  if (point_near(p, (ShaulaPoint){.x = left, .y = mid_y}, RESIZE_HIT_RADIUS))
+    return HANDLE_LEFT;
 
   return HANDLE_NONE;
 }
@@ -725,13 +790,17 @@ static void draw_handles(cairo_t *cr, ShaulaRect s) {
   ShaulaResizeHandle emphasized =
       state.drag_mode == DRAG_RESIZE ? state.active_handle : state.hover_handle;
   int emphasized_index = handle_index(emphasized);
-  ShaulaPoint points[4] = {
+  ShaulaPoint points[8] = {
       {s.x, s.y},
+      {s.x + s.width / 2, s.y},
       {s.x + s.width, s.y},
+      {s.x + s.width, s.y + s.height / 2},
       {s.x + s.width, s.y + s.height},
+      {s.x + s.width / 2, s.y + s.height},
       {s.x, s.y + s.height},
+      {s.x, s.y + s.height / 2},
   };
-  for (int i = 0; i < 4; i += 1) {
+  for (int i = 0; i < 8; i += 1) {
     double px = (double)points[i].x;
     double py = (double)points[i].y;
     double scale = i == emphasized_index ? 1.45 : 1.0;

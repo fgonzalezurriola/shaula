@@ -146,12 +146,12 @@ and the working diff.
   placement clamps to `(12,12)` before GTK measures the canvas.
 - Preview Ctrl+S and Ctrl+Shift+C success banners now use `Screenshot captured`
   desktop notifications with Freedesktop `image-path` screenshot thumbnails
-  and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint that writes
-  a new timestamped version and keeps the preview open; Save As/Ctrl+Shift+S
-  also keeps the preview open. The Done headerbar action is the final action:
-  it saves/promotes the current result if needed, emits the normal saved
-  notification, and closes the preview. Enter maps to Done only when
-  text/editable/crop/region/modal interaction does not own Enter.
+  and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint and keeps
+  the preview open; Save As/Ctrl+Shift+S also keeps the preview open. The Done
+  headerbar action is the final action: it saves/promotes the current result if
+  needed, emits the normal saved notification, and closes the preview. Enter
+  maps to Done only when text/editable/crop/region/modal interaction does not
+  own Enter.
 - Copy-only screenshot notifications must not expose implicit runtime capture
   artifacts as clickable files. Captures without `--save`/`--output` still write
   an internal PNG under `$XDG_RUNTIME_DIR/shaula/captures` or
@@ -390,11 +390,11 @@ and the working diff.
 - Overlay Enter/Return is handled in key-capture phase by the overlay window:
   even when the aspect dropdown was just used or remains open, Enter closes the
   dropdown if needed and confirms the capture instead of reopening the menu.
-- Area overlay hit-testing is corner-biased: resize is restricted only to the four
-  corner handles, while edges and the inner 24px rim provide move behavior, and
-  dragging in the selection interior starts a new region. This makes it
-  intuitive to grab and move a selection without accidental resizing, and keeps
-  it cheap to recover from a too-large selection without hunting for empty screen
+- Area overlay hit-testing is handle-biased: the 8 corner and mid-point handles
+  keep resize cursors, while edges themselves and the inner 24px rim keep move behavior,
+  and dragging in the selection interior starts a new region. This makes it
+  intuitive to move the selection by grabbing the edge, and keeps it
+  cheap to recover from a too-large selection without hunting for empty screen
   space.
 - Overlay selection stays output-local while the GTK layer-shell helper is
   interactive, then adds the selected monitor origin when emitting helper JSON
@@ -410,15 +410,15 @@ and the working diff.
 
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
-- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`,
-  adding a numeric suffix when needed and falling back to `~/shaula` when the
-  Pictures directory cannot be created or written. Quick Save updates preview
-  save metadata but does not create undo history.
+- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves to the current
+  real save path, or promotes a temporary capture from
+  `$XDG_RUNTIME_DIR/shaula/captures`/`/tmp/shaula/captures` into
+  `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`, falling back to
+  `~/shaula` when the Pictures directory cannot be created or written.
+  Quick Save updates preview save metadata but does not create undo history.
 - Save As: implemented as a responsive utility/menu action and
   `Ctrl+Shift+S`. It opens a file chooser, writes a PNG to disk, and updates
-  preview save metadata; later `Ctrl+S` still creates a new timestamped
-  version.
+  the current real save path so later `Ctrl+S` saves to the chosen file.
 - `shaula-undo-symbolic` Undo: implemented. Disabled when the history stack has
   no undo entry. Also available with `Ctrl+Z`.
 - `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
