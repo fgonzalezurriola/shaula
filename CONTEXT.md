@@ -189,6 +189,12 @@ and the working diff.
   `current-output` and `all-outputs` lanes separately from CLI compatibility
   tokens. Direct no-preview captures emit best-effort save/copy notifications
   from the Zig post-capture pipeline; preview keeps owning its own banners.
+- Capture shortcuts are gated by a capture-only session lock. Rapid
+  Ctrl+Shift+1/2/3/4 invocations return deterministic `ERR_CAPTURE_IN_PROGRESS`
+  while selection/backend capture is active, but the lock is released before
+  post-capture preview so existing previews do not block newer screenshots.
+- The GTK preview helper runs as a non-unique `GtkApplication`, so multiple
+  post-capture previews can stay open at the same time.
 - Architecture deepening pass: capture grammar now lives in
   `capture/command_grammar.zig`; capture invocation assembly lives in
   `capture/invocation.zig`; backend execution planning is typed in
@@ -410,15 +416,15 @@ and the working diff.
 
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
-- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves to the current
-  real save path, or promotes a temporary capture from
-  `$XDG_RUNTIME_DIR/shaula/captures`/`/tmp/shaula/captures` into
-  `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`, falling back to
-  `~/shaula` when the Pictures directory cannot be created or written.
-  Quick Save updates preview save metadata but does not create undo history.
+- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
+  timestamped PNG under `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`,
+  adding a numeric suffix when needed and falling back to `~/shaula` when the
+  Pictures directory cannot be created or written. Quick Save updates preview
+  save metadata but does not create undo history.
 - Save As: implemented as a responsive utility/menu action and
   `Ctrl+Shift+S`. It opens a file chooser, writes a PNG to disk, and updates
-  the current real save path so later `Ctrl+S` saves to the chosen file.
+  preview save metadata; later `Ctrl+S` still creates a new timestamped
+  version.
 - `shaula-undo-symbolic` Undo: implemented. Disabled when the history stack has
   no undo entry. Also available with `Ctrl+Z`.
 - `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has

@@ -13,9 +13,15 @@ const invocation = @import("invocation.zig");
 const json = @import("command_json.zig");
 const overlay = @import("../overlay/overlay.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
+const capture_session_lock = @import("../runtime/capture_session_lock.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const selection = @import("../selection/selection.zig");
+
+const CaptureSessionAcquire = struct {
+    lock: ?capture_session_lock.CaptureSessionLock = null,
+    exit_code: ?u8 = null,
+};
 
 /// Execute the shared capture lifecycle after mode-specific inputs are resolved.
 ///
@@ -29,6 +35,7 @@ fn executeLifecycle(
     io: std.Io,
     environ: std.process.Environ,
     options: invocation.Invocation,
+    session_lock: *capture_session_lock.CaptureSessionLock,
 ) !u8 {
     const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
@@ -74,6 +81,7 @@ fn executeLifecycle(
         }
     }
 
+    session_lock.release();
     return writeCaptureOutcome(allocator, io, environ, resolved_options.command, resolved_options.reported_mode, &outcome, resolved_options.post_flags, precondition_warning);
 }
 
@@ -133,6 +141,11 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture all-in-one", reported_mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture all-in-one", reported_mode, .quick, .capture, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
     if (selection_result.exit_code) |code| return code;
@@ -145,7 +158,7 @@ pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.proces
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
     _ = backend_mode;
-    return executeLifecycle(allocator, io, environ, invocation.allInOne(parsed, region_capture_mode, geometry));
+    return executeLifecycle(allocator, io, environ, invocation.allInOne(parsed, region_capture_mode, geometry), &session_lock);
 }
 
 /// Execute `capture quick` through the capture-on-release overlay lifecycle.
@@ -156,6 +169,11 @@ pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.E
         try json.writeErrorJson(io, "capture quick", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
+
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture quick", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture quick", mode, .quick, .quick, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
@@ -168,7 +186,7 @@ pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.E
     }
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, invocation.quick(parsed, region_capture_mode, geometry));
+    return executeLifecycle(allocator, io, environ, invocation.quick(parsed, region_capture_mode, geometry), &session_lock);
 }
 
 /// Execute `capture area` through the shared capture lifecycle.
@@ -179,6 +197,11 @@ pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         try json.writeErrorJson(io, "capture area", "ERR_CLI_USAGE", "--json is required", false, mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
+
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture area", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const selection_result = try resolveOverlaySelection(allocator, io, environ, "capture area", mode, .area, .area, parsed.aspect, region_capture_mode, parsed.dry_run, parsed.simulate_cancel);
@@ -191,7 +214,7 @@ pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     }
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
-    return executeLifecycle(allocator, io, environ, invocation.area(parsed, region_capture_mode, geometry));
+    return executeLifecycle(allocator, io, environ, invocation.area(parsed, region_capture_mode, geometry), &session_lock);
 }
 
 pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -202,7 +225,12 @@ pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.proc
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, invocation.fullscreen(parsed));
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture fullscreen", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
+    return executeLifecycle(allocator, io, environ, invocation.fullscreen(parsed), &session_lock);
 }
 
 pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -213,7 +241,12 @@ pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.proc
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, invocation.allScreens(parsed));
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture all-screens", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
+    return executeLifecycle(allocator, io, environ, invocation.allScreens(parsed), &session_lock);
 }
 
 pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -224,7 +257,12 @@ pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, invocation.focused(parsed));
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture focused", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
+    return executeLifecycle(allocator, io, environ, invocation.focused(parsed), &session_lock);
 }
 
 pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
@@ -235,7 +273,12 @@ pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    return executeLifecycle(allocator, io, environ, invocation.window(parsed));
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture window", mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
+    return executeLifecycle(allocator, io, environ, invocation.window(parsed), &session_lock);
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
@@ -256,7 +299,45 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
         return recovery_policy.exitCodeFor("ERR_PREVIOUS_AREA_UNAVAILABLE");
     };
 
-    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry));
+    const capture_session = try beginCaptureSession(allocator, io, environ, "capture previous-area", reported_mode);
+    if (capture_session.exit_code) |code| return code;
+    var session_lock = capture_session.lock.?;
+    defer session_lock.deinit();
+
+    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock);
+}
+
+/// Starts the capture-only session gate used by compositor shortcuts.
+///
+/// Contract: `ERR_CAPTURE_IN_PROGRESS` is deterministic and retryable; callers
+/// release the returned lock before preview so open previews do not block newer
+/// captures.
+fn beginCaptureSession(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    command: []const u8,
+    reported_mode: []const u8,
+) !CaptureSessionAcquire {
+    const lock = capture_session_lock.acquire(allocator, io, environ) catch |err| switch (err) {
+        error.CaptureInProgress => {
+            try json.writeErrorJson(
+                io,
+                command,
+                "ERR_CAPTURE_IN_PROGRESS",
+                "another capture is already in progress",
+                true,
+                reported_mode,
+                null,
+                false,
+                &.{"capture_session_busy"},
+            );
+            return .{ .exit_code = recovery_policy.exitCodeFor("ERR_CAPTURE_IN_PROGRESS") };
+        },
+        else => return err,
+    };
+
+    return .{ .lock = lock };
 }
 
 const OverlaySelectionOutcome = struct {

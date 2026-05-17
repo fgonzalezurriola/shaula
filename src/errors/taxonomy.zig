@@ -59,6 +59,7 @@ const specs = [_]ErrorSpec{
     .{ .code = "ERR_CAPTURE_BACKEND_UNAVAILABLE", .message = "capture backend unavailable", .retryable = true, .class = .backend, .action = .degrade_to_portal, .exit_code = 30 },
     .{ .code = "ERR_WINDOW_TARGET_UNRESOLVED", .message = "window target could not be resolved", .retryable = false, .class = .backend, .action = .degrade_continue, .exit_code = 31 },
     .{ .code = "ERR_CAPTURE_TIMEOUT", .message = "capture operation timed out", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 32 },
+    .{ .code = "ERR_CAPTURE_IN_PROGRESS", .message = "another capture is already in progress", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 46 },
     .{ .code = "ERR_CAPTURE_PRECONDITION_TIMEOUT", .message = "capture precondition timed out waiting for shell artifact guard", .retryable = true, .class = .backend, .action = .retry_limited, .exit_code = 35 },
     .{ .code = "ERR_SELECTION_CANCELLED", .message = "selection was cancelled by user", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 33 },
     .{ .code = "ERR_CAPTURE_MODE_UNSUPPORTED", .message = "capture mode is unsupported by runtime capabilities", .retryable = false, .class = .backend, .action = .fail_fast, .exit_code = 34 },
