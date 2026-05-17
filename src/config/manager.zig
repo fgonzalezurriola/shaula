@@ -8,19 +8,19 @@ pub const default_config_toml =
     \\[capture]
     \\# live keeps the desktop updating while selecting. frozen shows a still
     \\# screen while selecting for transient states.
-    \\region_capture_mode = "live"
+    \\region_capture_mode = "frozen"
     \\
     \\[capture.after]
     \\save_folder = "~/Pictures/shaula"
     \\
     \\[capture.after.quick]
     \\skip_preview = false
-    \\copy_to_clipboard = false
+    \\copy_to_clipboard = true
     \\save_to_folder = false
     \\
     \\[capture.after.area]
     \\skip_preview = false
-    \\copy_to_clipboard = false
+    \\copy_to_clipboard = true
     \\save_to_folder = false
     \\
     \\[capture.after.fullscreen]
