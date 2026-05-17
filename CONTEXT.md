@@ -548,10 +548,8 @@ and the working diff.
   layout path via `shaula_annotation_text_cursor_rect`, using the hidden
   buffer's UTF-8 insert byte index and `pango_layout_get_cursor_pos`;
   `GtkTextBuffer::mark-set` redraws cursor moves even when text content does
-  not change. Active drafts also draw a faint dashed editing box from the same
-  annotation bounds, distinct from selected-annotation chrome. Empty drafts use
-  the caret rect, not the empty annotation bounds, as the editing-box base so
-  the caret halo cannot visually overflow the initial box at low zoom. Text HUD
+  not change. Active drafts do not draw an editing bounds box; the visible
+  draft text and canvas caret are the only active text markers. Text HUD
   changes during an active draft update the draft state and do not mutate a
   previously selected committed text annotation. Drag release must keep
   `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks draft

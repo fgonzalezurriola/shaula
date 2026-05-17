@@ -405,27 +405,6 @@ static int text_view_cursor_byte_index(GtkTextView *view, const char *text) {
   return (int)(cursor - (text != NULL ? text : ""));
 }
 
-static void draw_text_editing_bounds(cairo_t *cr, ShaulaPreviewState *state,
-                                     ShaulaRect bounds) {
-  double zoom = MAX(state->zoom, 0.01);
-  bounds = shaula_rect_expanded(bounds, 4.0 / zoom);
-
-  cairo_save(cr);
-  double dashes[] = {5.0 / zoom, 4.0 / zoom};
-  cairo_set_dash(cr, dashes, 2, 0);
-  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-  cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.34);
-  cairo_set_line_width(cr, 2.5 / zoom);
-  cairo_rectangle(cr, bounds.x, bounds.y, bounds.width, bounds.height);
-  cairo_stroke(cr);
-  cairo_set_source_rgba(cr, state->text_color.r, state->text_color.g,
-                        state->text_color.b, 0.68);
-  cairo_set_line_width(cr, 1.0 / zoom);
-  cairo_rectangle(cr, bounds.x, bounds.y, bounds.width, bounds.height);
-  cairo_stroke(cr);
-  cairo_restore(cr);
-}
-
 static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state,
                                       ShaulaRect caret) {
   double zoom = MAX(state->zoom, 0.01);
@@ -466,12 +445,6 @@ static void draw_text_draft(cairo_t *cr, ShaulaPreviewState *state) {
   ShaulaRect caret = {0};
   gboolean has_caret =
       shaula_annotation_text_cursor_rect(annotation, cursor_byte_index, &caret);
-  ShaulaRect editing_bounds = annotation->bounds;
-  if (has_caret && (text == NULL || text[0] == '\0')) {
-    double zoom = MAX(state->zoom, 0.01);
-    editing_bounds = (ShaulaRect){caret.x, caret.y, 1.0 / zoom, caret.height};
-  }
-  draw_text_editing_bounds(cr, state, editing_bounds);
   if (has_caret)
     draw_text_insertion_caret(cr, state, caret);
   shaula_annotation_free(annotation);
