@@ -422,6 +422,22 @@ static gboolean clamp_selection(ShaulaRect input, ShaulaPoint bounds,
   return TRUE;
 }
 
+static gboolean clamp_selection_preserve_size(ShaulaRect input,
+                                              ShaulaPoint bounds,
+                                              ShaulaRect *out) {
+  int width = MIN(input.width, bounds.x);
+  int height = MIN(input.height, bounds.y);
+  if (width <= 0 || height <= 0)
+    return FALSE;
+  *out = (ShaulaRect){
+      .x = clamp_int(input.x, 0, MAX(0, bounds.x - width)),
+      .y = clamp_int(input.y, 0, MAX(0, bounds.y - height)),
+      .width = width,
+      .height = height,
+  };
+  return TRUE;
+}
+
 static gboolean geometry_from_points(ShaulaPoint anchor, ShaulaPoint point,
                                      ShaulaPoint bounds, ShaulaRect *out) {
   int width = abs(point.x - anchor.x) + 1;
@@ -580,6 +596,24 @@ static gboolean apply_aspect_from_center(ShaulaRect input, ShaulaAspect aspect,
       .height = h,
   };
   return clamp_selection(centered, bounds, out);
+}
+
+static gboolean apply_aspect_from_center_preserve(ShaulaRect input,
+                                                  ShaulaAspect aspect,
+                                                  ShaulaPoint bounds,
+                                                  ShaulaRect *out) {
+  int w = input.width;
+  int h = input.height;
+  apply_aspect(&w, &h, aspect);
+  int cx = input.x + input.width / 2;
+  int cy = input.y + input.height / 2;
+  ShaulaRect centered = {
+      .x = cx - w / 2,
+      .y = cy - h / 2,
+      .width = w,
+      .height = h,
+  };
+  return clamp_selection_preserve_size(centered, bounds, out);
 }
 
 static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
@@ -891,12 +925,30 @@ static void confirm(void) {
       state.selection.height <= 0)
     return;
   const char *aspect = state.has_aspect ? state.aspect_output_label : "Free";
+  const char *output_name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
+  ShaulaPoint bounds = initial_surface_size();
   printf("{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"%s\","
          "\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
-         "\"error\":null}\n",
+         "\"local_geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
+         "\"output\":{\"name\":",
          aspect, state.selection.x + state.output_origin.x,
          state.selection.y + state.output_origin.y, state.selection.width,
-         state.selection.height);
+         state.selection.height, state.selection.x, state.selection.y,
+         state.selection.width, state.selection.height);
+  if (output_name != NULL && output_name[0] != '\0') {
+    putchar('"');
+    for (const char *p = output_name; *p != '\0'; p += 1) {
+      if (*p == '"' || *p == '\\')
+        putchar('\\');
+      putchar(*p);
+    }
+    putchar('"');
+  } else {
+    printf("null");
+  }
+  printf(",\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
+         "\"error\":null}\n",
+         state.output_origin.x, state.output_origin.y, bounds.x, bounds.y);
   fflush(stdout);
   if (state.main_loop != NULL)
     g_main_loop_quit(state.main_loop);
@@ -1199,13 +1251,15 @@ static void load_initial_geometry(void) {
 
   ShaulaRect rect;
   ShaulaPoint bounds = initial_surface_size();
-  if (!clamp_selection(
-          (ShaulaRect){
-              .x = x - state.output_origin.x,
-              .y = y - state.output_origin.y,
-              .width = width,
-              .height = height,
-          },
+  const char *legacy = getenv("SHAULA_OVERLAY_INITIAL_GEOMETRY_LEGACY");
+  if (legacy != NULL && strcmp(legacy, "1") == 0) {
+    if (x < 0 || y < 0 || width > bounds.x || height > bounds.y ||
+        x > bounds.x - width || y > bounds.y - height) {
+      return;
+    }
+  }
+  if (!clamp_selection_preserve_size(
+          (ShaulaRect){.x = x, .y = y, .width = width, .height = height},
           bounds, &rect)) {
     return;
   }
@@ -1213,8 +1267,8 @@ static void load_initial_geometry(void) {
   state.selection = rect;
   if (state.has_aspect) {
     ShaulaRect adjusted;
-    if (apply_aspect_from_center(state.selection, state.aspect, bounds,
-                                 &adjusted))
+    if (apply_aspect_from_center_preserve(state.selection, state.aspect, bounds,
+                                          &adjusted))
       state.selection = adjusted;
   }
   state.has_selection = TRUE;

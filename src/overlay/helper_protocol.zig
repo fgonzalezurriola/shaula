@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const selection = @import("../selection/selection.zig");
+const capture_types = @import("../capture/types.zig");
 
 const HelperStatus = enum {
     ok,
@@ -20,6 +21,14 @@ const HelperGeometry = struct {
     height: u32,
 };
 
+const HelperOutput = struct {
+    name: ?[]const u8 = null,
+    x: i32 = 0,
+    y: i32 = 0,
+    width: u32 = 0,
+    height: u32 = 0,
+};
+
 const HelperError = struct {
     code: []const u8,
     message: []const u8,
@@ -29,8 +38,23 @@ const HelperEnvelope = struct {
     status: HelperStatus,
     aspect: ?[]const u8 = null,
     geometry: ?HelperGeometry = null,
+    local_geometry: ?HelperGeometry = null,
+    output: ?HelperOutput = null,
     action: ?HelperAction = null,
     @"error": ?HelperError = null,
+};
+
+pub const LocalSelection = struct {
+    output_name: ?[]u8 = null,
+    output_origin_x: i32 = 0,
+    output_origin_y: i32 = 0,
+    output_width: u32,
+    output_height: u32,
+    geometry: capture_types.AreaGeometry,
+
+    pub fn deinit(self: LocalSelection, allocator: std.mem.Allocator) void {
+        if (self.output_name) |name| allocator.free(name);
+    }
 };
 
 pub const AspectOverride = union(enum) {
@@ -99,6 +123,35 @@ pub fn parseAspectOverrideAlloc(allocator: std.mem.Allocator, payload: []const u
     if (freeAspect(aspect)) return .free;
     if (validAspect(aspect)) |valid| return .{ .value = try allocator.dupe(u8, valid) };
     return .missing;
+}
+
+/// Extract output-local confirmed geometry for overlay runtime state only.
+///
+/// Contract: this must never replace `geometry`, which remains the helper JSON
+/// backend capture contract in compositor-layout coordinates.
+pub fn parseConfirmedLocalSelectionAlloc(allocator: std.mem.Allocator, payload: []const u8) !?LocalSelection {
+    const parsed = std.json.parseFromSlice(HelperEnvelope, allocator, payload, .{}) catch return null;
+    defer parsed.deinit();
+
+    const envelope = parsed.value;
+    if (envelope.status != .ok or envelope.action == null or envelope.action.? != .capture) return null;
+    const local = validEnvelopeGeometry(envelope.local_geometry) orelse return null;
+    const output = envelope.output orelse return null;
+    if (output.width == 0 or output.height == 0) return null;
+
+    return .{
+        .output_name = if (output.name) |name| try allocator.dupe(u8, name) else null,
+        .output_origin_x = output.x,
+        .output_origin_y = output.y,
+        .output_width = output.width,
+        .output_height = output.height,
+        .geometry = .{
+            .x = local.x,
+            .y = local.y,
+            .width = local.width,
+            .height = local.height,
+        },
+    };
 }
 
 pub fn reportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {

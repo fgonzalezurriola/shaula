@@ -89,6 +89,7 @@ pub fn runSelection(
             defer helper_selection.deinit(allocator);
             const result = helper_selection.result;
             persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
+            persistOutputAwareSelectionDraft(allocator, io, environ, draft_mode, helper_selection) catch {};
             persistSelectionAspect(allocator, io, environ, interaction_mode, result, helper_selection) catch {};
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
             return result;
@@ -120,8 +121,27 @@ fn persistSelectionDraft(
     draft_mode: DraftMode,
     result: selection.SelectionResult,
 ) !void {
+    if (result.cancelled) return;
     const geometry = captureAreaGeometryFromSelection(result.geometry) orelse return;
     try selection_draft_store.store(allocator, io, environ, draft_mode, geometry);
+}
+
+fn persistOutputAwareSelectionDraft(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    draft_mode: DraftMode,
+    helper_selection: HelperSelection,
+) !void {
+    if (helper_selection.result.cancelled) return;
+    const local = helper_selection.local_selection orelse return;
+    try selection_draft_store.storeForOutput(allocator, io, environ, draft_mode, .{
+        .name = local.output_name,
+        .width = local.output_width,
+        .height = local.output_height,
+        .origin_x = local.output_origin_x,
+        .origin_y = local.output_origin_y,
+    }, local.geometry);
 }
 
 /// Persists only the final valid capture toolbar position after confirmation.
@@ -160,10 +180,12 @@ const HelperSelection = struct {
     result: selection.SelectionResult,
     final_aspect_known: bool = false,
     final_aspect: ?[]u8 = null,
+    local_selection: ?helper_protocol.LocalSelection = null,
     debug_stderr: ?[]const u8 = null,
 
     fn deinit(self: HelperSelection, allocator: std.mem.Allocator) void {
         if (self.final_aspect) |aspect| allocator.free(aspect);
+        if (self.local_selection) |local| local.deinit(allocator);
         if (self.debug_stderr) |stderr| allocator.free(stderr);
     }
 };
@@ -212,16 +234,19 @@ fn runHelperSelectionAttempt(
     if (output_name) |name| {
         try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
     }
-    const initial = try selection_draft_store.load(allocator, io, environ, draft_mode);
+    const initial = try selection_draft_store.loadInitialForOutputName(allocator, io, environ, draft_mode, output_name);
     if (initial) |geometry| {
         const initial_geometry = try std.fmt.allocPrint(allocator, "{d},{d},{d},{d}", .{
-            geometry.x,
-            geometry.y,
-            geometry.width,
-            geometry.height,
+            geometry.geometry.x,
+            geometry.geometry.y,
+            geometry.geometry.width,
+            geometry.geometry.height,
         });
         defer allocator.free(initial_geometry);
         try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY", initial_geometry);
+        if (geometry.legacy) {
+            try helper_env.put("SHAULA_OVERLAY_INITIAL_GEOMETRY_LEGACY", "1");
+        }
     }
 
     const debug_latency = helper_protocol.envFlagEnabled(environ, "SHAULA_DEBUG_OVERLAY_LATENCY");
@@ -246,6 +271,8 @@ fn runHelperSelectionAttempt(
     const result = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint);
     const aspect_override = try helper_protocol.parseAspectOverrideAlloc(allocator, helper.stdout);
     defer aspect_override.deinit(allocator);
+    const local_selection = try helper_protocol.parseConfirmedLocalSelectionAlloc(allocator, helper.stdout);
+    errdefer if (local_selection) |local| local.deinit(allocator);
 
     const owned_stderr = if (debug_latency) try allocator.dupe(u8, helper.stderr) else null;
     errdefer if (owned_stderr) |s| allocator.free(s);
@@ -258,6 +285,7 @@ fn runHelperSelectionAttempt(
                 try finalAspectForConfirmedSelection(allocator, helper_aspect, aspect_override)
             else
                 null,
+            .local_selection = local_selection,
             .debug_stderr = owned_stderr,
         },
     };

@@ -133,8 +133,8 @@ and the working diff.
   compatibility alias for current-output fullscreen behavior.
 - Capture Area restoration: `capture quick` is now the capture-on-release flow,
   while `capture area` is the adjustable overlay flow. The area overlay opens
-  with its last confirmed area or a centered 60% default, shows a minimal
-  aspect/Discard toolbar, confirms with `y`/Enter, cancels with
+  with its last confirmed same-output area or a centered 60% default, shows a
+  minimal aspect/Discard toolbar, confirms with `y`/Enter, cancels with
   Ctrl+C/Esc/Backspace/`n`, persists area/aspect only on confirm, and opens the
   normal post-capture preview. Quick and Area draft state are intentionally
   separate. Helper aspect extraction is parsed separately from `SelectionResult`
@@ -404,10 +404,13 @@ and the working diff.
   space.
 - Overlay selection stays output-local while the GTK layer-shell helper is
   interactive, then adds the selected monitor origin when emitting helper JSON
-  for backend capture. Persisted initial geometry subtracts that origin before
-  clamping back into the local surface. This keeps capture idempotent after Niri
-  monitor hotplug/restart layouts where a single output may not sit at `0,0`,
-  without adding retry sleeps to the hot path.
+  for backend capture. Confirmed overlay restore state is stored per output
+  name with output dimensions and diagnostic origin, but the rectangle itself is
+  output-local. Startup restores only the current output entry and uses a
+  preserve-size clamp (`w/h` fit first, then `x/y`) so a region saved on another
+  monitor can never be flattened into the current surface. This keeps capture
+  idempotent after Niri monitor hotplug/restart layouts where a single output
+  may not sit at `0,0`, without adding retry sleeps to the hot path.
 - Aspect-constrained capture remains available through
   `SHAULA_OVERLAY_ASPECT`; the removed button strip is no longer the interactive
   path for changing it during capture.
