@@ -74,6 +74,11 @@ static char *render_or_original_png(ShaulaPreviewState *state,
 /// helper does not depend on the GTK process exiting before the user gets
 /// feedback. Failures are intentionally non-fatal and reported to the caller
 /// only so the Zig service can keep a fallback path.
+///
+/// TODO: bridge this C helper to `notify/request.zig` once preview notification
+/// execution can cross the C/Zig seam without changing helper startup or action
+/// listener behavior. Keep all remaining C notify-send argv construction inside
+/// this function until then.
 static gboolean shaula_preview_notify(const char *summary, const char *body,
                                       const char *image_path,
                                       gboolean transient, int timeout_ms) {

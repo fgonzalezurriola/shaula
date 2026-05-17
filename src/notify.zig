@@ -1,23 +1,12 @@
 const std = @import("std");
+const notify_request = @import("notify/request.zig");
 const process_exec = @import("runtime/process_exec.zig");
 const runtime_paths = @import("runtime/paths.zig");
 
 const saved_screenshot_notification_timeout_ms: u32 = 6000;
 const saved_screenshot_notification_body = "Saved to screenshots folder.";
 
-pub const NotifyUrgency = enum {
-    low,
-    normal,
-    critical,
-
-    fn asNotifySendArg(self: NotifyUrgency) []const u8 {
-        return switch (self) {
-            .low => "low",
-            .normal => "normal",
-            .critical => "critical",
-        };
-    }
-};
+pub const NotifyUrgency = notify_request.NotifyUrgency;
 
 pub fn notifyScreenshotSaved(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
     const absolute_path = try absolutePathForNotification(allocator, io, path);
@@ -66,27 +55,16 @@ pub fn notify(
     timeout_ms: u32,
     transient: bool,
 ) !void {
-    const timeout = try std.fmt.allocPrint(allocator, "{d}", .{timeout_ms});
-    defer allocator.free(timeout);
+    var args = try notify_request.buildNotifySendArgs(allocator, .{
+        .summary = summary,
+        .body = body,
+        .urgency = urgency,
+        .timeout_ms = timeout_ms,
+        .transient = transient,
+    }, .hint);
+    defer args.deinit(allocator);
 
-    var argv: [9][]const u8 = undefined;
-    argv[0] = "notify-send";
-    argv[1] = "--app-name=Shaula";
-    argv[2] = "--urgency";
-    argv[3] = urgency.asNotifySendArg();
-    argv[4] = "--expire-time";
-    argv[5] = timeout;
-    var argv_len: usize = 6;
-    if (transient) {
-        argv[argv_len] = "--transient";
-        argv_len += 1;
-    }
-    argv[argv_len] = summary;
-    argv_len += 1;
-    argv[argv_len] = body;
-    argv_len += 1;
-
-    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
 
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
@@ -102,75 +80,34 @@ pub fn notifyWithImage(
     timeout_ms: u32,
     transient: bool,
 ) !void {
-    const timeout = try std.fmt.allocPrint(allocator, "{d}", .{timeout_ms});
-    defer allocator.free(timeout);
-    const image_hint = if (image_path) |path| try std.fmt.allocPrint(allocator, "string:image-path:file://{s}", .{path}) else null;
-    defer if (image_hint) |hint| allocator.free(hint);
+    const request = notify_request.NotificationRequest{
+        .summary = summary,
+        .body = body,
+        .image_path = image_path,
+        .urgency = urgency,
+        .timeout_ms = timeout_ms,
+        .transient = transient,
+    };
 
-    var argv: [12][]const u8 = undefined;
-    argv[0] = "notify-send";
-    argv[1] = "--app-name=Shaula";
-    argv[2] = "--urgency";
-    argv[3] = urgency.asNotifySendArg();
-    argv[4] = "--expire-time";
-    argv[5] = timeout;
-    var argv_len: usize = 6;
-    if (transient) {
-        argv[argv_len] = "--transient";
-        argv_len += 1;
-    }
-    if (image_hint) |hint| {
-        argv[argv_len] = "--hint";
-        argv_len += 1;
-        argv[argv_len] = hint;
-        argv_len += 1;
-    }
-    argv[argv_len] = summary;
-    argv_len += 1;
-    argv[argv_len] = body;
-    argv_len += 1;
+    var args = try notify_request.buildNotifySendArgs(allocator, request, .hint);
+    defer args.deinit(allocator);
 
-    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return fallbackNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return fallbackNotifyIcon(allocator, io, request);
     defer result.deinit(allocator);
 
     if (result.term == .exited and result.term.exited == 0) return;
-    try fallbackNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+    try fallbackNotifyIcon(allocator, io, request);
 }
 
 fn fallbackNotifyIcon(
     allocator: std.mem.Allocator,
     io: std.Io,
-    summary: []const u8,
-    body: []const u8,
-    image_path: ?[]const u8,
-    urgency: NotifyUrgency,
-    timeout: []const u8,
-    transient: bool,
+    request: notify_request.NotificationRequest,
 ) !void {
-    var argv: [11][]const u8 = undefined;
-    argv[0] = "notify-send";
-    argv[1] = "--app-name=Shaula";
-    argv[2] = "--urgency";
-    argv[3] = urgency.asNotifySendArg();
-    argv[4] = "--expire-time";
-    argv[5] = timeout;
-    var argv_len: usize = 6;
-    if (transient) {
-        argv[argv_len] = "--transient";
-        argv_len += 1;
-    }
-    if (image_path) |path| {
-        argv[argv_len] = "-i";
-        argv_len += 1;
-        argv[argv_len] = path;
-        argv_len += 1;
-    }
-    argv[argv_len] = summary;
-    argv_len += 1;
-    argv[argv_len] = body;
-    argv_len += 1;
+    var args = try notify_request.buildNotifySendArgs(allocator, request, .icon);
+    defer args.deinit(allocator);
 
-    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
 }
@@ -228,82 +165,36 @@ fn notifySavedWithAction(
     timeout_ms: u32,
     transient: bool,
 ) ![]u8 {
-    const timeout = try std.fmt.allocPrint(allocator, "{d}", .{timeout_ms});
-    defer allocator.free(timeout);
-    const image_uri = if (image_path) |image| try fileUriAlloc(allocator, io, image) else null;
-    defer if (image_uri) |uri| allocator.free(uri);
-    const image_hint = if (image_uri) |uri| try std.fmt.allocPrint(allocator, "string:image-path:{s}", .{uri}) else null;
-    defer if (image_hint) |hint| allocator.free(hint);
+    const request = notify_request.NotificationRequest{
+        .summary = summary,
+        .body = body,
+        .image_path = image_path,
+        .urgency = urgency,
+        .timeout_ms = timeout_ms,
+        .transient = transient,
+        .action = .{ .id = "default", .label = "Show in folder" },
+    };
 
-    var argv: [15][]const u8 = undefined;
-    argv[0] = "notify-send";
-    argv[1] = "--app-name=Shaula";
-    argv[2] = "--urgency";
-    argv[3] = urgency.asNotifySendArg();
-    argv[4] = "--expire-time";
-    argv[5] = timeout;
-    var argv_len: usize = 6;
-    if (transient) {
-        argv[argv_len] = "--transient";
-        argv_len += 1;
-    }
-    if (image_hint) |hint| {
-        argv[argv_len] = "--hint";
-        argv_len += 1;
-        argv[argv_len] = hint;
-        argv_len += 1;
-    }
-    argv[argv_len] = "--action=default=Show in folder";
-    argv_len += 1;
-    argv[argv_len] = summary;
-    argv_len += 1;
-    argv[argv_len] = body;
-    argv_len += 1;
+    var args = try notify_request.buildNotifySendArgs(allocator, request, .hint);
+    defer args.deinit(allocator);
 
-    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return fallbackSavedActionNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return fallbackSavedActionNotifyIcon(allocator, io, request);
     defer result.deinit(allocator);
     if (result.term == .exited and result.term.exited == 0) {
         return trimActionOutput(allocator, result.stdout);
     }
-    return fallbackSavedActionNotifyIcon(allocator, io, summary, body, image_path, urgency, timeout, transient);
+    return fallbackSavedActionNotifyIcon(allocator, io, request);
 }
 
 fn fallbackSavedActionNotifyIcon(
     allocator: std.mem.Allocator,
     io: std.Io,
-    summary: []const u8,
-    body: []const u8,
-    image_path: ?[]const u8,
-    urgency: NotifyUrgency,
-    timeout: []const u8,
-    transient: bool,
+    request: notify_request.NotificationRequest,
 ) ![]u8 {
-    var argv: [14][]const u8 = undefined;
-    argv[0] = "notify-send";
-    argv[1] = "--app-name=Shaula";
-    argv[2] = "--urgency";
-    argv[3] = urgency.asNotifySendArg();
-    argv[4] = "--expire-time";
-    argv[5] = timeout;
-    var argv_len: usize = 6;
-    if (transient) {
-        argv[argv_len] = "--transient";
-        argv_len += 1;
-    }
-    if (image_path) |image| {
-        argv[argv_len] = "-i";
-        argv_len += 1;
-        argv[argv_len] = image;
-        argv_len += 1;
-    }
-    argv[argv_len] = "--action=default=Show in folder";
-    argv_len += 1;
-    argv[argv_len] = summary;
-    argv_len += 1;
-    argv[argv_len] = body;
-    argv_len += 1;
+    var args = try notify_request.buildNotifySendArgs(allocator, request, .icon);
+    defer args.deinit(allocator);
 
-    const result = process_exec.run(allocator, io, argv[0..argv_len], 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
     return trimActionOutput(allocator, result.stdout);
@@ -371,18 +262,7 @@ fn openParentDirectory(allocator: std.mem.Allocator, io: std.Io, path: []const u
 fn fileUriAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
     const absolute = try absolutePathForNotification(allocator, io, path);
     defer allocator.free(absolute);
-
-    var out = std.ArrayList(u8).empty;
-    errdefer out.deinit(allocator);
-    try out.appendSlice(allocator, "file://");
-    for (absolute) |byte| {
-        if (byte == '/' or std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_' or byte == '.' or byte == '~') {
-            try out.append(allocator, byte);
-        } else {
-            try out.print(allocator, "%{X:0>2}", .{byte});
-        }
-    }
-    return out.toOwnedSlice(allocator);
+    return notify_request.fileUriFromPathAlloc(allocator, absolute);
 }
 
 fn absolutePathForNotification(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
