@@ -70,7 +70,7 @@ const ShaulaSettingsConfig = extern struct {
 
 export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) void {
     config.* = .{
-        .region_mode = .live,
+        .region_mode = .frozen,
         .window_mode = .floating,
         .focused = TRUE,
         .close_preview_on_save = TRUE,

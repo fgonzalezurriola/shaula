@@ -11,7 +11,7 @@ pub const Config = struct {
 };
 
 pub const CaptureConfig = struct {
-    region_capture_mode: core_capture_mode.RegionCaptureMode = .live,
+    region_capture_mode: core_capture_mode.RegionCaptureMode = .frozen,
     after: CaptureAfterConfig = .{},
 };
 

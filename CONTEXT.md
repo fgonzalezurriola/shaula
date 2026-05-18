@@ -361,6 +361,8 @@ and the working diff.
 - Mode selection plumbing: CLI `--region-mode live|frozen`, convenience
   `--frozen-region`, env `SHAULA_REGION_CAPTURE_MODE`, config
   `[capture] region_capture_mode = "live"|"frozen"`, and `./dev frozen`.
+  The built-in config and Settings helper defaults are `frozen`; `live` remains
+  selectable for users who prefer a continuously updating selection view.
 - Live final capture happens only after the overlay helper exits. Shaula waits a
   short compositor settle barrier (`SHAULA_LIVE_REGION_SETTLE_MS`, default 50ms)
   before backend capture to avoid including its own layer surface; this remains
