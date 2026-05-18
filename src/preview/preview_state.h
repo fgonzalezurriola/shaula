@@ -155,6 +155,7 @@ typedef struct {
   /* Set when the helper already emitted the user-facing save/copy banner. */
   gboolean notified;
   gboolean close_preview_on_save;
+  gboolean copy_on_accept;
   char *managed_temp_path;
   const char *last_action;
   gboolean is_dark;

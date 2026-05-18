@@ -38,7 +38,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    var outcome = try preview_service.runPreview(allocator, io, environ, path);
+    var outcome = try preview_service.runPreview(allocator, io, environ, path, false);
     switch (outcome) {
         .failure => |failure| {
             try writeErrorJson(io, "preview", failure.code, failure.message, failure.retryable);

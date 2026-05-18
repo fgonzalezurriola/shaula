@@ -113,7 +113,7 @@ fn resolvePostCaptureFlags(
 
     return .{
         .preview = preview,
-        .copy = explicit.copy or (!preview and mode_after.copy_to_clipboard),
+        .copy = explicit.copy or mode_after.copy_to_clipboard,
         .save = explicit.save or (!preview and mode_after.save_to_folder),
         .copy_explicit = explicit.copy_explicit,
         .save_explicit = explicit.save_explicit,

@@ -595,7 +595,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
 }
 
 void shaula_preview_action_done(ShaulaPreviewState *state) {
-  shaula_preview_action_accept(state, FALSE);
+  shaula_preview_action_accept(state, state != NULL && state->copy_on_accept);
 }
 
 void shaula_preview_action_close(ShaulaPreviewState *state) {

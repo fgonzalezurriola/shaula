@@ -19,16 +19,16 @@ typedef struct {
   GtkDropDown *position_combo;
   GtkSwitch *focused_switch;
   GtkSwitch *close_preview_on_save_switch;
-  GtkSwitch *quick_skip_switch;
+  GtkSwitch *quick_open_switch;
   GtkSwitch *quick_copy_switch;
   GtkSwitch *quick_save_switch;
-  GtkSwitch *area_skip_switch;
+  GtkSwitch *area_open_switch;
   GtkSwitch *area_copy_switch;
   GtkSwitch *area_save_switch;
-  GtkSwitch *fullscreen_skip_switch;
+  GtkSwitch *fullscreen_open_switch;
   GtkSwitch *fullscreen_copy_switch;
   GtkSwitch *fullscreen_save_switch;
-  GtkSwitch *all_screens_skip_switch;
+  GtkSwitch *all_screens_open_switch;
   GtkSwitch *all_screens_copy_switch;
   GtkSwitch *all_screens_save_switch;
   GtkEntry *save_folder_entry;
@@ -111,18 +111,16 @@ static void read_controls(ShaulaSettingsConfig *config) {
   PositionPreset position =
       (PositionPreset)gtk_drop_down_get_selected(state.position_combo);
   shaula_settings_apply_position_preset(config, position);
-  config->quick_skip_preview = gtk_switch_get_active(state.quick_skip_switch);
+  config->quick_skip_preview = !gtk_switch_get_active(state.quick_open_switch);
   config->quick_copy = gtk_switch_get_active(state.quick_copy_switch);
   config->quick_save = gtk_switch_get_active(state.quick_save_switch);
-  config->area_skip_preview = gtk_switch_get_active(state.area_skip_switch);
+  config->area_skip_preview = !gtk_switch_get_active(state.area_open_switch);
   config->area_copy = gtk_switch_get_active(state.area_copy_switch);
   config->area_save = gtk_switch_get_active(state.area_save_switch);
-  config->fullscreen_skip_preview =
-      gtk_switch_get_active(state.fullscreen_skip_switch);
+  config->fullscreen_skip_preview = !gtk_switch_get_active(state.fullscreen_open_switch);
   config->fullscreen_copy = gtk_switch_get_active(state.fullscreen_copy_switch);
   config->fullscreen_save = gtk_switch_get_active(state.fullscreen_save_switch);
-  config->all_screens_skip_preview =
-      gtk_switch_get_active(state.all_screens_skip_switch);
+  config->all_screens_skip_preview = !gtk_switch_get_active(state.all_screens_open_switch);
   config->all_screens_copy =
       gtk_switch_get_active(state.all_screens_copy_switch);
   config->all_screens_save =
@@ -143,24 +141,19 @@ static void update_dynamic_controls(void) {
       gtk_drop_down_get_selected(state.window_combo) == WINDOW_FLOATING;
   gtk_widget_set_sensitive(GTK_WIDGET(state.size_combo), floating);
   gtk_widget_set_sensitive(GTK_WIDGET(state.position_combo), floating);
-  gtk_widget_set_sensitive(GTK_WIDGET(state.quick_copy_switch),
-                           gtk_switch_get_active(state.quick_skip_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.quick_copy_switch), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(state.quick_save_switch),
-                           gtk_switch_get_active(state.quick_skip_switch));
-  gtk_widget_set_sensitive(GTK_WIDGET(state.area_copy_switch),
-                           gtk_switch_get_active(state.area_skip_switch));
+                           !gtk_switch_get_active(state.quick_open_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.area_copy_switch), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(state.area_save_switch),
-                           gtk_switch_get_active(state.area_skip_switch));
-  gtk_widget_set_sensitive(GTK_WIDGET(state.fullscreen_copy_switch),
-                           gtk_switch_get_active(state.fullscreen_skip_switch));
+                           !gtk_switch_get_active(state.area_open_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.fullscreen_copy_switch), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(state.fullscreen_save_switch),
-                           gtk_switch_get_active(state.fullscreen_skip_switch));
-  gtk_widget_set_sensitive(
-      GTK_WIDGET(state.all_screens_copy_switch),
-      gtk_switch_get_active(state.all_screens_skip_switch));
+                           !gtk_switch_get_active(state.fullscreen_open_switch));
+  gtk_widget_set_sensitive(GTK_WIDGET(state.all_screens_copy_switch), TRUE);
   gtk_widget_set_sensitive(
       GTK_WIDGET(state.all_screens_save_switch),
-      gtk_switch_get_active(state.all_screens_skip_switch));
+      !gtk_switch_get_active(state.all_screens_open_switch));
 }
 
 static void on_control_changed(GtkWidget *widget, gpointer data) {
@@ -434,10 +427,10 @@ static void refresh_niri_status(void) {
   if (state.niri_shortcuts_detail_label != NULL) {
     if (state.niri_shortcuts_installed) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
-                         "CTRL+Shift+1 Quick Capture | "
-                         "CTRL+Shift+2 Area | "
-                         "CTRL+Shift+3 Fullscreen | "
-                         "CTRL+Shift+4 All Screens");
+                         "Quick capture: Ctrl+Shift+1\n"
+                         "Area capture: Ctrl+Shift+2\n"
+                         "Fullscreen: Ctrl+Shift+3\n"
+                         "All screens: Ctrl+Shift+4");
     } else if (state.niri_shortcuts_conflicts) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
                          "Existing CTRL+Shift+1/2/3/4 bindings found outside "
@@ -740,24 +733,25 @@ static GtkSwitch *make_switch(gboolean active) {
   return sw;
 }
 
-static void append_after_mode(GtkWidget *box, const char *title,
-                              GtkSwitch **skip, GtkSwitch **copy,
-                              GtkSwitch **save, gboolean skip_value,
-                              gboolean copy_value, gboolean save_value) {
-  GtkWidget *label = gtk_label_new(title);
-  gtk_widget_add_css_class(label, "section-title");
-  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
-  gtk_box_append(GTK_BOX(box), label);
+static void add_matrix_row(GtkWidget *grid, int row, const char *label,
+                           GtkSwitch **open_sw, GtkSwitch **copy_sw, GtkSwitch **save_sw,
+                           gboolean skip_val, gboolean copy_val, gboolean save_val) {
+  GtkWidget *row_label = gtk_label_new(label);
+  gtk_label_set_xalign(GTK_LABEL(row_label), 0.0);
+  gtk_widget_set_hexpand(row_label, TRUE);
+  gtk_grid_attach(GTK_GRID(grid), row_label, 0, row, 1, 1);
 
-  *skip = make_switch(skip_value);
-  *copy = make_switch(copy_value);
-  *save = make_switch(save_value);
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Skip Shaula Preview", GTK_WIDGET(*skip)));
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Always Copy to Clipboard", GTK_WIDGET(*copy)));
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Save to Shaula Directory", GTK_WIDGET(*save)));
+  *open_sw = make_switch(!skip_val);
+  *copy_sw = make_switch(copy_val);
+  *save_sw = make_switch(save_val);
+
+  gtk_widget_set_halign(GTK_WIDGET(*open_sw), GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(GTK_WIDGET(*copy_sw), GTK_ALIGN_CENTER);
+  gtk_widget_set_halign(GTK_WIDGET(*save_sw), GTK_ALIGN_CENTER);
+
+  gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(*open_sw), 1, row, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(*copy_sw), 2, row, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(*save_sw), 3, row, 1, 1);
 }
 
 static void on_folder_response(GtkNativeDialog *dialog, int response,
@@ -811,9 +805,8 @@ static GtkWidget *folder_row(void) {
 static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_add_css_class(box, "settings-form");
-  gtk_widget_set_margin_end(box, 24);
 
-  GtkWidget *capture_title = gtk_label_new("Capture");
+  GtkWidget *capture_title = gtk_label_new("Capture behavior");
   gtk_widget_add_css_class(capture_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(capture_title), 0.0);
   gtk_box_append(GTK_BOX(box), capture_title);
@@ -824,7 +817,51 @@ static GtkWidget *build_form(void) {
   gtk_box_append(GTK_BOX(box),
                  labeled_row("Region mode", GTK_WIDGET(state.region_combo)));
 
-  GtkWidget *preview_title = gtk_label_new("Preview Window");
+  GtkWidget *after_title = gtk_label_new("After capture");
+  gtk_widget_add_css_class(after_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(after_title), 0.0);
+  gtk_box_append(GTK_BOX(box), after_title);
+
+  GtkWidget *grid = gtk_grid_new();
+  gtk_grid_set_column_spacing(GTK_GRID(grid), 32);
+  gtk_grid_set_row_spacing(GTK_GRID(grid), 12);
+  gtk_widget_set_margin_start(grid, 16);
+  gtk_widget_set_margin_end(grid, 16);
+
+  GtkWidget *h_open = gtk_label_new("Open preview");
+  gtk_widget_add_css_class(h_open, "description");
+  GtkWidget *h_copy = gtk_label_new("Copy to clipboard");
+  gtk_widget_add_css_class(h_copy, "description");
+  GtkWidget *h_save = gtk_label_new("Save automatically");
+  gtk_widget_add_css_class(h_save, "description");
+
+  gtk_grid_attach(GTK_GRID(grid), gtk_label_new(""), 0, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), h_open, 1, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), h_copy, 2, 0, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), h_save, 3, 0, 1, 1);
+
+  add_matrix_row(grid, 1, "Quick capture", &state.quick_open_switch,
+                 &state.quick_copy_switch, &state.quick_save_switch,
+                 state.config.quick_skip_preview, state.config.quick_copy,
+                 state.config.quick_save);
+  add_matrix_row(grid, 2, "Area capture", &state.area_open_switch,
+                 &state.area_copy_switch, &state.area_save_switch,
+                 state.config.area_skip_preview, state.config.area_copy,
+                 state.config.area_save);
+  add_matrix_row(grid, 3, "All screens", &state.all_screens_open_switch,
+                 &state.all_screens_copy_switch, &state.all_screens_save_switch,
+                 state.config.all_screens_skip_preview,
+                 state.config.all_screens_copy, state.config.all_screens_save);
+
+  // Also add fullscreen to matrix
+  add_matrix_row(grid, 4, "Fullscreen", &state.fullscreen_open_switch,
+                 &state.fullscreen_copy_switch, &state.fullscreen_save_switch,
+                 state.config.fullscreen_skip_preview, state.config.fullscreen_copy,
+                 state.config.fullscreen_save);
+
+  gtk_box_append(GTK_BOX(box), grid);
+
+  GtkWidget *preview_title = gtk_label_new("Preview");
   gtk_widget_add_css_class(preview_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(preview_title), 0.0);
   gtk_box_append(GTK_BOX(box), preview_title);
@@ -859,39 +896,17 @@ static GtkWidget *build_form(void) {
   state.close_preview_on_save_switch = GTK_SWITCH(gtk_switch_new());
   gtk_switch_set_active(state.close_preview_on_save_switch,
                         state.config.close_preview_on_save);
-  gtk_widget_set_tooltip_text(GTK_WIDGET(state.close_preview_on_save_switch),
-                              "Close the preview window after a successful "
-                              "Ctrl+S save.");
   gtk_box_append(GTK_BOX(box),
                  labeled_description_row(
                      "Close preview on save",
                      "Close the preview window after a successful Ctrl+S save.",
                      GTK_WIDGET(state.close_preview_on_save_switch)));
 
-  GtkWidget *after_title = gtk_label_new("After Capture");
-  gtk_widget_add_css_class(after_title, "section-title");
-  gtk_label_set_xalign(GTK_LABEL(after_title), 0.0);
-  gtk_box_append(GTK_BOX(box), after_title);
+  GtkWidget *saving_title = gtk_label_new("Saving");
+  gtk_widget_add_css_class(saving_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(saving_title), 0.0);
+  gtk_box_append(GTK_BOX(box), saving_title);
 
-  append_after_mode(box, "Quick Capture", &state.quick_skip_switch,
-                    &state.quick_copy_switch, &state.quick_save_switch,
-                    state.config.quick_skip_preview, state.config.quick_copy,
-                    state.config.quick_save);
-  append_after_mode(box, "Capture Area", &state.area_skip_switch,
-                    &state.area_copy_switch, &state.area_save_switch,
-                    state.config.area_skip_preview, state.config.area_copy,
-                    state.config.area_save);
-  append_after_mode(box, "Capture Fullscreen", &state.fullscreen_skip_switch,
-                    &state.fullscreen_copy_switch,
-                    &state.fullscreen_save_switch,
-                    state.config.fullscreen_skip_preview,
-                    state.config.fullscreen_copy, state.config.fullscreen_save);
-  append_after_mode(box, "Capture All Screens", &state.all_screens_skip_switch,
-                    &state.all_screens_copy_switch,
-                    &state.all_screens_save_switch,
-                    state.config.all_screens_skip_preview,
-                    state.config.all_screens_copy,
-                    state.config.all_screens_save);
   gtk_box_append(GTK_BOX(box), folder_row());
 
   GtkWidget *notifications_title = gtk_label_new("Notifications");
@@ -905,14 +920,53 @@ static GtkWidget *build_form(void) {
   state.notifications_thumbnails_switch =
       make_switch(state.config.notifications_thumbnails);
   gtk_box_append(GTK_BOX(box),
-                 labeled_row("Show Success Notifications",
+                 labeled_row("Show success notifications",
                              GTK_WIDGET(state.notifications_success_switch)));
   gtk_box_append(GTK_BOX(box),
-                 labeled_row("Show Error Notifications",
+                 labeled_row("Show error notifications",
                              GTK_WIDGET(state.notifications_errors_switch)));
   gtk_box_append(GTK_BOX(box),
-                 labeled_row("Include Thumbnail",
+                 labeled_row("Include thumbnail",
                              GTK_WIDGET(state.notifications_thumbnails_switch)));
+
+  GtkWidget *niri_title = gtk_label_new("Niri integration");
+  gtk_widget_add_css_class(niri_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(niri_title), 0.0);
+  gtk_box_append(GTK_BOX(box), niri_title);
+
+  GtkWidget *niri_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_add_css_class(niri_card, "settings-row");
+  gtk_widget_set_margin_start(niri_card, 16);
+  gtk_widget_set_margin_end(niri_card, 16);
+
+  state.niri_detected_label = gtk_label_new("checking...");
+  gtk_label_set_xalign(GTK_LABEL(state.niri_detected_label), 0.0);
+  gtk_box_append(GTK_BOX(niri_card), GTK_WIDGET(state.niri_detected_label));
+
+  state.niri_shortcuts_status_label = gtk_label_new("checking...");
+  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_status_label), 0.0);
+  gtk_box_append(GTK_BOX(niri_card), GTK_WIDGET(state.niri_shortcuts_status_label));
+
+  state.niri_shortcuts_detail_label = gtk_label_new("");
+  gtk_widget_add_css_class(state.niri_shortcuts_detail_label, "description");
+  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_detail_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(state.niri_shortcuts_detail_label), TRUE);
+  gtk_box_append(GTK_BOX(niri_card), state.niri_shortcuts_detail_label);
+
+  GtkWidget *niri_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state.niri_install_button =
+      gtk_button_new_with_label("Install / Update Shortcuts");
+  state.niri_remove_button = gtk_button_new_with_label("Remove Shortcuts");
+  state.niri_open_config_button =
+      gtk_button_new_with_label("Open Niri Config");
+  state.niri_recheck_button = gtk_button_new_with_label("Recheck");
+  gtk_box_append(GTK_BOX(niri_buttons), state.niri_install_button);
+  gtk_box_append(GTK_BOX(niri_buttons), state.niri_remove_button);
+  gtk_box_append(GTK_BOX(niri_buttons), state.niri_open_config_button);
+  gtk_box_append(GTK_BOX(niri_buttons), state.niri_recheck_button);
+  gtk_box_append(GTK_BOX(niri_card), niri_buttons);
+
+  gtk_box_append(GTK_BOX(box), niri_card);
 
   GtkWidget *advanced_title = gtk_label_new("Advanced");
   gtk_widget_add_css_class(advanced_title, "section-title");
@@ -925,17 +979,6 @@ static GtkWidget *build_form(void) {
   gtk_label_set_ellipsize(GTK_LABEL(state.path_label), PANGO_ELLIPSIZE_START);
   gtk_box_append(GTK_BOX(box), labeled_row("Config path", state.path_label));
 
-  GtkWidget *niri_title = gtk_label_new("Niri Shortcuts");
-  gtk_widget_add_css_class(niri_title, "section-title");
-  gtk_label_set_xalign(GTK_LABEL(niri_title), 0.0);
-  gtk_box_append(GTK_BOX(box), niri_title);
-
-  state.niri_detected_label = gtk_label_new("checking...");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_detected_label), 1.0);
-  gtk_box_append(
-      GTK_BOX(box),
-      labeled_row("Niri detected", GTK_WIDGET(state.niri_detected_label)));
-
   state.niri_config_path_label = gtk_label_new("unknown");
   gtk_label_set_xalign(GTK_LABEL(state.niri_config_path_label), 1.0);
   gtk_label_set_ellipsize(GTK_LABEL(state.niri_config_path_label),
@@ -944,31 +987,28 @@ static GtkWidget *build_form(void) {
                  labeled_row("Niri config path",
                              GTK_WIDGET(state.niri_config_path_label)));
 
-  state.niri_shortcuts_status_label = gtk_label_new("checking...");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_status_label), 1.0);
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Shortcuts status",
-                             GTK_WIDGET(state.niri_shortcuts_status_label)));
+  GtkWidget *advanced_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_margin_start(advanced_buttons, 16);
+  gtk_widget_set_margin_end(advanced_buttons, 16);
+  state.open_button = gtk_button_new_with_label("Open Config File");
+  state.reset_button = gtk_button_new_with_label("Reset to Defaults");
+  gtk_widget_add_css_class(state.reset_button, "error");
+  gtk_box_append(GTK_BOX(advanced_buttons), state.open_button);
+  gtk_box_append(GTK_BOX(advanced_buttons), state.reset_button);
+  gtk_box_append(GTK_BOX(box), advanced_buttons);
 
-  state.niri_shortcuts_detail_label = gtk_label_new("");
-  gtk_widget_add_css_class(state.niri_shortcuts_detail_label, "description");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_detail_label), 0.0);
-  gtk_label_set_wrap(GTK_LABEL(state.niri_shortcuts_detail_label), TRUE);
-  gtk_box_append(GTK_BOX(box), state.niri_shortcuts_detail_label);
-
-  GtkWidget *niri_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  gtk_widget_set_halign(niri_buttons, GTK_ALIGN_END);
-  state.niri_install_button =
-      gtk_button_new_with_label("Install / Update Shortcuts");
-  state.niri_remove_button = gtk_button_new_with_label("Remove Shortcuts");
-  state.niri_open_config_button =
-      gtk_button_new_with_label("Open Niri Config");
-  state.niri_recheck_button = gtk_button_new_with_label("Recheck");
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_install_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_remove_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_open_config_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_recheck_button);
-  gtk_box_append(GTK_BOX(box), niri_buttons);
+  g_signal_connect(state.open_button, "clicked", G_CALLBACK(on_open_clicked),
+                   NULL);
+  g_signal_connect(state.reset_button, "clicked", G_CALLBACK(on_reset_clicked),
+                   NULL);
+  g_signal_connect(state.niri_install_button, "clicked",
+                   G_CALLBACK(on_niri_install_clicked), NULL);
+  g_signal_connect(state.niri_remove_button, "clicked",
+                   G_CALLBACK(on_niri_remove_clicked), NULL);
+  g_signal_connect(state.niri_open_config_button, "clicked",
+                   G_CALLBACK(on_niri_open_config_clicked), NULL);
+  g_signal_connect(state.niri_recheck_button, "clicked",
+                   G_CALLBACK(on_niri_recheck_clicked), NULL);
 
   g_signal_connect(state.window_combo, "notify::selected",
                    G_CALLBACK(on_control_changed), NULL);
@@ -1040,62 +1080,57 @@ static void on_activate(GtkApplication *app, gpointer data) {
   gtk_widget_add_css_class(root, "settings-root");
   gtk_window_set_child(GTK_WINDOW(state.window), root);
 
+  state.error_box = build_error_box();
+  gtk_box_append(GTK_BOX(root), state.error_box);
+
+  state.form_scroller = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(state.form_scroller, TRUE);
+  gtk_box_append(GTK_BOX(root), state.form_scroller);
+
   GtkWidget *center_wrapper = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_halign(center_wrapper, GTK_ALIGN_CENTER);
-  gtk_widget_set_size_request(center_wrapper, 680, -1);
-  gtk_box_append(GTK_BOX(root), center_wrapper);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(state.form_scroller), center_wrapper);
 
-  state.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
-  gtk_widget_set_margin_top(state.content, 18);
-  gtk_widget_set_margin_bottom(state.content, 18);
-  gtk_widget_set_margin_start(state.content, 18);
-  gtk_widget_set_margin_end(state.content, 18);
-  gtk_box_append(GTK_BOX(center_wrapper), state.content);
-
-  state.error_box = build_error_box();
   state.form_box = build_form();
-  state.form_scroller = gtk_scrolled_window_new();
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(state.form_scroller),
-                                state.form_box);
-  gtk_widget_set_vexpand(state.form_scroller, TRUE);
-  gtk_box_append(GTK_BOX(state.content), state.error_box);
-  gtk_box_append(GTK_BOX(state.content), state.form_scroller);
+  gtk_widget_set_margin_top(state.form_box, 24);
+  gtk_widget_set_margin_bottom(state.form_box, 64);
+  gtk_widget_set_margin_start(state.form_box, 24);
+  gtk_widget_set_margin_end(state.form_box, 24);
+  gtk_widget_set_size_request(state.form_box, 640, -1);
+  gtk_box_append(GTK_BOX(center_wrapper), state.form_box);
+
   gtk_widget_set_visible(state.error_box, state.config_invalid);
   gtk_widget_set_visible(state.form_scroller, !state.config_invalid);
+
+  GtkWidget *footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+  gtk_widget_add_css_class(footer, "settings-footer");
+  gtk_widget_set_margin_start(footer, 24);
+  gtk_widget_set_margin_end(footer, 24);
+  gtk_widget_set_margin_top(footer, 16);
+  gtk_widget_set_margin_bottom(footer, 16);
 
   state.status_label = gtk_label_new(
       state.config_invalid ? "Open the config file or reset to defaults."
                            : "Changes apply to future preview windows.");
   gtk_label_set_wrap(GTK_LABEL(state.status_label), TRUE);
   gtk_label_set_xalign(GTK_LABEL(state.status_label), 0.0);
-  gtk_box_append(GTK_BOX(state.content), state.status_label);
+  gtk_widget_set_hexpand(state.status_label, TRUE);
+  gtk_box_append(GTK_BOX(footer), state.status_label);
 
   GtkWidget *buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_halign(buttons, GTK_ALIGN_END);
-  state.open_button = gtk_button_new_with_label("Open Config File");
-  state.reset_button = gtk_button_new_with_label("Reset to Defaults");
+  GtkWidget *cancel_button = gtk_button_new_with_label("Cancel");
   state.apply_button = gtk_button_new_with_label("Save");
   gtk_widget_add_css_class(state.apply_button, "suggested-action");
-  gtk_box_append(GTK_BOX(buttons), state.open_button);
-  gtk_box_append(GTK_BOX(buttons), state.reset_button);
+  gtk_box_append(GTK_BOX(buttons), cancel_button);
   gtk_box_append(GTK_BOX(buttons), state.apply_button);
-  gtk_box_append(GTK_BOX(state.content), buttons);
+  gtk_box_append(GTK_BOX(footer), buttons);
+
+  gtk_box_append(GTK_BOX(root), footer);
 
   gtk_widget_set_sensitive(state.apply_button, !state.config_invalid);
-  g_signal_connect(state.open_button, "clicked", G_CALLBACK(on_open_clicked),
-                   NULL);
-  g_signal_connect(state.reset_button, "clicked", G_CALLBACK(on_reset_clicked),
-                   NULL);
-  g_signal_connect(state.apply_button, "clicked", G_CALLBACK(on_save_clicked),
-                   NULL);
-  g_signal_connect(state.niri_install_button, "clicked",
-                   G_CALLBACK(on_niri_install_clicked), NULL);
-  g_signal_connect(state.niri_remove_button, "clicked",
-                   G_CALLBACK(on_niri_remove_clicked), NULL);
-  g_signal_connect(state.niri_open_config_button, "clicked",
-                   G_CALLBACK(on_niri_open_config_clicked), NULL);
-  g_signal_connect(state.niri_recheck_button, "clicked",
-                   G_CALLBACK(on_niri_recheck_clicked), NULL);
+  g_signal_connect_swapped(cancel_button, "clicked", G_CALLBACK(gtk_window_destroy), state.window);
+  g_signal_connect(state.apply_button, "clicked", G_CALLBACK(on_save_clicked), NULL);
 
   refresh_niri_status();
 

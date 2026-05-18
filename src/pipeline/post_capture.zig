@@ -25,6 +25,8 @@ pub const PipelineFlags = struct {
 ///   and `preview` fields with deterministic `ERR_*` codes.
 /// - preview is explicitly degraded; helper failures never invalidate the
 ///   already-created capture artifact.
+/// - copy means immediate clipboard work when preview is skipped, or copy on
+///   preview accept when preview is shown.
 /// - keep JSON contract version and fields stable for QA assertions.
 pub fn writeCapturePipelineJson(
     allocator: std.mem.Allocator,
@@ -75,7 +77,7 @@ fn runPostCaptureWork(
         };
     }
 
-    if (flags.copy) {
+    if (flags.copy and !flags.preview) {
         if (clipboard_service.copyImage(io, environ, success.path)) |copy_result| {
             outcome.clipboard = .{
                 .ok = copy_result.ok,
@@ -93,7 +95,7 @@ fn runPostCaptureWork(
 
     if (flags.preview) {
         outcome.preview.attempted = true;
-        var preview_outcome = try preview_service.runPreview(allocator, io, environ, success.path);
+        var preview_outcome = try preview_service.runPreview(allocator, io, environ, success.path, flags.copy);
         switch (preview_outcome) {
             .success => |*preview_success| {
                 defer preview_success.deinit(allocator);

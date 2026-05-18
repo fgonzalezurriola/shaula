@@ -188,7 +188,7 @@ void shaula_preview_state_free(ShaulaPreviewState *state) {
   for (int i = 0; i < state->icon_root_count; i++)
     g_free(state->icon_roots[i]);
   if (state->managed_temp_path != NULL &&
-      !(state->document.copied && state->notified &&
+      !(state->document.copied && !state->document.saved && state->notified &&
         g_strcmp0(state->last_action, "copy") == 0))
     g_unlink(state->managed_temp_path);
   g_free(state->managed_temp_path);

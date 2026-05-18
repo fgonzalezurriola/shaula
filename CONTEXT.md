@@ -105,7 +105,11 @@ and the working diff.
   CSS, and native GTK4 `GtkDropDown` widgets instead of the deprecated
   `GtkComboBoxText` to avoid state and rendering glitches. Settings also uses
   a native GTK header bar/titlebar with window controls; Preview and Overlay
-  decoration behavior is unchanged.
+  decoration behavior is unchanged. The interface is organized around user
+  workflows (Capture behavior, After capture, Preview, Saving, Notifications, Niri
+  integration, Advanced) with a compact capture-mode matrix for skip/copy/save
+  combinations, a dedicated saving section, a readable Niri status card, and a
+  fixed sticky footer for the primary Save and Cancel actions.
 - Public docs have been split: `README.md` is now the shorter product-facing
   install/usage/dev-basics page with `docs/assets/shaula-preview.png` as the
   product preview image. `DEV.md` holds internal workflow and integration notes,
@@ -149,7 +153,9 @@ and the working diff.
   and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint and keeps
   the preview open; Save As/Ctrl+Shift+S also keeps the preview open. The Done
   headerbar action is the final action: it saves/promotes the current result if
-  needed, emits the normal saved notification, and closes the preview. Enter
+  needed, copies the saved PNG to the clipboard when capture
+  `copy_to_clipboard` requested copy-on-accept, emits the normal copy/save
+  notification, and closes the preview. Enter
   maps to Done only when text/editable/crop/region/modal interaction does not
   own Enter.
 - Copy-only screenshot notifications must not expose implicit runtime capture
@@ -161,11 +167,18 @@ and the working diff.
 - Preview `Enter` accept/save on an implicit runtime capture must promote the
   temporary PNG into the durable save folder (`save_folder`, default
   `~/Pictures/shaula`) before notifying. Never report `/run/user/.../captures`
-  as a saved screenshot path; preview cleanup removes those staging files.
+  as a saved screenshot path; preview cleanup removes those staging files after
+  a durable save, even when Done also copies the saved PNG to the clipboard.
+- `skip_preview` and `copy_to_clipboard` are independent after-capture settings.
+  When preview is skipped, copy runs immediately after capture. When preview is
+  shown, the copy flag is carried into the GTK helper as
+  `SHAULA_PREVIEW_COPY_ON_ACCEPT=1` so Done/Enter copies the accepted PNG after
+  preview edits.
 - The preview right headerbar cluster order is metadata, Done, then the normal
   window close X. Done is built during initial toolbar construction, uses
-  `shaula-done-symbolic`, and carries GTK `suggested-action`; Save remains
-  neutral and is not a final/closing action.
+  `shaula-done-symbolic`, carries GTK `suggested-action`, and advertises either
+  `Save (Enter)` or `Save and copy (Enter)` according to the copy-on-accept
+  flag; Save remains neutral and is not a final/closing action.
 - Preview toolbar is application content, not window decoration. It must not be
   installed with `gtk_window_set_titlebar()` because fullscreen compositors can
   hide titlebars/decorations. The helper builds a root content container with
@@ -655,8 +668,10 @@ and the working diff.
   sampled colors does not shift the metadata group.
 - Image dimensions and zoom are stacked in a single compact column using
   `PANGO_SCALE_SMALL` monospace: dimensions (`987×721`) on top, zoom (`100%`)
-  below, both right-aligned. This layout saves horizontal toolbar space
-  compared to the previous inline readouts.
+  below, both right-aligned. The compact fixed widths avoid blank space between
+  the preceding swatch/hex/`Tab to copy` group and the zoom column without
+  changing order. This layout saves horizontal toolbar space compared to the
+  previous inline readouts.
 
 ## Preview History
 

@@ -242,6 +242,9 @@ int main(int argc, char **argv) {
   const char *close_on_save = getenv("SHAULA_PREVIEW_CLOSE_ON_SAVE");
   state.close_preview_on_save =
       close_on_save != NULL && g_strcmp0(close_on_save, "1") == 0;
+  const char *copy_on_accept = getenv("SHAULA_PREVIEW_COPY_ON_ACCEPT");
+  state.copy_on_accept =
+      copy_on_accept != NULL && g_strcmp0(copy_on_accept, "1") == 0;
   GtkApplication *app =
       gtk_application_new("dev.shaula.preview", G_APPLICATION_NON_UNIQUE);
   if (app == NULL) {

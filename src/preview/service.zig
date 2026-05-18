@@ -44,6 +44,7 @@ pub fn runPreview(
     io: std.Io,
     environ: std.process.Environ,
     path: []const u8,
+    copy_on_accept: bool,
 ) !PreviewOutcome {
     std.Io.Dir.cwd().access(io, path, .{}) catch {
         return .{ .failure = .{
@@ -65,6 +66,7 @@ pub fn runPreview(
         "SHAULA_PREVIEW_CLOSE_ON_SAVE",
         if (closePreviewOnSave(allocator, io, environ)) "1" else "0",
     );
+    try helper_env.put("SHAULA_PREVIEW_COPY_ON_ACCEPT", if (copy_on_accept) "1" else "0");
     var loaded_config = config_loader.load(allocator, io, environ) catch null;
     defer if (loaded_config) |*loaded| loaded.deinit(allocator);
     if (loaded_config) |loaded| {
