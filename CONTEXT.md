@@ -173,7 +173,9 @@ and the working diff.
   When preview is skipped, copy runs immediately after capture. When preview is
   shown, the copy flag is carried into the GTK helper as
   `SHAULA_PREVIEW_COPY_ON_ACCEPT=1` so Done/Enter copies the accepted PNG after
-  preview edits.
+  preview edits. First-run defaults expose `copy_to_clipboard=true` for quick,
+  area, fullscreen, and all-screens; quick/area still show preview by default,
+  while fullscreen/all-screens skip preview by default.
 - The preview right headerbar cluster order is metadata, Done, then the normal
   window close X. Done is built during initial toolbar construction, uses
   `shaula-done-symbolic`, carries GTK `suggested-action`, and advertises either

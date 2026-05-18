@@ -16,8 +16,8 @@ pub const CaptureConfig = struct {
 };
 
 pub const CaptureAfterConfig = struct {
-    quick: CaptureAfterModeConfig = .{},
-    area: CaptureAfterModeConfig = .{},
+    quick: CaptureAfterModeConfig = .{ .copy_to_clipboard = true },
+    area: CaptureAfterModeConfig = .{ .copy_to_clipboard = true },
     fullscreen: CaptureAfterModeConfig = .{ .skip_preview = true, .copy_to_clipboard = true },
     all_screens: CaptureAfterModeConfig = .{ .skip_preview = true, .copy_to_clipboard = true },
     save_folder: SaveFolderConfig = .{},
