@@ -6,6 +6,8 @@ pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
 pub const deterministicFailureCode = selection_session.deterministicFailureCode;
 pub const InteractionMode = selection_session.InteractionMode;
+pub const FrozenSource = selection_session.FrozenSource;
+pub const SelectionOutcome = selection_session.SelectionOutcome;
 
 /// Public overlay selection facade used by capture lifecycle callers.
 ///

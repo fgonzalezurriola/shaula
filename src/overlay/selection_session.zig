@@ -38,6 +38,31 @@ const OverlayBackground = struct {
     }
 };
 
+pub const FrozenSource = struct {
+    path: []u8,
+    cleanup: bool,
+    local_geometry: helper_protocol.LocalGeometry,
+    surface_width: u32,
+    surface_height: u32,
+
+    pub fn deinit(self: FrozenSource, allocator: std.mem.Allocator, io: std.Io) void {
+        if (self.cleanup) {
+            std.Io.Dir.deleteFileAbsolute(io, self.path) catch {};
+        }
+        allocator.free(self.path);
+    }
+};
+
+pub const SelectionOutcome = struct {
+    result: selection.SelectionResult,
+    frozen_source: ?FrozenSource = null,
+
+    pub fn deinit(self: *SelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
+        if (self.frozen_source) |source| source.deinit(allocator, io);
+        self.frozen_source = null;
+    }
+};
+
 /// Executes a complete overlay selection session.
 ///
 /// Contract constraints:
@@ -56,18 +81,18 @@ pub fn runSelection(
     region_capture_mode: RegionCaptureMode,
     is_dry_run: bool,
     simulate_cancel: bool,
-) !selection.SelectionResult {
+) !SelectionOutcome {
     if (simulate_cancel) {
-        return cancelledSelection(mode, constraint);
+        return .{ .result = cancelledSelection(mode, constraint) };
     }
 
     if (try helper_protocol.deterministicInteractionScenarioPayload(allocator, environ, constraint)) |payload| {
         defer allocator.free(payload);
-        return helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint);
+        return .{ .result = helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint) };
     }
 
     if (helper_protocol.testPayload(environ)) |payload| {
-        return helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint);
+        return .{ .result = helper_protocol.parseSelectionEnvelope(allocator, payload, mode, constraint) };
     }
 
     if (is_dry_run) {
@@ -80,22 +105,24 @@ pub fn runSelection(
         };
         persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
         persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
-        return result;
+        return .{ .result = result };
     }
 
     const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, interaction_mode, draft_mode, constraint, region_capture_mode);
     switch (helper_attempt) {
         .selection => |helper_selection_raw| {
-            const helper_selection = helper_selection_raw;
-            defer helper_selection.deinit(allocator);
+            var helper_selection = helper_selection_raw;
+            defer helper_selection.deinit(allocator, io);
             const result = helper_selection.result;
             persistSelectionDraft(allocator, io, environ, draft_mode, result) catch {};
             persistOutputAwareSelectionDraft(allocator, io, environ, draft_mode, helper_selection) catch {};
             persistSelectionAspect(allocator, io, environ, interaction_mode, result, helper_selection) catch {};
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
-            return result;
+            const frozen_source = helper_selection.frozen_source;
+            helper_selection.frozen_source = null;
+            return .{ .result = result, .frozen_source = frozen_source };
         },
-        .unavailable => return cancelledSelection(mode, constraint),
+        .unavailable => return .{ .result = cancelledSelection(mode, constraint) },
     }
 }
 
@@ -182,11 +209,13 @@ const HelperSelection = struct {
     final_aspect_known: bool = false,
     final_aspect: ?[]u8 = null,
     local_selection: ?helper_protocol.LocalSelection = null,
+    frozen_source: ?FrozenSource = null,
     debug_stderr: ?[]const u8 = null,
 
-    fn deinit(self: HelperSelection, allocator: std.mem.Allocator) void {
+    fn deinit(self: HelperSelection, allocator: std.mem.Allocator, io: std.Io) void {
         if (self.final_aspect) |aspect| allocator.free(aspect);
         if (self.local_selection) |local| local.deinit(allocator);
+        if (self.frozen_source) |source| source.deinit(allocator, io);
         if (self.debug_stderr) |stderr| allocator.free(stderr);
     }
 };
@@ -209,7 +238,7 @@ fn runHelperSelectionAttempt(
 ) !HelperSelectionAttempt {
     const output_name = try resolveOverlayOutputName(allocator, io, environ);
     defer if (output_name) |name| allocator.free(name);
-    const background = if (region_capture_mode == .frozen)
+    var background = if (region_capture_mode == .frozen)
         try prepareOverlayBackground(allocator, io, environ, output_name)
     else
         null;
@@ -274,6 +303,8 @@ fn runHelperSelectionAttempt(
     defer aspect_override.deinit(allocator);
     const local_selection = try helper_protocol.parseConfirmedLocalSelectionAlloc(allocator, helper.stdout);
     errdefer if (local_selection) |local| local.deinit(allocator);
+    const frozen_source =
+        try frozenSourceForConfirmedSelection(&background, result, local_selection);
 
     const owned_stderr = if (debug_latency) try allocator.dupe(u8, helper.stderr) else null;
     errdefer if (owned_stderr) |s| allocator.free(s);
@@ -287,8 +318,28 @@ fn runHelperSelectionAttempt(
             else
                 null,
             .local_selection = local_selection,
+            .frozen_source = frozen_source,
             .debug_stderr = owned_stderr,
         },
+    };
+}
+
+fn frozenSourceForConfirmedSelection(
+    background: *?OverlayBackground,
+    result: selection.SelectionResult,
+    local_selection: ?helper_protocol.LocalSelection,
+) !?FrozenSource {
+    if (result.cancelled) return null;
+    const prepared = background.* orelse return null;
+    const local = local_selection orelse return null;
+
+    background.* = null;
+    return .{
+        .path = prepared.path,
+        .cleanup = prepared.cleanup,
+        .local_geometry = local.geometry,
+        .surface_width = local.output_width,
+        .surface_height = local.output_height,
     };
 }
 
@@ -525,7 +576,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
     const block = try map.createPosixBlock(std.testing.allocator, .{});
     defer block.deinit(std.testing.allocator);
 
-    const result = try runSelection(
+    var outcome = try runSelection(
         std.testing.allocator,
         std.testing.io,
         .{ .block = block },
@@ -537,7 +588,9 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         false,
         false,
     );
+    defer outcome.deinit(std.testing.allocator, std.testing.io);
 
+    const result = outcome.result;
     try std.testing.expect(!result.cancelled);
     const geometry = result.geometry orelse return error.TestExpectedEqual;
     try std.testing.expectEqual(@as(i32, 320), geometry.x);

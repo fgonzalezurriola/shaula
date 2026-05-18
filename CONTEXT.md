@@ -371,8 +371,19 @@ and the working diff.
   - `live`: default normal Region path. The GTK layer-shell overlay draws only
     dimming/selection chrome and skips the frozen background so the desktop can
     keep updating while the user drags.
-  - `frozen`: preserved intentional path for transient states. The overlay
-    prepares and displays the best-effort still background while selecting.
+  - `frozen`: preserved intentional path for transient states. The full frozen
+    screenshot is captured before the overlay helper is shown, displayed as the
+    overlay background, and carried back as the immutable source for final crop,
+    preview, copy, and save. The confirm path must not call `grim` again; if the
+    frozen source is missing, capture fails with `ERR_CAPTURE_BACKEND_UNAVAILABLE`
+    instead of falling back to a live capture.
+- Frozen crop uses `shaula-crop-image` (`gdk-pixbuf`) to crop the stored PNG.
+  The helper receives the overlay-local selection and the overlay surface size,
+  then scales that rectangle into original image pixels so output scale,
+  fit-to-screen stretching, and monitor pixel density stay tied to the actual
+  frozen PNG dimensions. Manual check: hover a UI button until a tooltip is
+  visible, run `./dev frozen`, select the tooltip, press Enter, and confirm the
+  preview contains the same tooltip visible in the frozen overlay.
 - Mode selection plumbing: CLI `--region-mode live|frozen`, convenience
   `--frozen-region`, env `SHAULA_REGION_CAPTURE_MODE`, config
   `[capture] region_capture_mode = "live"|"frozen"`, and `./dev frozen`.

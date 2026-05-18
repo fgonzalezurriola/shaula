@@ -38,6 +38,10 @@ pub fn build(b: *std.Build) void {
     const install_settings_helper = b.addInstallFileWithDir(settings_helper_bin, .bin, "shaula-settings");
     b.getInstallStep().dependOn(&install_settings_helper.step);
 
+    const crop_helper_bin = buildNativeCropImageHelper(b);
+    const install_crop_helper = b.addInstallFileWithDir(crop_helper_bin, .bin, "shaula-crop-image");
+    b.getInstallStep().dependOn(&install_crop_helper.step);
+
     const install_preview_icons = b.addInstallDirectory(.{
         .source_dir = b.path("src/preview/icons/hicolor"),
         .install_dir = .{ .custom = "share" },
@@ -180,6 +184,22 @@ fn buildNativeGtkSettingsHelper(b: *std.Build, target: std.Build.ResolvedTarget,
     const output = command.addOutputFileArg("shaula-settings");
     command.addFileArg(b.path("src/settings/native_gtk_settings.c"));
     command.addFileArg(settings_config_obj);
+    return output;
+}
+
+fn buildNativeCropImageHelper(b: *std.Build) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  "$2" \
+        \\  -o "$1" \
+        \\ $(pkg-config --cflags --libs gdk-pixbuf-2.0) -lm
+        ,
+        "build-shaula-crop-image",
+    });
+    const output = command.addOutputFileArg("shaula-crop-image");
+    command.addFileArg(b.path("src/backends/native_crop_image.c"));
     return output;
 }
 

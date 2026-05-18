@@ -104,3 +104,9 @@ Useful development commands:
 ./dev noctalia-load
 ./dev dev-install
 ```
+
+## Support
+
+<a href="https://ko-fi.com/fgonzalezurriola">
+  <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi">
+</a>

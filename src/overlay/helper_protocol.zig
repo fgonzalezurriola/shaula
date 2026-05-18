@@ -57,6 +57,8 @@ pub const LocalSelection = struct {
     }
 };
 
+pub const LocalGeometry = capture_types.AreaGeometry;
+
 pub const AspectOverride = union(enum) {
     missing,
     free,

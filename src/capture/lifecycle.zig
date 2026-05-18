@@ -1,6 +1,9 @@
 const std = @import("std");
 
 const capture_backend = @import("../backends/capture_backend.zig");
+const capture_backend_failure = @import("../backends/capture_backend_failure.zig");
+const capture_backend_output_path = @import("../backends/capture_backend_output_path.zig");
+const capture_backend_png_meta = @import("../backends/capture_backend_png_meta.zig");
 const capture_types = @import("types.zig");
 const compositor_focused_output = @import("../compositor/focused_output.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
@@ -15,6 +18,7 @@ const overlay = @import("../overlay/overlay.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
 const capture_session_lock = @import("../runtime/capture_session_lock.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
+const process_exec = @import("../runtime/process_exec.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const selection = @import("../selection/selection.zig");
 
@@ -41,6 +45,7 @@ fn executeLifecycle(
     environ: std.process.Environ,
     options: invocation.Invocation,
     session_lock: *capture_session_lock.CaptureSessionLock,
+    frozen_source: ?overlay.FrozenSource,
 ) !u8 {
     const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
@@ -66,17 +71,24 @@ fn executeLifecycle(
     const focused_output_name = try resolveFocusedOutputForCapture(allocator, io, environ, runtime, options.request_mode);
     defer if (focused_output_name) |name| allocator.free(name);
 
-    var outcome = try capture_backend.execute(allocator, io, environ, .{
-        .runtime = runtime,
-        .focused_output_name = focused_output_name,
-    }, .{
-        .mode = options.request_mode,
-        .output_path = options.output_path,
-        .save_requested = resolved_options.post_flags.save,
-        .save_folder = config.capture.after.save_folder.value(),
-        .window_id = options.window_id,
-        .area_geometry = options.area_geometry,
-    });
+    if (frozen_source != null and options.request_mode != .area) {
+        return error.FrozenCaptureRequiresArea;
+    }
+
+    var outcome = if (frozen_source) |source|
+        try executeFrozenSourceCapture(allocator, io, environ, options, resolved_options.post_flags.save, config.capture.after.save_folder.value(), source)
+    else
+        try capture_backend.execute(allocator, io, environ, .{
+            .runtime = runtime,
+            .focused_output_name = focused_output_name,
+        }, .{
+            .mode = options.request_mode,
+            .output_path = options.output_path,
+            .save_requested = resolved_options.post_flags.save,
+            .save_folder = config.capture.after.save_folder.value(),
+            .window_id = options.window_id,
+            .area_geometry = options.area_geometry,
+        });
     defer capture_backend.deinitOutcome(allocator, &outcome);
 
     if (options.persist_previous_area) |geometry| {
@@ -122,6 +134,137 @@ fn resolvePostCaptureFlags(
         .show_error_notifications = true,
         .include_notification_thumbnail = true,
     };
+}
+
+fn executeFrozenSourceCapture(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    options: invocation.Invocation,
+    save_requested: bool,
+    save_folder: ?[]const u8,
+    source: overlay.FrozenSource,
+) !capture_types.CaptureOutcome {
+    const backend_used = "frozen-source";
+    const output_path = capture_backend_output_path.resolveOutputPath(
+        allocator,
+        io,
+        capture_types.modeString(options.request_mode),
+        environ,
+        options.output_path,
+        save_requested,
+        save_folder,
+    ) catch |err| switch (err) {
+        error.OutputPathInvalid => {
+            return capture_backend_failure.outcome(capture_types, options.request_mode, "ERR_OUTPUT_PATH_INVALID", "output path is not writable", false, false, backend_used);
+        },
+        else => {
+            return capture_backend_failure.unknown(capture_types, options.request_mode, backend_used, "frozen capture output path failed with unmapped error");
+        },
+    };
+    errdefer allocator.free(output_path);
+
+    if (std.fs.path.dirname(output_path)) |parent| {
+        std.Io.Dir.cwd().createDirPath(io, parent) catch {
+            allocator.free(output_path);
+            return capture_backend_failure.outcome(capture_types, options.request_mode, "ERR_OUTPUT_PATH_INVALID", "output path is not writable", false, false, backend_used);
+        };
+    }
+
+    logFrozenCapture(io, source, output_path);
+    if (!try cropFrozenSource(allocator, io, environ, source, output_path)) {
+        allocator.free(output_path);
+        return capture_backend_failure.backendUnavailable(capture_types, options.request_mode, backend_used);
+    }
+
+    const dimensions_meta = capture_backend_png_meta.resolveCaptureDimensions(allocator, io, output_path) catch {
+        allocator.free(output_path);
+        return capture_backend_failure.backendUnavailable(capture_types, options.request_mode, backend_used);
+    };
+
+    return .{
+        .success = .{
+            .mode = options.request_mode,
+            .path = output_path,
+            .mime = "image/png",
+            .dimensions = .{ .width = dimensions_meta.width, .height = dimensions_meta.height },
+            .backend_used = backend_used,
+            .latency_ms = 0,
+            .degraded = false,
+        },
+    };
+}
+
+fn cropFrozenSource(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    source: overlay.FrozenSource,
+    output_path: []const u8,
+) !bool {
+    const helper_bin = try resolveCropHelperBinary(allocator, io, environ);
+    defer allocator.free(helper_bin);
+
+    const x = try std.fmt.allocPrint(allocator, "{d}", .{source.local_geometry.x});
+    defer allocator.free(x);
+    const y = try std.fmt.allocPrint(allocator, "{d}", .{source.local_geometry.y});
+    defer allocator.free(y);
+    const width = try std.fmt.allocPrint(allocator, "{d}", .{source.local_geometry.width});
+    defer allocator.free(width);
+    const height = try std.fmt.allocPrint(allocator, "{d}", .{source.local_geometry.height});
+    defer allocator.free(height);
+    const surface_width = try std.fmt.allocPrint(allocator, "{d}", .{source.surface_width});
+    defer allocator.free(surface_width);
+    const surface_height = try std.fmt.allocPrint(allocator, "{d}", .{source.surface_height});
+    defer allocator.free(surface_height);
+
+    const result = process_exec.run(
+        allocator,
+        io,
+        &.{ helper_bin, source.path, output_path, x, y, width, height, surface_width, surface_height },
+        1024,
+        2048,
+    ) catch return false;
+    defer result.deinit(allocator);
+
+    return result.exitedZero();
+}
+
+fn resolveCropHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
+    if (environ.getPosix("SHAULA_CROP_HELPER_BIN")) |raw_z| {
+        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+        if (raw.len > 0) return allocator.dupe(u8, raw);
+    }
+
+    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-crop-image");
+    defer allocator.free(exe_dir);
+
+    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-crop-image", .{exe_dir});
+    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
+        return sibling;
+    } else |_| {
+        allocator.free(sibling);
+        return allocator.dupe(u8, "shaula-crop-image");
+    }
+}
+
+fn logFrozenCapture(io: std.Io, source: overlay.FrozenSource, output_path: []const u8) void {
+    var stderr_buffer: [512]u8 = undefined;
+    var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
+    stderr_writer.interface.print(
+        "[shaula-frozen-capture] crop source={s} output={s} rect={d},{d} {d}x{d} surface={d}x{d}\n",
+        .{
+            source.path,
+            output_path,
+            source.local_geometry.x,
+            source.local_geometry.y,
+            source.local_geometry.width,
+            source.local_geometry.height,
+            source.surface_width,
+            source.surface_height,
+        },
+    ) catch {};
+    stderr_writer.interface.flush() catch {};
 }
 
 fn resolveFocusedOutputForCapture(
@@ -191,7 +334,7 @@ fn runOverlayMode(
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     const overlay_spec = overlaySpecForMode(mode);
-    const selection_result = try resolveOverlaySelection(
+    var selection_result = try resolveOverlaySelection(
         allocator,
         io,
         environ,
@@ -204,6 +347,7 @@ fn runOverlayMode(
         parsed.dry_run,
         parsed.simulate_cancel,
     );
+    defer selection_result.deinit(allocator, io);
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 
@@ -216,6 +360,21 @@ fn runOverlayMode(
         return 0;
     }
 
+    if (region_capture_mode == .frozen and selection_result.frozen_source == null) {
+        try json.writeErrorJson(
+            io,
+            command,
+            "ERR_CAPTURE_BACKEND_UNAVAILABLE",
+            "frozen capture source unavailable",
+            true,
+            reported_mode,
+            null,
+            false,
+            &.{"frozen_source_missing"},
+        );
+        return recovery_policy.exitCodeFor("ERR_CAPTURE_BACKEND_UNAVAILABLE");
+    }
+
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
     const options = switch (mode) {
         .quick => invocation.quick(parsed, region_capture_mode, geometry),
@@ -223,7 +382,7 @@ fn runOverlayMode(
         .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock);
+    return executeLifecycle(allocator, io, environ, options, &session_lock, selection_result.frozen_source);
 }
 
 fn runDirectMode(
@@ -248,7 +407,7 @@ fn runDirectMode(
         .window => invocation.window(parsed),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock);
+    return executeLifecycle(allocator, io, environ, options, &session_lock, null);
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
@@ -271,7 +430,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     var session_lock = capture_session.lock.?;
     defer session_lock.deinit();
 
-    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock);
+    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock, null);
 }
 
 /// Starts the capture-only session gate used by compositor shortcuts.
@@ -355,7 +514,13 @@ fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeS
 
 const OverlaySelectionOutcome = struct {
     selection: selection.SelectionResult,
+    frozen_source: ?overlay.FrozenSource = null,
     exit_code: ?u8 = null,
+
+    fn deinit(self: *OverlaySelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
+        if (self.frozen_source) |source| source.deinit(allocator, io);
+        self.frozen_source = null;
+    }
 };
 
 fn resolveOverlaySelection(
@@ -373,7 +538,7 @@ fn resolveOverlaySelection(
 ) !OverlaySelectionOutcome {
     const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
     const use_overlay_dry_run = dry_run or force_noninteractive_selection;
-    const result = try overlay.runSelection(
+    var result = try overlay.runSelection(
         allocator,
         io,
         environ,
@@ -385,17 +550,22 @@ fn resolveOverlaySelection(
         use_overlay_dry_run,
         simulate_cancel,
     );
-    if (!result.cancelled) return .{ .selection = result };
+    defer result.deinit(allocator, io);
+    if (!result.result.cancelled) {
+        const frozen_source = result.frozen_source;
+        result.frozen_source = null;
+        return .{ .selection = result.result, .frozen_source = frozen_source };
+    }
 
     const overlay_code = overlay.deterministicFailureCode(environ, simulate_cancel, true);
     if (overlay_code) |code| {
         const spec = recovery_policy.specFor(code);
         try json.writeErrorJson(io, command, spec.code, spec.message, spec.retryable, reported_mode, null, false, &.{});
-        return .{ .selection = result, .exit_code = recovery_policy.exitCodeFor(spec.code) };
+        return .{ .selection = result.result, .exit_code = recovery_policy.exitCodeFor(spec.code) };
     }
 
     try json.writeErrorJson(io, command, "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, reported_mode, null, false, &.{});
-    return .{ .selection = result, .exit_code = recovery_policy.exitCodeFor("ERR_SELECTION_CANCELLED") };
+    return .{ .selection = result.result, .exit_code = recovery_policy.exitCodeFor("ERR_SELECTION_CANCELLED") };
 }
 
 fn writeCaptureOutcome(
