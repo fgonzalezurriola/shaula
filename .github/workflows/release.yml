@@ -81,6 +81,7 @@ jobs:
             "bin/shaula"
             "bin/shaula-overlay"
             "bin/shaula-preview"
+            "bin/shaula-crop-image"
             "bin/shaula-settings"
             "share/icons/hicolor/index.theme"
             "share/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
@@ -137,7 +138,7 @@ jobs:
             SHAULA_SHA256SUMS_URL="file://${PWD}/dist/SHA256SUMS" \
             scripts/install.sh --yes
 
-          for binary in shaula shaula-overlay shaula-preview shaula-settings; do
+          for binary in shaula shaula-overlay shaula-preview shaula-crop-image shaula-settings; do
             test -x "${xdg_bin}/${binary}"
           done
           test -f "${xdg_data}/applications/shaula.desktop"

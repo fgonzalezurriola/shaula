@@ -26,14 +26,16 @@ pub const InteractionMode = enum {
     }
 };
 
-const OverlayBackground = struct {
+pub const PreparedFrozenSource = struct {
     path: []u8,
     cleanup: bool,
+    output_name: ?[]u8 = null,
 
-    fn deinit(self: OverlayBackground, allocator: std.mem.Allocator, io: std.Io) void {
+    pub fn deinit(self: PreparedFrozenSource, allocator: std.mem.Allocator, io: std.Io) void {
         if (self.cleanup) {
             std.Io.Dir.deleteFileAbsolute(io, self.path) catch {};
         }
+        if (self.output_name) |name| allocator.free(name);
         allocator.free(self.path);
     }
 };
@@ -63,6 +65,33 @@ pub const SelectionOutcome = struct {
     }
 };
 
+/// Captures the frozen source image before the overlay helper is launched.
+///
+/// Contract constraint: frozen region capture must show and crop the same source
+/// frame. This function is called by the capture lifecycle before opening the
+/// helper window; failure returns `null` so the caller can emit deterministic
+/// frozen-source backend errors.
+pub fn prepareFrozenSourceForOverlay(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+) !?PreparedFrozenSource {
+    const output_name = try resolveOverlayOutputName(allocator, io, environ);
+    errdefer if (output_name) |name| allocator.free(name);
+
+    const background = try prepareOverlayBackground(allocator, io, environ, output_name);
+    if (background) |prepared| {
+        return .{
+            .path = prepared.path,
+            .cleanup = prepared.cleanup,
+            .output_name = output_name,
+        };
+    }
+
+    if (output_name) |name| allocator.free(name);
+    return null;
+}
+
 /// Executes a complete overlay selection session.
 ///
 /// Contract constraints:
@@ -70,6 +99,8 @@ pub const SelectionOutcome = struct {
 ///   cancellation so caller boundaries emit stable `ERR_*` outcomes.
 /// - accepted selections are the only path that persists draft and toolbar UI
 ///   state; runtime preparation and protocol parsing stay internal.
+/// - a provided frozen source is passed into the helper as its visual
+///   background and later promoted to the crop source for the confirmed area.
 pub fn runSelection(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -79,6 +110,7 @@ pub fn runSelection(
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
     region_capture_mode: RegionCaptureMode,
+    prepared_frozen_source: *?PreparedFrozenSource,
     is_dry_run: bool,
     simulate_cancel: bool,
 ) !SelectionOutcome {
@@ -108,7 +140,7 @@ pub fn runSelection(
         return .{ .result = result };
     }
 
-    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, interaction_mode, draft_mode, constraint, region_capture_mode);
+    const helper_attempt = try runHelperSelectionAttempt(allocator, io, environ, mode, interaction_mode, draft_mode, constraint, region_capture_mode, prepared_frozen_source);
     switch (helper_attempt) {
         .selection => |helper_selection_raw| {
             var helper_selection = helper_selection_raw;
@@ -235,14 +267,13 @@ fn runHelperSelectionAttempt(
     draft_mode: DraftMode,
     constraint: selection.SelectionConstraint,
     region_capture_mode: RegionCaptureMode,
+    prepared_frozen_source: *?PreparedFrozenSource,
 ) !HelperSelectionAttempt {
-    const output_name = try resolveOverlayOutputName(allocator, io, environ);
-    defer if (output_name) |name| allocator.free(name);
-    var background = if (region_capture_mode == .frozen)
-        try prepareOverlayBackground(allocator, io, environ, output_name)
+    const live_output_name = if (region_capture_mode == .live)
+        try resolveOverlayOutputName(allocator, io, environ)
     else
         null;
-    defer if (background) |prepared| prepared.deinit(allocator, io);
+    defer if (live_output_name) |name| allocator.free(name);
 
     var helper_env = try std.process.Environ.createMap(environ, allocator);
     defer helper_env.deinit();
@@ -258,13 +289,20 @@ fn runHelperSelectionAttempt(
     if (helper_aspect) |aspect| {
         try helper_env.put("SHAULA_OVERLAY_ASPECT", aspect);
     }
-    if (background) |prepared| {
-        try helper_env.put("SHAULA_OVERLAY_BACKGROUND_PATH", prepared.path);
+    if (region_capture_mode == .frozen) {
+        if (prepared_frozen_source.*) |prepared| {
+            try helper_env.put("SHAULA_OVERLAY_BACKGROUND_PATH", prepared.path);
+        }
     }
-    if (output_name) |name| {
+    if (prepared_frozen_source.*) |prepared| {
+        if (prepared.output_name) |name| {
+            try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
+        }
+    } else if (live_output_name) |name| {
         try helper_env.put("SHAULA_OVERLAY_OUTPUT_NAME", name);
     }
-    const initial = try selection_draft_store.loadInitialForOutputName(allocator, io, environ, draft_mode, output_name);
+    const output_name_for_draft = if (prepared_frozen_source.*) |prepared| prepared.output_name else live_output_name;
+    const initial = try selection_draft_store.loadInitialForOutputName(allocator, io, environ, draft_mode, output_name_for_draft);
     if (initial) |geometry| {
         const initial_geometry = try std.fmt.allocPrint(allocator, "{d},{d},{d},{d}", .{
             geometry.geometry.x,
@@ -304,7 +342,7 @@ fn runHelperSelectionAttempt(
     const local_selection = try helper_protocol.parseConfirmedLocalSelectionAlloc(allocator, helper.stdout);
     errdefer if (local_selection) |local| local.deinit(allocator);
     const frozen_source =
-        try frozenSourceForConfirmedSelection(&background, result, local_selection);
+        try frozenSourceForConfirmedSelection(allocator, prepared_frozen_source, result, local_selection);
 
     const owned_stderr = if (debug_latency) try allocator.dupe(u8, helper.stderr) else null;
     errdefer if (owned_stderr) |s| allocator.free(s);
@@ -325,15 +363,20 @@ fn runHelperSelectionAttempt(
 }
 
 fn frozenSourceForConfirmedSelection(
-    background: *?OverlayBackground,
+    allocator: std.mem.Allocator,
+    prepared_source: *?PreparedFrozenSource,
     result: selection.SelectionResult,
     local_selection: ?helper_protocol.LocalSelection,
 ) !?FrozenSource {
     if (result.cancelled) return null;
-    const prepared = background.* orelse return null;
+    const prepared = prepared_source.* orelse return null;
     const local = local_selection orelse return null;
 
-    background.* = null;
+    prepared_source.* = null;
+    if (prepared.output_name) |name| {
+        // Output name ownership is only needed before helper launch.
+        allocator.free(name);
+    }
     return .{
         .path = prepared.path,
         .cleanup = prepared.cleanup,
@@ -367,7 +410,7 @@ fn prepareOverlayBackground(
     io: std.Io,
     environ: std.process.Environ,
     output_name: ?[]const u8,
-) !?OverlayBackground {
+) !?PreparedFrozenSource {
     if (environ.getPosix("SHAULA_OVERLAY_BACKGROUND_PATH")) |existing_z| {
         const existing = std.mem.trim(u8, std.mem.sliceTo(existing_z, 0), " \t\r\n");
         if (existing.len > 0) {
@@ -576,6 +619,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
     const block = try map.createPosixBlock(std.testing.allocator, .{});
     defer block.deinit(std.testing.allocator);
 
+    var prepared_source: ?PreparedFrozenSource = null;
     var outcome = try runSelection(
         std.testing.allocator,
         std.testing.io,
@@ -585,6 +629,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         .area,
         .{ .aspect = null },
         .live,
+        &prepared_source,
         false,
         false,
     );
@@ -607,6 +652,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
     const block = try map.createPosixBlock(std.testing.allocator, .{});
     defer block.deinit(std.testing.allocator);
 
+    var prepared_source: ?PreparedFrozenSource = null;
     const attempt = try runHelperSelectionAttempt(
         std.testing.allocator,
         std.testing.io,
@@ -616,6 +662,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
         .area,
         .{ .aspect = null },
         .live,
+        &prepared_source,
     );
     try std.testing.expect(attempt == .unavailable);
 }

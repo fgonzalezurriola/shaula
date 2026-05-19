@@ -333,6 +333,18 @@ fn runOverlayMode(
     defer session_lock.deinit();
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
+    if (!parsed.dry_run) {
+        const backend_mode = core_capture_mode.backendModeToken(mode) orelse reported_mode;
+        const unsupported_rc = try guards.enforceModeSupported(io, environ, command, backend_mode);
+        if (unsupported_rc) |code| return code;
+    }
+
+    var prepared_frozen_source: ?overlay.PreparedFrozenSource = null;
+    defer if (prepared_frozen_source) |source| source.deinit(allocator, io);
+    if (region_capture_mode == .frozen and !parsed.dry_run) {
+        prepared_frozen_source = try overlay.prepareFrozenSourceForOverlay(allocator, io, environ);
+    }
+
     const overlay_spec = overlaySpecForMode(mode);
     var selection_result = try resolveOverlaySelection(
         allocator,
@@ -344,6 +356,7 @@ fn runOverlayMode(
         overlay_spec.draft_mode,
         parsed.aspect,
         region_capture_mode,
+        &prepared_frozen_source,
         parsed.dry_run,
         parsed.simulate_cancel,
     );
@@ -533,6 +546,7 @@ fn resolveOverlaySelection(
     draft_mode: overlay.DraftMode,
     aspect: ?[]const u8,
     region_capture_mode: core_capture_mode.RegionCaptureMode,
+    prepared_frozen_source: *?overlay.PreparedFrozenSource,
     dry_run: bool,
     simulate_cancel: bool,
 ) !OverlaySelectionOutcome {
@@ -547,6 +561,7 @@ fn resolveOverlaySelection(
         draft_mode,
         .{ .aspect = aspect },
         region_capture_mode,
+        prepared_frozen_source,
         use_overlay_dry_run,
         simulate_cancel,
     );

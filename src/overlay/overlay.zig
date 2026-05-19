@@ -7,7 +7,9 @@ pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureM
 pub const deterministicFailureCode = selection_session.deterministicFailureCode;
 pub const InteractionMode = selection_session.InteractionMode;
 pub const FrozenSource = selection_session.FrozenSource;
+pub const PreparedFrozenSource = selection_session.PreparedFrozenSource;
 pub const SelectionOutcome = selection_session.SelectionOutcome;
+pub const prepareFrozenSourceForOverlay = selection_session.prepareFrozenSourceForOverlay;
 
 /// Public overlay selection facade used by capture lifecycle callers.
 ///

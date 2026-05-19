@@ -125,6 +125,12 @@ and the working diff.
   backend execution, previous-area persistence, and final JSON/`ERR_*`
   emission. Preview document/history and UI behavior were intentionally left
   unchanged.
+- Frozen region capture now prepares the frozen source image in the capture
+  lifecycle before launching the overlay helper. The helper receives that same
+  image as its background, and Capture crops from the same frozen source instead
+  of taking a second live desktop frame, preserving transient hover/tooltip
+  state. Dev/release installs must ship `shaula-crop-image`; without that helper
+  frozen quick/area captures fail before preview.
 - Capture naming update: `capture fullscreen` targets the current/focused
   monitor, `capture all-screens` preserves the old all-output fullscreen
   behavior, and `capture focused` remains as a CLI compatibility alias.

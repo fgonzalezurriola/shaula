@@ -646,6 +646,7 @@ install_release() {
   log "installed ${XDG_BIN_HOME}/shaula"
   install_file_if_present "$(find_file "$extract_dir" shaula-overlay)" "${XDG_BIN_HOME}/shaula-overlay" 0755
   install_file_if_present "$(find_file "$extract_dir" shaula-preview)" "${XDG_BIN_HOME}/shaula-preview" 0755
+  install_file_if_present "$(find_file "$extract_dir" shaula-crop-image)" "${XDG_BIN_HOME}/shaula-crop-image" 0755
   install_file_if_present "$(find_file "$extract_dir" shaula-settings)" "${XDG_BIN_HOME}/shaula-settings" 0755
 
   if [ "$INSTALL_DESKTOP" -eq 1 ]; then
@@ -710,6 +711,7 @@ run_uninstall() {
   remove_path "${XDG_BIN_HOME}/shaula"
   remove_path "${XDG_BIN_HOME}/shaula-overlay"
   remove_path "${XDG_BIN_HOME}/shaula-preview"
+  remove_path "${XDG_BIN_HOME}/shaula-crop-image"
   remove_path "${XDG_BIN_HOME}/shaula-settings"
   remove_path "${XDG_DATA_HOME}/applications/shaula.desktop"
   remove_path "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg"

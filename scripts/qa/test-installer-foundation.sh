@@ -39,6 +39,9 @@ fi
 if [[ -x zig-out/bin/shaula-preview ]]; then
   install -m 0755 zig-out/bin/shaula-preview "${release_dir}/bin/shaula-preview"
 fi
+if [[ -x zig-out/bin/shaula-crop-image ]]; then
+  install -m 0755 zig-out/bin/shaula-crop-image "${release_dir}/bin/shaula-crop-image"
+fi
 
 archive="${tmp_dir}/shaula-linux-${release_arch}.tar.gz"
 tar -C "${release_dir}" -czf "${archive}" .
