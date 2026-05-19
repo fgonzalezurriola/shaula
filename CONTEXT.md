@@ -21,9 +21,10 @@ and the working diff.
   Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
   default canonical triage labels, and Shaula's single-context domain layout:
   root `CONTEXT.md` plus `docs/adr/` for durable architectural decisions.
-- v1.0.0 release prep: README install examples now point at `v1.0.0`, the
-  roadmap copy no longer describes Shaula as early software, and the optional
-  Noctalia widget manifest is aligned to `1.0.0`.
+- v0.1.0 release prep: README install examples now point at `v0.1.0`, and the
+  optional Noctalia widget manifest is aligned to `0.1.0`. Public protocol
+  `contract_version`/`ipc_version` remains `1.0.0` and is separate from app
+  release semver.
 - Scrolling capture specification is now in `spec/scrolling-capture.md`. The strategy is hybrid: Phase 1 starts with manual-scroll + row-vote stitching (no virtual pointer dependency), Phase 2 adds auto-scroll via `zwlr_virtual_pointer_v1`. The row-vote stitching algorithm is ported from jbonney/scrollshot's proven approach (row-by-row voting with sampled SAD + seam finding in overlap middle 80%). Column-sample algorithm (from wayscrollshot, O(9*height)) is planned as a fast alternative. The `shaula-scroll-helper` Wayland client binary pattern matches Shaula's existing helper architecture (overlay, preview). Required Wayland protocols: `zwlr_layer_shell_v1`, `zwlr_screencopy_manager_v1`, `zwlr_virtual_pointer_manager_v1`. CLI: `shaula capture scrolling --scroll-mode auto|manual`.
 
 - Prompt handoff snapshot is now `CONTEXT.md`; `./dev context` copies it with

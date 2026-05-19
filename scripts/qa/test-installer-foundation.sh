@@ -83,6 +83,6 @@ grep -q 'sentinel = true' "${xdg_config}/shaula/config.toml"
 grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh$' README.md
 grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall' README.md
 grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --yes' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v1.0.0' README.md
+grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v0.1.0' README.md
 
 echo "Installer foundation QA passed."
