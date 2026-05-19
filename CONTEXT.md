@@ -5,6 +5,12 @@ and the working diff.
 
 ## Current focus
 
+- Capture Area overlay resize smoothness: the GTK overlay now caches the scaled
+  screenshot background as a Cairo surface per drawing-area size. Pointer
+  move/resize redraws reuse that surface, including the clipped selected region,
+  instead of calling `gdk_pixbuf_scale_simple` on every frame. This keeps the
+  existing helper JSON/`ERR_*` contract unchanged and only affects interactive
+  overlay rendering latency.
 - The `./dev bench`, `./dev bench-ui`, `./dev strategies`, and
   `./dev strategies-ui` shortcuts were removed from the developer wrapper
   because they had become stale routine checks. `./dev check` and

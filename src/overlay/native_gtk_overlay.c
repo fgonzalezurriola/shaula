@@ -108,6 +108,9 @@ typedef struct {
   GtkWidget *window;
   GtkWidget *area;
   GdkPixbuf *background;
+  cairo_surface_t *background_surface;
+  int background_surface_width;
+  int background_surface_height;
   ShaulaPoint output_origin;
   gboolean has_selection;
   ShaulaRect selection;
@@ -308,6 +311,15 @@ static gboolean point_near(ShaulaPoint a, ShaulaPoint b, int radius) {
 static void queue_draw(void) {
   if (state.area != NULL)
     gtk_widget_queue_draw(state.area);
+}
+
+static void clear_background_surface(void) {
+  if (state.background_surface != NULL) {
+    cairo_surface_destroy(state.background_surface);
+    state.background_surface = NULL;
+  }
+  state.background_surface_width = 0;
+  state.background_surface_height = 0;
 }
 
 static const char *cursor_name(ShaulaCursorShape shape) {
@@ -716,16 +728,54 @@ static void apply_aspect_choice(void) {
     gtk_popover_popdown(GTK_POPOVER(state.aspect_popover));
 }
 
-static void draw_background(cairo_t *cr, int width, int height) {
+static gboolean ensure_background_surface(int width, int height) {
   if (state.background == NULL)
+    return FALSE;
+  if (width <= 0 || height <= 0)
+    return FALSE;
+  if (state.background_surface != NULL &&
+      state.background_surface_width == width &&
+      state.background_surface_height == height) {
+    return TRUE;
+  }
+
+  clear_background_surface();
+  cairo_surface_t *surface =
+      cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+  if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+    cairo_surface_destroy(surface);
+    return FALSE;
+  }
+
+  cairo_t *surface_cr = cairo_create(surface);
+  int source_width = MAX(1, gdk_pixbuf_get_width(state.background));
+  int source_height = MAX(1, gdk_pixbuf_get_height(state.background));
+  cairo_scale(surface_cr, (double)width / (double)source_width,
+              (double)height / (double)source_height);
+  gdk_cairo_set_source_pixbuf(surface_cr, state.background, 0, 0);
+  cairo_paint(surface_cr);
+  cairo_destroy(surface_cr);
+
+  if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+    cairo_surface_destroy(surface);
+    return FALSE;
+  }
+
+  state.background_surface = surface;
+  state.background_surface_width = width;
+  state.background_surface_height = height;
+  return TRUE;
+}
+
+static void draw_background(cairo_t *cr, int width, int height) {
+  /* Pointer resize can redraw dozens of times per second. Cache the scaled
+   * background per canvas size so the overlay contract stays interactive
+   * instead of re-sampling the full screenshot on every motion frame.
+   */
+  if (!ensure_background_surface(width, height))
     return;
-  GdkPixbuf *scaled = gdk_pixbuf_scale_simple(state.background, width, height,
-                                              GDK_INTERP_BILINEAR);
-  if (scaled == NULL)
-    return;
-  gdk_cairo_set_source_pixbuf(cr, scaled, 0, 0);
+  cairo_set_source_surface(cr, state.background_surface, 0, 0);
   cairo_paint(cr);
-  g_object_unref(scaled);
 }
 
 static void draw_selection_guides(cairo_t *cr, ShaulaRect s, int width,
@@ -1557,6 +1607,7 @@ int shaula_native_gtk_overlay_run(void) {
   g_main_loop_run(state.main_loop);
   g_main_loop_unref(state.main_loop);
   state.main_loop = NULL;
+  clear_background_surface();
   if (state.background != NULL)
     g_object_unref(state.background);
   return 0;
