@@ -463,7 +463,7 @@ and the working diff.
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
 - `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/shaula-YYYY-MM-DD-HHMMSS.png`,
+  timestamped PNG under `~/Pictures/shaula/YYYY-MM-DD-HHMMSS.png`,
   adding a numeric suffix when needed and falling back to `~/shaula` when the
   Pictures directory cannot be created or written. Quick Save updates preview
   save metadata but does not create undo history.

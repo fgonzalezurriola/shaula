@@ -345,9 +345,8 @@ static char *timestamped_quick_save_path(GError **error) {
   char *path = NULL;
   for (int attempt = 0; attempt < 1000; attempt += 1) {
     char *filename = attempt == 0
-                         ? g_strdup_printf("shaula-%s.png", stamp)
-                         : g_strdup_printf("shaula-%s-%03d.png", stamp,
-                                           attempt);
+                         ? g_strdup_printf("%s.png", stamp)
+                         : g_strdup_printf("%s-%03d.png", stamp, attempt);
     path = g_build_filename(dir, filename, NULL);
     g_free(filename);
     if (!g_file_test(path, G_FILE_TEST_EXISTS))
