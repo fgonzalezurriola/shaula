@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
+. "${ROOT_DIR}/scripts/qa/manual-suite-warning.sh"
+shaula_qa_manual_suite_warning "scripts/qa/run-e2e-niri.sh"
+
 EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-11-layer-e2e-niri-report.json"
 ERROR_LOG="${EVIDENCE_DIR}/task-11-layer-e2e-niri-report-error.txt"

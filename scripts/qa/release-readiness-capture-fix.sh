@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
+. "${ROOT_DIR}/scripts/qa/manual-suite-warning.sh"
+shaula_qa_manual_suite_warning "scripts/qa/release-readiness-capture-fix.sh"
+
 EVIDENCE_DIR="${ROOT_DIR}/.qa/evidence"
 REPORT_JSON="${EVIDENCE_DIR}/task-15-release-readiness.json"
 ERROR_TXT="${EVIDENCE_DIR}/task-15-release-readiness-error.txt"

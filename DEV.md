@@ -16,6 +16,14 @@ zig build
 ./dev check
 ```
 
+QA script scope:
+
+- `./dev check` plus `git diff --check` is the required baseline after code
+  changes.
+- `./dev qa` is the curated non-intrusive contract lane.
+- `scripts/qa/README.md` classifies targeted checks versus manual/legacy
+  investigation wrappers.
+
 Useful commands:
 
 ```bash

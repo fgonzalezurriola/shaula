@@ -21,6 +21,13 @@ and the working diff.
   physical image pixels after output-scale normalization. Niri IPC/window
   semantics, Wayland screencopy migration, fractional scaling, and overlay
   teardown timing remain technical risks.
+- QA script curation: `scripts/qa/README.md` is now the source of truth for QA
+  script status. The required baseline remains `./dev check` plus
+  `git diff --check`; `./dev qa` is the curated non-intrusive contract lane
+  (`run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
+  matrix, exit-code mapping). Integration, E2E Niri, performance, release
+  readiness, benchmark, Noctalia, and intrusive UI wrappers are manual/legacy
+  investigation tools and print an explicit warning before running.
 - Capture Area overlay resize smoothness: the GTK overlay now caches the scaled
   screenshot background as a Cairo surface per drawing-area size. Pointer
   move/resize redraws reuse that surface, including the clipped selected region,
@@ -35,10 +42,10 @@ and the working diff.
   underlying QA scripts when a change needs them.
 - `./dev qa` is now a lightweight QA wrapper for deterministic local contracts:
   negative Wayland/Niri preflight plus unit QA. It no longer runs integration,
-  E2E Niri, performance gates, or release-readiness evidence checks; several of
-  those deeper scripts still encode stale backend/output assumptions and remain
-  available under `scripts/qa/` for explicit investigation before they are
-  refreshed or retired. The `qa-full`/`qa-ui` wrapper aliases were removed.
+  E2E Niri, performance gates, or release-readiness evidence checks. The
+  deeper wrappers remain available under `scripts/qa/` as manual/legacy
+  investigation tools and now print an explicit warning before running. The
+  `qa-full`/`qa-ui` wrapper aliases were removed.
 - Agent skill configuration is documented in `AGENTS.md` and `docs/agents/`.
   Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
   default canonical triage labels, and Shaula's single-context domain layout:

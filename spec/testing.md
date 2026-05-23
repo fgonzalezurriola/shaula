@@ -4,7 +4,12 @@ See [spec/algo.md](algo.md) for the locked engineering decisions and [spec/perfo
 
 ## Scope
 
-This document defines the deterministic, machine-first QA strategy for Shaula across three layers:
+This document defines the deterministic, machine-first QA strategy for Shaula.
+The operational script classification lives in
+[`scripts/qa/README.md`](../scripts/qa/README.md); that file is the source of
+truth for which wrappers are current gates versus manual/legacy investigation.
+
+Historic QA scripts still exist across three layers:
 
 1. Unit/contracts/mocks (no real compositor required)
 2. Integration harness (local deterministic flows)
@@ -37,6 +42,14 @@ Deterministic failure token for non-ready environment:
 
 ## Test Matrix
 
+### Current Gate (`./dev check`, `git diff --check`, `./dev qa`)
+
+- `./dev check` builds and runs Zig/C helper tests.
+- `git diff --check` rejects whitespace errors.
+- `./dev qa` runs the curated non-intrusive contract lane:
+  `run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
+  matrix, and exit-code mapping.
+
 ### Unit / Contracts / Mocks (`scripts/qa/run-unit-tests.sh`)
 
 - Preflight and capabilities envelope schema checks
@@ -45,7 +58,11 @@ Deterministic failure token for non-ready environment:
 - Runtime backend unavailability deterministic failure mapping checks
 - Pre-capture guard timeout and warning-token contract checks
 
-### Integration (`scripts/qa/run-integration-tests.sh`)
+### Manual / Legacy Integration (`scripts/qa/run-integration-tests.sh`)
+
+This wrapper remains useful for investigation but is not a default release gate.
+It aggregates older task evidence and may include stale runtime assumptions
+until individual subchecks are refreshed.
 
 - Daemon lifecycle and state machine checks
 - Capture core modes (`area`, `fullscreen`) with decoded PNG integrity checks
@@ -57,7 +74,11 @@ Deterministic failure token for non-ready environment:
 - Shell artifact guard checks for handshake and bounded settle fallback behavior
 - Optional Noctalia adapter checks (action parity, plugin optionality, overhead budget)
 
-### E2E Real Niri (`scripts/qa/run-e2e-niri.sh`)
+### Manual / Legacy E2E Real Niri (`scripts/qa/run-e2e-niri.sh`)
+
+This wrapper requires careful interpretation. It may degrade missing real Niri
+preflight in headless environments, and it is not a substitute for targeted
+manual checks after overlay/capture/Wayland changes.
 
 - Strict `Preflight QA Gate` before any capture test
 - Capture flows: `area`, `fullscreen`, `window`
@@ -81,6 +102,10 @@ Report format is stable and machine-checkable:
 - `layers` (`unit`, `integration`, `e2e_niri`)
 - `matrix` with explicit case IDs and pass/fail fields
 - `subchecks` for runtime integrity, strict capabilities, default output, history Top-N, overlay base, precondition guard, and optional Noctalia integration
+
+The current `./dev qa` report only contains the curated unit/contract layer.
+Older integration/e2e/performance reports are investigation artifacts unless a
+release task explicitly refreshes and promotes them.
 
 ## Non-Interactive CI Rules
 

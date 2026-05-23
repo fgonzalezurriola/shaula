@@ -49,7 +49,7 @@ cleanup_qa_artifacts() {
         /tmp/shaula/task9-*.png \
         /tmp/shaula/task8-*.png \
         /tmp/shaula/task8-*.token \
-        /tmp/shaula/task6-history-topn/capture-*.png \
+        /tmp/shaula/task6-history-topn/*.png \
         /tmp/shaula/task2-capability-*.png \
         /tmp/shaula/task3-capture-content-fullscreen.png \
         /tmp/shaula/task3-stub-signature-1x1.png \

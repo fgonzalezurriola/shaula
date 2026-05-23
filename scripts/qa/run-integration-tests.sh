@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
+. "${ROOT_DIR}/scripts/qa/manual-suite-warning.sh"
+shaula_qa_manual_suite_warning "scripts/qa/run-integration-tests.sh"
+
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERR_QA_TOOL_MISSING tool=jq" >&2
   exit 1
@@ -47,7 +50,7 @@ cleanup_qa_artifacts() {
         /tmp/shaula/task9-*.png \
         /tmp/shaula/task8-*.png \
         /tmp/shaula/task8-*.token \
-        /tmp/shaula/task6-history-topn/capture-*.png \
+        /tmp/shaula/task6-history-topn/*.png \
         /tmp/shaula/qa-runtime-capture.png \
         /tmp/shaula/task2-capability-*.png \
         /tmp/shaula/task3-capture-content-fullscreen.png \
