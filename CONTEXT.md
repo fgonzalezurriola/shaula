@@ -206,6 +206,10 @@ and the working diff.
   `show-in-folder` and `reveal-file` for compatibility. Preview helpers receive
   the real path for the action listener but the visible notification body must
   stay generic (`Saved to screenshots folder.`), without filename or full path.
+  `src/preview/preview_notify.zig` is the C-to-Zig bridge for immediate preview
+  notification banners and reuses `notify/request.zig` for notify-send argv
+  construction; `preview_actions.c` remains only the action caller/fallback
+  policy owner.
   `SHAULA_BIN` and route canonical absolute saved paths through the same
   listener process. Activating the action tries
   `org.freedesktop.FileManager1.ShowItems` with a percent-encoded absolute
@@ -662,8 +666,8 @@ and the working diff.
 - Fit to screen: implemented.
 - Actual size: implemented.
 - Reset annotations: implemented.
-- Copy path: implemented.
-- Open containing folder: implemented.
+- Open preview folder: implemented. Opens the directory for the current preview
+  file path.
 
 ## Visible Metadata
 

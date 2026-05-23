@@ -165,11 +165,11 @@ static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
 }
 
 static GtkWidget *make_done_button(ShaulaPreviewState *state) {
-  const char *tooltip = state->copy_on_accept ? "Save and copy (Enter)"
-                                              : "Save (Enter)";
-  GtkWidget *button = make_toolbar_button(
-      state, "shaula-done-symbolic", tooltip,
-      G_CALLBACK(shaula_preview_on_done_clicked));
+  const char *tooltip =
+      state->copy_on_accept ? "Save and copy (Enter)" : "Save (Enter)";
+  GtkWidget *button =
+      make_toolbar_button(state, "shaula-done-symbolic", tooltip,
+                          G_CALLBACK(shaula_preview_on_done_clicked));
   gtk_widget_remove_css_class(button, "flat");
   gtk_widget_add_css_class(button, "suggested-action");
   return button;
@@ -331,10 +331,8 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   const MenuActionSpec actions[] = {
       {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
        G_CALLBACK(shaula_preview_on_save_as_clicked)},
-      {"shaula-copy-symbolic", "Copy path", "Copy path",
-       G_CALLBACK(shaula_preview_on_copy_path_clicked)},
-      {"shaula-more-symbolic", "Open containing folder",
-       "Open containing folder",
+      {"shaula-more-symbolic", "Open preview directory",
+       "Open preview directory",
        G_CALLBACK(shaula_preview_on_open_folder_clicked)},
   };
   for (int i = 0; i < (int)G_N_ELEMENTS(actions); i++)

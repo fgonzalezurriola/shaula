@@ -11,9 +11,9 @@
 #include "preview_render.h"
 #include "preview_toolbar.h"
 
-static gboolean shaula_preview_notify(const char *summary, const char *body,
-                                      const char *image_path,
-                                      gboolean transient, int timeout_ms);
+extern gboolean shaula_preview_notify(const char *summary, const char *body,
+                                      const char *image_path, gboolean transient,
+                                      int timeout_ms);
 
 static gboolean env_enabled(const char *name, gboolean fallback) {
   const char *value = g_getenv(name);
@@ -66,90 +66,6 @@ static char *render_or_original_png(ShaulaPreviewState *state,
     return shaula_render_composited_png_temp(state, error);
   }
   return g_strdup(state->document.path);
-}
-
-/// Runtime boundary for immediate preview notifications.
-///
-/// Save/copy actions emit their own best-effort desktop notifications so the
-/// helper does not depend on the GTK process exiting before the user gets
-/// feedback. Failures are intentionally non-fatal and reported to the caller
-/// only so the Zig service can keep a fallback path.
-///
-/// TODO: bridge this C helper to `notify/request.zig` once preview notification
-/// execution can cross the C/Zig seam without changing helper startup or action
-/// listener behavior. Keep all remaining C notify-send argv construction inside
-/// this function until then.
-static gboolean shaula_preview_notify(const char *summary, const char *body,
-                                      const char *image_path,
-                                      gboolean transient, int timeout_ms) {
-  gchar *timeout = g_strdup_printf("%d", timeout_ms);
-  gchar *image_hint =
-      image_path != NULL && image_path[0] != '\0'
-          ? g_strdup_printf("string:image-path:file://%s", image_path)
-          : NULL;
-  gchar *argv[13];
-  int argc = 0;
-  argv[argc++] = "notify-send";
-  argv[argc++] = "--app-name=Shaula";
-  argv[argc++] = "--urgency";
-  argv[argc++] = "normal";
-  argv[argc++] = "--expire-time";
-  argv[argc++] = timeout;
-  if (transient)
-    argv[argc++] = "--transient";
-  if (image_hint != NULL) {
-    argv[argc++] = "--hint";
-    argv[argc++] = image_hint;
-  }
-  argv[argc++] = (gchar *)summary;
-  argv[argc++] = (gchar *)body;
-  argv[argc] = NULL;
-
-  gint status = 1;
-  GError *error = NULL;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, NULL,
-                   G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-                       G_SPAWN_STDERR_TO_DEV_NULL,
-                   NULL, NULL, NULL, NULL, &status, &error);
-  if (!spawned) {
-    if (error != NULL)
-      g_error_free(error);
-    g_free(timeout);
-    g_free(image_hint);
-    return FALSE;
-  }
-
-  gboolean ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
-  if (!ok && image_path != NULL && image_path[0] != '\0') {
-    argc = 0;
-    argv[argc++] = "notify-send";
-    argv[argc++] = "--app-name=Shaula";
-    argv[argc++] = "--urgency";
-    argv[argc++] = "normal";
-    argv[argc++] = "--expire-time";
-    argv[argc++] = timeout;
-    if (transient)
-      argv[argc++] = "--transient";
-    argv[argc++] = "-i";
-    argv[argc++] = (gchar *)image_path;
-    argv[argc++] = (gchar *)summary;
-    argv[argc++] = (gchar *)body;
-    argv[argc] = NULL;
-    status = 1;
-    error = NULL;
-    spawned = g_spawn_sync(NULL, argv, NULL,
-                           G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-                               G_SPAWN_STDERR_TO_DEV_NULL,
-                           NULL, NULL, NULL, NULL, &status, &error);
-    ok = spawned && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-    if (error != NULL)
-      g_error_free(error);
-  }
-
-  g_free(timeout);
-  g_free(image_hint);
-  return ok;
 }
 
 static char *shaula_notify_action_log_path(void) {

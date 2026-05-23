@@ -131,6 +131,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     const preview_geometry_obj = buildZigObject(b, "preview-geometry", "src/preview/preview_geometry.zig", target, optimize);
     const preview_image_io_obj = buildZigObject(b, "preview-image-io", "src/preview/preview_image_io.zig", target, optimize);
     const preview_clipboard_obj = buildZigObject(b, "preview-clipboard", "src/preview/preview_clipboard.zig", target, optimize);
+    const preview_notify_obj = buildPreviewNotifyObject(b, target, optimize);
 
     const command = b.addSystemCommand(&.{
         "sh",
@@ -163,6 +164,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     command.addFileArg(preview_geometry_obj);
     command.addFileArg(preview_image_io_obj);
     command.addFileArg(preview_clipboard_obj);
+    command.addFileArg(preview_notify_obj);
     return output;
 }
 
@@ -201,6 +203,30 @@ fn buildNativeCropImageHelper(b: *std.Build) std.Build.LazyPath {
     const output = command.addOutputFileArg("shaula-crop-image");
     command.addFileArg(b.path("src/backends/native_crop_image.c"));
     return output;
+}
+
+fn buildPreviewNotifyObject(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) std.Build.LazyPath {
+    const module = b.createModule(.{
+        .root_source_file = b.path("src/preview/preview_notify.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const notify_request_module = b.createModule(.{
+        .root_source_file = b.path("src/notify/request.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("notify_request", notify_request_module);
+    const object = b.addObject(.{
+        .name = "preview-notify",
+        .root_module = module,
+    });
+    return object.getEmittedBin();
 }
 
 fn buildZigObject(
