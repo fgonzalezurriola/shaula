@@ -247,8 +247,14 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 
 ## Capture Persistence and History Contract
 
-- When `--output` is omitted, default capture output path is `~/Pictures/Shaula`.
-- Invalid or non-writable default destination resolves to deterministic `ERR_OUTPUT_PATH_INVALID`, no silent fallback to `/tmp`.
+- When `--output` is omitted and `--save` is not requested, capture writes an
+  internal runtime artifact for preview/copy flows, not a user-visible saved
+  screenshot.
+- When `--save` is requested without `--output`, default capture output path is
+  `~/Pictures/shaula` with `~/shaula` as the writable fallback.
+- Invalid or non-writable explicit/default destinations resolve to deterministic
+  `ERR_OUTPUT_PATH_INVALID`; copy-only runtime artifacts must not be reported as
+  saved screenshots.
 - History retention is Top-N 20 entries, newest-first, with deterministic trimming on write.
 - `history show --id latest` resolves to the first retained entry and remains contract-stable.
 

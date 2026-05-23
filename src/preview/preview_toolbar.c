@@ -549,8 +549,16 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   state->color_swatch = swatch;
   gtk_widget_set_size_request(swatch, 16, 16);
   gtk_widget_set_valign(swatch, GTK_ALIGN_CENTER);
+  gtk_widget_set_tooltip_text(swatch, "Click to use sampled color");
   gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(swatch), draw_swatch, state,
                                  NULL);
+  GtkGesture *pick_click = gtk_gesture_click_new();
+  gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(pick_click),
+                                GDK_BUTTON_PRIMARY);
+  g_signal_connect(pick_click, "pressed",
+                   G_CALLBACK(shaula_preview_on_use_hover_color_clicked),
+                   state);
+  gtk_widget_add_controller(swatch, GTK_EVENT_CONTROLLER(pick_click));
   gtk_box_append(GTK_BOX(color_row), swatch);
 
   char hex[8];
@@ -558,12 +566,13 @@ static GtkWidget *build_metadata_group(ShaulaPreviewState *state) {
   state->color_hex_label =
       make_normal_label(state->hover_color_valid ? state->hover_hex : hex);
   apply_fixed_code_width(state->color_hex_label, 7, 72, 0.0f);
-  gtk_widget_set_tooltip_text(state->color_hex_label, "Tab to copy color");
+  gtk_widget_set_tooltip_text(state->color_hex_label,
+                              "Tab to copy color; click swatch to use");
   gtk_box_append(GTK_BOX(color_row), state->color_hex_label);
 
   gtk_box_append(GTK_BOX(color_stack), color_row);
 
-  GtkWidget *hint = make_muted_label("[Tab to copy]");
+  GtkWidget *hint = make_muted_label("[Tab copy]");
   PangoAttrList *hint_attrs = pango_attr_list_new();
   pango_attr_list_insert(hint_attrs, pango_attr_scale_new(PANGO_SCALE_SMALL));
   gtk_label_set_attributes(GTK_LABEL(hint), hint_attrs);

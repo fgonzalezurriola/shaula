@@ -4,6 +4,13 @@ This file keeps contributor-facing workflow notes out of the public README.
 
 ## Local Build
 
+Use the pinned Zig toolchain:
+
+```bash
+zig version # must be 0.16.0
+bash scripts/qa/check-zig-version.sh
+```
+
 ```bash
 zig build
 ./dev check
@@ -37,7 +44,7 @@ Common manual commands:
 ./zig-out/bin/shaula capture fullscreen --json --preview
 ./zig-out/bin/shaula capture all-screens --json
 ./zig-out/bin/shaula capture previous-area --json
-./zig-out/bin/shaula preview ~/Pictures/Shaula/example.png --json
+./zig-out/bin/shaula preview ~/Pictures/shaula/example.png --json
 ```
 
 ## Installer Details

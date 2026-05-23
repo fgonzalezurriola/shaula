@@ -14,13 +14,16 @@ This file is sequencing only. Nothing here is public contract until the behavior
 
 - Floating post-capture preview.
 - Crop and basic redaction.
-- History and file naming polish.
+- Preview history, Copy, Save, Save As, and Done/accept polish.
+- Shaula-specific default filenames.
 
 ## Phase 2: Dev Tools
 
-- Color picker.
+- Color picker. Passive hover sampling, Tab copy, and swatch-to-active-color
+  apply are present; a dedicated eyedropper mode is still future polish.
 - Manual ruler / distance measurement.
-- Logical vs physical pixel clarity.
+- Logical vs physical pixel clarity: selection/compositor geometry is logical;
+  preview/export/ruler/color/redaction results are physical image pixels.
 
 ## Phase 3: Later Surface
 

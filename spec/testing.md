@@ -14,7 +14,7 @@ The matrix enforces final post-fix contracts for:
 
 - runtime capture backend execution without productive stub success path
 - capabilities strict contract between `capabilities list` and `capture <mode>`
-- default output path `~/Pictures/Shaula` with deterministic invalid-path failure
+- saved default output path `~/Pictures/shaula` with deterministic invalid-path failure
 - history retention Top-N 20 newest-first
 - overlay v1 base selection and cancellation contract
 - shell artifact pre-capture guard with bounded timeout behavior
@@ -51,7 +51,7 @@ Deterministic failure token for non-ready environment:
 - Capture core modes (`area`, `fullscreen`) with decoded PNG integrity checks
 - Post-capture pipeline (`--save`, `--copy`, partial behavior)
 - Capabilities strict contract parity checks (`capabilities.capture.*` vs execution outcomes)
-- Default output path checks for `~/Pictures/Shaula`
+- Default saved-output path checks for `~/Pictures/shaula`
 - History Top-N 20 consistency checks
 - Overlay base selection checks and deterministic cancel path checks
 - Shell artifact guard checks for handshake and bounded settle fallback behavior

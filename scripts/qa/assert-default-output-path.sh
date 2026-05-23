@@ -20,14 +20,14 @@ test_home="/tmp/shaula-home"
 rm -rf "${test_home}"
 mkdir -p "${test_home}"
 
-default_json="$(HOME="${test_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview)"
+default_json="$(HOME="${test_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --no-preview --save)"
 
 default_path="$(printf '%s\n' "${default_json}" | jq -r '.path')"
 
-printf '%s\n' "${default_json}" | jq -e --arg pfx "${test_home}/Pictures/Shaula/" '
+printf '%s\n' "${default_json}" | jq -e --arg pfx "${test_home}/Pictures/shaula/" '
   .ok == true and
   (.path | startswith($pfx)) and
-  (.path | test("/capture-area-[0-9]+\\.png$"))
+  (.path | test("/shaula-fullscreen-[0-9]+\\.png$"))
 ' >/dev/null || {
   echo "ERR_DEFAULT_OUTPUT_PATH_INVALID reason=default_path_contract" >&2
   printf '%s\n' "${default_json}" >&2
@@ -40,7 +40,7 @@ printf '%s\n' "${default_json}" | jq -e --arg pfx "${test_home}/Pictures/Shaula/
 }
 
 set +e
-missing_home_json="$(env -u HOME SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json 2>/tmp/shaula-default-output-missing-home.err)"
+missing_home_json="$(env -u HOME SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --save 2>/tmp/shaula-default-output-missing-home.err)"
 missing_home_rc=$?
 set -e
 
@@ -63,7 +63,7 @@ rm -f "${file_home}"
 touch "${file_home}"
 
 set +e
-invalid_home_json="$(HOME="${file_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json 2>/tmp/shaula-default-output-invalid-home.err)"
+invalid_home_json="$(HOME="${file_home}" SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --save 2>/tmp/shaula-default-output-invalid-home.err)"
 invalid_home_rc=$?
 set -e
 

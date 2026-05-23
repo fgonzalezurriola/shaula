@@ -28,7 +28,7 @@ pub fn resolveOutputPath(
     const millis = ts.toMilliseconds();
     return std.fmt.allocPrint(
         allocator,
-        "{s}/capture-{s}-{d}.png",
+        "{s}/shaula-{s}-{d}.png",
         .{ output_dir, mode_string, millis },
     );
 }
@@ -93,7 +93,7 @@ fn resolveTemporaryOutputPath(
     const millis = ts.toMilliseconds();
     return std.fmt.allocPrint(
         allocator,
-        "{s}/capture-{s}-{d}.png",
+        "{s}/shaula-{s}-{d}.png",
         .{ base_dir, mode_string, millis },
     );
 }

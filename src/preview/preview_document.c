@@ -78,11 +78,12 @@ static void history_stack_clear(GPtrArray *stack) {
     g_ptr_array_set_size(stack, 0);
 }
 
-static void history_stack_trim_to_capacity(ShaulaHistoryStack *history) {
-  if (history == NULL || history->undo == NULL || history->capacity == 0)
+static void history_stack_trim_to_capacity(ShaulaHistoryStack *history,
+                                           GPtrArray *stack) {
+  if (history == NULL || stack == NULL || history->capacity == 0)
     return;
-  while (history->undo->len > history->capacity)
-    g_ptr_array_remove_index(history->undo, 0);
+  while (stack->len > history->capacity)
+    g_ptr_array_remove_index(stack, 0);
 }
 
 void shaula_preview_history_push_undo(ShaulaHistoryStack *history,
@@ -91,7 +92,7 @@ void shaula_preview_history_push_undo(ShaulaHistoryStack *history,
   if (history == NULL || history->undo == NULL || snapshot == NULL)
     return;
   g_ptr_array_add(history->undo, snapshot);
-  history_stack_trim_to_capacity(history);
+  history_stack_trim_to_capacity(history, history->undo);
   if (clear_redo)
     history_stack_clear(history->redo);
 }
@@ -115,6 +116,7 @@ void shaula_preview_history_push_redo(ShaulaHistoryStack *history,
   if (history == NULL || history->redo == NULL || snapshot == NULL)
     return;
   g_ptr_array_add(history->redo, snapshot);
+  history_stack_trim_to_capacity(history, history->redo);
 }
 
 static void annotation_clipboard_init(ShaulaAnnotationClipboard *clipboard) {

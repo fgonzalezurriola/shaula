@@ -6,6 +6,9 @@ Shaula is currently tested primarily on Niri. It also includes integration work
 for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
 is the main supported environment right now.
 
+Shaula is screenshot-only. Screen recording, OCR, scrolling capture, and
+Share/upload backends are not implemented.
+
 ![Shaula preview with annotations](docs/assets/shaula-preview.png)
 
 ## Installation
@@ -58,6 +61,16 @@ On Arch/CachyOS:
 sudo pacman -S grim wl-clipboard gtk4 gtk4-layer-shell
 ```
 
+### Niri/Wayland Notes
+
+- Niri is the only supported compositor target for v0.1.x runtime behavior.
+- Area selection uses logical compositor/output coordinates; saved PNG
+  dimensions, preview dimensions, color sampling, ruler output, and redaction
+  edits operate on physical image pixels after output-scale normalization.
+- Fractional scaling and multi-output layouts are handled best-effort, but
+  Niri IPC/window semantics, Wayland screencopy protocol migration, and overlay
+  timing remain technical risk areas.
+
 ## Fonts
 
 Shaula uses **Geist** (normal) and **Excalifont** (sketch).
@@ -68,13 +81,20 @@ paru -S ttf-geist ttf-excalifont
 
 ## Usage
 
-Main usage is tied with the Noctalia-Shell menu installed. Shaula can be call through the terminal
+Main usage is tied to the installed Noctalia Shell menu. Shaula can also be
+called through the terminal:
 
 ```bash
 shaula capture quick --json
 shaula capture area --json
 shaula capture area --json --no-preview
 ```
+
+Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
+the configured save folder, defaulting to `~/Pictures/shaula`, and generate
+`shaula-screenshot-YYYYMMDD-HHMMSS.png` names from the preview. Direct
+no-preview saved captures use `shaula-<mode>-<milliseconds>.png`. Pin and Share
+are not exposed actions in v0.1.x.
 
 ## Development
 
@@ -85,10 +105,20 @@ Requirements:
 - GTK4 / gtk4-layer-shell development packages
 - Wayland development packages
 
+The Zig version is pinned in `.tool-versions`, CI, and
+`scripts/qa/check-zig-version.sh`. Use exactly Zig 0.16.0 for release builds
+unless the pin is updated everywhere in one change.
+
 Build from source:
 
 ```bash
 zig build
+```
+
+Release build:
+
+```bash
+zig build -Doptimize=ReleaseSafe -Dstrip
 ```
 
 Run checks:

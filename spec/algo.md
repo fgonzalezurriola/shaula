@@ -28,6 +28,11 @@ Shaula is a machine-first, Niri-first screenshot tool written in Zig. The produc
 | Selection overlay | `layer-shell` | MVP | Input and focus edge cases on multi-output. |
 | Clipboard export | `wl-clipboard` | MVP | External dependency reliability. |
 | History store | File-backed | MVP | Storage availability and concurrent access. |
+
+Current hidden/non-goal surfaces: Pin is not an exposed preview action, Share is
+not wired to a backend, and screen recording is outside the screenshot product
+scope.
+
 ## AGENT-FIRST CLI
 
 Shaula is machine-first. `--json` emits one JSON object on stdout, every response includes `contract_version`, and every failure carries a deterministic `ERR_*` code. The public grammar is documented in [spec/architecture.md](architecture.md).
@@ -48,6 +53,9 @@ Command families:
 - Niri window vs tile identity remains capability-gated and must fail deterministically when unresolved.
 - Portal or permission-mediated paths are fallback-only and may exceed the hot-path budget.
 - Optional integrations must never block capture completion.
+- Selection and output-layout coordinates are logical compositor/output values
+  until normalized; persisted PNG dimensions and preview edit tools operate on
+  physical image pixels.
 
 ## Performance Budgets
 
@@ -68,6 +76,8 @@ See [spec/performance.md](performance.md) for the numeric targets. The only cont
 | R-002 | Niri IPC breaking changes | High | Stable capability probing plus versioned internal IPC. |
 | R-003 | Zig toolchain drift | Low | Keep the toolchain pinned in the build matrix. |
 | R-004 | Portal latency | Low | Use fallback-only paths and keep direct Niri capture primary. |
+| R-005 | Fractional-scale coordinate drift | Medium | Normalize logical selection geometry before physical pixel edits and verify fixtures/manual Niri behavior. |
+| R-006 | Overlay/capture timing on Wayland | Medium | Keep overlay helpers off the post-capture critical path and manually verify live/frozen captures on Niri. |
 
 ## References
 

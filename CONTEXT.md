@@ -5,6 +5,22 @@ and the working diff.
 
 ## Current focus
 
+- v0.1.1 polish snapshot: preview Copy, Save, Save As, and Done/accept are the
+  real user-facing flows; Pin and Share are not exposed actions. Preview Save,
+  Save As defaults for runtime artifacts, and Done promotions now use
+  `shaula-screenshot-YYYYMMDD-HHMMSS.png`; direct saved no-preview captures use
+  `shaula-<mode>-<milliseconds>.png`. Redo history is bounded like undo history.
+  The live color sampler remains passive on hover/Tab copy, and clicking the
+  swatch applies the sampled color to the selected annotation or active tool
+  defaults.
+- Documentation now treats Shaula as screenshot-only for v0.1.x: screen
+  recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
+  are non-goals. Niri is the only supported compositor target; selection and
+  helper geometry are logical output coordinates, while PNG dimensions,
+  preview sampling, ruler measurements, redaction, and export operate on
+  physical image pixels after output-scale normalization. Niri IPC/window
+  semantics, Wayland screencopy migration, fractional scaling, and overlay
+  teardown timing remain technical risks.
 - Capture Area overlay resize smoothness: the GTK overlay now caches the scaled
   screenshot background as a Cairo surface per drawing-area size. Pointer
   move/resize redraws reuse that surface, including the clipped selected region,
@@ -467,7 +483,7 @@ and the working diff.
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
 - `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/YYYY-MM-DD-HHMMSS.png`,
+  timestamped PNG under `~/Pictures/shaula/shaula-screenshot-YYYYMMDD-HHMMSS.png`,
   adding a numeric suffix when needed and falling back to `~/shaula` when the
   Pictures directory cannot be created or written. Quick Save updates preview
   save metadata but does not create undo history.
@@ -481,6 +497,8 @@ and the working diff.
   no redo entry. Also available with `Ctrl+Shift+Z` and `Ctrl+Y`.
 - `shaula-share-symbolic` Share: not exposed; Share/upload backend is out of
   scope.
+- Pin: not exposed; unknown legacy helper action strings are tolerated by the
+  Zig preview-result parser for compatibility but do not map to a public action.
 - `shaula-crop-symbolic` Crop: implemented. It still mutates the current
   preview image internally, but it is now undoable through the preview document
   snapshot history. Direct Crop tool drags apply immediately on mouse release
@@ -683,7 +701,7 @@ and the working diff.
   null-terminated `#RRGGBB` into the fixed eight-byte C buffer; missing
   termination corrupts the GTK metadata label and can make the headerbar width
   jump while the invalid bytes disappear.
-- `Tab to copy` is exposed beside the hex readout. `Tab` is routed through the
+- `Tab copy` is exposed beside the hex readout. `Tab` is routed through the
   shared preview shortcut map as
   `SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR`; it copies `#RRGGBB` only when a
   valid hover sample exists and lets focused editable widgets keep normal text
@@ -700,9 +718,10 @@ and the working diff.
 - Image dimensions and zoom are stacked in a single compact column using
   `PANGO_SCALE_SMALL` monospace: dimensions (`987×721`) on top, zoom (`100%`)
   below, both right-aligned. The compact fixed widths avoid blank space between
-  the preceding swatch/hex/`Tab to copy` group and the zoom column without
-  changing order. This layout saves horizontal toolbar space compared to the
-  previous inline readouts.
+  the preceding swatch/hex/`Tab copy` group and the zoom column without
+  changing order. Clicking the swatch applies the last valid sampled color to
+  the selected annotation or the active tool's color default. This layout saves
+  horizontal toolbar space compared to the previous inline readouts.
 
 ## Preview History
 
@@ -790,6 +809,6 @@ and the working diff.
 
 ## Gaps
 
-- Share/upload backend, OCR, scrolling capture, screen recording, deep
-  redaction, AI removal, smart selection, and combine screenshots are explicitly
-  out of scope.
+- Share/upload backend, Pin/window persistence, OCR, scrolling capture, screen
+  recording, deep redaction, AI removal, smart selection, and combine
+  screenshots are explicitly out of scope.

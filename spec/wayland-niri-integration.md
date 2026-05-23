@@ -54,7 +54,9 @@ Go/No-Go for consolidating MVP backend decisions:
 - Capture command success requires runtime backend execution through the configured helper/process boundary.
 - Runtime helper unavailability maps deterministically to `ERR_CAPTURE_BACKEND_UNAVAILABLE`.
 - Backend identifier reported in capabilities and capture payloads is canonicalized to `niri-wayland-direct`.
-- Default output behavior for capture artifacts is aligned to `~/Pictures/Shaula` when no explicit output path is provided.
+- Implicit copy/preview captures use an internal runtime artifact path. Explicit
+  `--save` captures use the configured save folder, defaulting to
+  `~/Pictures/shaula`.
 - History persistence is post-capture and bounded to Top-N 20 entries, newest-first.
 
 ### Overlay Helper STDIO Contract v1
@@ -85,6 +87,13 @@ Contract guardrail: this parser contract does **not** change public `capture are
 2. Niri window vs tile screenshot semantics remain capability-gated and must fail deterministically when unresolved.
 3. Portal screenshot API is a fallback path only.
 4. Overlay keyboard/focus failures must surface deterministic `ERR_*` outcomes rather than silent retry loops.
+5. Fractional scaling can expose logical-vs-physical drift; helper selection
+   geometry is compositor/output logical, while crop/redaction/export operate on
+   physical PNG pixels after normalization.
+6. Overlay teardown timing can still affect live capture if the compositor has
+   not repainted after Shaula's layer surface exits. Frozen region capture crops
+   from the frozen source image; live capture still needs manual Niri
+   verification.
 
 ## Optional Noctalia Plugin Integration (post-MVP)
 

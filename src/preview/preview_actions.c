@@ -247,22 +247,30 @@ static char *quick_save_directory(GError **error) {
   return NULL;
 }
 
+static char *timestamped_screenshot_basename(void) {
+  GDateTime *now = g_date_time_new_now_local();
+  char *stamp =
+      now != NULL ? g_date_time_format(now, "%Y%m%d-%H%M%S")
+                  : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
+  if (now != NULL)
+    g_date_time_unref(now);
+  char *name = g_strdup_printf("shaula-screenshot-%s.png", stamp);
+  g_free(stamp);
+  return name;
+}
+
 static char *timestamped_quick_save_path(GError **error) {
   char *dir = quick_save_directory(error);
   if (dir == NULL)
     return NULL;
 
-  GDateTime *now = g_date_time_new_now_local();
-  char *stamp = now != NULL
-                    ? g_date_time_format(now, "%Y-%m-%d-%H%M%S")
-                    : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
-  if (now != NULL)
-    g_date_time_unref(now);
+  char *basename = timestamped_screenshot_basename();
+  char *stem = g_strndup(basename, strlen(basename) - strlen(".png"));
   char *path = NULL;
   for (int attempt = 0; attempt < 1000; attempt += 1) {
     char *filename = attempt == 0
-                         ? g_strdup_printf("%s.png", stamp)
-                         : g_strdup_printf("%s-%03d.png", stamp, attempt);
+                         ? g_strdup(basename)
+                         : g_strdup_printf("%s-%03d.png", stem, attempt);
     path = g_build_filename(dir, filename, NULL);
     g_free(filename);
     if (!g_file_test(path, G_FILE_TEST_EXISTS))
@@ -270,7 +278,8 @@ static char *timestamped_quick_save_path(GError **error) {
     g_free(path);
     path = NULL;
   }
-  g_free(stamp);
+  g_free(stem);
+  g_free(basename);
   g_free(dir);
   if (path == NULL)
     g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_EXIST,
@@ -576,7 +585,9 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
       "Save Shaula Preview", GTK_WINDOW(state->window),
       GTK_FILE_CHOOSER_ACTION_SAVE, "Save", "Cancel");
   if (state->document.path != NULL) {
-    char *basename = g_path_get_basename(state->document.path);
+    char *basename = is_temporary_capture_path(state->document.path)
+                         ? timestamped_screenshot_basename()
+                         : g_path_get_basename(state->document.path);
     char *png_name = shaula_image_io_with_png_extension(basename);
     gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog),
                                       png_name != NULL ? png_name : basename);
@@ -650,6 +661,86 @@ void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state) {
   GError *error = NULL;
   if (!shaula_clipboard_copy_text(state->hover_hex, &error))
     report_error("copy hover color", error);
+}
+
+static void apply_color_to_selected_annotation(ShaulaPreviewState *state,
+                                               ShaulaColor color) {
+  ShaulaAnnotation *annotation = state->selected_annotation;
+  if (annotation == NULL)
+    return;
+
+  switch (annotation->type) {
+  case SHAULA_ANNOTATION_ARROW:
+    shaula_preview_set_arrow_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_RECTANGLE:
+    shaula_preview_set_rectangle_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_HIGHLIGHT:
+    shaula_preview_set_highlight_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_PEN:
+    shaula_preview_set_pen_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_TEXT:
+    shaula_preview_set_text_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_MEASURE:
+    shaula_preview_set_measure_color(state, color);
+    break;
+  }
+}
+
+void shaula_preview_action_use_hover_color(ShaulaPreviewState *state) {
+  if (state == NULL || !state->hover_color_valid)
+    return;
+
+  ShaulaColor color = state->hover_color;
+  state->current_color = color;
+
+  if (state->selected_annotation != NULL) {
+    apply_color_to_selected_annotation(state, color);
+  } else {
+    switch (state->active_tool) {
+    case SHAULA_TOOL_ARROW:
+    case SHAULA_TOOL_LINE:
+      shaula_preview_set_arrow_color(state, color);
+      break;
+    case SHAULA_TOOL_MEASURE:
+      shaula_preview_set_measure_color(state, color);
+      break;
+    case SHAULA_TOOL_RECTANGLE:
+      shaula_preview_set_rectangle_color(state, color);
+      break;
+    case SHAULA_TOOL_HIGHLIGHT:
+      shaula_preview_set_highlight_color(state, color);
+      break;
+    case SHAULA_TOOL_PEN:
+      shaula_preview_set_pen_color(state, color);
+      break;
+    case SHAULA_TOOL_TEXT:
+      shaula_preview_set_text_color(state, color);
+      break;
+    case SHAULA_TOOL_SPOTLIGHT:
+      shaula_preview_set_spotlight_border_color(state, color);
+      break;
+    case SHAULA_TOOL_SELECT:
+    case SHAULA_TOOL_HAND:
+    case SHAULA_TOOL_CROP:
+    case SHAULA_TOOL_COUNT:
+      shaula_preview_set_arrow_color(state, color);
+      shaula_preview_set_rectangle_color(state, color);
+      shaula_preview_set_highlight_color(state, color);
+      shaula_preview_set_pen_color(state, color);
+      shaula_preview_set_text_color(state, color);
+      shaula_preview_set_measure_color(state, color);
+      shaula_preview_set_spotlight_border_color(state, color);
+      break;
+    }
+  }
+
+  if (state->color_swatch != NULL)
+    gtk_widget_queue_draw(state->color_swatch);
 }
 
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state) {
@@ -784,6 +875,16 @@ void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_COPY_PATH);
+}
+
+void shaula_preview_on_use_hover_color_clicked(GtkGestureClick *gesture,
+                                               int n_press, double x, double y,
+                                               gpointer data) {
+  (void)gesture;
+  (void)n_press;
+  (void)x;
+  (void)y;
+  shaula_preview_action_use_hover_color(data);
 }
 
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data) {

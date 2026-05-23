@@ -26,6 +26,7 @@ void shaula_preview_action_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_action_crop_selected(ShaulaPreviewState *state);
 void shaula_preview_action_copy_path(ShaulaPreviewState *state);
 void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state);
+void shaula_preview_action_use_hover_color(ShaulaPreviewState *state);
 void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state);
 
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data);
@@ -57,6 +58,9 @@ void shaula_preview_on_spotlight_width_changed(GtkRange *range, gpointer data);
 void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
                                                gpointer data);
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_use_hover_color_clicked(GtkGestureClick *gesture,
+                                               int n_press, double x, double y,
+                                               gpointer data);
 void shaula_preview_on_open_folder_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_arrow_color_set(GtkColorButton *button, gpointer data);

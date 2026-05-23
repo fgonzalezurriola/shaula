@@ -49,7 +49,10 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 
 - Color picker.
 - Manual ruler / distance measurement.
-- Logical vs physical pixel awareness.
+- Logical vs physical pixel awareness: compositor/selection geometry is
+  logical-output based, while PNG dimensions, preview sampling, ruler
+  measurements, redaction edits, and exported pixels are physical image pixels
+  after output-scale normalization.
 - Average-area color if it stays cheap and deterministic.
 
 ### Clipboard, Export, and Config
@@ -57,7 +60,9 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Copy PNG to clipboard.
 - Save PNG to disk.
 - Copy the saved path.
-- Default save folder and filename template.
+- Default save folder and filename template. Current default names are
+  `shaula-screenshot-YYYYMMDD-HHMMSS.png` for preview save/accept flows and
+  `shaula-<mode>-<milliseconds>.png` for direct saved captures.
 - TOML configuration.
 - Post-capture action defaults.
 
@@ -79,5 +84,6 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Smart selection.
 - Combine screenshots.
 - Share/upload backend.
+- Pin action/window persistence.
 - macOS-specific APIs or workflows.
 - Placeholder future UI surfaces.
