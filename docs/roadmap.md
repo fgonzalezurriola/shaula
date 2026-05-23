@@ -11,14 +11,19 @@ and post-capture preview/editing.
 
 ## Planned Features
 
-- pin screenshot
-- OCR
-- screen recording
-- scrolling capture (spec: [spec/scrolling-capture.md](../spec/scrolling-capture.md))
-- deeper redaction tools (gradient blur, shape-based, AI-powered removal)
-- color picker tool (active eyedropper; passive hover sampling exists)
+- Color picker tool (active eyedropper; passive hover sampling exists).
+- File naming polish.
+- History polish.
 
 ## Current Non-Goals
 
 - automatically editing Niri config from the installer
 - exposing placeholders for future features in the public UI
+- OCR
+- scrolling capture
+- screen recording
+- deep redaction
+- AI removal
+- smart selection
+- combine screenshots
+- Share backend

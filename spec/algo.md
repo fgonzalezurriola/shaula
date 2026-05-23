@@ -57,10 +57,8 @@ See [spec/performance.md](performance.md) for the numeric targets. The only cont
 
 - Focused output semantics through Niri/Wayland capability probing.
 - Focused window identity and tile/window ambiguity through Niri IPC.
-- Pinning behavior under Niri layer-shell or compositor-supported window rules.
 - Pixelate, blur, and solid-bar redaction determinism for QA/release gates.
 - Ruler and color picker behavior across logical versus physical pixels and fractional output scale.
-- OCR, QR reading, uploads, smart selection, object removal, and scrolling screenshot remain optional work.
 
 ## Risk and Dependency Matrix
 

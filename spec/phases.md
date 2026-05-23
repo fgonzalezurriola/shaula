@@ -14,7 +14,6 @@ This file is sequencing only. Nothing here is public contract until the behavior
 
 - Floating post-capture preview.
 - Crop and basic redaction.
-- Pin screenshot when the compositor allows it.
 - History and file naming polish.
 
 ## Phase 2: Dev Tools
@@ -22,11 +21,7 @@ This file is sequencing only. Nothing here is public contract until the behavior
 - Color picker.
 - Manual ruler / distance measurement.
 - Logical vs physical pixel clarity.
-- OCR and QR only if the optional path stays clean.
 
 ## Phase 3: Later Surface
 
-- Smart selection.
-- Remove-object style editing.
-- Combine screenshots.
-- Scrolling capture when the Wayland/Niri strategy is stable.
+- Pretty export polish.

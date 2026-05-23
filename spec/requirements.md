@@ -21,7 +21,6 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Focused output capture.
 - Focused window capture through Niri IPC.
 - Repeat previous area.
-- Scrolling capture is specified in [spec/scrolling-capture.md](scrolling-capture.md). Implementation starts with manual-scroll + row-vote stitching (Phase 1), then auto-scroll via `zwlr_virtual_pointer_v1` (Phase 2).
 
 ### Selection UX
 
@@ -39,14 +38,12 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Floating preview after capture.
 - Copy, save, and discard actions.
 - Crop before export.
-- Pin screenshot on screen when the compositor allows it.
 
 ### Editing and Redaction
 
 - Pixelate, blur, or solid-bar redaction first.
 - Rectangles and arrows next.
 - Text, highlight, and free draw after the core path is stable.
-- Remove-object style tools are intentionally late.
 
 ### Dev Tools
 
@@ -69,12 +66,18 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 | Slice | Focus |
 | --- | --- |
 | v0 | Area/fullscreen/focused output/window capture, repeat previous area, overlay selection, Esc/Enter, copy/save, TOML config |
-| v1 | Floating preview, crop, pixelate/redaction, arrows/rectangles, pin screenshot, history, file naming |
-| v2 | Color picker, ruler, OCR/QR, combine screenshots, pretty export, smart selection, uploads |
+| v1 | Floating preview, crop, pixelate/redaction, arrows/rectangles, history, file naming |
+| v2 | Color picker, ruler, pretty export |
 
 ## Explicit Non-Goals
 
 - Screen recording.
+- OCR and QR.
+- Scrolling capture.
+- Deep redaction.
+- AI removal and object removal.
+- Smart selection.
+- Combine screenshots.
+- Share/upload backend.
 - macOS-specific APIs or workflows.
 - Placeholder future UI surfaces.
-- Smart selection, object removal, OCR, QR, and uploads before a clear implementation strategy exists.

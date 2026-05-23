@@ -31,7 +31,8 @@ and the working diff.
   optional Noctalia widget manifest is aligned to `0.1.0`. Public protocol
   `contract_version`/`ipc_version` remains `1.0.0` and is separate from app
   release semver.
-- Scrolling capture specification is now in `spec/scrolling-capture.md`. The strategy is hybrid: Phase 1 starts with manual-scroll + row-vote stitching (no virtual pointer dependency), Phase 2 adds auto-scroll via `zwlr_virtual_pointer_v1`. The row-vote stitching algorithm is ported from jbonney/scrollshot's proven approach (row-by-row voting with sampled SAD + seam finding in overlap middle 80%). Column-sample algorithm (from wayscrollshot, O(9*height)) is planned as a fast alternative. The `shaula-scroll-helper` Wayland client binary pattern matches Shaula's existing helper architecture (overlay, preview). Required Wayland protocols: `zwlr_layer_shell_v1`, `zwlr_screencopy_manager_v1`, `zwlr_virtual_pointer_manager_v1`. CLI: `shaula capture scrolling --scroll-mode auto|manual`.
+- Scrolling capture is explicitly out of scope; keep the stale exploratory spec
+  out of active roadmap decisions.
 
 - Prompt handoff snapshot is now `CONTEXT.md`; `./dev context` copies it with
   the capture-mode note, last 3 commits, and working diff.
@@ -123,7 +124,6 @@ and the working diff.
   and `docs/roadmap.md` tracks future features.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
-- `pin screenshot` is a roadmap item, not a current toolbar action.
 - Undo/Redo now has a reusable preview history foundation for document edits.
 - Preview commands now provide the shared dispatch path for toolbar callbacks,
   keyboard shortcuts, and future menus/configurable shortcuts.
@@ -479,7 +479,8 @@ and the working diff.
   no undo entry. Also available with `Ctrl+Z`.
 - `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
   no redo entry. Also available with `Ctrl+Shift+Z` and `Ctrl+Y`.
-- `shaula-share-symbolic` Share: hidden until a backend decision exists.
+- `shaula-share-symbolic` Share: not exposed; Share/upload backend is out of
+  scope.
 - `shaula-crop-symbolic` Crop: implemented. It still mutates the current
   preview image internally, but it is now undoable through the preview document
   snapshot history. Direct Crop tool drags apply immediately on mouse release
@@ -666,8 +667,8 @@ and the working diff.
 - Fit to screen: implemented.
 - Actual size: implemented.
 - Reset annotations: implemented.
-- Open preview folder: implemented. Opens the directory for the current preview
-  file path.
+- Open preview directory: implemented. Opens the directory for the current
+  preview file path.
 
 ## Visible Metadata
 
@@ -780,10 +781,8 @@ and the working diff.
   low-level action helpers still own runtime work such as copy, save, discard,
   open folder, and tool cursor updates.
 
-## Icon Assets Not Wired To The Bar
+## Icon Assets
 
-- `shaula-pin-symbolic` exists in the theme, but there is no current toolbar
-  button or callback wired to it.
 - Preview toolbar icons are rendered from Shaula's SVG assets instead of using
   GTK symbolic-mask recoloring, because these assets are stroke/outline icons.
   The loader replaces `currentColor` with a theme-appropriate foreground color
@@ -791,6 +790,6 @@ and the working diff.
 
 ## Gaps
 
-- Share is hidden until a backend decision exists.
-- Pinning is not exposed in the current preview toolbar.
-- Redaction and deeper object editing are still future work.
+- Share/upload backend, OCR, scrolling capture, screen recording, deep
+  redaction, AI removal, smart selection, and combine screenshots are explicitly
+  out of scope.
