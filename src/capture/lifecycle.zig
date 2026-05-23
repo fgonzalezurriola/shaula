@@ -14,7 +14,8 @@ const flags = @import("command_flags.zig");
 const guards = @import("command_guards.zig");
 const invocation = @import("invocation.zig");
 const json = @import("command_json.zig");
-const overlay = @import("../overlay/overlay.zig");
+const overlay_session = @import("../overlay/selection_session.zig");
+const overlay_draft_store = @import("../overlay/selection_draft_store.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
 const capture_session_lock = @import("../runtime/capture_session_lock.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
@@ -28,8 +29,8 @@ const CaptureSessionAcquire = struct {
 };
 
 const OverlayModeSpec = struct {
-    interaction_mode: overlay.InteractionMode,
-    draft_mode: overlay.DraftMode,
+    interaction_mode: overlay_session.InteractionMode,
+    draft_mode: overlay_draft_store.DraftMode,
 };
 
 /// Execute the shared capture lifecycle after mode-specific inputs are resolved.
@@ -45,7 +46,7 @@ fn executeLifecycle(
     environ: std.process.Environ,
     options: invocation.Invocation,
     session_lock: *capture_session_lock.CaptureSessionLock,
-    frozen_source: ?overlay.FrozenSource,
+    frozen_source: ?overlay_session.FrozenSource,
 ) !u8 {
     const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
@@ -143,7 +144,7 @@ fn executeFrozenSourceCapture(
     options: invocation.Invocation,
     save_requested: bool,
     save_folder: ?[]const u8,
-    source: overlay.FrozenSource,
+    source: overlay_session.FrozenSource,
 ) !capture_types.CaptureOutcome {
     const backend_used = "frozen-source";
     const output_path = capture_backend_output_path.resolveOutputPath(
@@ -199,7 +200,7 @@ fn cropFrozenSource(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
-    source: overlay.FrozenSource,
+    source: overlay_session.FrozenSource,
     output_path: []const u8,
 ) !bool {
     const helper_bin = try resolveCropHelperBinary(allocator, io, environ);
@@ -248,7 +249,7 @@ fn resolveCropHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: st
     }
 }
 
-fn logFrozenCapture(io: std.Io, source: overlay.FrozenSource, output_path: []const u8) void {
+fn logFrozenCapture(io: std.Io, source: overlay_session.FrozenSource, output_path: []const u8) void {
     var stderr_buffer: [512]u8 = undefined;
     var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
     stderr_writer.interface.print(
@@ -339,10 +340,10 @@ fn runOverlayMode(
         if (unsupported_rc) |code| return code;
     }
 
-    var prepared_frozen_source: ?overlay.PreparedFrozenSource = null;
+    var prepared_frozen_source: ?overlay_session.PreparedFrozenSource = null;
     defer if (prepared_frozen_source) |source| source.deinit(allocator, io);
     if (region_capture_mode == .frozen and !parsed.dry_run) {
-        prepared_frozen_source = try overlay.prepareFrozenSourceForOverlay(allocator, io, environ);
+        prepared_frozen_source = try overlay_session.prepareFrozenSourceForOverlay(allocator, io, environ);
     }
 
     const overlay_spec = overlaySpecForMode(mode);
@@ -527,7 +528,7 @@ fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeS
 
 const OverlaySelectionOutcome = struct {
     selection: selection.SelectionResult,
-    frozen_source: ?overlay.FrozenSource = null,
+    frozen_source: ?overlay_session.FrozenSource = null,
     exit_code: ?u8 = null,
 
     fn deinit(self: *OverlaySelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
@@ -542,17 +543,17 @@ fn resolveOverlaySelection(
     environ: std.process.Environ,
     command: []const u8,
     reported_mode: []const u8,
-    interaction_mode: overlay.InteractionMode,
-    draft_mode: overlay.DraftMode,
+    interaction_mode: overlay_session.InteractionMode,
+    draft_mode: overlay_draft_store.DraftMode,
     aspect: ?[]const u8,
     region_capture_mode: core_capture_mode.RegionCaptureMode,
-    prepared_frozen_source: *?overlay.PreparedFrozenSource,
+    prepared_frozen_source: *?overlay_session.PreparedFrozenSource,
     dry_run: bool,
     simulate_cancel: bool,
 ) !OverlaySelectionOutcome {
     const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
     const use_overlay_dry_run = dry_run or force_noninteractive_selection;
-    var result = try overlay.runSelection(
+    var result = try overlay_session.runSelection(
         allocator,
         io,
         environ,
@@ -572,7 +573,7 @@ fn resolveOverlaySelection(
         return .{ .selection = result.result, .frozen_source = frozen_source };
     }
 
-    const overlay_code = overlay.deterministicFailureCode(environ, simulate_cancel, true);
+    const overlay_code = overlay_session.deterministicFailureCode(environ, simulate_cancel, true);
     if (overlay_code) |code| {
         const spec = recovery_policy.specFor(code);
         try json.writeErrorJson(io, command, spec.code, spec.message, spec.retryable, reported_mode, null, false, &.{});

@@ -1,11 +1,11 @@
 const std = @import("std");
+const c_compat = @import("c_compat");
 
 const CInt = c_int;
 
 const TRUE: CInt = 1;
 const FALSE: CInt = 0;
 
-extern fn g_malloc(n_bytes: usize) ?[*]u8;
 extern fn g_free(mem: ?*anyopaque) void;
 extern fn g_getenv(variable: [*:0]const u8) ?[*:0]const u8;
 extern fn g_get_home_dir() ?[*:0]const u8;
@@ -76,12 +76,12 @@ export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) vo
         .close_preview_on_save = TRUE,
         .width = 1100,
         .height = 720,
-        .column_display = dupZ("normal"),
+        .column_display = c_compat.dupZ("normal"),
         .floating_x_set = FALSE,
         .floating_y_set = FALSE,
         .floating_x = 0,
         .floating_y = 0,
-        .floating_relative_to = dupZ("top-left"),
+        .floating_relative_to = c_compat.dupZ("top-left"),
         .position_preset = .centered,
         .quick_skip_preview = FALSE,
         .quick_copy = TRUE,
@@ -95,7 +95,7 @@ export fn shaula_settings_config_init_defaults(config: *ShaulaSettingsConfig) vo
         .all_screens_skip_preview = TRUE,
         .all_screens_copy = TRUE,
         .all_screens_save = FALSE,
-        .save_folder = dupZ("~/Pictures/shaula"),
+        .save_folder = c_compat.dupZ("~/Pictures/shaula"),
         .notifications_success = TRUE,
         .notifications_errors = TRUE,
         .notifications_thumbnails = TRUE,
@@ -182,15 +182,15 @@ export fn shaula_settings_position_arg(config: *const ShaulaSettingsConfig) [*:0
 export fn shaula_settings_resolve_config_path() ?[*:0]u8 {
     if (g_getenv("SHAULA_CONFIG_FILE")) |raw| {
         const trimmed = std.mem.trim(u8, std.mem.span(raw), " \t\r\n");
-        if (trimmed.len > 0) return dupZ(trimmed);
+        if (trimmed.len > 0) return c_compat.dupZ(trimmed);
     }
     if (g_getenv("XDG_CONFIG_HOME")) |raw| {
         const xdg = std.mem.span(raw);
-        if (xdg.len > 0) return joinPath(&.{ xdg, "shaula", "config.toml" });
+        if (xdg.len > 0) return c_compat.joinPathZ(&.{ xdg, "shaula", "config.toml" });
     }
     if (g_get_home_dir()) |raw| {
         const home = std.mem.span(raw);
-        if (home.len > 0) return joinPath(&.{ home, ".config", "shaula", "config.toml" });
+        if (home.len > 0) return c_compat.joinPathZ(&.{ home, ".config", "shaula", "config.toml" });
     }
     return null;
 }
@@ -281,7 +281,7 @@ fn jsonStringAfter(json: []const u8, needle: []const u8) ?[*:0]u8 {
     const start = std.mem.indexOf(u8, json, needle) orelse return null;
     const value_start = start + needle.len;
     const rel_end = std.mem.indexOfScalar(u8, json[value_start..], '"') orelse return null;
-    return dupZ(json[value_start .. value_start + rel_end]);
+    return c_compat.dupZ(json[value_start .. value_start + rel_end]);
 }
 
 fn jsonBoolAfter(json: []const u8, needle: []const u8, fallback: CInt) CInt {
@@ -320,36 +320,9 @@ fn parseLeadingInt(value: []const u8) ?c_int {
 
 fn replaceString(slot: *?[*:0]u8, value: []const u8) void {
     g_free(slot.*);
-    slot.* = dupZ(value);
+    slot.* = c_compat.dupZ(value);
 }
 
 fn spanOrEmpty(value: ?[*:0]const u8) []const u8 {
     return if (value) |v| std.mem.span(v) else "";
-}
-
-fn dupZ(value: []const u8) [*:0]u8 {
-    const memory = g_malloc(value.len + 1) orelse @panic("g_malloc failed");
-    @memcpy(memory[0..value.len], value);
-    memory[value.len] = 0;
-    return @ptrCast(memory);
-}
-
-fn joinPath(parts: []const []const u8) [*:0]u8 {
-    var len: usize = 0;
-    for (parts, 0..) |part, index| {
-        len += part.len;
-        if (index + 1 < parts.len) len += 1;
-    }
-    const memory = g_malloc(len + 1) orelse @panic("g_malloc failed");
-    var cursor: usize = 0;
-    for (parts, 0..) |part, index| {
-        @memcpy(memory[cursor .. cursor + part.len], part);
-        cursor += part.len;
-        if (index + 1 < parts.len) {
-            memory[cursor] = '/';
-            cursor += 1;
-        }
-    }
-    memory[cursor] = 0;
-    return @ptrCast(memory);
 }

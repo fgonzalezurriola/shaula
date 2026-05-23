@@ -1,4 +1,5 @@
 const std = @import("std");
+const c_compat = @import("c_compat");
 const notify_request = @import("notify_request");
 
 const CInt = c_int;
@@ -88,15 +89,11 @@ fn spawnNotify(request: notify_request.NotificationRequest, mode: notify_request
         null,
     ) == FALSE) return false;
 
-    return exitedZero(status);
+    return c_compat.exitedZero(status);
 }
 
 fn freeOwned(allocator: std.mem.Allocator, owned: *[16]?[:0]u8) void {
     for (owned) |maybe_arg| {
         if (maybe_arg) |arg| allocator.free(arg);
     }
-}
-
-fn exitedZero(status: CInt) bool {
-    return (status & 0x7f) == 0 and ((status >> 8) & 0xff) == 0;
 }

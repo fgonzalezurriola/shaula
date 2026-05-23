@@ -3,6 +3,7 @@ const std = @import("std");
 const config_loader = @import("../config/loader.zig");
 const notify = @import("../notify.zig");
 const preview_result = @import("../preview_result.zig");
+const helper_resolution = @import("../runtime/helper_resolution.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
 pub const PreviewAction = preview_result.PreviewAction;
@@ -62,13 +63,13 @@ pub fn runPreview(
     var helper_env = try std.process.Environ.createMap(environ, allocator);
     defer helper_env.deinit();
     try helper_env.put("SHAULA_BIN", shaula_bin);
-    try helper_env.put(
-        "SHAULA_PREVIEW_CLOSE_ON_SAVE",
-        if (closePreviewOnSave(allocator, io, environ)) "1" else "0",
-    );
     try helper_env.put("SHAULA_PREVIEW_COPY_ON_ACCEPT", if (copy_on_accept) "1" else "0");
     var loaded_config = config_loader.load(allocator, io, environ) catch null;
     defer if (loaded_config) |*loaded| loaded.deinit(allocator);
+    try helper_env.put(
+        "SHAULA_PREVIEW_CLOSE_ON_SAVE",
+        if (loaded_config) |loaded| if (loaded.config.preview.window.close_preview_on_save) "1" else "0" else "0",
+    );
     if (loaded_config) |loaded| {
         if (loaded.config.preview.window.width) |width| {
             const value = try std.fmt.allocPrint(allocator, "{d}", .{width});
@@ -141,12 +142,6 @@ pub fn runPreview(
     return .{ .success = helper_result };
 }
 
-fn closePreviewOnSave(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) bool {
-    var loaded = config_loader.load(allocator, io, environ) catch return false;
-    defer loaded.deinit(allocator);
-    return loaded.config.preview.window.close_preview_on_save;
-}
-
 fn parseHelperResult(allocator: std.mem.Allocator, path: []const u8, stdout: []const u8) !PreviewRunResult {
     var parsed = try preview_result.parse(allocator, stdout);
     errdefer parsed.deinit(allocator);
@@ -183,21 +178,7 @@ fn notifyForPreviewResult(allocator: std.mem.Allocator, io: std.Io, result: Prev
 }
 
 fn resolvePreviewBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_PREVIEW_HELPER_BIN")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
-    }
-
-    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-preview");
-    defer allocator.free(exe_dir);
-
-    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-preview", .{exe_dir});
-    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
-        return sibling;
-    } else |_| {
-        allocator.free(sibling);
-        return allocator.dupe(u8, "shaula-preview");
-    }
+    return helper_resolution.resolveSiblingHelper(allocator, io, environ, "SHAULA_PREVIEW_HELPER_BIN", "shaula-preview");
 }
 
 test "preview helper result rejects empty stdout" {

@@ -1,10 +1,10 @@
 const std = @import("std");
+const c_compat = @import("c_compat");
 
 const CInt = c_int;
 const TRUE: CInt = 1;
 const FALSE: CInt = 0;
 
-extern fn g_malloc(n_bytes: usize) ?[*]u8;
 extern fn g_free(mem: ?*anyopaque) void;
 extern fn g_file_get_contents(filename: [*:0]const u8, contents: *?[*]u8, length: *usize, err: ?*?*anyopaque) CInt;
 extern fn g_file_set_contents(filename: [*:0]const u8, contents: [*]const u8, length: isize, err: ?*?*anyopaque) CInt;
@@ -29,8 +29,8 @@ export fn shaula_image_io_path_has_png_extension(path_z: ?[*:0]const u8) CInt {
 
 export fn shaula_image_io_with_png_extension(path_z: ?[*:0]const u8) ?[*:0]u8 {
     const path = if (path_z) |value| std.mem.span(value) else return null;
-    if (shaula_image_io_path_has_png_extension(path_z) == TRUE) return dupZ(path);
-    return allocPrintZ("{s}.png", .{path});
+    if (shaula_image_io_path_has_png_extension(path_z) == TRUE) return c_compat.dupZ(path);
+    return c_compat.allocPrintZ("{s}.png", .{path});
 }
 
 export fn shaula_image_io_open_containing_folder(path_z: ?[*:0]const u8, err: ?*?*anyopaque) CInt {
@@ -40,20 +40,7 @@ export fn shaula_image_io_open_containing_folder(path_z: ?[*:0]const u8, err: ?*
     defer g_free(dir);
     const quoted = g_shell_quote(dir) orelse return FALSE;
     defer g_free(quoted);
-    const command = allocPrintZ("xdg-open {s}", .{std.mem.span(quoted)});
+    const command = c_compat.allocPrintZ("xdg-open {s}", .{std.mem.span(quoted)});
     defer g_free(command);
     return g_spawn_command_line_async(command, err);
-}
-
-fn dupZ(value: []const u8) [*:0]u8 {
-    const memory = g_malloc(value.len + 1) orelse @panic("g_malloc failed");
-    @memcpy(memory[0..value.len], value);
-    memory[value.len] = 0;
-    return @ptrCast(memory);
-}
-
-fn allocPrintZ(comptime fmt: []const u8, args: anytype) [*:0]u8 {
-    var buffer: [4096]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, fmt, args) catch @panic("format overflow");
-    return dupZ(text);
 }

@@ -216,6 +216,7 @@ fn buildPreviewNotifyObject(
         .optimize = optimize,
         .link_libc = true,
     });
+    addCCompatImport(b, module, target, optimize);
     const notify_request_module = b.createModule(.{
         .root_source_file = b.path("src/notify/request.zig"),
         .target = target,
@@ -242,9 +243,25 @@ fn buildZigObject(
         .optimize = optimize,
         .link_libc = true,
     });
+    addCCompatImport(b, module, target, optimize);
     const object = b.addObject(.{
         .name = name,
         .root_module = module,
     });
     return object.getEmittedBin();
+}
+
+fn addCCompatImport(
+    b: *std.Build,
+    module: *std.Build.Module,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) void {
+    const c_compat_module = b.createModule(.{
+        .root_source_file = b.path("src/runtime/c_compat.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    module.addImport("c_compat", c_compat_module);
 }

@@ -1,10 +1,10 @@
 const std = @import("std");
+const c_compat = @import("c_compat");
 
 const CInt = c_int;
 const TRUE: CInt = 1;
 const FALSE: CInt = 0;
 
-extern fn g_malloc(n_bytes: usize) ?[*]u8;
 extern fn g_free(mem: ?*anyopaque) void;
 extern fn g_file_read_link(filename: [*:0]const u8, err: ?*?*anyopaque) ?[*:0]u8;
 extern fn g_path_get_dirname(file_name: [*:0]const u8) ?[*:0]u8;
@@ -46,7 +46,7 @@ export fn shaula_clipboard_copy_png_file(path_z: ?[*:0]const u8, err: ?*?*anyopa
     var status: CInt = 1;
     var argv = [_:null]?[*:0]u8{ shaula, @constCast("clipboard"), @constCast("copy-image"), @constCast("--input"), @constCast(path), @constCast("--json") };
     if (g_spawn_sync(null, &argv, null, G_SPAWN_SEARCH_PATH, null, null, null, &stderr_text, &status, err) == FALSE) return FALSE;
-    if (!exitedZero(status)) {
+    if (!c_compat.exitedZero(status)) {
         setError(err, 2, "shaula clipboard copy-image failed");
         return FALSE;
     }
@@ -57,12 +57,12 @@ export fn shaula_clipboard_copy_text(text_z: ?[*:0]const u8, err: ?*?*anyopaque)
     const text = text_z orelse @constCast("");
     const quoted = g_shell_quote(text) orelse return FALSE;
     defer g_free(quoted);
-    const shell_cmd = allocPrintZ("printf %s {s} | wl-copy --type text/plain", .{std.mem.span(quoted)});
+    const shell_cmd = c_compat.allocPrintZ("printf %s {s} | wl-copy --type text/plain", .{std.mem.span(quoted)});
     defer g_free(shell_cmd);
     var status: CInt = 1;
     var argv = [_:null]?[*:0]u8{ @constCast("/bin/sh"), @constCast("-c"), shell_cmd };
     if (g_spawn_sync(null, &argv, null, G_SPAWN_SEARCH_PATH, null, null, null, null, &status, err) == FALSE) return FALSE;
-    if (!exitedZero(status)) {
+    if (!c_compat.exitedZero(status)) {
         setError(err, 3, "wl-copy text failed");
         return FALSE;
     }
@@ -82,26 +82,9 @@ fn resolveShaulaCli() [*:0]u8 {
             }
         }
     }
-    return dupZ("shaula");
-}
-
-fn exitedZero(status: CInt) bool {
-    return (status & 0x7f) == 0 and ((status >> 8) & 0xff) == 0;
+    return c_compat.dupZ("shaula");
 }
 
 fn setError(err: ?*?*anyopaque, code: CInt, message: [*:0]const u8) void {
     g_set_error_literal(err, g_quark_from_static_string("shaula-preview-clipboard"), code, message);
-}
-
-fn dupZ(value: []const u8) [*:0]u8 {
-    const memory = g_malloc(value.len + 1) orelse @panic("g_malloc failed");
-    @memcpy(memory[0..value.len], value);
-    memory[value.len] = 0;
-    return @ptrCast(memory);
-}
-
-fn allocPrintZ(comptime fmt: []const u8, args: anytype) [*:0]u8 {
-    var buffer: [4096]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, fmt, args) catch @panic("format overflow");
-    return dupZ(text);
 }

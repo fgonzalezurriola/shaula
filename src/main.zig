@@ -10,7 +10,7 @@ pub const compositor_runtime_module = @import("compositor/runtime.zig");
 const protocol = @import("ipc/protocol.zig");
 const daemon_server = @import("daemon/server.zig");
 const daemon_cli = @import("daemon/cli_control.zig");
-const daemon_json = @import("daemon/cli_json.zig");
+const cli_json = @import("cli/json.zig");
 const preflight_probe = @import("preflight/probe.zig");
 const capabilities_probe = @import("capabilities/probe.zig");
 const capture_command = @import("capture/command.zig");
@@ -31,7 +31,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = init.minimal.args.vector;
 
     if (argv.len < 2) {
-        try daemon_json.writeErrorJson(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|directory|doctor|daemon|preflight|capabilities|history|clipboard|errors> ... --json", false);
+        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|directory|doctor|daemon|preflight|capabilities|history|clipboard|errors> ... --json", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -40,7 +40,7 @@ pub fn main(init: std.process.Init) !u8 {
     if (std.mem.eql(u8, family, "preflight")) {
         const flags = parseFlags(io, argv, 2, true, "preflight") catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
-            try daemon_json.writeErrorJson(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
+            try cli_json.writeBasicError(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
         return preflight_probe.run(allocator, io, init.minimal.environ, flags.socket_arg);
@@ -56,14 +56,14 @@ pub fn main(init: std.process.Init) !u8 {
                 flags_start = 3;
                 flags_command = "capabilities list";
             } else if (maybe_subcommand.len == 0 or maybe_subcommand[0] != '-') {
-                try daemon_json.writeErrorJson(io, "capabilities list", "ERR_CLI_USAGE", "usage: shaula capabilities [list] --json", false);
+                try cli_json.writeBasicError(io, "capabilities list", "ERR_CLI_USAGE", "usage: shaula capabilities [list] --json", false);
                 return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
             }
         }
 
         const flags = parseFlags(io, argv, flags_start, false, flags_command) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
-            try daemon_json.writeErrorJson(io, flags_command, "ERR_CLI_USAGE", "--json is required", false);
+            try cli_json.writeBasicError(io, flags_command, "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
         return capabilities_probe.run(allocator, io, init.minimal.environ);
@@ -110,19 +110,19 @@ pub fn main(init: std.process.Init) !u8 {
     }
 
     if (!std.mem.eql(u8, family, "daemon")) {
-        try daemon_json.writeErrorJson(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
+        try cli_json.writeBasicError(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
     if (argv.len < 3) {
-        try daemon_json.writeErrorJson(io, "daemon", "ERR_CLI_USAGE", "usage: shaula daemon <start|status|stop> --json", false);
+        try cli_json.writeBasicError(io, "daemon", "ERR_CLI_USAGE", "usage: shaula daemon <start|status|stop> --json", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
     const flags = parseFlags(io, argv, 3, true, daemon_cli.daemonCommand(argToSlice(argv[2]))) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
 
     if (!flags.json_mode) {
-        try daemon_json.writeErrorJson(io, daemon_cli.daemonCommand(argToSlice(argv[2])), "ERR_CLI_USAGE", "--json is required", false);
+        try cli_json.writeBasicError(io, daemon_cli.daemonCommand(argToSlice(argv[2])), "ERR_CLI_USAGE", "--json is required", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -133,10 +133,10 @@ pub fn main(init: std.process.Init) !u8 {
         var server = daemon_server.DaemonServer.init(allocator, io, socket_path);
         server.run() catch |err| {
             if (err == error.IpcBindFailed or err == error.InvalidSocketPath or err == error.SocketParentCreateFailed) {
-                try daemon_json.writeErrorJson(io, "daemon _serve", "ERR_IPC_BIND_FAILED", "failed to bind daemon IPC socket", false);
+                try cli_json.writeBasicError(io, "daemon _serve", "ERR_IPC_BIND_FAILED", "failed to bind daemon IPC socket", false);
                 return recovery_policy.exitCodeFor("ERR_IPC_BIND_FAILED");
             }
-            try daemon_json.writeErrorJson(io, "daemon _serve", "ERR_UNKNOWN_UNMAPPED", "daemon server failed with unmapped error", false);
+            try cli_json.writeBasicError(io, "daemon _serve", "ERR_UNKNOWN_UNMAPPED", "daemon server failed with unmapped error", false);
             return recovery_policy.exitCodeFor("ERR_UNKNOWN_UNMAPPED");
         };
         return 0;
@@ -167,7 +167,7 @@ pub fn main(init: std.process.Init) !u8 {
         };
     }
 
-    try daemon_json.writeErrorJson(io, "daemon", "ERR_CLI_USAGE", "unsupported daemon subcommand", false);
+    try cli_json.writeBasicError(io, "daemon", "ERR_CLI_USAGE", "unsupported daemon subcommand", false);
     return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
 }
 
@@ -188,11 +188,11 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, allow_socke
         }
         if (std.mem.eql(u8, current, "--socket")) {
             if (!allow_socket) {
-                try daemon_json.writeErrorJson(io, command, "ERR_CLI_USAGE", "--socket is not supported for this command", false);
+                try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "--socket is not supported for this command", false);
                 return error.InvalidArgument;
             }
             if (i + 1 >= argv.len) {
-                try daemon_json.writeErrorJson(io, command, "ERR_CLI_USAGE", "--socket requires a path", false);
+                try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "--socket requires a path", false);
                 return error.InvalidArgument;
             }
             i += 1;
@@ -200,7 +200,7 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, allow_socke
             continue;
         }
 
-        try daemon_json.writeErrorJson(io, command, "ERR_CLI_USAGE", "unsupported flag", false);
+        try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "unsupported flag", false);
         return error.InvalidArgument;
     }
 

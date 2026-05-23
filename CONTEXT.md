@@ -276,6 +276,16 @@ and the working diff.
 - Runtime process seam was deepened: `runtime/process_exec.zig` now also owns
   stdin-pipe execution (`runWithPipeInput`), and preview/notify/clipboard
   command execution now routes through runtime process adapters.
+- Architecture cleanup pass: deleted the pure pass-through `daemon/cli_json.zig`
+  and `overlay/overlay.zig` modules. Main/daemon code now imports `cli/json.zig`
+  directly, and capture lifecycle imports `overlay/selection_session.zig` plus
+  `overlay/selection_draft_store.zig` directly. Helper binary resolution is
+  centralized in `runtime/helper_resolution.zig` for overlay, preview, and
+  settings helpers, preserving env-var override -> sibling binary -> PATH
+  fallback ordering. C/GTK helper string/status glue is centralized in
+  `runtime/c_compat.zig` for preview clipboard/image/notify and settings config
+  FFI modules; returned strings remain GLib-owned and must be freed with
+  `g_free`.
 - C-to-Zig migration pass: settings config contract logic now lives in
   `src/settings/settings_config.zig`; preview geometry lives in
   `src/preview/preview_geometry.zig`; preview image IO and preview clipboard

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const cli_json = @import("../cli/json.zig");
+const helper_resolution = @import("../runtime/helper_resolution.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 
 /// Launches the native GTK settings helper.
@@ -50,19 +51,5 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 }
 
 fn resolveSettingsBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_SETTINGS_HELPER_BIN")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
-    }
-
-    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-settings");
-    defer allocator.free(exe_dir);
-
-    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-settings", .{exe_dir});
-    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
-        return sibling;
-    } else |_| {
-        allocator.free(sibling);
-        return allocator.dupe(u8, "shaula-settings");
-    }
+    return helper_resolution.resolveSiblingHelper(allocator, io, environ, "SHAULA_SETTINGS_HELPER_BIN", "shaula-settings");
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const helper_resolution = @import("../runtime/helper_resolution.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
 pub const OverlayRuntimeError = error{
@@ -52,19 +53,5 @@ pub fn runSelectionHelper(
 /// `shaula-overlay` binary before falling back to PATH, otherwise users silently
 /// lose the Shaula overlay and only see deterministic overlay unavailability.
 pub fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_HELPER_BIN")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
-    }
-
-    const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, "shaula-overlay");
-    defer allocator.free(exe_dir);
-
-    const sibling = try std.fmt.allocPrint(allocator, "{s}/shaula-overlay", .{exe_dir});
-    if (std.Io.Dir.accessAbsolute(io, sibling, .{})) {
-        return sibling;
-    } else |_| {
-        allocator.free(sibling);
-        return allocator.dupe(u8, "shaula-overlay");
-    }
+    return helper_resolution.resolveSiblingHelper(allocator, io, environ, "SHAULA_OVERLAY_HELPER_BIN", "shaula-overlay");
 }

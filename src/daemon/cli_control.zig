@@ -1,6 +1,6 @@
 const std = @import("std");
 const protocol = @import("../ipc/protocol.zig");
-const json_helpers = @import("cli_json.zig");
+const json_helpers = @import("../cli/json.zig");
 
 pub fn runDaemonStart(allocator: std.mem.Allocator, io: std.Io, socket_path: []const u8) !u8 {
     const already_running = blk: {
@@ -8,7 +8,7 @@ pub fn runDaemonStart(allocator: std.mem.Allocator, io: std.Io, socket_path: []c
         break :blk true;
     };
     if (already_running) {
-        try json_helpers.writeErrorJson(io, "daemon start", "ERR_DAEMON_ALREADY_RUNNING", "daemon already running", false);
+        try json_helpers.writeBasicError(io, "daemon start", "ERR_DAEMON_ALREADY_RUNNING", "daemon already running", false);
         return error.DaemonAlreadyRunning;
     }
 
@@ -21,7 +21,7 @@ pub fn runDaemonStart(allocator: std.mem.Allocator, io: std.Io, socket_path: []c
         .stdout = .ignore,
         .stderr = .ignore,
     }) catch {
-        try json_helpers.writeErrorJson(io, "daemon start", "ERR_IPC_BIND_FAILED", "failed to spawn resident daemon", false);
+        try json_helpers.writeBasicError(io, "daemon start", "ERR_IPC_BIND_FAILED", "failed to spawn resident daemon", false);
         return error.IpcBindFailed;
     };
 
@@ -52,14 +52,14 @@ pub fn runDaemonStart(allocator: std.mem.Allocator, io: std.Io, socket_path: []c
         if (child.id != null) {
             std.posix.kill(child.id.?, @enumFromInt(0)) catch |err| {
                 if (err == error.ProcessNotFound) {
-                    try json_helpers.writeErrorJson(io, "daemon start", "ERR_IPC_BIND_FAILED", "daemon failed to bind IPC socket", false);
+                try json_helpers.writeBasicError(io, "daemon start", "ERR_IPC_BIND_FAILED", "daemon failed to bind IPC socket", false);
                     return error.IpcBindFailed;
                 }
             };
         }
 
         if (child.id == null) {
-            try json_helpers.writeErrorJson(io, "daemon start", "ERR_IPC_BIND_FAILED", "daemon failed to bind IPC socket", false);
+            try json_helpers.writeBasicError(io, "daemon start", "ERR_IPC_BIND_FAILED", "daemon failed to bind IPC socket", false);
             return error.IpcBindFailed;
         }
 
@@ -67,7 +67,7 @@ pub fn runDaemonStart(allocator: std.mem.Allocator, io: std.Io, socket_path: []c
         delay.sleep(io) catch {};
     }
 
-    try json_helpers.writeErrorJson(io, "daemon start", "ERR_IPC_TIMEOUT", "daemon did not reach ready state before timeout", true);
+    try json_helpers.writeBasicError(io, "daemon start", "ERR_IPC_TIMEOUT", "daemon did not reach ready state before timeout", true);
     return error.IpcTimeout;
 }
 
@@ -77,17 +77,17 @@ pub fn runDaemonStatus(allocator: std.mem.Allocator, io: std.Io, socket_path: []
         break :blk true;
     };
     if (!exists) {
-        try json_helpers.writeErrorJson(io, "daemon status", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
+        try json_helpers.writeBasicError(io, "daemon status", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
         return error.DaemonNotRunning;
     }
 
     const status_snapshot = sendDaemonStatusAndRead(allocator, io, socket_path) catch |err| switch (err) {
         error.NotRunning => {
-            try json_helpers.writeErrorJson(io, "daemon status", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
+        try json_helpers.writeBasicError(io, "daemon status", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
             return error.DaemonNotRunning;
         },
         error.Timeout, error.InvalidResponse => {
-            try json_helpers.writeErrorJson(io, "daemon status", "ERR_IPC_TIMEOUT", "daemon status request timed out", true);
+        try json_helpers.writeBasicError(io, "daemon status", "ERR_IPC_TIMEOUT", "daemon status request timed out", true);
             return error.IpcTimeout;
         },
         else => return err,
@@ -120,27 +120,27 @@ pub fn runDaemonStop(allocator: std.mem.Allocator, io: std.Io, socket_path: []co
         break :blk true;
     };
     if (!exists) {
-        try json_helpers.writeErrorJson(io, "daemon stop", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
+        try json_helpers.writeBasicError(io, "daemon stop", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
         return error.DaemonNotRunning;
     }
 
     const stopped = sendDaemonStopAndWait(io, socket_path) catch |err| switch (err) {
         error.NotRunning => {
-            try json_helpers.writeErrorJson(io, "daemon stop", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
+        try json_helpers.writeBasicError(io, "daemon stop", "ERR_DAEMON_NOT_RUNNING", "daemon is not running", false);
             return error.DaemonNotRunning;
         },
         error.Timeout => {
-            try json_helpers.writeErrorJson(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
+            try json_helpers.writeBasicError(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
             return error.IpcTimeout;
         },
         else => {
-            try json_helpers.writeErrorJson(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
+            try json_helpers.writeBasicError(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
             return error.IpcTimeout;
         },
     };
 
     if (!stopped) {
-        try json_helpers.writeErrorJson(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
+        try json_helpers.writeBasicError(io, "daemon stop", "ERR_IPC_TIMEOUT", "daemon did not terminate before timeout", true);
         return error.IpcTimeout;
     }
 
