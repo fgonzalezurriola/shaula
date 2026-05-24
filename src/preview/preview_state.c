@@ -715,6 +715,7 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
     return;
 
   shaula_preview_push_undo(state);
+  state->has_region_selection = FALSE;
   for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
     ShaulaAnnotation *annotation =
         g_ptr_array_index(state->document.annotations, (guint)i);

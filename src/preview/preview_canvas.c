@@ -1100,6 +1100,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     if (hit != NULL) {
       gboolean hit_was_selected =
           shaula_preview_is_annotation_selected(state, hit);
+      shaula_preview_clear_region_selection(state);
       if (shift) {
         shaula_preview_toggle_annotation_selection(state, hit);
         break;

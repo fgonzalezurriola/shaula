@@ -18,7 +18,10 @@ and the working diff.
   coupled: it remains the rectangular region for crop/blur/erase/spotlight and
   also selects intersecting annotations on release, so the existing secondary
   menu stays available while annotation operations can act on the selected
-  objects. Multi-select intentionally hides single-object
+  objects. Starting an annotation interaction, such as grabbing a selected
+  annotation to move it or deleting selected annotations, clears the rectangular
+  region/menu and returns to annotation-only selection until the user draws a
+  new region. Multi-select intentionally hides single-object
   property/duplicate/crop actions and exposes only batch delete. Rectangle
   annotations can be selected by clicking inside their bounds, even when
   unfilled, because edge-only hit testing made Select feel broken.
