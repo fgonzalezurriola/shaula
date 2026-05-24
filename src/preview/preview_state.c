@@ -176,6 +176,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   shaula_color_to_hex(state->hover_color, state->hover_hex);
   shaula_properties_hud_state_init(&state->properties_hud);
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
+  state->selected_annotation_ids = g_array_new(FALSE, FALSE, sizeof(int));
   state->measure_tolerance = 32;
   state->toolbar_overflow_visible_count = -1;
 }
@@ -185,6 +186,8 @@ void shaula_preview_state_free(ShaulaPreviewState *state) {
     return;
   if (state->draft_pen_points != NULL)
     g_array_unref(state->draft_pen_points);
+  if (state->selected_annotation_ids != NULL)
+    g_array_unref(state->selected_annotation_ids);
   for (int i = 0; i < state->icon_root_count; i++)
     g_free(state->icon_roots[i]);
   if (state->managed_temp_path != NULL &&
@@ -300,78 +303,297 @@ void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor) {
   shaula_preview_queue_draw(state);
 }
 
-void shaula_preview_select_annotation(ShaulaPreviewState *state,
-                                      ShaulaAnnotation *annotation) {
-  if (state == NULL)
+static ShaulaAnnotation *annotation_by_id(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->document.annotations == NULL || id <= 0)
+    return NULL;
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
+    if (annotation != NULL && annotation->id == id)
+      return annotation;
+  }
+  return NULL;
+}
+
+static gboolean selected_ids_contain(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->selected_annotation_ids == NULL || id <= 0)
+    return FALSE;
+  for (guint i = 0; i < state->selected_annotation_ids->len; i++) {
+    if (g_array_index(state->selected_annotation_ids, int, i) == id)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static void selected_ids_add(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->selected_annotation_ids == NULL || id <= 0 ||
+      selected_ids_contain(state, id))
     return;
-  if (state->selected_annotation != annotation)
-    shaula_preview_commit_history_gesture(state, TRUE);
+  g_array_append_val(state->selected_annotation_ids, id);
+}
+
+static void selected_ids_remove(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->selected_annotation_ids == NULL || id <= 0)
+    return;
+  for (guint i = 0; i < state->selected_annotation_ids->len; i++) {
+    if (g_array_index(state->selected_annotation_ids, int, i) == id) {
+      g_array_remove_index(state->selected_annotation_ids, i);
+      return;
+    }
+  }
+}
+
+static void reset_property_targets(ShaulaPreviewState *state) {
   state->properties_hud.arrow_index = -1;
   state->properties_hud.spotlight_index = -1;
   state->properties_hud.rectangle_index = -1;
   state->properties_hud.measure_index = -1;
+}
+
+static void set_single_selection_properties(ShaulaPreviewState *state,
+                                            ShaulaAnnotation *annotation) {
+  reset_property_targets(state);
+  state->selected_annotation = annotation;
+  if (annotation == NULL) {
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
+    return;
+  }
+
+  int annotation_index = -1;
   if (state->document.annotations != NULL) {
     for (guint i = 0; i < state->document.annotations->len; i++) {
-      ShaulaAnnotation *item = g_ptr_array_index(state->document.annotations, i);
-      item->selected = FALSE;
-      if (item == annotation && annotation != NULL &&
-          annotation->type == SHAULA_ANNOTATION_ARROW)
-        state->properties_hud.arrow_index = (int)i;
-      if (item == annotation && annotation != NULL &&
-          annotation->type == SHAULA_ANNOTATION_RECTANGLE)
-        state->properties_hud.rectangle_index = (int)i;
-      if (item == annotation && annotation != NULL &&
-          annotation->type == SHAULA_ANNOTATION_MEASURE)
-        state->properties_hud.measure_index = (int)i;
+      if (g_ptr_array_index(state->document.annotations, i) == annotation) {
+        annotation_index = (int)i;
+        break;
+      }
     }
   }
-  state->selected_annotation = annotation;
-  if (annotation != NULL) {
-    state->has_region_selection = FALSE;
-    annotation->selected = TRUE;
-    if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ARROW;
-      state->properties_hud.arrow_color = annotation->color;
-      state->properties_hud.arrow_stroke_width = annotation->stroke_width;
-    } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
-      state->properties_hud.rectangle_color = annotation->color;
-      state->properties_hud.rectangle_stroke_width = annotation->stroke_width;
-      state->properties_hud.rectangle_stroke_style = annotation->data.rectangle.stroke_style;
-      state->properties_hud.rectangle_filled = annotation->data.rectangle.filled;
-      state->properties_hud.rectangle_corners = annotation->data.rectangle.corners;
-    } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
-      state->properties_hud.pen_color = annotation->color;
-      state->properties_hud.pen_opacity = annotation->color.a;
-      state->properties_hud.pen_stroke_width = annotation->stroke_width;
-    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
-      state->properties_hud.highlight_color = annotation->color;
-      state->properties_hud.highlight_opacity = annotation->color.a;
-      state->properties_hud.highlight_stroke_width = annotation->stroke_width;
-    } else if (annotation->type == SHAULA_ANNOTATION_TEXT) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
-      state->properties_hud.text_color = annotation->color;
-      state->properties_hud.text_font_size = annotation->data.text.font_size;
-      state->properties_hud.text_align = annotation->data.text.align;
-      state->properties_hud.text_font_mode = annotation->data.text.font_mode;
-    } else if (annotation->type == SHAULA_ANNOTATION_MEASURE) {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_MEASURE;
-      state->properties_hud.measure_color = annotation->color;
-      state->properties_hud.measure_stroke_width = annotation->stroke_width;
-    } else {
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
-    }
+
+  if (annotation->type == SHAULA_ANNOTATION_ARROW) {
+    state->properties_hud.arrow_index = annotation_index;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+    state->properties_hud.arrow_color = annotation->color;
+    state->properties_hud.arrow_stroke_width = annotation->stroke_width;
+  } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+    state->properties_hud.rectangle_index = annotation_index;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
+    state->properties_hud.rectangle_color = annotation->color;
+    state->properties_hud.rectangle_stroke_width = annotation->stroke_width;
+    state->properties_hud.rectangle_stroke_style =
+        annotation->data.rectangle.stroke_style;
+    state->properties_hud.rectangle_filled = annotation->data.rectangle.filled;
+    state->properties_hud.rectangle_corners = annotation->data.rectangle.corners;
+  } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
+    state->properties_hud.pen_color = annotation->color;
+    state->properties_hud.pen_opacity = annotation->color.a;
+    state->properties_hud.pen_stroke_width = annotation->stroke_width;
+  } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+    state->properties_hud.highlight_color = annotation->color;
+    state->properties_hud.highlight_opacity = annotation->color.a;
+    state->properties_hud.highlight_stroke_width = annotation->stroke_width;
+  } else if (annotation->type == SHAULA_ANNOTATION_TEXT) {
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    state->properties_hud.text_color = annotation->color;
+    state->properties_hud.text_font_size = annotation->data.text.font_size;
+    state->properties_hud.text_align = annotation->data.text.align;
+    state->properties_hud.text_font_mode = annotation->data.text.font_mode;
+  } else if (annotation->type == SHAULA_ANNOTATION_MEASURE) {
+    state->properties_hud.measure_index = annotation_index;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_MEASURE;
+    state->properties_hud.measure_color = annotation->color;
+    state->properties_hud.measure_stroke_width = annotation->stroke_width;
   } else {
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
   }
+}
+
+/* Selection IDs are the editor source of truth. Annotation flags are kept in
+ * sync because rendering and document snapshots already persist that contract.
+ */
+static void sync_selection_from_ids(ShaulaPreviewState *state) {
+  if (state == NULL || state->selected_annotation_ids == NULL)
+    return;
+
+  for (gint i = (gint)state->selected_annotation_ids->len - 1; i >= 0; i--) {
+    int id = g_array_index(state->selected_annotation_ids, int, (guint)i);
+    if (annotation_by_id(state, id) == NULL)
+      g_array_remove_index(state->selected_annotation_ids, (guint)i);
+  }
+
+  ShaulaAnnotation *single = NULL;
+  if (state->document.annotations != NULL) {
+    for (guint i = 0; i < state->document.annotations->len; i++) {
+      ShaulaAnnotation *item = g_ptr_array_index(state->document.annotations, i);
+      item->selected = selected_ids_contain(state, item->id);
+      if (item->selected)
+        single = item;
+    }
+  }
+
+  if (state->selected_annotation_ids->len == 1) {
+    set_single_selection_properties(state, single);
+  } else {
+    reset_property_targets(state);
+    state->selected_annotation = NULL;
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
+  }
+}
+
+static void rebuild_selection_ids_from_flags(ShaulaPreviewState *state) {
+  if (state == NULL || state->selected_annotation_ids == NULL)
+    return;
+  g_array_set_size(state->selected_annotation_ids, 0);
+  if (state->document.annotations != NULL) {
+    for (guint i = 0; i < state->document.annotations->len; i++) {
+      ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
+      if (annotation != NULL && annotation->selected)
+        selected_ids_add(state, annotation->id);
+    }
+  }
+  sync_selection_from_ids(state);
+}
+
+void shaula_preview_select_annotation(ShaulaPreviewState *state,
+                                      ShaulaAnnotation *annotation) {
+  shaula_preview_select_only_annotation(state, annotation);
+}
+
+void shaula_preview_select_only_annotation(ShaulaPreviewState *state,
+                                           ShaulaAnnotation *annotation) {
+  if (state == NULL)
+    return;
+  gboolean changed = (annotation == NULL && shaula_preview_has_selection(state)) ||
+                     (annotation != NULL &&
+                      (state->selected_annotation_ids == NULL ||
+                       state->selected_annotation_ids->len != 1 ||
+                       !selected_ids_contain(state, annotation->id)));
+  if (changed)
+    shaula_preview_commit_history_gesture(state, TRUE);
+  if (state->selected_annotation_ids != NULL)
+    g_array_set_size(state->selected_annotation_ids, 0);
+  if (annotation != NULL) {
+    state->has_region_selection = FALSE;
+    selected_ids_add(state, annotation->id);
+  }
+  sync_selection_from_ids(state);
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
+}
+
+void shaula_preview_toggle_annotation_selection(ShaulaPreviewState *state,
+                                                ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL)
+    return;
+  shaula_preview_commit_history_gesture(state, TRUE);
+  if (selected_ids_contain(state, annotation->id))
+    selected_ids_remove(state, annotation->id);
+  else
+    selected_ids_add(state, annotation->id);
+  if (shaula_preview_has_selection(state))
+    state->has_region_selection = FALSE;
+  sync_selection_from_ids(state);
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
+}
+
+void shaula_preview_add_annotation_to_selection(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL ||
+      selected_ids_contain(state, annotation->id))
+    return;
+  shaula_preview_commit_history_gesture(state, TRUE);
+  selected_ids_add(state, annotation->id);
+  state->has_region_selection = FALSE;
+  sync_selection_from_ids(state);
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
+}
+
+void shaula_preview_remove_annotation_from_selection(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL ||
+      !selected_ids_contain(state, annotation->id))
+    return;
+  shaula_preview_commit_history_gesture(state, TRUE);
+  selected_ids_remove(state, annotation->id);
+  sync_selection_from_ids(state);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_selection_state(state);
 }
 
 void shaula_preview_clear_selection(ShaulaPreviewState *state) {
-  shaula_preview_select_annotation(state, NULL);
+  shaula_preview_select_only_annotation(state, NULL);
+}
+
+gboolean shaula_preview_has_selection(ShaulaPreviewState *state) {
+  return state != NULL && state->selected_annotation_ids != NULL &&
+         state->selected_annotation_ids->len > 0;
+}
+
+gboolean shaula_preview_is_annotation_selected(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation) {
+  return annotation != NULL && selected_ids_contain(state, annotation->id);
+}
+
+guint shaula_preview_selected_count(ShaulaPreviewState *state) {
+  return state != NULL && state->selected_annotation_ids != NULL
+             ? state->selected_annotation_ids->len
+             : 0;
+}
+
+void shaula_preview_select_all_annotations(ShaulaPreviewState *state) {
+  if (state == NULL || state->document.annotations == NULL ||
+      state->document.annotations->len == 0)
+    return;
+  shaula_preview_commit_history_gesture(state, TRUE);
+  g_array_set_size(state->selected_annotation_ids, 0);
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
+    if (annotation != NULL)
+      selected_ids_add(state, annotation->id);
+  }
+  state->has_region_selection = FALSE;
+  sync_selection_from_ids(state);
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
+}
+
+guint shaula_preview_select_annotations_intersecting_rect(
+    ShaulaPreviewState *state, ShaulaRect rect) {
+  if (state == NULL || state->document.annotations == NULL ||
+      state->document.annotations->len == 0)
+    return 0;
+
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_is_empty(rect))
+    return 0;
+
+  GArray *matched_ids = g_array_new(FALSE, FALSE, sizeof(int));
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
+    if (annotation != NULL && shaula_rect_intersects(annotation->bounds, rect)) {
+      int id = annotation->id;
+      g_array_append_val(matched_ids, id);
+    }
+  }
+  guint matched_count = matched_ids->len;
+  if (matched_count == 0) {
+    g_array_unref(matched_ids);
+    return 0;
+  }
+
+  shaula_preview_commit_history_gesture(state, TRUE);
+  g_array_set_size(state->selected_annotation_ids, 0);
+  for (guint i = 0; i < matched_ids->len; i++) {
+    int id = g_array_index(matched_ids, int, i);
+    selected_ids_add(state, id);
+  }
+  g_array_unref(matched_ids);
+  sync_selection_from_ids(state);
+  shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  return matched_count;
 }
 
 void shaula_preview_clear_region_selection(ShaulaPreviewState *state) {
@@ -400,16 +622,18 @@ void shaula_preview_add_annotation(ShaulaPreviewState *state,
 }
 
 gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state) {
-  return state != NULL && state->selected_annotation != NULL;
+  return state != NULL && shaula_preview_selected_count(state) == 1 &&
+         state->selected_annotation != NULL;
 }
 
 gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state) {
-  return state != NULL && state->selected_annotation != NULL;
+  return state != NULL && shaula_preview_has_selection(state);
 }
 
 gboolean
 shaula_preview_can_copy_selected_annotation(ShaulaPreviewState *state) {
-  return state != NULL && state->selected_annotation != NULL;
+  return state != NULL && shaula_preview_selected_count(state) == 1 &&
+         state->selected_annotation != NULL;
 }
 
 gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state) {
@@ -486,22 +710,21 @@ gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_delete_selected(ShaulaPreviewState *state) {
-  if (state == NULL || state->selected_annotation == NULL)
+  if (state == NULL || !shaula_preview_has_selection(state) ||
+      state->document.annotations == NULL)
     return;
-  ShaulaAnnotation *selected = state->selected_annotation;
-  for (guint i = 0; i < state->document.annotations->len; i++) {
-    if (g_ptr_array_index(state->document.annotations, i) == selected) {
-      shaula_preview_push_undo(state);
-      state->selected_annotation = NULL;
-      shaula_preview_document_remove_annotation_at(&state->document, i);
-      shaula_preview_queue_draw(state);
-      shaula_preview_toolbar_update_history_state(state);
-      shaula_preview_toolbar_update_selection_state(state);
-      return;
-    }
+
+  shaula_preview_push_undo(state);
+  for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, (guint)i);
+    if (shaula_preview_is_annotation_selected(state, annotation))
+      shaula_preview_document_remove_annotation_at(&state->document, (guint)i);
   }
-  state->selected_annotation = NULL;
+  g_array_set_size(state->selected_annotation_ids, 0);
+  sync_selection_from_ids(state);
   shaula_preview_queue_draw(state);
+  shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
 }
 
@@ -518,6 +741,7 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
    */
   shaula_preview_push_undo(state);
   state->selected_annotation = NULL;
+  g_array_set_size(state->selected_annotation_ids, 0);
   shaula_preview_document_clear_annotations(&state->document);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
@@ -579,16 +803,7 @@ void shaula_preview_replace_annotations(ShaulaPreviewState *state,
   if (state->document.annotations != NULL)
     g_ptr_array_unref(state->document.annotations);
   state->document.annotations = annotations;
-  state->selected_annotation = NULL;
-  if (state->document.annotations != NULL) {
-    for (guint i = 0; i < state->document.annotations->len; i++) {
-      ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
-      if (annotation->selected) {
-        state->selected_annotation = annotation;
-        break;
-      }
-    }
-  }
+  rebuild_selection_ids_from_flags(state);
   shaula_preview_toolbar_update_selection_state(state);
 }
 
@@ -596,6 +811,7 @@ static void restore_snapshot(ShaulaPreviewState *state,
                              ShaulaPreviewSnapshot *snapshot) {
   shaula_preview_document_restore_snapshot(&state->document, snapshot,
                                            &state->selected_annotation);
+  rebuild_selection_ids_from_flags(state);
   shaula_preview_toolbar_update_selection_state(state);
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
@@ -656,6 +872,8 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
     return;
   state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
+  state->drag_hit_annotation = NULL;
+  state->drag_preserved_multi_selection = FALSE;
   state->active_resize_handle = SHAULA_RESIZE_HANDLE_NONE;
   shaula_preview_cancel_history_gesture(state);
   state->has_crop_draft = FALSE;
@@ -950,6 +1168,8 @@ static void remap_annotations_after_crop(ShaulaPreviewState *state,
     return;
 
   state->selected_annotation = NULL;
+  if (state->selected_annotation_ids != NULL)
+    g_array_set_size(state->selected_annotation_ids, 0);
   for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
     ShaulaAnnotation *annotation =
         g_ptr_array_index(state->document.annotations, (guint)i);
@@ -1033,7 +1253,8 @@ gboolean shaula_preview_apply_crop(ShaulaPreviewState *state) {
 }
 
 gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state) {
-  if (state == NULL || state->selected_annotation == NULL)
+  if (state == NULL || shaula_preview_selected_count(state) != 1 ||
+      state->selected_annotation == NULL)
     return FALSE;
 
   ShaulaAnnotation *annotation = state->selected_annotation;
@@ -1360,7 +1581,8 @@ void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
 static ShaulaAnnotation *
 selected_annotation_of_type(ShaulaPreviewState *state,
                             ShaulaAnnotationType type) {
-  if (state == NULL || state->selected_annotation == NULL ||
+  if (state == NULL || shaula_preview_selected_count(state) != 1 ||
+      state->selected_annotation == NULL ||
       state->selected_annotation->type != type)
     return NULL;
   return state->selected_annotation;

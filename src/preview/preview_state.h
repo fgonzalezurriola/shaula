@@ -121,6 +121,7 @@ typedef struct {
   ShaulaPoint drag_start_image;
   ShaulaPoint drag_current_image;
   ShaulaPoint drag_last_image;
+  ShaulaAnnotation *drag_hit_annotation;
   double drag_start_x;
   double drag_start_y;
   double pan_origin_x;
@@ -131,6 +132,7 @@ typedef struct {
   ShaulaPoint resize_origin_arrow_end;
   ShaulaPoint resize_origin_arrow_control;
   gboolean resize_origin_arrow_curved;
+  gboolean drag_preserved_multi_selection;
 
   gboolean has_crop_draft;
   ShaulaRect crop_draft;
@@ -139,6 +141,7 @@ typedef struct {
   GArray *draft_pen_points;
   ShaulaPoint text_anchor_image;
 
+  GArray *selected_annotation_ids;
   ShaulaAnnotation *selected_annotation;
 
   ShaulaColor current_color;
@@ -192,7 +195,22 @@ void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor);
 
 void shaula_preview_select_annotation(ShaulaPreviewState *state,
                                       ShaulaAnnotation *annotation);
+void shaula_preview_select_only_annotation(ShaulaPreviewState *state,
+                                           ShaulaAnnotation *annotation);
+void shaula_preview_toggle_annotation_selection(ShaulaPreviewState *state,
+                                                ShaulaAnnotation *annotation);
+void shaula_preview_add_annotation_to_selection(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
+void shaula_preview_remove_annotation_from_selection(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
 void shaula_preview_clear_selection(ShaulaPreviewState *state);
+gboolean shaula_preview_has_selection(ShaulaPreviewState *state);
+gboolean shaula_preview_is_annotation_selected(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
+guint shaula_preview_selected_count(ShaulaPreviewState *state);
+void shaula_preview_select_all_annotations(ShaulaPreviewState *state);
+guint shaula_preview_select_annotations_intersecting_rect(
+    ShaulaPreviewState *state, ShaulaRect rect);
 void shaula_preview_clear_region_selection(ShaulaPreviewState *state);
 void shaula_preview_add_annotation(ShaulaPreviewState *state,
                                    ShaulaAnnotation *annotation);

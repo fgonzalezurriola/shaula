@@ -32,8 +32,9 @@ void shaula_preview_document_finish_edit(
 
   if (finish.clear_crop_draft)
     state->has_crop_draft = FALSE;
-  if (finish.clear_region_selection)
+  if (finish.clear_region_selection) {
     state->has_region_selection = FALSE;
+  }
   if (finish.reset_tool_to_select) {
     state->operation = SHAULA_OPERATION_NONE;
     state->active_tool = SHAULA_TOOL_SELECT;

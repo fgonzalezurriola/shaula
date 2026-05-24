@@ -465,6 +465,36 @@ static void draw_rectangle_handles(cairo_t *cr, ShaulaRect rect) {
   draw_square_handle(cr, (ShaulaPoint){x0, cy});
 }
 
+static void draw_rectangle_selection(cairo_t *cr, ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_is_empty(rect))
+    return;
+
+  double px = screen_px_to_user(cr, 1.0);
+  double pad = MAX(3.0 * px, 1.0);
+  cairo_save(cr);
+  cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.58);
+  cairo_set_line_width(cr, MAX(3.0 * px, 1.0));
+  rectangle_path(cr,
+                 (ShaulaRect){rect.x - pad, rect.y - pad,
+                              rect.width + 2.0 * pad,
+                              rect.height + 2.0 * pad},
+                 PREVIEW_RECTANGLE_CORNERS_SQUARE);
+  cairo_stroke(cr);
+
+  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.96);
+  cairo_set_line_width(cr, MAX(1.5 * px, 0.75));
+  double dashes[] = {4.0 * px, 3.0 * px};
+  cairo_set_dash(cr, dashes, 2, 0);
+  rectangle_path(cr,
+                 (ShaulaRect){rect.x - pad, rect.y - pad,
+                              rect.width + 2.0 * pad,
+                              rect.height + 2.0 * pad},
+                 PREVIEW_RECTANGLE_CORNERS_SQUARE);
+  cairo_stroke(cr);
+  cairo_restore(cr);
+}
+
 static double path_distance_to_point(ShaulaPenPath path, ShaulaPoint point) {
   if (path.len <= 0)
     return G_MAXDOUBLE;
@@ -496,13 +526,6 @@ static double rectangle_edge_distance_to_point(ShaulaRect rect,
   best =
       MIN(best, shaula_point_distance_to_segment(point, bottom_left, top_left));
   return best;
-}
-
-static double rectangle_visible_fill_alpha(const ShaulaAnnotation *annotation) {
-  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_RECTANGLE ||
-      !annotation->data.rectangle.filled)
-    return 0.0;
-  return annotation->color.a * 0.22;
 }
 
 static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
@@ -870,6 +893,7 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       cairo_set_line_width(cr, annotation->stroke_width);
       draw_pen_path(cr, annotation->data.highlight);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+      draw_rectangle_selection(cr, annotation->data.rectangle.rect);
       set_annotation_color(cr, annotation->color, 1.0);
       cairo_set_line_width(cr, annotation->stroke_width);
       apply_arrow_stroke_style(cr, annotation->data.rectangle.stroke_style,
@@ -1038,8 +1062,7 @@ static ShaulaAnnotationHitKind annotation_hit_kind(ShaulaAnnotation *annotation,
     if (rectangle_edge_distance_to_point(annotation->data.rectangle.rect,
                                          point) <= stroke_tolerance)
       return SHAULA_ANNOTATION_HIT_STROKE;
-    if (rectangle_visible_fill_alpha(annotation) >= 0.10 &&
-        shaula_rect_contains_point(
+    if (shaula_rect_contains_point(
             shaula_rect_normalized(annotation->data.rectangle.rect), point))
       return SHAULA_ANNOTATION_HIT_FILL;
     break;

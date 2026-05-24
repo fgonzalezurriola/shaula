@@ -717,7 +717,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state, SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
   gboolean can_delete = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
-  gboolean has_object_selection = state->selected_annotation != NULL;
+  guint selected_count = shaula_preview_selected_count(state);
+  gboolean has_object_selection = selected_count > 0;
+  gboolean has_single_object_selection = selected_count == 1;
   gboolean has_region_selection = state->has_region_selection;
   gboolean show_group =
       state->active_tool == SHAULA_TOOL_SELECT &&
@@ -778,7 +780,7 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_range_set_value(GTK_RANGE(state->properties_hud.arrow_width_scale),
                         state->properties_hud.arrow_stroke_width);
   PreviewArrowStrokeStyle arrow_stroke_style = PREVIEW_ARROW_STROKE_SOLID;
-  if (state->selected_annotation != NULL &&
+  if (has_single_object_selection && state->selected_annotation != NULL &&
       state->selected_annotation->type == SHAULA_ANNOTATION_ARROW)
     arrow_stroke_style = state->selected_annotation->data.arrow.stroke_style;
   for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DOTTED;
@@ -805,7 +807,7 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
                         state->properties_hud.rectangle_stroke_width);
   PreviewArrowStrokeStyle rectangle_style =
       state->properties_hud.rectangle_stroke_style;
-  if (state->selected_annotation != NULL &&
+  if (has_single_object_selection && state->selected_annotation != NULL &&
       state->selected_annotation->type == SHAULA_ANNOTATION_RECTANGLE)
     rectangle_style = state->selected_annotation->data.rectangle.stroke_style;
   for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DASHED;
@@ -818,7 +820,7 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   gboolean rectangle_filled = state->properties_hud.rectangle_filled;
   PreviewRectangleCorners rectangle_corners =
       state->properties_hud.rectangle_corners;
-  if (state->selected_annotation != NULL &&
+  if (has_single_object_selection && state->selected_annotation != NULL &&
       state->selected_annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
     rectangle_filled = state->selected_annotation->data.rectangle.filled;
     rectangle_corners = state->selected_annotation->data.rectangle.corners;
@@ -946,7 +948,7 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_range_set_value(GTK_RANGE(state->properties_hud.measure_width_scale),
                         state->properties_hud.measure_stroke_width);
   if (state->duplicate_button != NULL) {
-    gtk_widget_set_visible(state->duplicate_button, has_object_selection);
+    gtk_widget_set_visible(state->duplicate_button, has_single_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
   }
   if (state->crop_selected_button != NULL) {
@@ -973,5 +975,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->delete_button != NULL) {
     gtk_widget_set_visible(state->delete_button, has_object_selection);
     gtk_widget_set_sensitive(state->delete_button, can_delete);
+    gtk_widget_set_tooltip_text(
+        state->delete_button,
+        selected_count > 1 ? "Delete selected annotations (Delete)"
+                           : "Delete selected annotation (Delete)");
   }
 }

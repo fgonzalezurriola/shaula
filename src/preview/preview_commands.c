@@ -40,6 +40,14 @@ static const ShaulaPreviewCommandSpec command_specs[] = {
      GDK_KEY_Delete, 0, "Delete"},
     {SHAULA_PREVIEW_COMMAND_DELETE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_BackSpace, 0, "Delete"},
+    {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_a, GDK_CONTROL_MASK, "Ctrl+A"},
+    {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_A, GDK_CONTROL_MASK | GDK_SHIFT_MASK, "Ctrl+A"},
+    {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_a, GDK_SUPER_MASK, "Super+A"},
+    {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_A, GDK_SUPER_MASK | GDK_SHIFT_MASK, "Super+A"},
     {SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_Tab, 0, "Tab"},
     {SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN, FALSE, SHAULA_TOOL_SELECT,
@@ -193,11 +201,17 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return shaula_preview_can_paste_annotation(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     return shaula_preview_can_delete_selected(state);
+  case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
+    return state->active_tool == SHAULA_TOOL_SELECT &&
+           state->operation == SHAULA_OPERATION_NONE &&
+           state->document.annotations != NULL &&
+           state->document.annotations->len > 0;
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
     if (state->active_tool == SHAULA_TOOL_SELECT &&
         state->has_region_selection)
       return TRUE;
     if (state->active_tool == SHAULA_TOOL_SELECT &&
+        shaula_preview_selected_count(state) == 1 &&
         state->selected_annotation != NULL) {
       ShaulaAnnotation *annotation = state->selected_annotation;
       return annotation->type == SHAULA_ANNOTATION_RECTANGLE;
@@ -277,6 +291,9 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     return shaula_preview_duplicate_selected(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     shaula_preview_delete_selected(state);
+    return TRUE;
+  case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
+    shaula_preview_select_all_annotations(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
     if (state->has_region_selection)

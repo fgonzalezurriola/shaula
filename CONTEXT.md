@@ -5,6 +5,23 @@ and the working diff.
 
 ## Current focus
 
+- Preview annotation multi-select is the final v0.1.x editor feature before
+  icon/release work. The GTK preview now uses `selected_annotation_ids` as the
+  annotation selection source of truth, keeps the legacy
+  `selected_annotation` pointer only for single-selection compatibility, and
+  syncs annotation `selected` flags because rendering/export/history snapshots
+  already consume them. Select mode supports normal click select-only,
+  Shift+click toggle, drag marquee using the existing rectangular selection,
+  Ctrl/Cmd+A select all annotations, Esc clear annotation selection before
+  closing, batch Delete/Backspace, and moving multiple selected annotations as
+  one undoable history gesture. The Select drag rectangle is intentionally
+  coupled: it remains the rectangular region for crop/blur/erase/spotlight and
+  also selects intersecting annotations on release, so the existing secondary
+  menu stays available while annotation operations can act on the selected
+  objects. Multi-select intentionally hides single-object
+  property/duplicate/crop actions and exposes only batch delete. Rectangle
+  annotations can be selected by clicking inside their bounds, even when
+  unfilled, because edge-only hit testing made Select feel broken.
 - v0.1.1 polish snapshot: preview Copy, Save, Save As, and Done/accept are the
   real user-facing flows; Pin and Share are not exposed actions. Preview Save,
   Save As defaults for runtime artifacts, and Done promotions now use
@@ -349,10 +366,12 @@ and the working diff.
   initial overflow layout before `gtk_window_present()`. Post-present toolbar
   updates may change sensitivity/active/menu state, but must not add primary
   toolbar buttons or expand the titlebar natural width.
-- Selected Rectangle annotations intentionally do not draw an extra selection
-  aura/border. The rectangle's own stroke plus resize handles are the only
-  selection affordances, so selecting a dashed rectangle does not visually add a
-  second outline.
+- Selected Rectangle annotations now draw an external selection outline before
+  repainting the real rectangle stroke above it. The outline must be derived
+  from `data.rectangle.rect`, not the broad-phase `bounds`, and use
+  screen-pixel-stable padding so selection chrome stays aligned at every
+  location/zoom. Multi-select made the old stroke-plus-handles-only affordance
+  too subtle for dashed rectangles.
 - Pan and Crop are fixed navigation/utility tools after Copy, Save, Undo, and
   Redo. Numbered canvas tools are ordered Select `1`, Rectangle `2`, Arrow `3`,
   reserved Line `4`, Text `5`, Pen `6`, Highlight `7`, Measure `8`, and
@@ -662,18 +681,14 @@ and the working diff.
   for related option toggles. Fill uses the selected stroke color at low alpha in
   the draw/export path so filled rectangles mark an area without fully hiding
   screenshot content. Select-mode hit testing for Rectangle is geometry-based:
-  bounding boxes are broad-phase only, stroke-only or visually transparent
-  rectangles hit only near the four visible edges with human tolerance, and
-  filled interiors are active only when the drawn fill alpha is at least `0.10`.
+  bounding boxes are broad-phase only, and rectangle interiors are selectable
+  even when unfilled so the Select tool has a forgiving target.
   The selection resolver ranks handles/strokes above visible fills and text
   bounds before applying z-order, so empty rectangle interiors pass through to
-  objects behind them. Selected rectangles draw border-following selection chrome
-  instead of a generic expanded bounds box and expose eight resize handles in
-  Select mode. Rectangle selection chrome must stay subtle UI: draw a low-alpha
-  external solid aura, redraw the real annotation stroke above it, and use
-  compact screen-pixel-stable handles as the primary selected affordance. Do
-  not draw a dashed white selection outline over rectangle borders, because it
-  visually replaces dashed orange content.
+  objects behind them. Selected rectangles draw an external selection outline
+  from the actual rectangle geometry plus eight resize handles in Select mode,
+  then repaint the real annotation stroke above the selection chrome so dashed
+  orange content remains visible.
 - `shaula-highlight-symbolic` Highlight: implemented. Its icon is the
   highlighter glyph, not the Spotlight/filter glyph.
 - `shaula-pen-symbolic` Pen: implemented.

@@ -846,7 +846,9 @@ static ShaulaAnnotationResizeHandle
 selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
                           double tolerance) {
   ShaulaAnnotation *annotation =
-      state != NULL ? state->selected_annotation : NULL;
+      state != NULL && shaula_preview_selected_count(state) == 1
+          ? state->selected_annotation
+          : NULL;
   if (annotation == NULL)
     return SHAULA_RESIZE_HANDLE_NONE;
 
@@ -884,6 +886,17 @@ selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
       return SHAULA_RESIZE_HANDLE_ARROW_CONTROL;
   }
   return SHAULA_RESIZE_HANDLE_NONE;
+}
+
+static void move_selected_annotations(ShaulaPreviewState *state, double dx,
+                                      double dy) {
+  if (state == NULL || state->document.annotations == NULL)
+    return;
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
+    if (shaula_preview_is_annotation_selected(state, annotation))
+      shaula_annotation_move(annotation, dx, dy);
+  }
 }
 
 static const char *
@@ -1039,6 +1052,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     return;
   state->drag_start_x = x;
   state->drag_start_y = y;
+  state->drag_hit_annotation = NULL;
+  state->drag_preserved_multi_selection = FALSE;
   update_hover_color(state, x, y);
 
   if (state->operation == SHAULA_OPERATION_TEXT && state->text_entry != NULL) {
@@ -1059,6 +1074,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
 
   if (button != 1)
     return;
+  GdkModifierType modifiers =
+      gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(gesture));
+  gboolean shift = (modifiers & GDK_SHIFT_MASK) != 0;
 
   switch (state->active_tool) {
   case SHAULA_TOOL_HAND:
@@ -1080,7 +1098,18 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     }
     ShaulaAnnotation *hit = hit_result.annotation;
     if (hit != NULL) {
-      shaula_preview_select_annotation(state, hit);
+      gboolean hit_was_selected =
+          shaula_preview_is_annotation_selected(state, hit);
+      if (shift) {
+        shaula_preview_toggle_annotation_selection(state, hit);
+        break;
+      }
+      if (!hit_was_selected || shaula_preview_selected_count(state) <= 1) {
+        shaula_preview_select_only_annotation(state, hit);
+      } else {
+        state->drag_hit_annotation = hit;
+        state->drag_preserved_multi_selection = TRUE;
+      }
       shaula_preview_begin_history_gesture(state);
 
       gboolean is_bend = FALSE;
@@ -1090,7 +1119,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
         gtk_widget_set_cursor_from_name(
             state->area, cursor_for_resize_handle(resize_handle));
         break;
-      } else if (hit->type == SHAULA_ANNOTATION_ARROW) {
+      } else if (shaula_preview_selected_count(state) == 1 &&
+                 hit->type == SHAULA_ANNOTATION_ARROW) {
         ShaulaPoint p0 = hit->data.arrow.start;
         ShaulaPoint p2 = hit->data.arrow.end;
         ShaulaPoint p1 =
@@ -1215,8 +1245,8 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
         (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
          fabs(raw.y - state->drag_start_image.y) > 0.5))
       state->operation_changed = TRUE;
-    if (state->selected_annotation != NULL && state->operation_changed) {
-      shaula_annotation_move(state->selected_annotation, mx, my);
+    if (shaula_preview_has_selection(state) && state->operation_changed) {
+      move_selected_annotations(state, mx, my);
       state->document.modified = TRUE;
     }
     state->drag_last_image = raw;
@@ -1485,11 +1515,19 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
         state->operation == SHAULA_OPERATION_BEND_ARROW ||
         state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION)
       shaula_preview_commit_history_gesture(state, state->operation_changed);
+    if (state->operation == SHAULA_OPERATION_MOVE &&
+        !state->operation_changed && state->drag_preserved_multi_selection &&
+        state->drag_hit_annotation != NULL)
+      shaula_preview_select_only_annotation(state, state->drag_hit_annotation);
     if (state->operation == SHAULA_OPERATION_SELECT_REGION) {
-      if (!state->operation_changed)
-        shaula_preview_clear_region_selection(state);
-      else
+      if (state->operation_changed) {
+        ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
+                                                  state->drag_current_image);
+        shaula_preview_select_annotations_intersecting_rect(state, rect);
         shaula_preview_toolbar_update_selection_state(state);
+      } else if (!state->operation_changed) {
+        shaula_preview_clear_region_selection(state);
+      }
     }
     if (state->operation == SHAULA_OPERATION_SPOTLIGHT) {
       if (state->operation_changed) {
@@ -1512,6 +1550,8 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
       state->operation != SHAULA_OPERATION_TEXT)
     state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
+  state->drag_hit_annotation = NULL;
+  state->drag_preserved_multi_selection = FALSE;
   state->active_resize_handle = SHAULA_RESIZE_HANDLE_NONE;
   if (state->space_pan_restore_pending)
     restore_space_pan_tool(state);
@@ -1551,6 +1591,10 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
       state->measure_mode = SHAULA_MEASURE_MODE_AUTO;
       state->measure_outer_bounds = FALSE;
       shaula_preview_queue_draw(state);
+      return TRUE;
+    }
+    if (shaula_preview_has_selection(state)) {
+      shaula_preview_clear_selection(state);
       return TRUE;
     }
     if (state->last_action == NULL)
