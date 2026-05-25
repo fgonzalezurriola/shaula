@@ -71,8 +71,15 @@ color_text() {
 }
 
 log() {
-  color_text "32" "$*"
-  printf '\n'
+  printf '%s\n' "$*"
+}
+
+ok() {
+  if color_enabled; then
+    printf '\033[32mok:\033[0m %s\n' "$*"
+  else
+    printf 'ok: %s\n' "$*"
+  fi
 }
 
 warn() {
@@ -496,20 +503,20 @@ confirm_noctalia_restart() {
 
 restart_noctalia() {
   if command -v systemctl >/dev/null 2>&1 && systemctl --user restart noctalia.service >/dev/null 2>&1; then
-    log "restarted noctalia.service"
+    ok "restarted noctalia.service"
     return 0
   fi
   if command -v qs >/dev/null 2>&1; then
     qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
     nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    log "restarted Noctalia with qs"
+    ok "restarted Noctalia with qs"
     log "Noctalia restart log: /tmp/shaula-noctalia.log"
     return 0
   fi
   if command -v quickshell >/dev/null 2>&1; then
     quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
     nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    log "restarted Noctalia with quickshell"
+    ok "restarted Noctalia with quickshell"
     log "Noctalia restart log: /tmp/shaula-noctalia.log"
     return 0
   fi
@@ -707,7 +714,7 @@ install_arch_runtime_deps_if_confirmed() {
   log "checking Arch runtime packages..."
   missing_packages="$(missing_arch_runtime_packages)"
   if [ -z "$missing_packages" ]; then
-    log "Arch runtime packages already installed."
+    ok "Arch runtime packages already installed."
     return 0
   fi
   if [ "$ASSUME_YES" -eq 1 ]; then
@@ -730,7 +737,7 @@ install_arch_runtime_deps_if_confirmed() {
     return 0
   fi
   if sudo pacman -S --needed $missing_packages; then
-    log "installed Arch runtime packages: $missing_packages"
+    ok "installed Arch runtime packages: $missing_packages"
   else
     warn "Arch runtime package install failed or was cancelled; continuing with Shaula install."
   fi
@@ -806,7 +813,7 @@ install_release() {
 
   if [ "$INSTALL_INTEGRATIONS" -eq 1 ]; then
     if niri_path="$(detect_niri_config)"; then
-      log "detected Niri config candidate: $niri_path"
+      ok "detected Niri config candidate: $niri_path"
       write_niri_snippet "$niri_path"
       log "Niri config was not edited automatically."
     else
@@ -814,7 +821,7 @@ install_release() {
     fi
 
     if noctalia_path="$(detect_noctalia)"; then
-      log "detected Noctalia candidate: $noctalia_path"
+      ok "detected Noctalia candidate: $noctalia_path"
       if confirm_noctalia_widget; then
         if install_noctalia_widget; then
           NOCTALIA_WIDGET_INSTALLED=1

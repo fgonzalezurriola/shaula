@@ -105,7 +105,8 @@ and the working diff.
   installs `grim slurp wl-clipboard gtk4 gtk4-layer-shell` via
   `sudo pacman -S --needed ...`, reads from `/dev/tty` so `curl | sh` still
   works interactively, logs when packages are already installed, supports
-  colorized TTY output, and `--yes` must never auto-escalate. The test-only
+  colorized TTY status prefixes (`ok:` green, `warning:` yellow, `error:` red)
+  without tinting entire normal log lines, and `--yes` must never auto-escalate. The test-only
   `SHAULA_INSTALL_ASSUME_ARCH=1` and
   `SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=...` environment variables exist
   so the dependency prompt can be exercised without uninstalling system
