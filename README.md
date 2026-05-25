@@ -6,7 +6,7 @@ Shaula is currently tested primarily on Niri. It also includes integration work
 for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
 is the main supported environment right now.
 
-![Shaula preview with annotations](docs/assets/shaula-preview.png)
+<video src="docs/assets/shaula-demo.mp4" controls width="100%" poster="docs/assets/shaula-preview.png"></video>
 
 ## Installation
 
