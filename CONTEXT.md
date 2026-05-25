@@ -117,7 +117,10 @@ and the working diff.
   Every installer prompt that changes integration state must first print the
   visible user outcome, files, settings, or keybinds it will affect before
   asking the user to confirm; do not expose internal CLI commands as the main
-  prompt copy. Local dev installs still prompt unless `--yes` is passed.
+  prompt copy. Installer output should be grouped by user-visible phases and
+  prefer concise status over raw implementation detail, while still naming
+  backup/config paths when they are useful for recovery. Local dev installs
+  still prompt unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use

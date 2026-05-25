@@ -78,6 +78,10 @@ info() {
   printf '  %s\n' "$*"
 }
 
+section() {
+  printf '\n%s\n' "$*"
+}
+
 ok() {
   if color_enabled; then
     printf '\033[32mok:\033[0m %s\n' "$*"
@@ -145,10 +149,10 @@ confirm_noctalia_widget() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
-  log "Noctalia integration changes:"
-  info "copy widget files to ${NOCTALIA_PLUGIN_DIR}"
-  info "backup and edit ${NOCTALIA_PLUGINS_JSON} to enable shaula"
-  info "backup and edit ${NOCTALIA_SETTINGS_JSON} to add plugin:shaula to the bar"
+  log "Noctalia integration:"
+  info "add the Shaula widget to your Noctalia bar"
+  info "enable the Shaula plugin in Noctalia"
+  info "create backups before changing Noctalia settings"
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
     prompt='Install/reload this local Shaula Noctalia Bar Widget? [y/N] '
   else
@@ -221,7 +225,11 @@ download() {
   url="$1"
   dest="$2"
   if command -v curl >/dev/null 2>&1; then
-    curl -fL "$url" -o "$dest"
+    if [ -t 1 ]; then
+      curl -fL --progress-bar "$url" -o "$dest"
+    else
+      curl -fsSL "$url" -o "$dest"
+    fi
   elif command -v wget >/dev/null 2>&1; then
     wget -O "$dest" "$url"
   else
@@ -724,7 +732,7 @@ install_arch_runtime_deps_if_confirmed() {
     log "Arch runtime dependency helper skipped; pacman-based distro not detected."
     return 0
   fi
-  log "checking Arch runtime packages..."
+  section "Checking system dependencies"
   missing_packages="$(missing_arch_runtime_packages)"
   if [ -z "$missing_packages" ]; then
     ok "Arch runtime packages already installed."
@@ -776,6 +784,7 @@ install_release() {
 
   install_arch_runtime_deps_if_confirmed
 
+  section "Downloading Shaula"
   arch="$(detect_arch)"
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' EXIT INT HUP TERM
@@ -797,6 +806,7 @@ install_release() {
   [ -n "$shaula_bin" ] || die "release archive does not contain shaula"
 
   confirm
+  section "Installing files"
   mkdir -p "$XDG_BIN_HOME" "$SHAULA_GENERATED_DIR"
   install -m 0755 "$shaula_bin" "${XDG_BIN_HOME}/shaula"
   log "installed ${XDG_BIN_HOME}/shaula"
@@ -825,10 +835,11 @@ install_release() {
   warn_runtime_tools
 
   if [ "$INSTALL_INTEGRATIONS" -eq 1 ]; then
+    section "Configuring integrations"
     if niri_path="$(detect_niri_config)"; then
-      ok "detected Niri config candidate: $niri_path"
+      ok "found Niri config: $niri_path"
       write_niri_snippet "$niri_path"
-      log "Niri config was not edited automatically."
+      log "created optional Niri preview-rule snippet; your Niri config was not edited here."
     else
       log "Niri config was not detected; no Niri snippet generated."
     fi
