@@ -74,6 +74,10 @@ log() {
   printf '%s\n' "$*"
 }
 
+info() {
+  printf '  %s\n' "$*"
+}
+
 ok() {
   if color_enabled; then
     printf '\033[32mok:\033[0m %s\n' "$*"
@@ -141,10 +145,14 @@ confirm_noctalia_widget() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
+  log "Noctalia integration changes:"
+  info "copy widget files to ${NOCTALIA_PLUGIN_DIR}"
+  info "backup and edit ${NOCTALIA_PLUGINS_JSON} to enable shaula"
+  info "backup and edit ${NOCTALIA_SETTINGS_JSON} to add plugin:shaula to the bar"
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
-    prompt='Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
+    prompt='Install/reload this local Shaula Noctalia Bar Widget? [y/N] '
   else
-    prompt='Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
+    prompt='Install Shaula Noctalia Bar Widget? [y/N] '
   fi
   prompt_yes_no "$prompt"
 }
@@ -156,11 +164,12 @@ confirm_niri_keybinds() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 1
   fi
-  if [ "$INSTALL_CONTEXT" = "dev" ]; then
-    prompt='Install recommended Shaula Niri shortcuts (CTRL+Shift+1/2/3/4)? [y/N] '
-  else
-    prompt='Install recommended Shaula Niri shortcuts? [y/N] '
-  fi
+  log "Niri keybinds to install:"
+  info "Ctrl+Shift+1 -> shaula capture area --json"
+  info "Ctrl+Shift+2 -> shaula capture fullscreen --json --save"
+  info "Ctrl+Shift+3 -> shaula capture all-screens --json --save"
+  info "Ctrl+Shift+4 -> shaula settings"
+  prompt='Install these Shaula Niri shortcuts? [y/N] '
   if prompt_yes_no "$prompt"; then
     INSTALL_NIRI_KEYBINDS=1
     return 0
@@ -650,7 +659,11 @@ install_niri_keybinds() {
     fi
     return 1
   }
-  log "installed Niri keybinds (CTRL+Shift+1/2/3/4)"
+  ok "installed Niri keybinds:"
+  info "Ctrl+Shift+1 -> area capture"
+  info "Ctrl+Shift+2 -> fullscreen capture"
+  info "Ctrl+Shift+3 -> all-screens capture"
+  info "Ctrl+Shift+4 -> settings"
 }
 
 uninstall_niri_keybinds() {

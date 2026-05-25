@@ -114,7 +114,9 @@ and the working diff.
   and Niri keybind installation prompt when those environments are detected.
   After installing the Noctalia widget, the installer asks at the end whether
   to restart Noctalia so the widget loads; `--yes` must not auto-restart it.
-  Local dev installs still prompt unless `--yes` is passed.
+  Every installer prompt that changes integration state must first print the
+  exact files, settings, keybinds, or commands it will affect before asking the
+  user to confirm. Local dev installs still prompt unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use
