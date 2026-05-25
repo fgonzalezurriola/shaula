@@ -84,6 +84,8 @@ jobs:
             "bin/shaula-crop-image"
             "bin/shaula-settings"
             "share/icons/hicolor/index.theme"
+            "share/icons/hicolor/256x256/apps/shaula.png"
+            "share/icons/hicolor/512x512/apps/shaula.png"
             "share/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
             "share/icons/hicolor/scalable/actions/shaula-save-symbolic.svg"
             "share/icons/hicolor/scalable/actions/shaula-spotlight-symbolic.svg"
@@ -143,7 +145,8 @@ jobs:
           done
           test -f "${xdg_data}/applications/shaula.desktop"
           test -f "${xdg_data}/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
-          test -f "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
+          test -f "${xdg_data}/icons/hicolor/256x256/apps/shaula.png"
+          test -f "${xdg_data}/icons/hicolor/512x512/apps/shaula.png"
           test -f "${xdg_config}/shaula/config.toml"
           test -f "${xdg_config}/shaula/generated/niri-shaula.kdl"
           grep -q "${xdg_bin}/shaula" "${xdg_config}/shaula/generated/niri-shaula.kdl"

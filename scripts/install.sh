@@ -13,7 +13,6 @@ INSTALL_NIRI_KEYBINDS=0
 UNINSTALL=0
 RELEASE_EXTRACT_DIR=""
 INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
-NOCTALIA_WIDGET_INSTALLED=0
 
 XDG_BIN_HOME="${XDG_BIN_HOME:-${HOME}/.local/bin}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
@@ -510,37 +509,6 @@ install_noctalia_widget() {
   return 0
 }
 
-confirm_noctalia_restart() {
-  [ "$NOCTALIA_WIDGET_INSTALLED" -eq 1 ] || return 1
-  if [ "$ASSUME_YES" -eq 1 ]; then
-    return 1
-  fi
-  prompt_yes_no 'Restart Noctalia now so the Shaula widget is loaded? [y/N] '
-}
-
-restart_noctalia() {
-  if command -v systemctl >/dev/null 2>&1 && systemctl --user restart noctalia.service >/dev/null 2>&1; then
-    ok "restarted noctalia.service"
-    return 0
-  fi
-  if command -v qs >/dev/null 2>&1; then
-    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
-    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    ok "restarted Noctalia with qs"
-    log "Noctalia restart log: /tmp/shaula-noctalia.log"
-    return 0
-  fi
-  if command -v quickshell >/dev/null 2>&1; then
-    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
-    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    ok "restarted Noctalia with quickshell"
-    log "Noctalia restart log: /tmp/shaula-noctalia.log"
-    return 0
-  fi
-  warn "could not restart Noctalia; missing noctalia.service and qs/quickshell"
-  return 1
-}
-
 edit_noctalia_plugins_json_disable() {
   [ -f "$NOCTALIA_PLUGINS_JSON" ] || return 1
   if ! python3 - "$NOCTALIA_PLUGINS_JSON" >/dev/null <<'PY'
@@ -824,8 +792,11 @@ install_release() {
       install_dir_if_present "$bundled_icon_theme" "${XDG_DATA_HOME}/icons/hicolor"
     fi
     bundled_icon="$(find "$extract_dir" -type f -path '*/icons/hicolor/scalable/apps/shaula.svg' | head -n 1)"
+    bundled_png_icon="$(find "$extract_dir" -type f -path '*/icons/hicolor/*/apps/shaula.png' | head -n 1)"
     if [ -n "$bundled_icon" ]; then
       install_file_if_present "$bundled_icon" "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg" 0644
+    elif [ -n "$bundled_png_icon" ]; then
+      log "installed bundled PNG app icons"
     else
       write_icon_file
     fi
@@ -847,9 +818,7 @@ install_release() {
     if noctalia_path="$(detect_noctalia)"; then
       ok "detected Noctalia candidate: $noctalia_path"
       if confirm_noctalia_widget; then
-        if install_noctalia_widget; then
-          NOCTALIA_WIDGET_INSTALLED=1
-        fi
+        install_noctalia_widget
       else
         log "skipped Noctalia Bar Widget install."
       fi
@@ -861,12 +830,6 @@ install_release() {
       else
         log "skipped Niri keybinds install."
       fi
-    fi
-
-    if confirm_noctalia_restart; then
-      restart_noctalia || true
-    elif [ "$NOCTALIA_WIDGET_INSTALLED" -eq 1 ]; then
-      log "skipped Noctalia restart."
     fi
   fi
 
@@ -890,6 +853,9 @@ run_uninstall() {
   remove_path "${XDG_BIN_HOME}/shaula-settings"
   remove_path "${XDG_DATA_HOME}/applications/shaula.desktop"
   remove_path "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg"
+  for size in 48x48 64x64 128x128 256x256 512x512; do
+    remove_path "${XDG_DATA_HOME}/icons/hicolor/${size}/apps/shaula.png"
+  done
   remove_path "${SHAULA_GENERATED_DIR}/niri-shaula.kdl"
   uninstall_noctalia_widget
   log "kept ${SHAULA_CONFIG_DIR}/config.toml"

@@ -68,7 +68,7 @@ Installed paths:
 - `~/.local/bin/shaula-preview`
 - `~/.local/bin/shaula-settings`
 - `~/.local/share/applications/shaula.desktop`
-- `~/.local/share/icons/hicolor/scalable/apps/shaula.svg`
+- `~/.local/share/icons/hicolor/<size>/apps/shaula.png`
 - `~/.config/shaula/config.toml`
 - `~/.config/shaula/generated/`
 

@@ -112,8 +112,8 @@ and the working diff.
   so the dependency prompt can be exercised without uninstalling system
   packages. Release installs otherwise stay non-interactive; optional Noctalia
   and Niri keybind installation prompt when those environments are detected.
-  After installing the Noctalia widget, the installer asks at the end whether
-  to restart Noctalia so the widget loads; `--yes` must not auto-restart it.
+  The Noctalia plugin state hot-applies, so the release installer must not ask
+  to restart Noctalia after installing the widget.
   Every installer prompt that changes integration state must first print the
   visible user outcome, files, settings, or keybinds it will affect before
   asking the user to confirm; do not expose internal CLI commands as the main
@@ -139,7 +139,13 @@ and the working diff.
   with `ERR_CLI_USAGE`, which makes compositor-spawned shortcuts appear to do
   nothing.
 - Installer icon handling copies the packaged `share/icons/hicolor` tree into
-  `~/.local/share/icons/hicolor`, not only the desktop app icon. Preview helper
+  `~/.local/share/icons/hicolor`, not only the desktop app icon. The desktop
+  launcher uses `Icon=shaula` and ships the AI-generated transparent PNG app
+  icon as fixed hicolor sizes under `48x48`, `64x64`, `128x128`, `256x256`,
+  and `512x512` rather than tracing it to SVG. The source raster lives at
+  `src/preview/icons/source/shaula-source.png`; avoid unused root-level icon
+  copies. Installer uninstall must remove those app PNG sizes plus the
+  legacy fallback SVG app icon. Preview helper
   toolbar icons are runtime-loaded from `../share/icons` relative to the
   installed helper, so missing `scalable/actions/shaula-*-symbolic.svg` files
   show as GTK missing-icon glyphs in installed previews.
