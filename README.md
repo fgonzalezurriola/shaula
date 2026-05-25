@@ -6,9 +6,6 @@ Shaula is currently tested primarily on Niri. It also includes integration work
 for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
 is the main supported environment right now.
 
-Shaula is screenshot-only. Screen recording, OCR, scrolling capture, and
-Share/upload backends are not implemented.
-
 ![Shaula preview with annotations](docs/assets/shaula-preview.png)
 
 ## Installation
@@ -19,17 +16,8 @@ Install or update with:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
 ```
 
-Install a specific release with:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v0.1.2
-```
-
-For a non-interactive install:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --yes
-```
+On Arch/CachyOS, the installer can prompt to install missing runtime packages
+with `sudo pacman -S --needed ...` when it detects a TTY.
 
 Uninstall with:
 
@@ -43,37 +31,16 @@ Shaula currently expects Wayland and is tested mainly on Niri. Full support
 across GNOME, KDE, Hyprland, Sway, and other Wayland compositors is not promised
 yet.
 
-Recommended runtime tools:
-
-- `grim`
-- `wl-clipboard` / `wl-copy`
-- GTK4 / gtk4-layer-shell runtime libraries
-
-Optional integration tools:
-
-- `slurp`, only if needed as a fallback selection helper
-- `niri`, recommended for the best integration
-- `quickshell`, only for Noctalia integration
-
-On Arch/CachyOS:
+Manual Arch/CachyOS install:
 
 ```bash
-sudo pacman -S grim wl-clipboard gtk4 gtk4-layer-shell
+sudo pacman -S --needed grim slurp wl-clipboard gtk4 gtk4-layer-shell
 ```
-
-### Niri/Wayland Notes
-
-- Niri is the only supported compositor target for v0.1.x runtime behavior.
-- Area selection uses logical compositor/output coordinates; saved PNG
-  dimensions, preview dimensions, color sampling, ruler output, and redaction
-  edits operate on physical image pixels after output-scale normalization.
-- Fractional scaling and multi-output layouts are handled best-effort, but
-  Niri IPC/window semantics, Wayland screencopy protocol migration, and overlay
-  timing remain technical risk areas.
 
 ## Fonts
 
-Shaula uses **Geist** (normal) and **Excalifont** (sketch).
+Shaula looks best with **Geist** (normal) and **Excalifont** (sketch), but the
+preview has fallback fonts if you skip them.
 
 ```bash
 paru -S ttf-geist ttf-excalifont

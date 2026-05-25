@@ -31,8 +31,9 @@ usage() {
 Usage: scripts/install.sh [options]
        scripts/install.sh v0.1.2
 
-Install Shaula for the current user. This script never uses sudo and never
-overwrites an existing ~/.config/shaula/config.toml.
+Install Shaula for the current user. The installer only uses sudo when you
+explicitly confirm Arch runtime dependency installation and never overwrites an
+existing ~/.config/shaula/config.toml.
 
 Options:
   --help              Show this help.
@@ -68,6 +69,25 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+can_prompt() {
+  [ -r /dev/tty ] && [ -w /dev/tty ]
+}
+
+prompt_yes_no() {
+  question="$1"
+  if ! can_prompt; then
+    return 1
+  fi
+  printf '%s' "$question" > /dev/tty
+  if ! IFS= read -r answer < /dev/tty; then
+    return 1
+  fi
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 confirm() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
@@ -76,15 +96,11 @@ confirm() {
     return 0
   fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
-    printf 'Install this local dev build of Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
+    prompt="Install this local dev build of Shaula into ${XDG_BIN_HOME}, ${XDG_DATA_HOME}, and ${SHAULA_CONFIG_DIR}? [y/N] "
   else
-    printf 'Install Shaula into %s, %s, and %s? [y/N] ' "$XDG_BIN_HOME" "$XDG_DATA_HOME" "$SHAULA_CONFIG_DIR"
+    prompt="Install Shaula into ${XDG_BIN_HOME}, ${XDG_DATA_HOME}, and ${SHAULA_CONFIG_DIR}? [y/N] "
   fi
-  read answer
-  case "$answer" in
-    y|Y|yes|YES) return 0 ;;
-    *) die "installation cancelled" ;;
-  esac
+  prompt_yes_no "$prompt" || die "installation cancelled"
 }
 
 confirm_noctalia_widget() {
@@ -95,15 +111,11 @@ confirm_noctalia_widget() {
     return 1
   fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
-    printf 'Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
+    prompt='Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
   else
-    printf 'Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
+    prompt='Detected Noctalia Shell. Install Shaula Noctalia Bar Widget? [y/N] '
   fi
-  read answer
-  case "$answer" in
-    y|Y|yes|YES) return 0 ;;
-    *) return 1 ;;
-  esac
+  prompt_yes_no "$prompt"
 }
 
 confirm_niri_keybinds() {
@@ -117,18 +129,15 @@ confirm_niri_keybinds() {
     return 1
   fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
-    printf 'Install recommended Shaula Niri shortcuts (CTRL+Shift+1/2/3/4)? [y/N] '
+    prompt='Install recommended Shaula Niri shortcuts (CTRL+Shift+1/2/3/4)? [y/N] '
   else
-    printf 'Install recommended Shaula Niri shortcuts? [y/N] '
+    prompt='Install recommended Shaula Niri shortcuts? [y/N] '
   fi
-  read answer
-  case "$answer" in
-    y|Y|yes|YES)
-      INSTALL_NIRI_KEYBINDS=1
-      return 0
-      ;;
-    *) return 1 ;;
-  esac
+  if prompt_yes_no "$prompt"; then
+    INSTALL_NIRI_KEYBINDS=1
+    return 0
+  fi
+  return 1
 }
 
 detect_arch() {
@@ -602,8 +611,68 @@ uninstall_niri_keybinds() {
   fi
 }
 
+is_arch_like_with_pacman() {
+  command -v pacman >/dev/null 2>&1 || return 1
+  if [ -r /etc/os-release ]; then
+    os_release="$(
+      (
+        . /etc/os-release
+        printf '%s %s' "${ID:-}" "${ID_LIKE:-}"
+      ) 2>/dev/null || true
+    )"
+    os_release="$(printf '%s' "$os_release" | tr '[:upper:]' '[:lower:]')"
+    case " $os_release " in
+      *" arch "*|*" cachyos "*|*" endeavouros "*|*" manjaro "*) return 0 ;;
+    esac
+    return 1
+  fi
+  return 0
+}
+
+missing_arch_runtime_packages() {
+  missing=""
+  for package in grim slurp wl-clipboard gtk4 gtk4-layer-shell; do
+    if ! pacman -Q "$package" >/dev/null 2>&1; then
+      missing="${missing} ${package}"
+    fi
+  done
+  printf '%s' "${missing# }"
+}
+
+install_arch_runtime_deps_if_confirmed() {
+  if ! is_arch_like_with_pacman; then
+    return 0
+  fi
+  missing_packages="$(missing_arch_runtime_packages)"
+  [ -n "$missing_packages" ] || return 0
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    warn "missing Arch runtime packages: $missing_packages"
+    warn "rerun without --yes to confirm sudo pacman -S --needed ${missing_packages}"
+    return 0
+  fi
+  if ! can_prompt; then
+    warn "missing Arch runtime packages: $missing_packages"
+    warn "install them manually or rerun with a TTY to confirm sudo pacman -S --needed ${missing_packages}"
+    return 0
+  fi
+  # `curl | sh` consumes stdin, so installer prompts must use `/dev/tty`.
+  if ! prompt_yes_no "Missing Arch runtime packages for Shaula: ${missing_packages}. Install now with sudo pacman -S --needed ${missing_packages}? [y/N] "; then
+    warn "skipped Arch runtime package install: $missing_packages"
+    return 0
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    warn "cannot install Arch runtime packages automatically because sudo is not installed"
+    return 0
+  fi
+  if sudo pacman -S --needed $missing_packages; then
+    log "installed Arch runtime packages: $missing_packages"
+  else
+    warn "Arch runtime package install failed or was cancelled; continuing with Shaula install."
+  fi
+}
+
 warn_runtime_tools() {
-  for tool in grim slurp wl-copy niri quickshell; do
+  for tool in grim slurp wl-copy wl-paste niri quickshell; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       warn "runtime tool not found in PATH: $tool"
     fi
@@ -619,6 +688,8 @@ install_release() {
   need_cmd sha256sum
   need_cmd install
   need_cmd mktemp
+
+  install_arch_runtime_deps_if_confirmed
 
   arch="$(detect_arch)"
   tmp_dir="$(mktemp -d)"

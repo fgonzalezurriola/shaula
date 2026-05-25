@@ -82,7 +82,7 @@ grep -q 'sentinel = true' "${xdg_config}/shaula/config.toml"
 
 grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh$' README.md
 grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --yes' README.md
-grep -q 'curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v0.1.2' README.md
+grep -q 'sudo pacman -S --needed grim slurp wl-clipboard gtk4 gtk4-layer-shell' README.md
+grep -q 'installer can prompt to install missing runtime packages' README.md
 
 echo "Installer foundation QA passed."

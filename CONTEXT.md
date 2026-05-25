@@ -99,10 +99,15 @@ and the working diff.
   `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
   `SHA256SUMS`, supports latest stable, `--version`, positional `v*`, and
   `SHAULA_VERSION`, warns about missing runtime tools, installs
-  desktop/icon/config/generated paths, never uses sudo, and preserves an
-  existing `~/.config/shaula/config.toml`. Release installs are non-interactive;
-  optional Noctalia installation is skipped unless explicitly confirmed with
-  `--yes`, and local dev installs still prompt unless `--yes` is passed.
+  desktop/icon/config/generated paths, preserves an existing
+  `~/.config/shaula/config.toml`, and only uses `sudo` after an explicit
+  Arch/CachyOS runtime-dependency confirmation. The Arch dependency prompt
+  installs `grim slurp wl-clipboard gtk4 gtk4-layer-shell` via
+  `sudo pacman -S --needed ...`, reads from `/dev/tty` so `curl | sh` still
+  works interactively, and `--yes` must never auto-escalate. Release installs
+  otherwise stay non-interactive; optional Noctalia installation is skipped
+  unless explicitly confirmed with `--yes`, and local dev installs still prompt
+  unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use
