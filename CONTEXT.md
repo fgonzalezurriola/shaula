@@ -134,7 +134,7 @@ and the working diff.
   install by trying `noctalia.service`, then `qs`, then `quickshell`; it skips
   restart for `--help`, `--uninstall`, and `--no-integrations`.
 - `./dev dev-install --yes` does not opt into Niri keybind installation by
-  itself; the installer passes `--no-niri` to `shaula setup` in that path so
+  itself; the installer passes `--skip-niri-keybinds` to `shaula setup` in that path so
   non-interactive installs do not silently edit Niri config. Use
   `./dev dev-install --yes --niri-keybinds`, `shaula setup`, or the Settings
   shortcut installer. Managed CTRL+Shift+1/2/3/4 Niri keybinds must spawn

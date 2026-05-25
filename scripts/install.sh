@@ -743,7 +743,7 @@ run_shaula_setup() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     setup_args="${setup_args} --yes"
     if [ "$INSTALL_NIRI_KEYBINDS" -eq 0 ]; then
-      setup_args="${setup_args} --no-niri"
+      setup_args="${setup_args} --skip-niri-keybinds"
     fi
   fi
   if [ "$INSTALL_INTEGRATIONS" -eq 0 ]; then
