@@ -32,7 +32,7 @@ provides=('shaula')
 conflicts=('shaula-bin')
 install='shaula.install'
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('81246a131177e8182764d4d98ebcc425425f73d5815a4732111de8f566a86771')
+sha256sums=('b6d6a5aa9032a8fa44fb4d46c1347bad764b575ae5694eb0aa4335d424ed2667')
 
 build() {
   cd "${srcdir}/${pkgname}-${pkgver}"

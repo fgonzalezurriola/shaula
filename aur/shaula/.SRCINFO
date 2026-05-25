@@ -26,6 +26,6 @@ pkgbase = shaula
 	provides = shaula
 	conflicts = shaula-bin
 	source = shaula-0.1.3.tar.gz::https://github.com/fgonzalezurriola/shaula/archive/refs/tags/v0.1.3.tar.gz
-	sha256sums = 81246a131177e8182764d4d98ebcc425425f73d5815a4732111de8f566a86771
+	sha256sums = b6d6a5aa9032a8fa44fb4d46c1347bad764b575ae5694eb0aa4335d424ed2667
 
 pkgname = shaula
