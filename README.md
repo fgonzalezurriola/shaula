@@ -10,16 +10,24 @@ the primary supported environment today.
 
 ## Installation
 
-Install or update with:
+### Arch Linux (AUR)
+
+```bash
+paru -S shaula-bin      # prebuilt binary
+paru -S shaula          # build from source
+shaula setup             # configure Niri & Noctalia integrations
+```
+
+Uninstall:
+
+```bash
+paru -R shaula-bin
+```
+
+### Script (any distro)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
-```
-
-After package-manager installs, run the user setup wizard:
-
-```bash
-shaula setup
 ```
 
 On Arch/CachyOS, the installer can prompt to install missing runtime packages
@@ -31,7 +39,7 @@ To test that prompt without uninstalling packages, answer `n`:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=grim sh
 ```
 
-Uninstall with:
+Uninstall:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall
