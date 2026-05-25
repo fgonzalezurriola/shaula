@@ -104,10 +104,16 @@ and the working diff.
   Arch/CachyOS runtime-dependency confirmation. The Arch dependency prompt
   installs `grim slurp wl-clipboard gtk4 gtk4-layer-shell` via
   `sudo pacman -S --needed ...`, reads from `/dev/tty` so `curl | sh` still
-  works interactively, and `--yes` must never auto-escalate. Release installs
-  otherwise stay non-interactive; optional Noctalia installation is skipped
-  unless explicitly confirmed with `--yes`, and local dev installs still prompt
-  unless `--yes` is passed.
+  works interactively, logs when packages are already installed, supports
+  colorized TTY output, and `--yes` must never auto-escalate. The test-only
+  `SHAULA_INSTALL_ASSUME_ARCH=1` and
+  `SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=...` environment variables exist
+  so the dependency prompt can be exercised without uninstalling system
+  packages. Release installs otherwise stay non-interactive; optional Noctalia
+  and Niri keybind installation prompt when those environments are detected.
+  After installing the Noctalia widget, the installer asks at the end whether
+  to restart Noctalia so the widget loads; `--yes` must not auto-restart it.
+  Local dev installs still prompt unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use

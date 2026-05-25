@@ -19,6 +19,12 @@ curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scri
 On Arch/CachyOS, the installer can prompt to install missing runtime packages
 with `sudo pacman -S --needed ...` when it detects a TTY.
 
+To test that prompt without uninstalling packages, answer `n`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=grim sh
+```
+
 Uninstall with:
 
 ```bash

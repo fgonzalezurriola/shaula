@@ -13,6 +13,7 @@ INSTALL_NIRI_KEYBINDS=0
 UNINSTALL=0
 RELEASE_EXTRACT_DIR=""
 INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
+NOCTALIA_WIDGET_INSTALLED=0
 
 XDG_BIN_HOME="${XDG_BIN_HOME:-${HOME}/.local/bin}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
@@ -49,19 +50,45 @@ Environment:
   SHAULA_VERSION             Install a specific GitHub release tag.
   SHAULA_RELEASE_ASSET_URL   Override release archive URL.
   SHAULA_SHA256SUMS_URL      Override SHA256SUMS URL.
+  SHAULA_INSTALL_ASSUME_ARCH Testing only: treat this host as Arch-like.
+  SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES
+                             Testing only: simulate missing Arch packages.
 EOF
 }
 
+color_enabled() {
+  [ -z "${NO_COLOR:-}" ] && [ -t 1 ]
+}
+
+color_text() {
+  code="$1"
+  text="$2"
+  if color_enabled; then
+    printf '\033[%sm%s\033[0m' "$code" "$text"
+  else
+    printf '%s' "$text"
+  fi
+}
+
 log() {
-  printf '%s\n' "$*"
+  color_text "32" "$*"
+  printf '\n'
 }
 
 warn() {
-  printf 'warning: %s\n' "$*" >&2
+  if color_enabled; then
+    printf '\033[33mwarning:\033[0m %s\n' "$*" >&2
+  else
+    printf 'warning: %s\n' "$*" >&2
+  fi
 }
 
 die() {
-  printf 'error: %s\n' "$*" >&2
+  if color_enabled; then
+    printf '\033[31merror:\033[0m %s\n' "$*" >&2
+  else
+    printf 'error: %s\n' "$*" >&2
+  fi
   exit 1
 }
 
@@ -78,7 +105,7 @@ prompt_yes_no() {
   if ! can_prompt; then
     return 1
   fi
-  printf '%s' "$question" > /dev/tty
+  color_text "33" "$question" > /dev/tty
   if ! IFS= read -r answer < /dev/tty; then
     return 1
   fi
@@ -107,9 +134,6 @@ confirm_noctalia_widget() {
   if [ "$ASSUME_YES" -eq 1 ]; then
     return 0
   fi
-  if [ "$INSTALL_CONTEXT" = "release" ]; then
-    return 1
-  fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
     prompt='Detected Noctalia Shell. Install/reload the Shaula Noctalia Bar Widget from this local dev build? [y/N] '
   else
@@ -123,9 +147,6 @@ confirm_niri_keybinds() {
     return 0
   fi
   if [ "$ASSUME_YES" -eq 1 ]; then
-    return 1
-  fi
-  if [ "$INSTALL_CONTEXT" = "release" ]; then
     return 1
   fi
   if [ "$INSTALL_CONTEXT" = "dev" ]; then
@@ -462,6 +483,38 @@ install_noctalia_widget() {
   if [ "$plugins_edited" -eq 0 ] || [ "$settings_edited" -eq 0 ]; then
     log "Manual Noctalia enable: plugin files are in ${NOCTALIA_PLUGIN_DIR}; enable shaula and add plugin:shaula to the bar in Noctalia settings."
   fi
+  return 0
+}
+
+confirm_noctalia_restart() {
+  [ "$NOCTALIA_WIDGET_INSTALLED" -eq 1 ] || return 1
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    return 1
+  fi
+  prompt_yes_no 'Restart Noctalia now so the Shaula widget is loaded? [y/N] '
+}
+
+restart_noctalia() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user restart noctalia.service >/dev/null 2>&1; then
+    log "restarted noctalia.service"
+    return 0
+  fi
+  if command -v qs >/dev/null 2>&1; then
+    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
+    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    log "restarted Noctalia with qs"
+    log "Noctalia restart log: /tmp/shaula-noctalia.log"
+    return 0
+  fi
+  if command -v quickshell >/dev/null 2>&1; then
+    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
+    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
+    log "restarted Noctalia with quickshell"
+    log "Noctalia restart log: /tmp/shaula-noctalia.log"
+    return 0
+  fi
+  warn "could not restart Noctalia; missing noctalia.service and qs/quickshell"
+  return 1
 }
 
 edit_noctalia_plugins_json_disable() {
@@ -613,6 +666,9 @@ uninstall_niri_keybinds() {
 
 is_arch_like_with_pacman() {
   command -v pacman >/dev/null 2>&1 || return 1
+  if [ "${SHAULA_INSTALL_ASSUME_ARCH:-0}" = "1" ]; then
+    return 0
+  fi
   if [ -r /etc/os-release ]; then
     os_release="$(
       (
@@ -630,6 +686,10 @@ is_arch_like_with_pacman() {
 }
 
 missing_arch_runtime_packages() {
+  if [ -n "${SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES:-}" ]; then
+    printf '%s' "$SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES"
+    return 0
+  fi
   missing=""
   for package in grim slurp wl-clipboard gtk4 gtk4-layer-shell; do
     if ! pacman -Q "$package" >/dev/null 2>&1; then
@@ -641,10 +701,15 @@ missing_arch_runtime_packages() {
 
 install_arch_runtime_deps_if_confirmed() {
   if ! is_arch_like_with_pacman; then
+    log "Arch runtime dependency helper skipped; pacman-based distro not detected."
     return 0
   fi
+  log "checking Arch runtime packages..."
   missing_packages="$(missing_arch_runtime_packages)"
-  [ -n "$missing_packages" ] || return 0
+  if [ -z "$missing_packages" ]; then
+    log "Arch runtime packages already installed."
+    return 0
+  fi
   if [ "$ASSUME_YES" -eq 1 ]; then
     warn "missing Arch runtime packages: $missing_packages"
     warn "rerun without --yes to confirm sudo pacman -S --needed ${missing_packages}"
@@ -751,7 +816,9 @@ install_release() {
     if noctalia_path="$(detect_noctalia)"; then
       log "detected Noctalia candidate: $noctalia_path"
       if confirm_noctalia_widget; then
-        install_noctalia_widget
+        if install_noctalia_widget; then
+          NOCTALIA_WIDGET_INSTALLED=1
+        fi
       else
         log "skipped Noctalia Bar Widget install."
       fi
@@ -763,6 +830,12 @@ install_release() {
       else
         log "skipped Niri keybinds install."
       fi
+    fi
+
+    if confirm_noctalia_restart; then
+      restart_noctalia || true
+    elif [ "$NOCTALIA_WIDGET_INSTALLED" -eq 1 ]; then
+      log "skipped Noctalia restart."
     fi
   fi
 
