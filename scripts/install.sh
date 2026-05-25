@@ -39,7 +39,7 @@ Options:
   --help              Show this help.
   --version <tag>     Install a specific GitHub release tag.
   --yes               Do not prompt before installing.
-  --no-integrations   Skip generated integration snippets.
+  --no-integrations   Skip setup integration prompts.
   --no-desktop        Skip the desktop entry.
   --no-icon           Skip the hicolor app icon.
   --niri-keybinds     Install recommended Shaula Niri keyboard shortcuts.
@@ -732,6 +732,35 @@ install_arch_runtime_deps_if_confirmed() {
   fi
 }
 
+run_shaula_setup() {
+  shaula_bin="${XDG_BIN_HOME}/shaula"
+  if [ ! -x "$shaula_bin" ]; then
+    warn "shaula binary not found at $shaula_bin; skipped setup."
+    return 0
+  fi
+
+  setup_args=""
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    setup_args="${setup_args} --yes"
+    if [ "$INSTALL_NIRI_KEYBINDS" -eq 0 ]; then
+      setup_args="${setup_args} --no-niri"
+    fi
+  fi
+  if [ "$INSTALL_INTEGRATIONS" -eq 0 ]; then
+    setup_args="${setup_args} --no-integrations"
+  fi
+  if [ "$INSTALL_NIRI_KEYBINDS" -eq 1 ]; then
+    setup_args="${setup_args} --niri-keybinds"
+  fi
+
+  noctalia_source="$(noctalia_plugin_source_dir 2>/dev/null || true)"
+  if [ -n "$noctalia_source" ]; then
+    SHAULA_NOCTALIA_PLUGIN_SOURCE="$noctalia_source" "$shaula_bin" setup $setup_args || warn "shaula setup failed; run 'shaula setup' manually."
+  else
+    "$shaula_bin" setup $setup_args || warn "shaula setup failed; run 'shaula setup' manually."
+  fi
+}
+
 warn_runtime_tools() {
   for tool in grim slurp wl-copy wl-paste niri quickshell; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -802,36 +831,10 @@ install_release() {
     fi
   fi
 
-  write_default_config
   warn_runtime_tools
 
-  if [ "$INSTALL_INTEGRATIONS" -eq 1 ]; then
-    section "Configuring integrations"
-    if niri_path="$(detect_niri_config)"; then
-      ok "found Niri config: $niri_path"
-      write_niri_snippet "$niri_path"
-      log "created optional Niri preview-rule snippet; your Niri config was not edited here."
-    else
-      log "Niri config was not detected; no Niri snippet generated."
-    fi
-
-    if noctalia_path="$(detect_noctalia)"; then
-      ok "detected Noctalia candidate: $noctalia_path"
-      if confirm_noctalia_widget; then
-        install_noctalia_widget
-      else
-        log "skipped Noctalia Bar Widget install."
-      fi
-    fi
-
-    if niri_path="$(detect_niri_config)"; then
-      if confirm_niri_keybinds; then
-        install_niri_keybinds
-      else
-        log "skipped Niri keybinds install."
-      fi
-    fi
-  fi
+  section "Running user setup"
+  run_shaula_setup
 
   log "Shaula install complete."
 }

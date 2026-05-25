@@ -98,9 +98,9 @@ and the working diff.
 - First installer foundation is now present in `scripts/install.sh` and
   `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
   `SHA256SUMS`, supports latest stable, `--version`, positional `v*`, and
-  `SHAULA_VERSION`, warns about missing runtime tools, installs
-  desktop/icon/config/generated paths, preserves an existing
-  `~/.config/shaula/config.toml`, and only uses `sudo` after an explicit
+  `SHAULA_VERSION`, warns about missing runtime tools, installs desktop/icon
+  paths, delegates user config/integration setup to `shaula setup`, preserves an
+  existing `~/.config/shaula/config.toml`, and only uses `sudo` after an explicit
   Arch/CachyOS runtime-dependency confirmation. The Arch dependency prompt
   installs `grim slurp wl-clipboard gtk4 gtk4-layer-shell` via
   `sudo pacman -S --needed ...`, reads from `/dev/tty` so `curl | sh` still
@@ -110,8 +110,9 @@ and the working diff.
   `SHAULA_INSTALL_ASSUME_ARCH=1` and
   `SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=...` environment variables exist
   so the dependency prompt can be exercised without uninstalling system
-  packages. Release installs otherwise stay non-interactive; optional Noctalia
-  and Niri keybind installation prompt when those environments are detected.
+  packages. Release installs otherwise stay non-interactive; `shaula setup`
+  owns optional Noctalia and Niri integration prompts when those environments are
+  detected.
   The Noctalia plugin state hot-applies, so the release installer must not ask
   to restart Noctalia after installing the widget.
   Every installer prompt that changes integration state must first print the
@@ -133,11 +134,27 @@ and the working diff.
   install by trying `noctalia.service`, then `qs`, then `quickshell`; it skips
   restart for `--help`, `--uninstall`, and `--no-integrations`.
 - `./dev dev-install --yes` does not opt into Niri keybind installation by
-  itself; use `./dev dev-install --yes --niri-keybinds` or the Settings
+  itself; the installer passes `--no-niri` to `shaula setup` in that path so
+  non-interactive installs do not silently edit Niri config. Use
+  `./dev dev-install --yes --niri-keybinds`, `shaula setup`, or the Settings
   shortcut installer. Managed CTRL+Shift+1/2/3/4 Niri keybinds must spawn
   `shaula capture <mode> --json`; capture commands reject non-JSON invocations
   with `ERR_CLI_USAGE`, which makes compositor-spawned shortcuts appear to do
   nothing.
+- `shaula setup` is the post-install user wizard for package-manager installs
+  such as AUR `shaula-bin`: packages install files, while setup creates the
+  user config, asks before mutating Niri, asks before installing the Noctalia Bar
+  Widget, writes backups before JSON/config edits, and can run non-interactively
+  with `--yes`, `--no-integrations`, `--no-niri`, `--no-noctalia`,
+  `--niri-keybinds`, `--skip-niri-keybinds`, and `--dry-run`.
+- AUR packaging scaffolds live under `aur/shaula` and `aur/shaula-bin`.
+  `shaula` is the source package for `x86_64`/`aarch64` and has `zig` only in
+  `makedepends`; `shaula-bin` installs the GitHub Release tarball without Zig
+  and currently declares only `x86_64` because published releases do not yet
+  include a checked `shaula-linux-aarch64.tar.gz` asset. Both packages install a
+  pacman post-install message that points users at settings and conditionally at
+  `shaula setup` when the installed binary supports it, instead of mutating user
+  configs from package hooks.
 - Installer icon handling copies the packaged `share/icons/hicolor` tree into
   `~/.local/share/icons/hicolor`, not only the desktop app icon. The desktop
   launcher uses `Icon=shaula` and ships the AI-generated transparent PNG app
@@ -149,16 +166,16 @@ and the working diff.
   toolbar icons are runtime-loaded from `../share/icons` relative to the
   installed helper, so missing `scalable/actions/shaula-*-symbolic.svg` files
   show as GTK missing-icon glyphs in installed previews.
-- Installer integration behavior is intentionally conservative: it detects Niri
-  config candidates and generates
-  `~/.config/shaula/generated/niri-shaula.kdl` without editing Niri config. The
-  snippet includes the preview floating window-rule and recommended area,
-  fullscreen, and all-screens capture binds using the installed absolute
-  `shaula` path. It detects Noctalia and can optionally install the minimal
-  `integrations/noctalia/shaula/` Bar Widget into
-  `~/.config/noctalia/plugins/shaula/`, enabling `states.shaula.enabled` and
-  adding `plugin:shaula` to the bar only after backing up and validating
-  Noctalia JSON config. The user-facing Noctalia menu should expose capture,
+- Integration behavior is intentionally user-scoped: packages and the installer
+  install files, then `shaula setup` detects Niri config candidates and asks
+  before editing the user's Niri config. The managed blocks include the preview
+  floating window-rule and recommended quick, area, fullscreen, and all-screens
+  capture binds using the installed absolute `shaula` path. It detects Noctalia
+  and can optionally install the minimal `integrations/noctalia/shaula/` Bar
+  Widget into `~/.config/noctalia/plugins/shaula/`, enabling
+  `states.shaula.enabled` and adding `plugin:shaula` to the bar only after
+  backing up and validating Noctalia JSON config. The user-facing Noctalia menu
+  should expose capture,
   Settings, screenshots-folder, and bug-report actions; keep `shaula doctor`
   out of that menu because it is a diagnostic/development command.
 - Installer Niri and Noctalia detection must honor `XDG_CONFIG_HOME` first and

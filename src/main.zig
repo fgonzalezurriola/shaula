@@ -23,6 +23,7 @@ const config_command = @import("config/command.zig");
 const doctor_command = @import("doctor/command.zig");
 const settings_command = @import("settings/command.zig");
 const directory_command = @import("directory/command.zig");
+const setup_command = @import("setup/command.zig");
 const recovery_policy = @import("recovery/policy.zig");
 
 pub fn main(init: std.process.Init) !u8 {
@@ -31,7 +32,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = init.minimal.args.vector;
 
     if (argv.len < 2) {
-        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|directory|doctor|daemon|preflight|capabilities|history|clipboard|errors> ... --json", false);
+        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|setup|directory|doctor|daemon|preflight|capabilities|history|clipboard|errors> ...", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -95,6 +96,10 @@ pub fn main(init: std.process.Init) !u8 {
 
     if (std.mem.eql(u8, family, "settings")) {
         return settings_command.run(allocator, io, init.minimal.environ, argv);
+    }
+
+    if (std.mem.eql(u8, family, "setup")) {
+        return setup_command.run(allocator, io, init.minimal.environ, argv);
     }
 
     if (std.mem.eql(u8, family, "directory")) {

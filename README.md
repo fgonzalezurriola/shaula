@@ -16,6 +16,12 @@ Install or update with:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
 ```
 
+After package-manager installs, run the user setup wizard:
+
+```bash
+shaula setup
+```
+
 On Arch/CachyOS, the installer can prompt to install missing runtime packages
 with `sudo pacman -S --needed ...` when it detects a TTY.
 
@@ -100,6 +106,7 @@ Useful development commands:
 ./dev capture
 ./dev noctalia-load
 ./dev dev-install
+shaula setup
 ```
 
 ## Support

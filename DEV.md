@@ -70,22 +70,17 @@ Installed paths:
 - `~/.local/share/applications/shaula.desktop`
 - `~/.local/share/icons/hicolor/<size>/apps/shaula.png`
 - `~/.config/shaula/config.toml`
-- `~/.config/shaula/generated/`
 
 The installer detects `x86_64` and `aarch64`, warns if runtime tools are
-missing, and never overwrites an existing `~/.config/shaula/config.toml`.
+missing, then runs `shaula setup` for user-scoped config and integration work.
+It never overwrites an existing `~/.config/shaula/config.toml`.
 
 ## Niri Integration
 
-The installer does not edit Niri config automatically.
-
-If Niri is detected, it generates:
-
-```txt
-~/.config/shaula/generated/niri-shaula.kdl
-```
-
-You can manually include or copy that snippet into your active Niri config.
+`shaula setup` detects Niri and asks before installing the managed preview
+window rule and Ctrl+Shift+1/2/3/4 keybinds into the user's Niri config.
+Package installs should point users at `shaula setup` instead of editing
+`~/.config/niri` from a package hook.
 
 Manual helper commands:
 
@@ -94,6 +89,7 @@ shaula config show --json
 shaula config init --json
 shaula config save --json --region-mode live --preview-mode floating --focused true --close-preview-on-save true --width 1100 --height 720 --floating-position centered
 shaula config niri-window-rule --json
+shaula setup
 shaula settings
 ```
 
@@ -128,10 +124,12 @@ Installed Noctalia paths:
 - `~/.config/noctalia/plugins.json`
 - `~/.config/noctalia/settings.json`
 
-Install from the script and accept the Noctalia prompt:
+Install from the script and accept the Noctalia prompt, or run setup after a
+package-manager install:
 
 ```bash
 scripts/install.sh --yes
+shaula setup
 ```
 
 For local development, use the dev helper. It builds the current checkout,
@@ -142,8 +140,8 @@ restarts the user Noctalia service:
 ./dev noctalia-load
 ```
 
-The installer copies the plugin files, writes a `.shaula-managed` marker, backs
-up Noctalia JSON files as `*.shaula-backup-<timestamp>`, enables
+`shaula setup` copies the plugin files, writes a `.shaula-managed` marker,
+backs up Noctalia JSON files as `*.shaula-backup-<timestamp>`, enables
 `states.shaula.enabled`, and adds `plugin:shaula` to the right bar section when
 the local JSON structure matches Noctalia's v2 registry format.
 
