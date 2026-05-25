@@ -38,11 +38,12 @@ const keybind_specs = [_]struct {
     key: []const u8,
     subcommand: []const u8,
     title: []const u8,
+    save: bool = false,
 }{
     .{ .key = "CTRL+Shift+1", .subcommand = "quick", .title = "Shaula: Quick Capture" },
     .{ .key = "CTRL+Shift+2", .subcommand = "area", .title = "Shaula: Capture Area" },
-    .{ .key = "CTRL+Shift+3", .subcommand = "fullscreen", .title = "Shaula: Capture Fullscreen" },
-    .{ .key = "CTRL+Shift+4", .subcommand = "all-screens", .title = "Shaula: Capture All Screens" },
+    .{ .key = "CTRL+Shift+3", .subcommand = "fullscreen", .title = "Shaula: Capture Fullscreen", .save = true },
+    .{ .key = "CTRL+Shift+4", .subcommand = "all-screens", .title = "Shaula: Capture All Screens", .save = true },
 };
 
 /// Render the Niri keybind block for Shaula capture shortcuts.
@@ -50,6 +51,7 @@ const keybind_specs = [_]struct {
 /// Contract constraints:
 /// - uses `spawn`, not `spawn-sh`, because no shell features are needed.
 /// - includes `--json`; capture commands reject non-JSON invocations with ERR_CLI_USAGE.
+/// - CTRL+Shift+3/4 include `--save` so those shortcuts always leave a durable file.
 /// - binary_path must be the absolute installed Shaula binary path.
 pub fn renderKeybinds(allocator: std.mem.Allocator, binary_path: []const u8) !RenderedKeybinds {
     var out = std.ArrayList(u8).empty;
@@ -57,11 +59,19 @@ pub fn renderKeybinds(allocator: std.mem.Allocator, binary_path: []const u8) !Re
 
     try out.appendSlice(allocator, "binds {\n");
     for (keybind_specs) |spec| {
-        try out.print(
-            allocator,
-            "    {s} repeat=false hotkey-overlay-title=\"{s}\" {{\n        spawn \"{s}\" \"capture\" \"{s}\" \"--json\";\n    }}\n\n",
-            .{ spec.key, spec.title, binary_path, spec.subcommand },
-        );
+        if (spec.save) {
+            try out.print(
+                allocator,
+                "    {s} repeat=false hotkey-overlay-title=\"{s}\" {{\n        spawn \"{s}\" \"capture\" \"{s}\" \"--json\" \"--save\";\n    }}\n\n",
+                .{ spec.key, spec.title, binary_path, spec.subcommand },
+            );
+        } else {
+            try out.print(
+                allocator,
+                "    {s} repeat=false hotkey-overlay-title=\"{s}\" {{\n        spawn \"{s}\" \"capture\" \"{s}\" \"--json\";\n    }}\n\n",
+                .{ spec.key, spec.title, binary_path, spec.subcommand },
+            );
+        }
     }
     try out.appendSlice(allocator, "}\n");
 

@@ -218,8 +218,6 @@ void shaula_preview_update_theme_state(ShaulaPreviewState *state) {
 void shaula_preview_queue_draw(ShaulaPreviewState *state) {
   if (state->area != NULL)
     gtk_widget_queue_draw(state->area);
-  if (state->color_swatch != NULL)
-    gtk_widget_queue_draw(state->color_swatch);
 }
 
 void shaula_preview_update_dimensions_label(ShaulaPreviewState *state) {

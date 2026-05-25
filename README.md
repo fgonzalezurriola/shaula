@@ -93,8 +93,9 @@ shaula capture area --json --no-preview
 Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
 the configured save folder, defaulting to `~/Pictures/shaula`, and generate
 `shaula-screenshot-YYYYMMDD-HHMMSS.png` names from the preview. Direct
-no-preview saved captures use `shaula-<mode>-<milliseconds>.png`. Pin and Share
-are not exposed actions in v0.1.x.
+no-preview saved captures use `shaula-<mode>-<milliseconds>.png`. The default
+fullscreen and all-screens shortcuts save a durable copy to that folder. Pin and
+Share are not exposed actions in v0.1.x.
 
 ## Development
 

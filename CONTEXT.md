@@ -21,7 +21,10 @@ and the working diff.
   objects. Starting an annotation interaction, such as grabbing a selected
   annotation to move it or deleting selected annotations, clears the rectangular
   region/menu and returns to annotation-only selection until the user draws a
-  new region. Multi-select intentionally hides single-object
+  new region. Interactive performance constraints: drag/move hot paths must not
+  sample hover color, must not redraw the toolbar color swatch on every canvas
+  frame, and should use the synced `annotation->selected` flag for per-frame
+  movement instead of repeated selected-ID scans. Multi-select intentionally hides single-object
   property/duplicate/crop actions and exposes only batch delete. Rectangle
   annotations can be selected by clicking inside their bounds, even when
   unfilled, because edge-only hit testing made Select feel broken.
@@ -231,7 +234,9 @@ and the working diff.
   `SHAULA_PREVIEW_COPY_ON_ACCEPT=1` so Done/Enter copies the accepted PNG after
   preview edits. First-run defaults expose `copy_to_clipboard=true` for quick,
   area, fullscreen, and all-screens; quick/area still show preview by default,
-  while fullscreen/all-screens skip preview by default.
+  while fullscreen/all-screens skip preview and save a durable copy to
+  `save_folder` by default. Managed Ctrl+Shift+3/4 Niri keybinds also pass
+  `--save`, so those shipped shortcuts always leave a screenshot file.
 - The preview right headerbar cluster order is metadata, Done, then the normal
   window close X. Done is built during initial toolbar construction, uses
   `shaula-done-symbolic`, carries GTK `suggested-action`, and advertises either

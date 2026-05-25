@@ -894,7 +894,7 @@ static void move_selected_annotations(ShaulaPreviewState *state, double dx,
     return;
   for (guint i = 0; i < state->document.annotations->len; i++) {
     ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
-    if (shaula_preview_is_annotation_selected(state, annotation))
+    if (annotation != NULL && annotation->selected)
       shaula_annotation_move(annotation, dx, dy);
   }
 }
@@ -1339,7 +1339,8 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
                       gpointer data) {
   (void)controller;
   ShaulaPreviewState *state = data;
-  update_hover_color(state, x, y);
+  if (state->operation == SHAULA_OPERATION_NONE)
+    update_hover_color(state, x, y);
 
   if (state->active_tool == SHAULA_TOOL_SELECT &&
       state->operation == SHAULA_OPERATION_NONE && state->area != NULL &&

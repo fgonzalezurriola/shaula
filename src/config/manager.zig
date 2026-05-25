@@ -26,12 +26,12 @@ pub const default_config_toml =
     \\[capture.after.fullscreen]
     \\skip_preview = true
     \\copy_to_clipboard = true
-    \\save_to_folder = false
+    \\save_to_folder = true
     \\
     \\[capture.after.all_screens]
     \\skip_preview = true
     \\copy_to_clipboard = true
-    \\save_to_folder = false
+    \\save_to_folder = true
     \\
     \\[notifications]
     \\success = true

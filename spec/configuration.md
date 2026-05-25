@@ -26,7 +26,30 @@ Initial supported schema:
 
 ```toml
 [capture]
-region_capture_mode = "live"
+region_capture_mode = "frozen"
+
+[capture.after]
+save_folder = "~/Pictures/shaula"
+
+[capture.after.quick]
+skip_preview = false
+copy_to_clipboard = true
+save_to_folder = false
+
+[capture.after.area]
+skip_preview = false
+copy_to_clipboard = true
+save_to_folder = false
+
+[capture.after.fullscreen]
+skip_preview = true
+copy_to_clipboard = true
+save_to_folder = true
+
+[capture.after.all_screens]
+skip_preview = true
+copy_to_clipboard = true
+save_to_folder = true
 
 [preview.window]
 mode = "floating"
@@ -46,7 +69,30 @@ Defaults:
 
 ```toml
 [capture]
-region_capture_mode = "live"
+region_capture_mode = "frozen"
+
+[capture.after]
+save_folder = "~/Pictures/shaula"
+
+[capture.after.quick]
+skip_preview = false
+copy_to_clipboard = true
+save_to_folder = false
+
+[capture.after.area]
+skip_preview = false
+copy_to_clipboard = true
+save_to_folder = false
+
+[capture.after.fullscreen]
+skip_preview = true
+copy_to_clipboard = true
+save_to_folder = true
+
+[capture.after.all_screens]
+skip_preview = true
+copy_to_clipboard = true
+save_to_folder = true
 
 [preview.window]
 mode = "floating"
@@ -62,8 +108,14 @@ relative_to = "top-left"
 
 Supported `capture.region_capture_mode` values:
 
-- `live`: default. The desktop keeps updating while selecting the region.
+- `live`: the desktop keeps updating while selecting the region.
 - `frozen`: selection happens against a still background for transient states.
+
+Default after-capture behavior:
+
+- quick and area show preview and copy on accept, without automatic folder save.
+- fullscreen and all-screens skip preview, copy to clipboard, and save to the
+  configured screenshot folder.
 
 Supported `preview.window.mode` values:
 
