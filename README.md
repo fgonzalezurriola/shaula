@@ -31,22 +31,15 @@ Uninstall with:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall
 ```
 
-## Runtime Requirements
+## Dependencies
 
-Shaula currently expects Wayland and is tested mainly on Niri. Full support
-across GNOME, KDE, Hyprland, Sway, and other Wayland compositors is not promised
-yet.
-
-Manual Arch/CachyOS install:
+Install runtime dependencies:
 
 ```bash
 sudo pacman -S --needed grim slurp wl-clipboard gtk4 gtk4-layer-shell
 ```
 
-## Fonts
-
-Shaula looks best with **Geist** (normal) and **Excalifont** (sketch), but the
-preview has fallback fonts if you skip them.
+Install fonts dependencies:
 
 ```bash
 paru -S ttf-geist ttf-excalifont
@@ -54,8 +47,9 @@ paru -S ttf-geist ttf-excalifont
 
 ## Usage
 
-Main usage is tied to the installed Noctalia Shell menu. Shaula can also be
-called through the terminal:
+Main usage is tied to the installed Noctalia Shell menu and by shortcuts (Ctrl+Shift+1/2/3/4). 
+
+Shaula can also becalled through the terminal:
 
 ```bash
 shaula capture quick --json
@@ -67,8 +61,7 @@ Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
 the configured save folder, defaulting to `~/Pictures/shaula`, and generate
 `shaula-screenshot-YYYYMMDD-HHMMSS.png` names from the preview. Direct
 no-preview saved captures use `shaula-<mode>-<milliseconds>.png`. The default
-fullscreen and all-screens shortcuts save a durable copy to that folder. Pin and
-Share are not exposed actions in v0.1.x.
+fullscreen and all-screens shortcuts save a durable copy to that folder.
 
 ## Development
 
