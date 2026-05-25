@@ -148,8 +148,7 @@ jobs:
           test -f "${xdg_data}/icons/hicolor/256x256/apps/shaula.png"
           test -f "${xdg_data}/icons/hicolor/512x512/apps/shaula.png"
           test -f "${xdg_config}/shaula/config.toml"
-          test -f "${xdg_config}/shaula/generated/niri-shaula.kdl"
-          grep -q "${xdg_bin}/shaula" "${xdg_config}/shaula/generated/niri-shaula.kdl"
+          grep -q "BEGIN SHAULA PREVIEW WINDOW RULE" "${xdg_config}/niri/config.kdl"
           test -f "${xdg_config}/noctalia/plugins/shaula/manifest.json"
           jq -e '.states.shaula.enabled == true' "${xdg_config}/noctalia/plugins.json" >/dev/null
           jq -e '.bar.widgets.right | any(.id == "plugin:shaula")' "${xdg_config}/noctalia/settings.json" >/dev/null
@@ -160,7 +159,7 @@ jobs:
             XDG_DATA_HOME="${xdg_data}" \
             XDG_CONFIG_HOME="${xdg_config}" \
             "${xdg_bin}/shaula" doctor --json \
-            | jq -e '.ok == true and .paths.config_exists == true and .paths.niri_snippet_exists == true and .noctalia.plugin_installed == true' >/dev/null
+            | jq -e '.ok == true and .paths.config_exists == true and .noctalia.plugin_installed == true' >/dev/null
 
           env \
             HOME="${home_dir}" \
