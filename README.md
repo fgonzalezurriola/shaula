@@ -2,13 +2,11 @@
 
 Shaula is a screenshot tool for Wayland/Niri.
 
-Shaula is currently tested primarily on Niri. It also includes integration work
-for Noctalia Shell. Broader Wayland compositor support is in progress, but Niri
-is the main supported environment right now.
+Shaula is currently tested primarily on Niri, with integration work for
+Noctalia Shell. Broader Wayland compositor support is in progress, but Niri is
+the primary supported environment today.
 
-<video src="https://github.com/fgonzalezurriola/shaula/raw/master/docs/assets/shaula-demo.mp4" controls="controls" muted="muted" style="max-width: 100%;">
-  Your browser does not support the video tag.
-</video>
+[![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
 ## Installation
 
