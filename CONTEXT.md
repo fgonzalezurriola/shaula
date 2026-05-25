@@ -115,8 +115,9 @@ and the working diff.
   After installing the Noctalia widget, the installer asks at the end whether
   to restart Noctalia so the widget loads; `--yes` must not auto-restart it.
   Every installer prompt that changes integration state must first print the
-  exact files, settings, keybinds, or commands it will affect before asking the
-  user to confirm. Local dev installs still prompt unless `--yes` is passed.
+  visible user outcome, files, settings, or keybinds it will affect before
+  asking the user to confirm; do not expose internal CLI commands as the main
+  prompt copy. Local dev installs still prompt unless `--yes` is passed.
 - `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use

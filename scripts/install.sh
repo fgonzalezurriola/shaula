@@ -165,10 +165,10 @@ confirm_niri_keybinds() {
     return 1
   fi
   log "Niri keybinds to install:"
-  info "Ctrl+Shift+1 -> shaula capture area --json"
-  info "Ctrl+Shift+2 -> shaula capture fullscreen --json --save"
-  info "Ctrl+Shift+3 -> shaula capture all-screens --json --save"
-  info "Ctrl+Shift+4 -> shaula settings"
+  info "Ctrl+Shift+1 -> choose an area and open the preview"
+  info "Ctrl+Shift+2 -> capture the current screen and save it"
+  info "Ctrl+Shift+3 -> capture all screens and save it"
+  info "Ctrl+Shift+4 -> open Shaula settings"
   prompt='Install these Shaula Niri shortcuts? [y/N] '
   if prompt_yes_no "$prompt"; then
     INSTALL_NIRI_KEYBINDS=1
@@ -660,10 +660,10 @@ install_niri_keybinds() {
     return 1
   }
   ok "installed Niri keybinds:"
-  info "Ctrl+Shift+1 -> area capture"
-  info "Ctrl+Shift+2 -> fullscreen capture"
-  info "Ctrl+Shift+3 -> all-screens capture"
-  info "Ctrl+Shift+4 -> settings"
+  info "Ctrl+Shift+1 -> choose an area and open the preview"
+  info "Ctrl+Shift+2 -> capture the current screen and save it"
+  info "Ctrl+Shift+3 -> capture all screens and save it"
+  info "Ctrl+Shift+4 -> open Shaula settings"
 }
 
 uninstall_niri_keybinds() {
