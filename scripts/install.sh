@@ -29,7 +29,7 @@ NOCTALIA_MANAGED_MARKER=".shaula-managed"
 usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [options]
-       scripts/install.sh v0.1.0
+       scripts/install.sh v0.1.2
 
 Install Shaula for the current user. This script never uses sudo and never
 overwrites an existing ~/.config/shaula/config.toml.

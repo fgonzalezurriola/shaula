@@ -73,8 +73,8 @@ and the working diff.
   Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
   default canonical triage labels, and Shaula's single-context domain layout:
   root `CONTEXT.md` plus `docs/adr/` for durable architectural decisions.
-- v0.1.0 release prep: README install examples now point at `v0.1.0`, and the
-  optional Noctalia widget manifest is aligned to `0.1.0`. Public protocol
+- v0.1.2 release prep: README install examples now point at `v0.1.2`, and the
+  optional Noctalia widget manifest is aligned to `0.1.2`. Public protocol
   `contract_version`/`ipc_version` remains `1.0.0` and is separate from app
   release semver.
 - Scrolling capture is explicitly out of scope; keep the stale exploratory spec

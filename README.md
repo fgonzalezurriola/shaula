@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scri
 Install a specific release with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --version v0.1.2
 ```
 
 For a non-interactive install:
