@@ -139,5 +139,7 @@ ShaulaAnnotationHit shaula_annotations_hit_test_ranked(GPtrArray *annotations,
 ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
                                               ShaulaPoint point,
                                               double tolerance);
+gboolean shaula_annotation_intersects_selection_rect(
+    const ShaulaAnnotation *annotation, ShaulaRect rect);
 
 #endif

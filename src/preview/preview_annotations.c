@@ -528,6 +528,85 @@ static double rectangle_edge_distance_to_point(ShaulaRect rect,
   return best;
 }
 
+static double point_to_rect_distance(ShaulaPoint point, ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_contains_point(rect, point))
+    return 0.0;
+  double dx = MAX(MAX(rect.x - point.x, 0.0), point.x - (rect.x + rect.width));
+  double dy = MAX(MAX(rect.y - point.y, 0.0), point.y - (rect.y + rect.height));
+  return sqrt(dx * dx + dy * dy);
+}
+
+static double orientation(ShaulaPoint a, ShaulaPoint b, ShaulaPoint c) {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+static gboolean value_between(double value, double a, double b) {
+  return value >= MIN(a, b) - 0.0001 && value <= MAX(a, b) + 0.0001;
+}
+
+static gboolean segments_intersect(ShaulaPoint a, ShaulaPoint b,
+                                   ShaulaPoint c, ShaulaPoint d) {
+  double o1 = orientation(a, b, c);
+  double o2 = orientation(a, b, d);
+  double o3 = orientation(c, d, a);
+  double o4 = orientation(c, d, b);
+  if (((o1 > 0.0 && o2 < 0.0) || (o1 < 0.0 && o2 > 0.0)) &&
+      ((o3 > 0.0 && o4 < 0.0) || (o3 < 0.0 && o4 > 0.0)))
+    return TRUE;
+  if (fabs(o1) <= 0.0001 && value_between(c.x, a.x, b.x) &&
+      value_between(c.y, a.y, b.y))
+    return TRUE;
+  if (fabs(o2) <= 0.0001 && value_between(d.x, a.x, b.x) &&
+      value_between(d.y, a.y, b.y))
+    return TRUE;
+  if (fabs(o3) <= 0.0001 && value_between(a.x, c.x, d.x) &&
+      value_between(a.y, c.y, d.y))
+    return TRUE;
+  if (fabs(o4) <= 0.0001 && value_between(b.x, c.x, d.x) &&
+      value_between(b.y, c.y, d.y))
+    return TRUE;
+  return FALSE;
+}
+
+static double segment_to_rect_distance(ShaulaPoint a, ShaulaPoint b,
+                                       ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  ShaulaPoint top_left = {rect.x, rect.y};
+  ShaulaPoint top_right = {rect.x + rect.width, rect.y};
+  ShaulaPoint bottom_right = {rect.x + rect.width, rect.y + rect.height};
+  ShaulaPoint bottom_left = {rect.x, rect.y + rect.height};
+  if (shaula_rect_contains_point(rect, a) || shaula_rect_contains_point(rect, b) ||
+      segments_intersect(a, b, top_left, top_right) ||
+      segments_intersect(a, b, top_right, bottom_right) ||
+      segments_intersect(a, b, bottom_right, bottom_left) ||
+      segments_intersect(a, b, bottom_left, top_left))
+    return 0.0;
+
+  double best = MIN(point_to_rect_distance(a, rect), point_to_rect_distance(b, rect));
+  best = MIN(best, shaula_point_distance_to_segment(top_left, a, b));
+  best = MIN(best, shaula_point_distance_to_segment(top_right, a, b));
+  best = MIN(best, shaula_point_distance_to_segment(bottom_right, a, b));
+  best = MIN(best, shaula_point_distance_to_segment(bottom_left, a, b));
+  return best;
+}
+
+static double rectangle_edge_distance_to_rect(ShaulaRect rectangle,
+                                              ShaulaRect selection) {
+  rectangle = shaula_rect_normalized(rectangle);
+  selection = shaula_rect_normalized(selection);
+  ShaulaPoint top_left = {rectangle.x, rectangle.y};
+  ShaulaPoint top_right = {rectangle.x + rectangle.width, rectangle.y};
+  ShaulaPoint bottom_right = {rectangle.x + rectangle.width,
+                              rectangle.y + rectangle.height};
+  ShaulaPoint bottom_left = {rectangle.x, rectangle.y + rectangle.height};
+  double best = segment_to_rect_distance(top_left, top_right, selection);
+  best = MIN(best, segment_to_rect_distance(top_right, bottom_right, selection));
+  best = MIN(best, segment_to_rect_distance(bottom_right, bottom_left, selection));
+  best = MIN(best, segment_to_rect_distance(bottom_left, top_left, selection));
+  return best;
+}
+
 static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
                                 double stroke_width) {
   if (path.len <= 0)
@@ -1110,4 +1189,24 @@ ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
                                               double tolerance) {
   return shaula_annotations_hit_test_ranked(annotations, point, tolerance)
       .annotation;
+}
+
+gboolean shaula_annotation_intersects_selection_rect(
+    const ShaulaAnnotation *annotation, ShaulaRect rect) {
+  if (annotation == NULL)
+    return FALSE;
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_is_empty(rect))
+    return FALSE;
+
+  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+    ShaulaRect rectangle = shaula_rect_normalized(annotation->data.rectangle.rect);
+    if (annotation->data.rectangle.filled &&
+        shaula_rect_intersects(rectangle, rect))
+      return TRUE;
+    double stroke_tolerance = MAX(1.0, annotation->stroke_width / 2.0);
+    return rectangle_edge_distance_to_rect(rectangle, rect) <= stroke_tolerance;
+  }
+
+  return shaula_rect_intersects(annotation->bounds, rect);
 }

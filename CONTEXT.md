@@ -733,6 +733,10 @@ and the working diff.
   screenshot content. Select-mode hit testing for Rectangle is geometry-based:
   bounding boxes are broad-phase only, unfilled rectangle interiors are not hit
   targets, and only visible fills return `SHAULA_ANNOTATION_HIT_FILL`.
+  Drag-select/multi-select uses the same visible-object contract for
+  rectangles: unfilled rectangles are selected only when the selection region
+  intersects the visible stroke band, not the empty interior or external
+  selection outline.
   The selection resolver ranks handles/strokes above visible fills and text
   bounds before applying z-order, so transparent rectangle interiors pass
   through to objects behind them. Selected rectangles draw an external selection

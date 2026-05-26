@@ -570,7 +570,7 @@ guint shaula_preview_select_annotations_intersecting_rect(
   GArray *matched_ids = g_array_new(FALSE, FALSE, sizeof(int));
   for (guint i = 0; i < state->document.annotations->len; i++) {
     ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
-    if (annotation != NULL && shaula_rect_intersects(annotation->bounds, rect)) {
+    if (shaula_annotation_intersects_selection_rect(annotation, rect)) {
       int id = annotation->id;
       g_array_append_val(matched_ids, id);
     }
