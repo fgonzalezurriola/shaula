@@ -219,7 +219,7 @@ test "implicit output path resolves under temporary captures directory" {
 
     switch (outcome) {
         .success => |success| {
-            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-runtime/shaula/captures/shaula-area-"));
+            try std.testing.expect(std.mem.startsWith(u8, success.path, "/tmp/shaula-test-runtime/shaula/captures/screenshot-"));
         },
         else => return error.TestExpectedSuccess,
     }
@@ -254,7 +254,7 @@ test "saved output path falls back to HOME shaula when Pictures path is unusable
 
     switch (outcome) {
         .success => |success| {
-            const expected_prefix = try std.fmt.allocPrint(std.testing.allocator, "{s}/shaula/shaula-area-", .{home});
+            const expected_prefix = try std.fmt.allocPrint(std.testing.allocator, "{s}/shaula/screenshot-", .{home});
             defer std.testing.allocator.free(expected_prefix);
             try std.testing.expect(std.mem.startsWith(u8, success.path, expected_prefix));
         },

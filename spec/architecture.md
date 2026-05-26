@@ -103,7 +103,7 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `result`.
   "timestamp": "2026-04-18T20:45:00Z",
   "result": {
     "mode": "area",
-    "path": "/tmp/shaula/capture-001.png",
+    "path": "/tmp/shaula/captures/screenshot-20260418-204500.png",
     "mime": "image/png",
     "preview": {
       "attempted": true,
@@ -132,7 +132,7 @@ Preview command success responses include the final user action:
   "command": "preview",
   "timestamp": "2026-04-18T20:45:00Z",
   "result": {
-    "path": "/tmp/shaula/capture-001.png",
+    "path": "/tmp/shaula/captures/screenshot-20260418-204500.png",
     "closed": true,
     "action": "copy",
     "copied": true,

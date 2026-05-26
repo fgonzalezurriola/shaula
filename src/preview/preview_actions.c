@@ -254,7 +254,7 @@ static char *timestamped_screenshot_basename(void) {
                   : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
   if (now != NULL)
     g_date_time_unref(now);
-  char *name = g_strdup_printf("shaula-screenshot-%s.png", stamp);
+  char *name = g_strdup_printf("screenshot-%s.png", stamp);
   g_free(stamp);
   return name;
 }
@@ -270,7 +270,7 @@ static char *timestamped_quick_save_path(GError **error) {
   for (int attempt = 0; attempt < 1000; attempt += 1) {
     char *filename = attempt == 0
                          ? g_strdup(basename)
-                         : g_strdup_printf("%s-%03d.png", stem, attempt);
+                         : g_strdup_printf("%s-%d.png", stem, attempt + 1);
     path = g_build_filename(dir, filename, NULL);
     g_free(filename);
     if (!g_file_test(path, G_FILE_TEST_EXISTS))

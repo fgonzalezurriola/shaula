@@ -1,6 +1,7 @@
 #include "preview_render.h"
 
 #include <cairo.h>
+#include <fcntl.h>
 #include <gdk/gdk.h>
 #include <glib/gstdio.h>
 #include <unistd.h>
@@ -54,9 +55,19 @@ char *shaula_render_composited_png_temp(ShaulaPreviewState *state,
 
   cairo_destroy(cr);
 
-  char *path = g_strdup_printf("%s/shaula-preview-XXXXXX.png", g_get_tmp_dir());
-  int fd = g_mkstemp(path);
-  if (fd < 0) {
+  char *path = NULL;
+  int fd = -1;
+  for (int attempt = 0; attempt < 100; attempt += 1) {
+    guint token = g_random_int() & 0xffffffu;
+    path = g_strdup_printf("%s/preview-%06x.png", g_get_tmp_dir(), token);
+    fd = g_open(path, O_CREAT | O_EXCL | O_WRONLY, 0600);
+    if (fd >= 0)
+      break;
+    g_free(path);
+    path = NULL;
+  }
+
+  if (path == NULL || fd < 0) {
     g_set_error(error, render_error_quark(), 3,
                 "failed to create temporary PNG path");
     cairo_surface_destroy(surface);

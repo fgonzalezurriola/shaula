@@ -17,8 +17,8 @@ and post-capture preview/editing.
 
 - Keep preview history bounded and predictable for undo and redo.
 - Keep default filenames human-recognizable:
-  `shaula-screenshot-YYYYMMDD-HHMMSS.png` from preview save flows and
-  `shaula-<mode>-<milliseconds>.png` for direct no-preview saved captures.
+  `screenshot-YYYYMMDD-HHMMSS.png` from preview save flows and direct
+  no-preview saved captures, with `-2`, `-3`, and so on for collisions.
 - Keep README/specs honest about Niri-only support, logical-vs-physical pixel
   handling, hidden Pin/Share status, and screenshot-only scope.
 - Manual verification target: Pin absent, Copy, Save, Save As, and Done/accept

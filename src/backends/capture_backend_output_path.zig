@@ -24,13 +24,7 @@ pub fn resolveOutputPath(
     const output_dir = resolveSavedOutputDir(allocator, io, environ, save_folder) catch return error.OutputPathInvalid;
     defer allocator.free(output_dir);
 
-    const ts = std.Io.Timestamp.now(io, .real);
-    const millis = ts.toMilliseconds();
-    return std.fmt.allocPrint(
-        allocator,
-        "{s}/shaula-{s}-{d}.png",
-        .{ output_dir, mode_string, millis },
-    );
+    return uniqueScreenshotPath(allocator, io, output_dir);
 }
 
 /// Resolve the durable screenshot directory used by explicit save flows.
@@ -84,18 +78,70 @@ fn resolveTemporaryOutputPath(
     mode_string: []const u8,
     environ: std.process.Environ,
 ) ![]u8 {
+    _ = mode_string;
+
     const base_dir = try runtime_paths.captureArtifactDir(allocator, environ);
     defer allocator.free(base_dir);
 
     ensureDirectoryWritable(allocator, io, base_dir) catch return error.OutputPathInvalid;
 
+    return uniqueScreenshotPath(allocator, io, base_dir);
+}
+
+fn uniqueScreenshotPath(allocator: std.mem.Allocator, io: std.Io, dir: []const u8) ![]u8 {
+    const stamp = try timestampStamp(allocator, io);
+    defer allocator.free(stamp);
+
+    for (0..1000) |attempt| {
+        const path = if (attempt == 0)
+            try std.fmt.allocPrint(allocator, "{s}/screenshot-{s}.png", .{ dir, stamp })
+        else
+            try std.fmt.allocPrint(allocator, "{s}/screenshot-{s}-{d}.png", .{ dir, stamp, attempt + 1 });
+
+        std.Io.Dir.accessAbsolute(io, path, .{}) catch |err| switch (err) {
+            error.FileNotFound => return path,
+            else => {
+                allocator.free(path);
+                return error.OutputPathInvalid;
+            },
+        };
+        allocator.free(path);
+    }
+
+    return error.OutputPathInvalid;
+}
+
+fn timestampStamp(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
     const ts = std.Io.Timestamp.now(io, .real);
-    const millis = ts.toMilliseconds();
-    return std.fmt.allocPrint(
-        allocator,
-        "{s}/shaula-{s}-{d}.png",
-        .{ base_dir, mode_string, millis },
-    );
+    const epoch_seconds: i64 = ts.toSeconds();
+
+    const days: i64 = @divFloor(epoch_seconds, 86400);
+    const secs_of_day: i64 = @mod(epoch_seconds, 86400);
+
+    const z = days + 719468;
+    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
+    const doe = z - era * 146097;
+    const yoe = @divFloor(doe - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096), 365);
+    var y = yoe + era * 400;
+    const doy = doe - (365 * yoe + @divFloor(yoe, 4) - @divFloor(yoe, 100));
+    const mp = @divFloor(5 * doy + 2, 153);
+    const d = doy - @divFloor(153 * mp + 2, 5) + 1;
+    var m: i64 = mp + (if (mp < 10) @as(i64, 3) else @as(i64, -9));
+    y += if (m <= 2) 1 else 0;
+    if (m <= 0) m += 12;
+
+    const hh = @divFloor(secs_of_day, 3600);
+    const mm = @divFloor(@mod(secs_of_day, 3600), 60);
+    const ss = @mod(secs_of_day, 60);
+
+    return std.fmt.allocPrint(allocator, "{d:0>4}{d:0>2}{d:0>2}-{d:0>2}{d:0>2}{d:0>2}", .{
+        @as(u64, @intCast(y)),
+        @as(u64, @intCast(m)),
+        @as(u64, @intCast(d)),
+        @as(u64, @intCast(hh)),
+        @as(u64, @intCast(mm)),
+        @as(u64, @intCast(ss)),
+    });
 }
 
 /// Resolves a writable output directory with a deterministic preference order.

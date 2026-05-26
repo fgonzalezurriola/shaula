@@ -31,8 +31,9 @@ and the working diff.
 - v0.1.1 polish snapshot: preview Copy, Save, Save As, and Done/accept are the
   real user-facing flows; Pin and Share are not exposed actions. Preview Save,
   Save As defaults for runtime artifacts, and Done promotions now use
-  `shaula-screenshot-YYYYMMDD-HHMMSS.png`; direct saved no-preview captures use
-  `shaula-<mode>-<milliseconds>.png`. Redo history is bounded like undo history.
+  `screenshot-YYYYMMDD-HHMMSS.png`; direct saved no-preview and runtime
+  captures use the same filename template, with `-2`, `-3`, and so on for
+  collisions. Redo history is bounded like undo history.
   The live color sampler remains passive on hover/Tab copy, and clicking the
   swatch applies the sampled color to the selected annotation or active tool
   defaults.
@@ -568,7 +569,7 @@ and the working diff.
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
 - `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/shaula-screenshot-YYYYMMDD-HHMMSS.png`,
+  timestamped PNG under `~/Pictures/shaula/screenshot-YYYYMMDD-HHMMSS.png`,
   adding a numeric suffix when needed and falling back to `~/shaula` when the
   Pictures directory cannot be created or written. Quick Save updates preview
   save metadata but does not create undo history.
@@ -730,14 +731,14 @@ and the working diff.
   for related option toggles. Fill uses the selected stroke color at low alpha in
   the draw/export path so filled rectangles mark an area without fully hiding
   screenshot content. Select-mode hit testing for Rectangle is geometry-based:
-  bounding boxes are broad-phase only, and rectangle interiors are selectable
-  even when unfilled so the Select tool has a forgiving target.
+  bounding boxes are broad-phase only, unfilled rectangle interiors are not hit
+  targets, and only visible fills return `SHAULA_ANNOTATION_HIT_FILL`.
   The selection resolver ranks handles/strokes above visible fills and text
-  bounds before applying z-order, so empty rectangle interiors pass through to
-  objects behind them. Selected rectangles draw an external selection outline
-  from the actual rectangle geometry plus eight resize handles in Select mode,
-  then repaint the real annotation stroke above the selection chrome so dashed
-  orange content remains visible.
+  bounds before applying z-order, so transparent rectangle interiors pass
+  through to objects behind them. Selected rectangles draw an external selection
+  outline from the actual rectangle geometry plus eight resize handles in Select
+  mode, then repaint the real annotation stroke above the selection chrome so
+  dashed orange content remains visible.
 - `shaula-highlight-symbolic` Highlight: implemented. Its icon is the
   highlighter glyph, not the Spotlight/filter glyph.
 - `shaula-pen-symbolic` Pen: implemented.

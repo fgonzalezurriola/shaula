@@ -1062,7 +1062,8 @@ static ShaulaAnnotationHitKind annotation_hit_kind(ShaulaAnnotation *annotation,
     if (rectangle_edge_distance_to_point(annotation->data.rectangle.rect,
                                          point) <= stroke_tolerance)
       return SHAULA_ANNOTATION_HIT_STROKE;
-    if (shaula_rect_contains_point(
+    if (annotation->data.rectangle.filled &&
+        shaula_rect_contains_point(
             shaula_rect_normalized(annotation->data.rectangle.rect), point))
       return SHAULA_ANNOTATION_HIT_FILL;
     break;

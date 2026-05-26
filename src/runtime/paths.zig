@@ -94,7 +94,7 @@ test "runtime path falls back to tmp" {
 }
 
 test "runtime capture artifact detection covers canonical prefixes" {
-    try std.testing.expect(isRuntimeCaptureArtifact("/tmp/shaula/captures/shaula-area-1.png"));
-    try std.testing.expect(isRuntimeCaptureArtifact("/run/user/1000/shaula/captures/shaula-area-1.png"));
-    try std.testing.expect(!isRuntimeCaptureArtifact("/home/me/Pictures/shaula/shaula-area-1.png"));
+    try std.testing.expect(isRuntimeCaptureArtifact("/tmp/shaula/captures/screenshot-20260526-091430.png"));
+    try std.testing.expect(isRuntimeCaptureArtifact("/run/user/1000/shaula/captures/screenshot-20260526-091430.png"));
+    try std.testing.expect(!isRuntimeCaptureArtifact("/home/me/Pictures/shaula/screenshot-20260526-091430.png"));
 }
