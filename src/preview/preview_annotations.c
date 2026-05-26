@@ -591,6 +591,19 @@ static double segment_to_rect_distance(ShaulaPoint a, ShaulaPoint b,
   return best;
 }
 
+static double path_to_rect_distance(ShaulaPenPath path, ShaulaRect rect) {
+  if (path.len <= 0)
+    return G_MAXDOUBLE;
+  if (path.len == 1)
+    return point_to_rect_distance(path.points[0], rect);
+
+  double best = G_MAXDOUBLE;
+  for (int i = 1; i < path.len; i++)
+    best = MIN(best,
+               segment_to_rect_distance(path.points[i - 1], path.points[i], rect));
+  return best;
+}
+
 static double rectangle_edge_distance_to_rect(ShaulaRect rectangle,
                                               ShaulaRect selection) {
   rectangle = shaula_rect_normalized(rectangle);
@@ -660,6 +673,21 @@ static double arrow_curve_distance_to_point(ShaulaPoint start,
         arrow_curve_point(start, control, end, (double)i / 24.0);
     best =
         MIN(best, shaula_point_distance_to_segment(point, previous, current));
+    previous = current;
+  }
+  return best;
+}
+
+static double arrow_curve_distance_to_rect(ShaulaPoint start,
+                                           ShaulaPoint control,
+                                           ShaulaPoint end,
+                                           ShaulaRect rect) {
+  double best = G_MAXDOUBLE;
+  ShaulaPoint previous = start;
+  for (int i = 1; i <= 24; i++) {
+    ShaulaPoint current =
+        arrow_curve_point(start, control, end, (double)i / 24.0);
+    best = MIN(best, segment_to_rect_distance(previous, current, rect));
     previous = current;
   }
   return best;
@@ -786,6 +814,72 @@ static ShaulaPoint arrow_shaft_end(ShaulaPoint dir_point, ShaulaPoint end,
   double t = (dist - shorten) / dist;
   return (ShaulaPoint){dir_point.x + (end.x - dir_point.x) * t,
                        dir_point.y + (end.y - dir_point.y) * t};
+}
+
+static gboolean point_in_polygon(ShaulaPoint point, const ShaulaPoint *polygon,
+                                 int len) {
+  gboolean inside = FALSE;
+  for (int i = 0, j = len - 1; i < len; j = i++) {
+    gboolean crosses =
+        ((polygon[i].y > point.y) != (polygon[j].y > point.y)) &&
+        (point.x < (polygon[j].x - polygon[i].x) *
+                           (point.y - polygon[i].y) /
+                           (polygon[j].y - polygon[i].y) +
+                       polygon[i].x);
+    if (crosses)
+      inside = !inside;
+  }
+  return inside;
+}
+
+static gboolean polygon_intersects_rect(const ShaulaPoint *polygon, int len,
+                                        ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  ShaulaPoint top_left = {rect.x, rect.y};
+  ShaulaPoint top_right = {rect.x + rect.width, rect.y};
+  ShaulaPoint bottom_right = {rect.x + rect.width, rect.y + rect.height};
+  ShaulaPoint bottom_left = {rect.x, rect.y + rect.height};
+  ShaulaPoint rect_points[] = {top_left, top_right, bottom_right, bottom_left};
+
+  for (int i = 0; i < len; i++) {
+    if (shaula_rect_contains_point(rect, polygon[i]))
+      return TRUE;
+    ShaulaPoint next = polygon[(i + 1) % len];
+    for (int edge = 0; edge < 4; edge++) {
+      if (segments_intersect(polygon[i], next, rect_points[edge],
+                             rect_points[(edge + 1) % 4]))
+        return TRUE;
+    }
+  }
+
+  for (int i = 0; i < 4; i++) {
+    if (point_in_polygon(rect_points[i], polygon, len))
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static gboolean arrow_head_intersects_rect(const ShaulaAnnotation *annotation,
+                                           ShaulaRect rect) {
+  if (!annotation->data.arrow.has_head)
+    return FALSE;
+
+  ShaulaPoint end = annotation->data.arrow.end;
+  ShaulaPoint dir_point = annotation->data.arrow.is_curved
+                              ? annotation->data.arrow.control
+                              : annotation->data.arrow.start;
+  double head_len = MAX(12.0, annotation->stroke_width * 4.5);
+  double angle = atan2(end.y - dir_point.y, end.x - dir_point.x);
+  ShaulaPoint polygon[] = {
+      end,
+      {end.x + cos(angle + G_PI - 0.42) * head_len,
+       end.y + sin(angle + G_PI - 0.42) * head_len},
+      {end.x + cos(angle + G_PI) * head_len * 0.65,
+       end.y + sin(angle + G_PI) * head_len * 0.65},
+      {end.x + cos(angle + G_PI + 0.42) * head_len,
+       end.y + sin(angle + G_PI + 0.42) * head_len},
+  };
+  return polygon_intersects_rect(polygon, 4, rect);
 }
 
 static void draw_arrow_shape(cairo_t *cr, const ShaulaAnnotation *annotation) {
@@ -1199,14 +1293,46 @@ gboolean shaula_annotation_intersects_selection_rect(
   if (shaula_rect_is_empty(rect))
     return FALSE;
 
-  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+  double stroke_tolerance = MAX(1.0, annotation->stroke_width / 2.0);
+
+  switch (annotation->type) {
+  case SHAULA_ANNOTATION_ARROW: {
+    double shaft_distance = annotation->data.arrow.is_curved
+                                ? arrow_curve_distance_to_rect(
+                                      annotation->data.arrow.start,
+                                      annotation->data.arrow.control,
+                                      annotation->data.arrow.end, rect)
+                                : segment_to_rect_distance(
+                                      annotation->data.arrow.start,
+                                      annotation->data.arrow.has_head
+                                          ? arrow_shaft_end(
+                                                annotation->data.arrow.start,
+                                                annotation->data.arrow.end,
+                                                annotation->stroke_width)
+                                          : annotation->data.arrow.end,
+                                      rect);
+    return shaft_distance <= stroke_tolerance ||
+           arrow_head_intersects_rect(annotation, rect);
+  }
+  case SHAULA_ANNOTATION_MEASURE:
+    return segment_to_rect_distance(annotation->data.measure.start,
+                                    annotation->data.measure.end,
+                                    rect) <= stroke_tolerance;
+  case SHAULA_ANNOTATION_RECTANGLE: {
     ShaulaRect rectangle = shaula_rect_normalized(annotation->data.rectangle.rect);
     if (annotation->data.rectangle.filled &&
         shaula_rect_intersects(rectangle, rect))
       return TRUE;
-    double stroke_tolerance = MAX(1.0, annotation->stroke_width / 2.0);
     return rectangle_edge_distance_to_rect(rectangle, rect) <= stroke_tolerance;
   }
+  case SHAULA_ANNOTATION_HIGHLIGHT:
+    return path_to_rect_distance(annotation->data.highlight, rect) <=
+           stroke_tolerance;
+  case SHAULA_ANNOTATION_PEN:
+    return path_to_rect_distance(annotation->data.pen, rect) <= stroke_tolerance;
+  case SHAULA_ANNOTATION_TEXT:
+    return shaula_rect_intersects(annotation->bounds, rect);
+  }
 
-  return shaula_rect_intersects(annotation->bounds, rect);
+  return FALSE;
 }

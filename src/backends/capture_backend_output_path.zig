@@ -94,9 +94,9 @@ fn uniqueScreenshotPath(allocator: std.mem.Allocator, io: std.Io, dir: []const u
 
     for (0..1000) |attempt| {
         const path = if (attempt == 0)
-            try std.fmt.allocPrint(allocator, "{s}/screenshot-{s}.png", .{ dir, stamp })
+            try std.fmt.allocPrint(allocator, "{s}/{s}.png", .{ dir, stamp })
         else
-            try std.fmt.allocPrint(allocator, "{s}/screenshot-{s}-{d}.png", .{ dir, stamp, attempt + 1 });
+            try std.fmt.allocPrint(allocator, "{s}/{s}-{d}.png", .{ dir, stamp, attempt + 1 });
 
         std.Io.Dir.accessAbsolute(io, path, .{}) catch |err| switch (err) {
             error.FileNotFound => return path,

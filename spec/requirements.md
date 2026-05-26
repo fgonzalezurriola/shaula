@@ -61,8 +61,8 @@ Shottr is the behavior benchmark, not the platform model. The goal is to copy th
 - Save PNG to disk.
 - Copy the saved path.
 - Default save folder and filename template. Current default names are
-  `screenshot-YYYYMMDD-HHMMSS.png` for preview save/accept flows and direct
-  saved captures, with `-2`, `-3`, and so on for collisions.
+  `YYYYMMDD-HHMMSS.png` for preview save/accept flows and direct saved
+  captures, with `-2`, `-3`, and so on for collisions.
 - TOML configuration.
 - Post-capture action defaults.
 

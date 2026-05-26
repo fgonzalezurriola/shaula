@@ -31,8 +31,8 @@ and the working diff.
 - v0.1.1 polish snapshot: preview Copy, Save, Save As, and Done/accept are the
   real user-facing flows; Pin and Share are not exposed actions. Preview Save,
   Save As defaults for runtime artifacts, and Done promotions now use
-  `screenshot-YYYYMMDD-HHMMSS.png`; direct saved no-preview and runtime
-  captures use the same filename template, with `-2`, `-3`, and so on for
+  `YYYYMMDD-HHMMSS.png`; direct saved no-preview and runtime captures use the
+  same prefix-free filename template, with `-2`, `-3`, and so on for
   collisions. Redo history is bounded like undo history.
   The live color sampler remains passive on hover/Tab copy, and clicking the
   swatch applies the sampled color to the selected annotation or active tool
@@ -569,7 +569,7 @@ and the working diff.
 - `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
   preview has modifications, otherwise reuses the original PNG path.
 - `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/screenshot-YYYYMMDD-HHMMSS.png`,
+  timestamped PNG under `~/Pictures/shaula/YYYYMMDD-HHMMSS.png`,
   adding a numeric suffix when needed and falling back to `~/shaula` when the
   Pictures directory cannot be created or written. Quick Save updates preview
   save metadata but does not create undo history.
@@ -734,9 +734,10 @@ and the working diff.
   bounding boxes are broad-phase only, unfilled rectangle interiors are not hit
   targets, and only visible fills return `SHAULA_ANNOTATION_HIT_FILL`.
   Drag-select/multi-select uses the same visible-object contract for
-  rectangles: unfilled rectangles are selected only when the selection region
-  intersects the visible stroke band, not the empty interior or external
-  selection outline.
+  annotations: arrows, measure lines, pen/highlight paths, and unfilled
+  rectangles are selected only when the selection region intersects their
+  visible stroke geometry; empty bounding-box space, transparent rectangle
+  interiors, and external selection outlines do not count.
   The selection resolver ranks handles/strokes above visible fills and text
   bounds before applying z-order, so transparent rectangle interiors pass
   through to objects behind them. Selected rectangles draw an external selection

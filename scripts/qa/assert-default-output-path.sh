@@ -27,7 +27,7 @@ default_path="$(printf '%s\n' "${default_json}" | jq -r '.path')"
 printf '%s\n' "${default_json}" | jq -e --arg pfx "${test_home}/Pictures/shaula/" '
   .ok == true and
   (.path | startswith($pfx)) and
-  (.path | test("/screenshot-[0-9]{8}-[0-9]{6}(-[0-9]+)?\\.png$"))
+  (.path | test("/[0-9]{8}-[0-9]{6}(-[0-9]+)?\\.png$"))
 ' >/dev/null || {
   echo "ERR_DEFAULT_OUTPUT_PATH_INVALID reason=default_path_contract" >&2
   printf '%s\n' "${default_json}" >&2

@@ -254,7 +254,7 @@ static char *timestamped_screenshot_basename(void) {
                   : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
   if (now != NULL)
     g_date_time_unref(now);
-  char *name = g_strdup_printf("screenshot-%s.png", stamp);
+  char *name = g_strdup_printf("%s.png", stamp);
   g_free(stamp);
   return name;
 }
