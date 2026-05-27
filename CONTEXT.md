@@ -50,8 +50,11 @@ and the working diff.
   `git diff --check`; `./dev qa` is the curated non-intrusive contract lane
   (`run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
   matrix, exit-code mapping). Integration, E2E Niri, performance, release
-  readiness, benchmark, Noctalia, and intrusive UI wrappers are manual/legacy
-  investigation tools and print an explicit warning before running.
+  readiness, remaining benchmark, Noctalia, and intrusive UI wrappers are
+  manual/legacy investigation tools and print an explicit warning before
+  running. Unreferenced QA scripts for old repo preflight, UI smoke/contract
+  checks, selection interaction shell checks, overlay cancel, and plugin
+  overhead benchmarking were removed.
 - Capture Area overlay resize smoothness: the GTK overlay now caches the scaled
   screenshot background as a Cairo surface per drawing-area size. Pointer
   move/resize redraws reuse that surface, including the clipped selected region,
@@ -60,10 +63,11 @@ and the working diff.
   overlay rendering latency.
 - The `./dev bench`, `./dev bench-ui`, `./dev strategies`, and
   `./dev strategies-ui` shortcuts were removed from the developer wrapper
-  because they had become stale routine checks. `./dev check` and
-  `git diff --check` remain the after-change verification baseline; targeted
-  runtime checks should be invoked explicitly through `./dev run ...` or the
-  underlying QA scripts when a change needs them.
+  because they had become stale routine checks. The old overlay strategy
+  benchmark script and all-in-one strategy spec were also removed as stale
+  design noise. `./dev check` and `git diff --check` remain the after-change
+  verification baseline; targeted runtime checks should be invoked explicitly
+  through `./dev run ...` or the underlying QA scripts when a change needs them.
 - `./dev qa` is now a lightweight QA wrapper for deterministic local contracts:
   negative Wayland/Niri preflight plus unit QA. It no longer runs integration,
   E2E Niri, performance gates, or release-readiness evidence checks. The
@@ -155,7 +159,11 @@ and the working diff.
   include a checked `shaula-linux-aarch64.tar.gz` asset. Both packages install a
   pacman post-install message that points users at settings and conditionally at
   `shaula setup` when the installed binary supports it, instead of mutating user
-  configs from package hooks.
+  configs from package hooks. AUR maintainer metadata should use the real
+  current maintainer identity `fgonzalezurriola <fgonzalezurriola@gmail.com>`;
+  keep `shaula` and `shaula-bin` aligned when publishing release updates. Both
+  AUR scaffolds have been advanced to v0.1.4 with current source/binary
+  checksums and regenerated `.SRCINFO`.
 - Installer icon handling copies the packaged `share/icons/hicolor` tree into
   `~/.local/share/icons/hicolor`, not only the desktop app icon. The desktop
   launcher uses `Icon=shaula` and ships the AI-generated transparent PNG app

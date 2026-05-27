@@ -372,10 +372,5 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 - Capture hot path remains independent and must complete even when plugin is absent, disabled, or crashed.
 - Runtime policy: plugin adapter timeouts are bounded (`<=250ms` in PoC scripts) and never on capture hot path.
 
-### Added-Latency Budget (PoC)
-
-- A dedicated benchmark (`scripts/qa/benchmark-plugin-overhead.sh`) measures baseline daemon status path vs plugin-mediated path.
-- Acceptance gate for Task 15: added p95 latency from plugin path must remain within configured threshold (`--max-added-p95-ms`, default test gate: `15ms`).
-
 ### UI Backend Contract Rule
 UI must only invoke validated CLI/daemon contracts; no direct backend capture calls.

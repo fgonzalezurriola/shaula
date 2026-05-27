@@ -55,8 +55,9 @@ not be cited as release readiness without refreshing the failing subchecks:
 - `scripts/qa/run-e2e-niri.sh`
 - `scripts/qa/run-performance-gates.sh`
 - `scripts/qa/release-readiness-capture-fix.sh`
-- `scripts/qa/benchmark-*.sh`
-- `scripts/qa/test-ui-*.sh`
+- `scripts/qa/benchmark-capture-completion.sh`
+- `scripts/qa/benchmark-daemon-idle.sh`
+- `scripts/qa/benchmark-overlay-first-paint.sh`
 - `scripts/qa/assert-noctalia-*.sh`
 - `scripts/qa/test-noctalia-plugin-optional.sh`
 - `scripts/qa/assert-overlay-helper-interactive.sh`
