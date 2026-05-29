@@ -2,8 +2,8 @@ const std = @import("std");
 const execution_plan = @import("capture_execution_plan.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
-/// Dispatch runtime capture to helper or grim and map failures to
-/// `error.BackendUnavailable` for deterministic taxonomy handling.
+/// Dispatch runtime capture to helper, portal, or grim and map failures to
+/// deterministic taxonomy-facing errors.
 pub fn writeRuntimeCapture(
     io: std.Io,
     environ: std.process.Environ,
@@ -46,5 +46,13 @@ pub fn writeRuntimeCapture(
         return;
     }
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
-    return error.BackendUnavailable;
+    return switch (result.term) {
+        .exited => |code| switch (code) {
+            23 => error.IpcTimeout,
+            33 => error.SelectionCancelled,
+            99 => error.UnknownUnmapped,
+            else => error.BackendUnavailable,
+        },
+        else => error.BackendUnavailable,
+    };
 }

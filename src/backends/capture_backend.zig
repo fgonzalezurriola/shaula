@@ -88,6 +88,18 @@ pub fn execute(
             allocator.free(resolved_output_path);
             return failure.backendUnavailable(capture_types, request.mode, backend_used);
         },
+        error.IpcTimeout => {
+            allocator.free(resolved_output_path);
+            return failure.outcome(capture_types, request.mode, "ERR_IPC_TIMEOUT", "IPC operation timed out", true, degraded_backend, backend_used);
+        },
+        error.SelectionCancelled => {
+            allocator.free(resolved_output_path);
+            return failure.outcome(capture_types, request.mode, "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, degraded_backend, backend_used);
+        },
+        error.UnknownUnmapped => {
+            allocator.free(resolved_output_path);
+            return failure.unknown(capture_types, request.mode, backend_used, "capture backend failed with unmapped error");
+        },
         else => {
             allocator.free(resolved_output_path);
             return failure.unknown(capture_types, request.mode, backend_used, "capture backend failed with unmapped error");

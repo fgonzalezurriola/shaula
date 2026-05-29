@@ -47,9 +47,14 @@ fn writeHuman(io: std.Io, report: diagnostics.Report) !void {
         report.niri_snippet_path orelse "unknown",
         if (report.niri_snippet_exists) "exists" else "missing",
     });
-    try stdout.interface.print("Wayland:\n  XDG_SESSION_TYPE: {s}\n  WAYLAND_DISPLAY: {s}\n\n", .{
+    try stdout.interface.print("Wayland:\n  XDG_SESSION_TYPE: {s}\n  WAYLAND_DISPLAY: {s}\n  compositor: {s}\n  active backend: {s}\n  portal available: {s}\n  portal window capable: {s}\n  overlay supported: {s}\n\n", .{
         report.xdg_session_type orelse "unset",
         report.wayland_display orelse "unset",
+        report.detected_compositor,
+        report.backend_active,
+        if (report.portal_available) "yes" else "no",
+        if (report.portal_window_capable) "yes" else "no",
+        if (report.overlay_supported) "yes" else "no",
     });
     try stdout.interface.print("Niri:\n  niri in PATH: {s}\n  NIRI_CONFIG: {s} ({s})\n  ~/.config/niri/config.kdl: {s}\n  ~/.config/niri/cfg/: {s}\n  /etc/niri/config.kdl: {s}\n\n", .{
         if (diagnostics.toolFound(report.tools, "niri")) "yes" else "no",
@@ -132,7 +137,19 @@ fn waylandJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {
     defer allocator.free(session);
     const display = try jsonNullable(allocator, report.wayland_display);
     defer allocator.free(display);
-    return std.fmt.allocPrint(allocator, "{{\"xdg_session_type\":{s},\"wayland_display\":{s}}}", .{ session, display });
+    const compositor = try jsonNullable(allocator, report.detected_compositor);
+    defer allocator.free(compositor);
+    const backend = try jsonNullable(allocator, report.backend_active);
+    defer allocator.free(backend);
+    return std.fmt.allocPrint(allocator, "{{\"xdg_session_type\":{s},\"wayland_display\":{s},\"compositor\":{s},\"backend_active\":{s},\"portal_available\":{s},\"portal_window_capable\":{s},\"overlay_supported\":{s}}}", .{
+        session,
+        display,
+        compositor,
+        backend,
+        boolJson(report.portal_available),
+        boolJson(report.portal_window_capable),
+        boolJson(report.overlay_supported),
+    });
 }
 
 fn niriJson(allocator: std.mem.Allocator, report: diagnostics.Report) ![]u8 {

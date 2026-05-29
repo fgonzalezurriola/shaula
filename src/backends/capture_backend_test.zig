@@ -48,8 +48,10 @@ fn resolved(backend: runtime_capabilities.BackendKind) capture_backend.ResolvedE
     return .{
         .runtime = .{
             .compositor_supported = true,
+            .overlay_supported = true,
             .backend = backend,
             .capture = .{ .area = true, .fullscreen = true, .all_screens = true, .window = false },
+            .compositor = .{ .kind = .niri, .label = "niri" },
         },
         .focused_output_name = "test-output",
     };
@@ -59,8 +61,10 @@ fn unsupportedResolved() capture_backend.ResolvedExecution {
     return .{
         .runtime = .{
             .compositor_supported = false,
+            .overlay_supported = false,
             .backend = .portal_screenshot,
             .capture = .{ .area = false, .fullscreen = false, .all_screens = false, .window = false },
+            .compositor = .{ .kind = .unsupported, .label = "unsupported" },
         },
     };
 }

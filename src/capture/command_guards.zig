@@ -11,7 +11,7 @@ const command_json = @import("command_json.zig");
 /// - Forced stub returns `ERR_CAPTURE_BACKEND_UNAVAILABLE` and uses exit-code mapping.
 /// - Unsupported mode returns `ERR_CAPTURE_MODE_UNSUPPORTED` with mismatch marker.
 pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: []const u8, mode: []const u8) !?u8 {
-    const runtime = runtime_capabilities.resolve(environ);
+    const runtime = runtime_capabilities.resolve(std.heap.smp_allocator, io, environ);
     if (runtime.backend == .stub) {
         const backend_used = runtime_capabilities.backendLabel(runtime.backend);
         try command_json.writeErrorJson(
@@ -65,7 +65,7 @@ pub fn enforcePreCaptureGuard(
     switch (guard_result) {
         .ok => |ok| return ok.warning,
         .timeout => {
-            const runtime = runtime_capabilities.resolve(environ);
+            const runtime = runtime_capabilities.resolve(allocator, io, environ);
             const backend_used = runtime_capabilities.backendLabel(runtime.backend);
 
             try command_json.writeErrorJson(

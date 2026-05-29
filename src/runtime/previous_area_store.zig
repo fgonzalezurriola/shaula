@@ -66,6 +66,10 @@ pub fn load(
     };
 }
 
+pub fn supportedForBackendLabel(backend_label: []const u8) bool {
+    return !std.mem.eql(u8, backend_label, "portal-screenshot");
+}
+
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
     return runtime_paths.resolve(allocator, environ, "SHAULA_PREVIOUS_AREA_FILE", "selection/previous-area.v1");
 }

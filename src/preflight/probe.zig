@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 
@@ -8,7 +9,8 @@ pub const PreflightError = error{UnsupportedCompositor};
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, socket_arg: ?[]const u8) !u8 {
     const compositor = compositor_runtime.detect(environ);
-    if (!compositor_runtime.supportedInCurrentScope(compositor)) {
+    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+    if (!runtime.compositor_supported) {
         try writeErrorJson(io, "preflight", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
@@ -30,11 +32,23 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
 
+    const warning = runtime.backend == .portal_screenshot;
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preflight\",\"timestamp\":\"{s}\",\"compositor\":\"{s}\",\"ready\":true,\"ipc\":{{\"socket\":\"{s}\",\"ready\":{s}}},\"result\":{{\"compositor\":\"{s}\",\"wayland\":true,\"ipc_ready\":{s}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts, compositor.label, socket_path, if (ipc_ready) "true" else "false", compositor.label, if (ipc_ready) "true" else "false" },
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preflight\",\"timestamp\":\"{s}\",\"compositor\":\"{s}\",\"ready\":true,\"ipc\":{{\"socket\":\"{s}\",\"ready\":{s}}},\"result\":{{\"compositor\":\"{s}\",\"wayland\":true,\"ipc_ready\":{s},\"backend\":\"{s}\",\"portal_available\":{s}}},\"warnings\":{s}}}\n",
+        .{
+            protocol.contract_version,
+            ts,
+            compositor.label,
+            socket_path,
+            if (ipc_ready) "true" else "false",
+            compositor.label,
+            if (ipc_ready) "true" else "false",
+            runtime_capabilities.backendLabel(runtime.backend),
+            if (runtime.portal_available) "true" else "false",
+            if (warning) "[\"portal_fallback\"]" else "[]",
+        },
     );
     try stdout.interface.flush();
     return 0;

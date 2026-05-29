@@ -164,9 +164,7 @@ pub fn reportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bo
     if (envelope.status != .@"error") return false;
 
     const helper_error = envelope.@"error" orelse return false;
-    if (std.mem.eql(u8, helper_error.code, "ERR_OVERLAY_UNAVAILABLE")) return true;
-    if (std.mem.eql(u8, helper_error.code, "ERR_OVERLAY_TIMEOUT")) return true;
-    return false;
+    return std.mem.eql(u8, helper_error.code, "ERR_OVERLAY_UNAVAILABLE");
 }
 
 /// Resolve deterministic overlay helper failure taxonomy for cancelled selections.

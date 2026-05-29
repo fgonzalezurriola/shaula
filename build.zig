@@ -42,6 +42,10 @@ pub fn build(b: *std.Build) void {
     const install_crop_helper = b.addInstallFileWithDir(crop_helper_bin, .bin, "shaula-crop-image");
     b.getInstallStep().dependOn(&install_crop_helper.step);
 
+    const portal_helper_bin = buildNativePortalScreenshotHelper(b);
+    const install_portal_helper = b.addInstallFileWithDir(portal_helper_bin, .bin, "shaula-portal-screenshot");
+    b.getInstallStep().dependOn(&install_portal_helper.step);
+
     const install_preview_icons = b.addInstallDirectory(.{
         .source_dir = b.path("src/preview/icons/hicolor"),
         .install_dir = .{ .custom = "share" },
@@ -202,6 +206,22 @@ fn buildNativeCropImageHelper(b: *std.Build) std.Build.LazyPath {
     });
     const output = command.addOutputFileArg("shaula-crop-image");
     command.addFileArg(b.path("src/backends/native_crop_image.c"));
+    return output;
+}
+
+fn buildNativePortalScreenshotHelper(b: *std.Build) std.Build.LazyPath {
+    const command = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
+        \\  "$2" \
+        \\  -o "$1" \
+        \\ $(pkg-config --cflags --libs gio-2.0 glib-2.0)
+        ,
+        "build-shaula-portal-screenshot",
+    });
+    const output = command.addOutputFileArg("shaula-portal-screenshot");
+    command.addFileArg(b.path("src/backends/native_portal_screenshot.c"));
     return output;
 }
 

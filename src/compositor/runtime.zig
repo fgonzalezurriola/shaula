@@ -15,8 +15,8 @@ pub const Detection = struct {
 ///
 /// Contract constraints:
 /// - `label` is the stable token emitted in preflight/capabilities JSON.
-/// - only `niri` is supported in current runtime scope; other Wayland
-///   compositors are detected and reported but remain unsupported.
+/// - generic Wayland support is gated by portal availability in runtime
+///   capabilities, while overlay remains limited to Niri/wlroots tokens.
 pub fn detect(environ: std.process.Environ) Detection {
     if (environ.getPosix("SHAULA_COMPOSITOR")) |value| {
         const explicit = std.mem.trim(u8, std.mem.sliceTo(value, 0), " \t\r\n");
@@ -45,8 +45,17 @@ pub fn detect(environ: std.process.Environ) Detection {
     return .{ .kind = .unsupported, .label = "unsupported" };
 }
 
-pub fn supportedInCurrentScope(detection: Detection) bool {
-    return detection.kind == .niri;
+pub fn supportedInCurrentScope(detection: Detection, portal_available: bool) bool {
+    return detection.kind == .niri or isWlroots(detection) or (detection.kind == .wayland and portal_available);
+}
+
+pub fn overlaySupported(detection: Detection) bool {
+    return detection.kind == .niri or isWlroots(detection);
+}
+
+pub fn isWlroots(detection: Detection) bool {
+    if (detection.kind == .niri) return false;
+    return isWlrootsToken(detection.label);
 }
 
 fn classifyLabel(label: []const u8) Detection {
@@ -62,6 +71,10 @@ fn classifyLabel(label: []const u8) Detection {
 fn isWaylandToken(value: []const u8) bool {
     const wayland_tokens = [_][]const u8{
         "wayland",
+        "gnome",
+        "gnome-shell",
+        "kde",
+        "plasma",
         "sway",
         "hyprland",
         "river",
@@ -75,6 +88,22 @@ fn isWaylandToken(value: []const u8) bool {
         if (std.ascii.eqlIgnoreCase(value, token)) return true;
     }
     return std.mem.indexOf(u8, value, "wayland") != null;
+}
+
+fn isWlrootsToken(value: []const u8) bool {
+    const wlroots_tokens = [_][]const u8{
+        "sway",
+        "hyprland",
+        "river",
+        "wayfire",
+        "labwc",
+        "cage",
+        "dwl",
+    };
+    for (wlroots_tokens) |token| {
+        if (std.ascii.eqlIgnoreCase(value, token)) return true;
+    }
+    return false;
 }
 
 fn extractDesktopToken(value: []const u8) ?[]const u8 {

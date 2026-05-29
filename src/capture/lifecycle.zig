@@ -47,6 +47,7 @@ fn executeLifecycle(
     options: invocation.Invocation,
     session_lock: *capture_session_lock.CaptureSessionLock,
     frozen_source: ?overlay_session.FrozenSource,
+    selection_warning: ?[]const u8,
 ) !u8 {
     const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
@@ -68,7 +69,10 @@ fn executeLifecycle(
     resolved_options.post_flags.show_error_notifications = config.notifications.errors;
     resolved_options.post_flags.include_notification_thumbnail = config.notifications.thumbnails;
 
-    const runtime = runtime_capabilities.resolve(environ);
+    var runtime = runtime_capabilities.resolve(allocator, io, environ);
+    if (selection_warning != null and std.mem.eql(u8, selection_warning.?, "capture_selection_portal")) {
+        runtime.backend = .portal_screenshot;
+    }
     const focused_output_name = try resolveFocusedOutputForCapture(allocator, io, environ, runtime, options.request_mode);
     defer if (focused_output_name) |name| allocator.free(name);
 
@@ -100,7 +104,7 @@ fn executeLifecycle(
     }
 
     session_lock.release();
-    return writeCaptureOutcome(allocator, io, environ, resolved_options.command, resolved_options.reported_mode, &outcome, resolved_options.post_flags, precondition_warning);
+    return writeCaptureOutcome(allocator, io, environ, resolved_options.command, resolved_options.reported_mode, &outcome, resolved_options.post_flags, precondition_warning, selection_warning);
 }
 
 fn resolvePostCaptureFlags(
@@ -338,6 +342,17 @@ fn runOverlayMode(
         const backend_mode = core_capture_mode.backendModeToken(mode) orelse reported_mode;
         const unsupported_rc = try guards.enforceModeSupported(io, environ, command, backend_mode);
         if (unsupported_rc) |code| return code;
+
+        const runtime = runtime_capabilities.resolve(allocator, io, environ);
+        if (runtime.backend == .portal_screenshot or !runtime.overlay_supported) {
+            const options = switch (mode) {
+                .quick => invocation.quick(parsed, region_capture_mode, null),
+                .area => invocation.area(parsed, region_capture_mode, null),
+                .all_in_one => invocation.allInOne(parsed, region_capture_mode, null),
+                else => unreachable,
+            };
+            return executeLifecycle(allocator, io, environ, options, &session_lock, null, "capture_selection_portal");
+        }
     }
 
     var prepared_frozen_source: ?overlay_session.PreparedFrozenSource = null;
@@ -374,7 +389,7 @@ fn runOverlayMode(
         return 0;
     }
 
-    if (region_capture_mode == .frozen and selection_result.frozen_source == null) {
+    if (region_capture_mode == .frozen and selection_result.frozen_source == null and selection_result.selection_warning == null) {
         try json.writeErrorJson(
             io,
             command,
@@ -396,7 +411,7 @@ fn runOverlayMode(
         .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock, selection_result.frozen_source);
+    return executeLifecycle(allocator, io, environ, options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
 }
 
 fn runDirectMode(
@@ -421,7 +436,7 @@ fn runDirectMode(
         .window => invocation.window(parsed),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock, null);
+    return executeLifecycle(allocator, io, environ, options, &session_lock, null, null);
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
@@ -434,6 +449,23 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture previous-area", backend_mode);
     if (unsupported_rc) |code| return code;
 
+    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+    const backend_label = runtime_capabilities.backendLabel(runtime.backend);
+    if (!previous_area_store.supportedForBackendLabel(backend_label)) {
+        try json.writeErrorJson(
+            io,
+            "capture previous-area",
+            "ERR_CAPTURE_MODE_UNSUPPORTED",
+            "capture mode is unsupported by runtime capabilities",
+            false,
+            reported_mode,
+            backend_label,
+            false,
+            &.{"capability_execution_mismatch_guard"},
+        );
+        return recovery_policy.exitCodeFor("ERR_CAPTURE_MODE_UNSUPPORTED");
+    }
+
     const geometry = (try previous_area_store.load(allocator, io, environ)) orelse {
         try json.writeErrorJson(io, "capture previous-area", "ERR_PREVIOUS_AREA_UNAVAILABLE", "previous area is unavailable", false, reported_mode, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_PREVIOUS_AREA_UNAVAILABLE");
@@ -444,7 +476,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     var session_lock = capture_session.lock.?;
     defer session_lock.deinit();
 
-    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock, null);
+    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock, null, null);
 }
 
 /// Starts the capture-only session gate used by compositor shortcuts.
@@ -529,6 +561,7 @@ fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeS
 const OverlaySelectionOutcome = struct {
     selection: selection.SelectionResult,
     frozen_source: ?overlay_session.FrozenSource = null,
+    selection_warning: ?[]const u8 = null,
     exit_code: ?u8 = null,
 
     fn deinit(self: *OverlaySelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
@@ -573,6 +606,13 @@ fn resolveOverlaySelection(
         return .{ .selection = result.result, .frozen_source = frozen_source };
     }
 
+    if (result.unavailable) {
+        const runtime = runtime_capabilities.resolve(allocator, io, environ);
+        if (runtime.backend == .portal_screenshot or runtime.portal_available) {
+            return .{ .selection = result.result, .selection_warning = "capture_selection_portal" };
+        }
+    }
+
     const overlay_code = overlay_session.deterministicFailureCode(environ, simulate_cancel, true);
     if (overlay_code) |code| {
         const spec = recovery_policy.specFor(code);
@@ -593,12 +633,17 @@ fn writeCaptureOutcome(
     outcome: *capture_types.CaptureOutcome,
     post_flags: invocation.PostCaptureFlags,
     precondition_warning: ?[]const u8,
+    selection_warning: ?[]const u8,
 ) !u8 {
     switch (outcome.*) {
         .success => |success| {
-            var warnings: [2][]const u8 = undefined;
+            var warnings: [3][]const u8 = undefined;
             var warning_count: usize = 0;
             if (precondition_warning) |warning| {
+                warnings[warning_count] = warning;
+                warning_count += 1;
+            }
+            if (selection_warning) |warning| {
                 warnings[warning_count] = warning;
                 warning_count += 1;
             }
@@ -615,9 +660,13 @@ fn writeCaptureOutcome(
             return 0;
         },
         .failure => |failure| {
-            var warnings: [2][]const u8 = undefined;
+            var warnings: [3][]const u8 = undefined;
             var warning_count: usize = 0;
             if (precondition_warning) |warning| {
+                warnings[warning_count] = warning;
+                warning_count += 1;
+            }
+            if (selection_warning) |warning| {
                 warnings[warning_count] = warning;
                 warning_count += 1;
             }

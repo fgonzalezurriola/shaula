@@ -5,6 +5,21 @@ and the working diff.
 
 ## Current focus
 
+- Generic Wayland support is now implemented through an xdg-desktop-portal
+  Screenshot compatibility backend. Runtime selection prefers the test stub,
+  forced portal, Niri direct, wlroots `grim` when `grim` is installed, and then
+  portal for generic Wayland or wlroots without `grim`; generic Wayland without
+  portal remains `ERR_UNSUPPORTED_COMPOSITOR`. The portal path uses the installed
+  `shaula-portal-screenshot` helper (`SHAULA_PORTAL_SCREENSHOT_HELPER_BIN`
+  override) with the same `--backend portal-screenshot --mode ... --output ...`
+  contract as QA helpers. It reports degraded captures with
+  `capture_backend_degraded`, portal-based area selection with
+  `capture_selection_portal`, maps portal timeout to `ERR_IPC_TIMEOUT`, and maps
+  portal cancellation to `ERR_SELECTION_CANCELLED`. Overlay selection remains
+  limited to Niri/wlroots layer-shell; portal area capture bypasses overlay and
+  `previous-area` is unsupported under the portal backend because the portal does
+  not return reliable geometry. `preflight`, `capabilities list`, and `doctor`
+  now expose portal availability/window-capability and backend selection.
 - Preview annotation multi-select is the final v0.1.x editor feature before
   icon/release work. The GTK preview now uses `selected_annotation_ids` as the
   annotation selection source of truth, keeps the legacy

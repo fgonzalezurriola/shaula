@@ -1,4 +1,5 @@
 const std = @import("std");
+const portal_screenshot = @import("portal_screenshot.zig");
 
 pub const Options = struct {
     backend_label: []const u8,
@@ -19,12 +20,13 @@ pub const Operation = enum {
 pub const Plan = struct {
     argv_storage: [9][]const u8 = undefined,
     argv_len: usize = 0,
+    owned_helper_path: ?[]u8 = null,
     pub fn argv(self: *const Plan) []const []const u8 {
         return self.argv_storage[0..self.argv_len];
     }
 
     pub fn deinit(self: *Plan, allocator: std.mem.Allocator) void {
-        _ = allocator;
+        if (self.owned_helper_path) |path| allocator.free(path);
         self.* = .{};
     }
 };
@@ -41,9 +43,23 @@ pub fn resolve(
     environ: std.process.Environ,
     options: Options,
 ) !Plan {
-    _ = allocator;
     if (configuredRuntimeCaptureHelper(environ)) |helper_path| {
         return helperPlan(helper_path, options);
+    }
+
+    if (std.mem.eql(u8, options.backend_label, portal_screenshot.backend_label)) {
+        const helper_path = portal_screenshot.resolveHelperBinary(allocator, io, environ) catch return error.BackendUnavailable;
+        var plan = staticPlan(&.{
+            helper_path,
+            "--backend",
+            options.backend_label,
+            "--mode",
+            options.mode_string,
+            "--output",
+            options.output_path,
+        });
+        plan.owned_helper_path = helper_path;
+        return plan;
     }
 
     const grim_path = findGrimBinary(io) orelse return error.BackendUnavailable;

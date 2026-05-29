@@ -687,7 +687,7 @@ missing_arch_runtime_packages() {
     return 0
   fi
   missing=""
-  for package in grim slurp wl-clipboard gtk4 gtk4-layer-shell; do
+  for package in grim slurp wl-clipboard gtk4 gtk4-layer-shell xdg-desktop-portal xdg-desktop-portal-gtk; do
     if ! pacman -Q "$package" >/dev/null 2>&1; then
       missing="${missing} ${package}"
     fi
@@ -762,7 +762,7 @@ run_shaula_setup() {
 }
 
 warn_runtime_tools() {
-  for tool in grim slurp wl-copy wl-paste niri quickshell; do
+  for tool in grim slurp wl-copy wl-paste gdbus niri quickshell; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       warn "runtime tool not found in PATH: $tool"
     fi
@@ -810,6 +810,7 @@ install_release() {
   install_file_if_present "$(find_file "$extract_dir" shaula-overlay)" "${XDG_BIN_HOME}/shaula-overlay" 0755
   install_file_if_present "$(find_file "$extract_dir" shaula-preview)" "${XDG_BIN_HOME}/shaula-preview" 0755
   install_file_if_present "$(find_file "$extract_dir" shaula-crop-image)" "${XDG_BIN_HOME}/shaula-crop-image" 0755
+  install_file_if_present "$(find_file "$extract_dir" shaula-portal-screenshot)" "${XDG_BIN_HOME}/shaula-portal-screenshot" 0755
   install_file_if_present "$(find_file "$extract_dir" shaula-settings)" "${XDG_BIN_HOME}/shaula-settings" 0755
 
   if [ "$INSTALL_DESKTOP" -eq 1 ]; then
@@ -853,6 +854,7 @@ run_uninstall() {
   remove_path "${XDG_BIN_HOME}/shaula-overlay"
   remove_path "${XDG_BIN_HOME}/shaula-preview"
   remove_path "${XDG_BIN_HOME}/shaula-crop-image"
+  remove_path "${XDG_BIN_HOME}/shaula-portal-screenshot"
   remove_path "${XDG_BIN_HOME}/shaula-settings"
   remove_path "${XDG_DATA_HOME}/applications/shaula.desktop"
   remove_path "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg"

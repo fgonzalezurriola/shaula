@@ -10,6 +10,8 @@ pub const jsonNullableStringAlloc = cli_json.nullableStringAlloc;
 pub const warningsJson = cli_json.warningsAlloc;
 pub const nowIso8601 = cli_json.nowIso8601;
 
+pub const known_warning_capture_selection_portal = "capture_selection_portal";
+
 pub fn writeSuccessJson(
     allocator: std.mem.Allocator,
     io: std.Io,

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const loader = @import("../config/loader.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 
 pub const ToolStatus = struct {
     name: []const u8,
@@ -26,6 +27,11 @@ pub const Report = struct {
     niri_snippet_exists: bool,
     xdg_session_type: ?[]const u8,
     wayland_display: ?[]const u8,
+    detected_compositor: []const u8,
+    backend_active: []const u8,
+    portal_available: bool,
+    portal_window_capable: bool,
+    overlay_supported: bool,
     niri_config_env: ?[]const u8,
     niri_config_env_exists: bool,
     niri_user_config_exists: bool,
@@ -52,7 +58,7 @@ pub const Report = struct {
     }
 };
 
-const tool_names = [_][]const u8{ "grim", "slurp", "wl-copy", "wl-paste", "niri", "quickshell" };
+const tool_names = [_][]const u8{ "grim", "slurp", "wl-copy", "wl-paste", "gdbus", "niri", "quickshell" };
 
 /// Collect install and runtime diagnostics without mutating user state.
 ///
@@ -75,6 +81,7 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     const niri_config_env = envSlice(environ, "NIRI_CONFIG");
     const wayland_display = envSlice(environ, "WAYLAND_DISPLAY");
     const xdg_session_type = envSlice(environ, "XDG_SESSION_TYPE");
+    const runtime = runtime_capabilities.resolve(allocator, io, environ);
     const niri_user_config_path = try xdgConfigPath(allocator, xdg_config_dir, "niri/config.kdl");
     defer if (niri_user_config_path) |path| allocator.free(path);
     const niri_cfg_dir_path = try xdgConfigPath(allocator, xdg_config_dir, "niri/cfg");
@@ -96,6 +103,7 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     if (!toolFound(tools, "wl-copy")) try warnings.append(allocator, "missing wl-copy");
     if (wayland_display == null or wayland_display.?.len == 0) try warnings.append(allocator, "missing WAYLAND_DISPLAY");
     if (xdg_session_type == null or !std.mem.eql(u8, xdg_session_type.?, "wayland")) try warnings.append(allocator, "XDG_SESSION_TYPE is not wayland");
+    if (!runtime.portal_available and runtime.compositor.kind == .wayland and !runtime.overlay_supported) try warnings.append(allocator, "portal unavailable for generic Wayland compositor");
 
     const niri_detected =
         toolFound(tools, "niri") or
@@ -125,6 +133,11 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         .niri_snippet_exists = niri_snippet_exists,
         .xdg_session_type = xdg_session_type,
         .wayland_display = wayland_display,
+        .detected_compositor = runtime.compositor.label,
+        .backend_active = runtime_capabilities.backendLabel(runtime.backend),
+        .portal_available = runtime.portal_available,
+        .portal_window_capable = runtime.portal_window_capable,
+        .overlay_supported = runtime.overlay_supported,
         .niri_config_env = niri_config_env,
         .niri_config_env_exists = niri_config_env != null and niri_config_env.?.len > 0 and fileExists(io, niri_config_env.?),
         .niri_user_config_exists = niri_user_config_path != null and fileExists(io, niri_user_config_path.?),

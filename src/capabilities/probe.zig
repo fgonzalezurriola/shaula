@@ -43,7 +43,8 @@ else
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !u8 {
     const compositor = compositor_runtime.detect(environ);
-    if (!compositor_runtime.supportedInCurrentScope(compositor)) {
+    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+    if (!runtime.compositor_supported) {
         try writeErrorJson(io, "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
@@ -51,24 +52,28 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
 
-    const runtime = runtime_capabilities.resolve(environ);
     const backend = runtime_capabilities.backendLabel(runtime.backend);
     const fallbacks = runtime_capabilities.fallbacksFor(runtime.backend);
     const fallbacks_json = try stringArrayJson(allocator, fallbacks);
     defer allocator.free(fallbacks_json);
 
-    const window_warning = if (!runtime.capture.window) "window_capture_degraded" else null;
-    const warnings = if (window_warning) |warning| blk: {
-        const warning_json = try std.json.Stringify.valueAlloc(allocator, warning, .{});
-        defer allocator.free(warning_json);
-        break :blk try std.fmt.allocPrint(allocator, "[{s}]", .{warning_json});
-    } else try allocator.dupe(u8, "[]");
+    var warning_values: [2][]const u8 = undefined;
+    var warning_count: usize = 0;
+    if (!runtime.capture.window) {
+        warning_values[warning_count] = "window_capture_degraded";
+        warning_count += 1;
+    }
+    if (runtime.backend == .portal_screenshot) {
+        warning_values[warning_count] = "portal_fallback";
+        warning_count += 1;
+    }
+    const warnings = try cli_json.warningsAlloc(allocator, warning_values[0..warning_count]);
     defer allocator.free(warnings);
 
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"result\":{{\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"{s}\",\"ipc_version\":\"{s}\"}},\"warnings\":{s}}}\n",
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"portal_window_capable\":{s},\"result\":{{\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"{s}\",\"ipc_version\":\"{s}\",\"portal_available\":{s},\"portal_window_capable\":{s},\"overlay_supported\":{s}}},\"warnings\":{s}}}\n",
         .{
             protocol.contract_version,
             ts,
@@ -78,6 +83,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             boolToJson(runtime.capture.window),
             backend,
             fallbacks_json,
+            boolToJson(runtime.portal_window_capable),
             boolToJson(runtime.capture.area),
             boolToJson(runtime.capture.fullscreen),
             boolToJson(runtime.capture.all_screens),
@@ -86,6 +92,9 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             fallbacks_json,
             compositor.label,
             protocol.ipc_version,
+            boolToJson(runtime.portal_available),
+            boolToJson(runtime.portal_window_capable),
+            boolToJson(runtime.overlay_supported),
             warnings,
         },
     );
@@ -162,7 +171,7 @@ test "runtime capabilities backend naming is canonical" {
 
     const environ: std.process.Environ = .{ .block = block };
 
-    const runtime = runtime_capabilities.resolve(environ);
+    const runtime = runtime_capabilities.resolve(std.testing.allocator, std.testing.io, environ);
     try std.testing.expectEqualStrings("niri-wayland-direct", runtime_capabilities.backendLabel(runtime.backend));
     try std.testing.expect(runtime.capture.all_screens);
     try std.testing.expect(!runtime.capture.window);

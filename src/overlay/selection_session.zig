@@ -58,6 +58,7 @@ pub const FrozenSource = struct {
 pub const SelectionOutcome = struct {
     result: selection.SelectionResult,
     frozen_source: ?FrozenSource = null,
+    unavailable: bool = false,
 
     pub fn deinit(self: *SelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
         if (self.frozen_source) |source| source.deinit(allocator, io);
@@ -154,7 +155,7 @@ pub fn runSelection(
             helper_selection.frozen_source = null;
             return .{ .result = result, .frozen_source = frozen_source };
         },
-        .unavailable => return .{ .result = cancelledSelection(mode, constraint) },
+        .unavailable => return .{ .result = cancelledSelection(mode, constraint), .unavailable = true },
     }
 }
 

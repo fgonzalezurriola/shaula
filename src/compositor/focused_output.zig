@@ -6,6 +6,11 @@ const NiriFocusedOutput = struct {
     name: []const u8,
 };
 
+const SwayOutput = struct {
+    name: []const u8,
+    focused: bool = false,
+};
+
 /// Resolve compositor-focused output name for monitor-scoped operations.
 ///
 /// Contract constraints:
@@ -23,10 +28,9 @@ pub fn resolveName(
     }
 
     const compositor = compositor_runtime.detect(environ);
-    return switch (compositor.kind) {
-        .niri => resolveNiriFocusedOutputName(allocator, io),
-        .wayland, .unsupported => null,
-    };
+    if (compositor.kind == .niri) return resolveNiriFocusedOutputName(allocator, io);
+    if (std.ascii.eqlIgnoreCase(compositor.label, "sway")) return resolveSwayFocusedOutputName(allocator, io);
+    return null;
 }
 
 fn resolveNiriFocusedOutputName(
@@ -44,4 +48,22 @@ fn resolveNiriFocusedOutputName(
     if (parsed.value.name.len == 0) return null;
 
     return try allocator.dupe(u8, parsed.value.name);
+}
+
+fn resolveSwayFocusedOutputName(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+) !?[]u8 {
+    const result = process_exec.run(allocator, io, &.{ "swaymsg", "-t", "get_outputs", "-r" }, 65536, 1024) catch return null;
+    defer result.deinit(allocator);
+    if (!result.exitedZero()) return null;
+
+    const parsed = std.json.parseFromSlice([]SwayOutput, allocator, result.stdout, .{
+        .ignore_unknown_fields = true,
+    }) catch return null;
+    defer parsed.deinit();
+    for (parsed.value) |output| {
+        if (output.focused and output.name.len > 0) return try allocator.dupe(u8, output.name);
+    }
+    return null;
 }
