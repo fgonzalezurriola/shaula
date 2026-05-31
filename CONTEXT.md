@@ -922,3 +922,7 @@ and the working diff.
 - Share/upload backend, Pin/window persistence, OCR, scrolling capture, screen
   recording, deep redaction, AI removal, smart selection, and combine
   screenshots are explicitly out of scope.
+
+## Planned: QuickShell Integration
+
+A general QuickShell integration layer is planned to expand beyond the Noctalia-specific plugin. The design introduces `ShaulaService.qml` (a QuickShell Singleton + IpcHandler) that any QS-based shell can use, an IPC-based panel-hide handshake replacing file-token polling, and a standalone bar widget for non-Noctalia QS configs. Full plan: `docs/plan-quickshell-integration.md`. Phases: (0) extract shaula-core QML module, (1) refactor Noctalia plugin to use ShaulaService, (2) IPC-based panel-hide handshake + `shaula ipc` CLI subcommand, (3) bidirectional capture state feedback, (4) standalone widget distribution and setup.

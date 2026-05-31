@@ -4,6 +4,7 @@ const core_capture_mode = @import("../core/capture_mode.zig");
 const lifecycle = @import("lifecycle.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const json = @import("command_json.zig");
+const runtime_capabilities = @import("../capabilities/runtime.zig");
 
 /// Entry point for the `capture` command family.
 ///
@@ -26,15 +27,17 @@ pub fn run(
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     };
 
+    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+
     return switch (requested_mode) {
-        .quick => lifecycle.runQuick(allocator, io, environ, argv),
-        .area => lifecycle.runArea(allocator, io, environ, argv),
-        .fullscreen => lifecycle.runFullscreen(allocator, io, environ, argv),
-        .all_screens => lifecycle.runAllScreens(allocator, io, environ, argv),
-        .focused => lifecycle.runFocused(allocator, io, environ, argv),
-        .window => lifecycle.runWindow(allocator, io, environ, argv),
-        .previous_area => lifecycle.runPreviousArea(allocator, io, environ, argv),
-        .all_in_one => lifecycle.runAllInOne(allocator, io, environ, argv),
+        .quick => lifecycle.runQuick(allocator, io, environ, runtime, argv),
+        .area => lifecycle.runArea(allocator, io, environ, runtime, argv),
+        .fullscreen => lifecycle.runFullscreen(allocator, io, environ, runtime, argv),
+        .all_screens => lifecycle.runAllScreens(allocator, io, environ, runtime, argv),
+        .focused => lifecycle.runFocused(allocator, io, environ, runtime, argv),
+        .window => lifecycle.runWindow(allocator, io, environ, runtime, argv),
+        .previous_area => lifecycle.runPreviousArea(allocator, io, environ, runtime, argv),
+        .all_in_one => lifecycle.runAllInOne(allocator, io, environ, runtime, argv),
     };
 }
 

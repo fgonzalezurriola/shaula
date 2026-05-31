@@ -41,6 +41,7 @@ const OverlayModeSpec = struct {
 /// - callers provide the mode-specific backend request and optional previous
 ///   area persistence; this Module owns the ordering.
 fn executeLifecycle(
+    runtime: runtime_capabilities.RuntimeDecision,
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
@@ -49,10 +50,10 @@ fn executeLifecycle(
     frozen_source: ?overlay_session.FrozenSource,
     selection_warning: ?[]const u8,
 ) !u8 {
-    const unsupported_rc = try guards.enforceModeSupported(io, environ, options.command, options.backend_mode);
+    const unsupported_rc = try guards.enforceModeSupported(runtime, io, options.command, options.backend_mode);
     if (unsupported_rc) |code| return code;
 
-    const precondition_warning = guards.enforcePreCaptureGuard(allocator, io, environ, options.command, options.backend_mode) catch |err| switch (err) {
+    const precondition_warning = guards.enforcePreCaptureGuard(runtime, allocator, io, environ, options.command, options.backend_mode) catch |err| switch (err) {
         error.PreconditionTimeout => return recovery_policy.exitCodeFor("ERR_CAPTURE_PRECONDITION_TIMEOUT"),
         else => return err,
     };
@@ -69,10 +70,6 @@ fn executeLifecycle(
     resolved_options.post_flags.show_error_notifications = config.notifications.errors;
     resolved_options.post_flags.include_notification_thumbnail = config.notifications.thumbnails;
 
-    var runtime = runtime_capabilities.resolve(allocator, io, environ);
-    if (selection_warning != null and std.mem.eql(u8, selection_warning.?, "capture_selection_portal")) {
-        runtime.backend = .portal_screenshot;
-    }
     const focused_output_name = try resolveFocusedOutputForCapture(allocator, io, environ, runtime, options.request_mode);
     defer if (focused_output_name) |name| allocator.free(name);
 
@@ -285,50 +282,52 @@ fn resolveFocusedOutputForCapture(
 }
 
 /// Execute `capture all-in-one` through the shared capture lifecycle.
-pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAllInOneFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, .all_in_one, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, .all_in_one, parsed);
 }
 
 /// Execute `capture quick` through the capture-on-release overlay lifecycle.
-pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseQuickFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, .quick, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, .quick, parsed);
 }
 
 /// Execute `capture area` through the shared capture lifecycle.
-pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, .area, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, .area, parsed);
 }
 
-pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseFullscreenFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, .fullscreen, parsed);
+    return runDirectMode(allocator, io, environ, runtime, .fullscreen, parsed);
 }
 
-pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAllScreensFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, .all_screens, parsed);
+    return runDirectMode(allocator, io, environ, runtime, .all_screens, parsed);
 }
 
-pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, .focused, parsed);
+    return runDirectMode(allocator, io, environ, runtime, .focused, parsed);
 }
 
-pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, .window, parsed);
+    return runDirectMode(allocator, io, environ, runtime, .window, parsed);
 }
 
 fn runOverlayMode(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
+    runtime_arg: runtime_capabilities.RuntimeDecision,
     comptime mode: core_capture_mode.CaptureMode,
     parsed: anytype,
 ) !u8 {
+    var runtime = runtime_arg;
     const reported_mode = core_capture_mode.cliToken(mode);
     const command = commandForMode(mode);
 
@@ -340,10 +339,9 @@ fn runOverlayMode(
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     if (!parsed.dry_run) {
         const backend_mode = core_capture_mode.backendModeToken(mode) orelse reported_mode;
-        const unsupported_rc = try guards.enforceModeSupported(io, environ, command, backend_mode);
+        const unsupported_rc = try guards.enforceModeSupported(runtime, io, command, backend_mode);
         if (unsupported_rc) |code| return code;
 
-        const runtime = runtime_capabilities.resolve(allocator, io, environ);
         if (runtime.backend == .portal_screenshot or !runtime.overlay_supported) {
             const options = switch (mode) {
                 .quick => invocation.quick(parsed, region_capture_mode, null),
@@ -351,7 +349,7 @@ fn runOverlayMode(
                 .all_in_one => invocation.allInOne(parsed, region_capture_mode, null),
                 else => unreachable,
             };
-            return executeLifecycle(allocator, io, environ, options, &session_lock, null, "capture_selection_portal");
+            return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, "capture_selection_portal");
         }
     }
 
@@ -363,6 +361,7 @@ fn runOverlayMode(
 
     const overlay_spec = overlaySpecForMode(mode);
     var selection_result = try resolveOverlaySelection(
+        runtime,
         allocator,
         io,
         environ,
@@ -379,6 +378,10 @@ fn runOverlayMode(
     defer selection_result.deinit(allocator, io);
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
+
+    if (selection_result.selection_warning != null and std.mem.eql(u8, selection_result.selection_warning.?, "capture_selection_portal")) {
+        runtime.withPortalFallback();
+    }
 
     if (parsed.dry_run) {
         if (mode == .area) {
@@ -411,13 +414,14 @@ fn runOverlayMode(
         .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
+    return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
 }
 
 fn runDirectMode(
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
+    runtime: runtime_capabilities.RuntimeDecision,
     comptime mode: core_capture_mode.CaptureMode,
     parsed: anytype,
 ) !u8 {
@@ -436,20 +440,19 @@ fn runDirectMode(
         .window => invocation.window(parsed),
         else => unreachable,
     };
-    return executeLifecycle(allocator, io, environ, options, &session_lock, null, null);
+    return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, null);
 }
 
 /// Execute `capture previous-area` without fabricating missing geometry.
-pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
+pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const reported_mode = core_capture_mode.cliToken(.previous_area);
     const backend_mode = core_capture_mode.backendModeToken(.previous_area) orelse reported_mode;
     const parsed = flags.parsePreviousAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (try validateJsonMode(io, "capture previous-area", reported_mode, parsed.json_mode)) |code| return code;
 
-    const unsupported_rc = try guards.enforceModeSupported(io, environ, "capture previous-area", backend_mode);
+    const unsupported_rc = try guards.enforceModeSupported(runtime, io, "capture previous-area", backend_mode);
     if (unsupported_rc) |code| return code;
 
-    const runtime = runtime_capabilities.resolve(allocator, io, environ);
     const backend_label = runtime_capabilities.backendLabel(runtime.backend);
     if (!previous_area_store.supportedForBackendLabel(backend_label)) {
         try json.writeErrorJson(
@@ -476,7 +479,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     var session_lock = capture_session.lock.?;
     defer session_lock.deinit();
 
-    return executeLifecycle(allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock, null, null);
+    return executeLifecycle(runtime, allocator, io, environ, invocation.previousArea(parsed, geometry), &session_lock, null, null);
 }
 
 /// Starts the capture-only session gate used by compositor shortcuts.
@@ -571,6 +574,7 @@ const OverlaySelectionOutcome = struct {
 };
 
 fn resolveOverlaySelection(
+    runtime: runtime_capabilities.RuntimeDecision,
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
@@ -607,7 +611,6 @@ fn resolveOverlaySelection(
     }
 
     if (result.unavailable) {
-        const runtime = runtime_capabilities.resolve(allocator, io, environ);
         if (runtime.backend == .portal_screenshot or runtime.portal_available) {
             return .{ .selection = result.result, .selection_warning = "capture_selection_portal" };
         }

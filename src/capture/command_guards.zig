@@ -10,8 +10,7 @@ const command_json = @import("command_json.zig");
 /// Contract constraints:
 /// - Forced stub returns `ERR_CAPTURE_BACKEND_UNAVAILABLE` and uses exit-code mapping.
 /// - Unsupported mode returns `ERR_CAPTURE_MODE_UNSUPPORTED` with mismatch marker.
-pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: []const u8, mode: []const u8) !?u8 {
-    const runtime = runtime_capabilities.resolve(std.heap.smp_allocator, io, environ);
+pub fn enforceModeSupported(runtime: runtime_capabilities.RuntimeDecision, io: std.Io, command: []const u8, mode: []const u8) !?u8 {
     if (runtime.backend == .stub) {
         const backend_used = runtime_capabilities.backendLabel(runtime.backend);
         try command_json.writeErrorJson(
@@ -55,6 +54,7 @@ pub fn enforceModeSupported(io: std.Io, environ: std.process.Environ, command: [
 /// On timeout this function writes deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`
 /// and returns `error.PreconditionTimeout` for exit-code mapping.
 pub fn enforcePreCaptureGuard(
+    runtime: runtime_capabilities.RuntimeDecision,
     allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
@@ -65,7 +65,6 @@ pub fn enforcePreCaptureGuard(
     switch (guard_result) {
         .ok => |ok| return ok.warning,
         .timeout => {
-            const runtime = runtime_capabilities.resolve(allocator, io, environ);
             const backend_used = runtime_capabilities.backendLabel(runtime.backend);
 
             try command_json.writeErrorJson(

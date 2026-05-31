@@ -34,6 +34,10 @@ pub const RuntimeDecision = struct {
     portal_available: bool = false,
     portal_window_capable: bool = false,
     compositor: compositor_runtime.Detection,
+
+    pub fn withPortalFallback(self: *RuntimeDecision) void {
+        self.backend = .portal_screenshot;
+    }
 };
 
 /// Resolve runtime decision from environment and compositor probe.
