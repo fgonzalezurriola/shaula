@@ -1,7 +1,9 @@
 const std = @import("std");
 
 const loader = @import("../config/loader.zig");
+const env = @import("../runtime/env.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
+const tool_lookup = @import("../runtime/tool_lookup.zig");
 
 pub const ToolStatus = struct {
     name: []const u8,
@@ -75,12 +77,12 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     var tools = try allocator.alloc(ToolStatus, tool_names.len);
     errdefer allocator.free(tools);
     for (tool_names, 0..) |name, index| {
-        tools[index] = .{ .name = name, .path = try findToolInPath(allocator, io, environ, name) };
+        tools[index] = .{ .name = name, .path = try tool_lookup.findInPathAlloc(allocator, io, environ, name) };
     }
 
-    const niri_config_env = envSlice(environ, "NIRI_CONFIG");
-    const wayland_display = envSlice(environ, "WAYLAND_DISPLAY");
-    const xdg_session_type = envSlice(environ, "XDG_SESSION_TYPE");
+    const niri_config_env = env.slice(environ, "NIRI_CONFIG");
+    const wayland_display = env.slice(environ, "WAYLAND_DISPLAY");
+    const xdg_session_type = env.slice(environ, "XDG_SESSION_TYPE");
     const runtime = runtime_capabilities.resolve(allocator, io, environ);
     const niri_user_config_path = try xdgConfigPath(allocator, xdg_config_dir, "niri/config.kdl");
     defer if (niri_user_config_path) |path| allocator.free(path);
@@ -108,18 +110,18 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     const niri_detected =
         toolFound(tools, "niri") or
         (niri_config_env != null and niri_config_env.?.len > 0) or
-        (niri_user_config_path != null and fileExists(io, niri_user_config_path.?)) or
-        (niri_cfg_dir_path != null and fileExists(io, niri_cfg_dir_path.?)) or
-        fileExists(io, "/etc/niri/config.kdl");
-    const niri_snippet_exists = niri_snippet_path != null and fileExists(io, niri_snippet_path.?);
+        (niri_user_config_path != null and tool_lookup.fileExists(io, niri_user_config_path.?)) or
+        (niri_cfg_dir_path != null and tool_lookup.fileExists(io, niri_cfg_dir_path.?)) or
+        tool_lookup.fileExists(io, "/etc/niri/config.kdl");
+    const niri_snippet_exists = niri_snippet_path != null and tool_lookup.fileExists(io, niri_snippet_path.?);
     if (niri_detected and !niri_snippet_exists) try warnings.append(allocator, "Niri detected but generated snippet is missing");
 
     const noctalia_detected =
-        (noctalia_dir_path != null and fileExists(io, noctalia_dir_path.?)) or
-        (noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?)) or
-        (noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?)) or
-        (noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?));
-    const noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_path != null and fileExists(io, noctalia_shaula_plugin_dir_path.?);
+        (noctalia_dir_path != null and tool_lookup.fileExists(io, noctalia_dir_path.?)) or
+        (noctalia_plugins_dir_path != null and tool_lookup.fileExists(io, noctalia_plugins_dir_path.?)) or
+        (noctalia_plugins_json_path != null and tool_lookup.fileExists(io, noctalia_plugins_json_path.?)) or
+        (noctalia_settings_json_path != null and tool_lookup.fileExists(io, noctalia_settings_json_path.?));
+    const noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_path != null and tool_lookup.fileExists(io, noctalia_shaula_plugin_dir_path.?);
     const noctalia_shaula_plugin_enabled = if (noctalia_plugins_json_path) |path| try detectNoctaliaPluginEnabled(allocator, io, path) else null;
     if (noctalia_detected and !noctalia_shaula_plugin_dir_exists) try warnings.append(allocator, "Noctalia detected but Shaula plugin is not installed");
 
@@ -127,7 +129,7 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         .binary_path = binary_path,
         .xdg_config_dir = xdg_config_dir,
         .config_file_path = config_file_path,
-        .config_exists = config_file_path != null and fileExists(io, config_file_path.?),
+        .config_exists = config_file_path != null and tool_lookup.fileExists(io, config_file_path.?),
         .generated_dir_path = generated_dir_path,
         .niri_snippet_path = niri_snippet_path,
         .niri_snippet_exists = niri_snippet_exists,
@@ -139,14 +141,14 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         .portal_window_capable = runtime.portal_window_capable,
         .overlay_supported = runtime.overlay_supported,
         .niri_config_env = niri_config_env,
-        .niri_config_env_exists = niri_config_env != null and niri_config_env.?.len > 0 and fileExists(io, niri_config_env.?),
-        .niri_user_config_exists = niri_user_config_path != null and fileExists(io, niri_user_config_path.?),
-        .niri_cfg_dir_exists = niri_cfg_dir_path != null and fileExists(io, niri_cfg_dir_path.?),
-        .niri_etc_config_exists = fileExists(io, "/etc/niri/config.kdl"),
-        .noctalia_dir_exists = noctalia_dir_path != null and fileExists(io, noctalia_dir_path.?),
-        .noctalia_plugins_dir_exists = noctalia_plugins_dir_path != null and fileExists(io, noctalia_plugins_dir_path.?),
-        .noctalia_plugins_json_exists = noctalia_plugins_json_path != null and fileExists(io, noctalia_plugins_json_path.?),
-        .noctalia_settings_json_exists = noctalia_settings_json_path != null and fileExists(io, noctalia_settings_json_path.?),
+        .niri_config_env_exists = niri_config_env != null and niri_config_env.?.len > 0 and tool_lookup.fileExists(io, niri_config_env.?),
+        .niri_user_config_exists = niri_user_config_path != null and tool_lookup.fileExists(io, niri_user_config_path.?),
+        .niri_cfg_dir_exists = niri_cfg_dir_path != null and tool_lookup.fileExists(io, niri_cfg_dir_path.?),
+        .niri_etc_config_exists = tool_lookup.fileExists(io, "/etc/niri/config.kdl"),
+        .noctalia_dir_exists = noctalia_dir_path != null and tool_lookup.fileExists(io, noctalia_dir_path.?),
+        .noctalia_plugins_dir_exists = noctalia_plugins_dir_path != null and tool_lookup.fileExists(io, noctalia_plugins_dir_path.?),
+        .noctalia_plugins_json_exists = noctalia_plugins_json_path != null and tool_lookup.fileExists(io, noctalia_plugins_json_path.?),
+        .noctalia_settings_json_exists = noctalia_settings_json_path != null and tool_lookup.fileExists(io, noctalia_settings_json_path.?),
         .noctalia_shaula_plugin_dir_exists = noctalia_shaula_plugin_dir_exists,
         .noctalia_shaula_plugin_enabled = noctalia_shaula_plugin_enabled,
         .tools = tools,
@@ -162,10 +164,10 @@ pub fn toolFound(tools: []const ToolStatus, name: []const u8) bool {
 }
 
 fn resolveXdgConfigDir(allocator: std.mem.Allocator, environ: std.process.Environ) !?[]u8 {
-    if (envSlice(environ, "XDG_CONFIG_HOME")) |value| {
+    if (env.slice(environ, "XDG_CONFIG_HOME")) |value| {
         if (value.len > 0) return try allocator.dupe(u8, value);
     }
-    if (envSlice(environ, "HOME")) |home| {
+    if (env.slice(environ, "HOME")) |home| {
         if (home.len > 0) return try std.fmt.allocPrint(allocator, "{s}/.config", .{home});
     }
     return null;
@@ -174,23 +176,6 @@ fn resolveXdgConfigDir(allocator: std.mem.Allocator, environ: std.process.Enviro
 fn xdgConfigPath(allocator: std.mem.Allocator, xdg_config_dir: ?[]const u8, suffix: []const u8) !?[]u8 {
     const dir = xdg_config_dir orelse return null;
     return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, suffix });
-}
-
-fn findToolInPath(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, tool: []const u8) !?[]u8 {
-    const path_env = envSlice(environ, "PATH") orelse return null;
-    var parts = std.mem.splitScalar(u8, path_env, ':');
-    while (parts.next()) |part| {
-        if (part.len == 0) continue;
-        const candidate = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ part, tool });
-        if (fileExists(io, candidate)) return candidate;
-        allocator.free(candidate);
-    }
-    return null;
-}
-
-fn fileExists(io: std.Io, path: []const u8) bool {
-    std.Io.Dir.cwd().access(io, path, .{}) catch return false;
-    return true;
 }
 
 /// Reads Noctalia's plugin registry without mutating it.
@@ -222,9 +207,4 @@ fn detectNoctaliaPluginEnabled(allocator: std.mem.Allocator, io: std.Io, path: [
         .bool => |value| value,
         else => null,
     };
-}
-
-fn envSlice(environ: std.process.Environ, key: []const u8) ?[]const u8 {
-    if (environ.getPosix(key)) |value| return std.mem.sliceTo(value, 0);
-    return null;
 }

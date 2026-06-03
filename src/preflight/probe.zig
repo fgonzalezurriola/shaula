@@ -1,4 +1,5 @@
 const std = @import("std");
+const backend_contract = @import("../backends/capture_backend_contract.zig");
 const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
@@ -8,10 +9,9 @@ const recovery_policy = @import("../recovery/policy.zig");
 pub const PreflightError = error{UnsupportedCompositor};
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, socket_arg: ?[]const u8) !u8 {
-    const compositor = compositor_runtime.detect(environ);
     const runtime = runtime_capabilities.resolve(allocator, io, environ);
     if (!runtime.compositor_supported) {
-        try writeErrorJson(io, "preflight", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor.label);
+        try writeErrorJson(io, "preflight", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, runtime.compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
 
@@ -20,7 +20,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 
     const wayland_ready = environ.getPosix("WAYLAND_DISPLAY") != null;
     if (!wayland_ready) {
-        try writeErrorJson(io, "preflight", "ERR_PREFLIGHT_ENV_NOT_READY", "wayland environment is not ready", true, compositor.label);
+        try writeErrorJson(io, "preflight", "ERR_PREFLIGHT_ENV_NOT_READY", "wayland environment is not ready", true, runtime.compositor.label);
         return recovery_policy.exitCodeFor("ERR_PREFLIGHT_ENV_NOT_READY");
     }
 
@@ -32,7 +32,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
 
-    const warning = runtime.backend == .portal_screenshot;
+    const warning = runtime.usesPortalBackend();
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
@@ -40,14 +40,14 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         .{
             protocol.contract_version,
             ts,
-            compositor.label,
+            runtime.compositor.label,
             socket_path,
             if (ipc_ready) "true" else "false",
-            compositor.label,
+            runtime.compositor.label,
             if (ipc_ready) "true" else "false",
-            runtime_capabilities.backendLabel(runtime.backend),
+            runtime.backendUsedLabel(),
             if (runtime.portal_available) "true" else "false",
-            if (warning) "[\"portal_fallback\"]" else "[]",
+            if (warning) "[\"" ++ backend_contract.warning_portal_fallback ++ "\"]" else "[]",
         },
     );
     try stdout.interface.flush();

@@ -1,9 +1,11 @@
 const std = @import("std");
 
+const backend_contract = @import("capture_backend_contract.zig");
+const env = @import("../runtime/env.zig");
 const helper_resolution = @import("../runtime/helper_resolution.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
-pub const backend_label = "portal-screenshot";
+pub const backend_label = backend_contract.backend_portal_screenshot;
 pub const helper_env_var = "SHAULA_PORTAL_SCREENSHOT_HELPER_BIN";
 pub const helper_binary = "shaula-portal-screenshot";
 
@@ -26,10 +28,10 @@ pub fn resolveHelperBinary(allocator: std.mem.Allocator, io: std.Io, environ: st
 /// support decisions without requiring a live user session bus. Runtime capture
 /// still validates the backend at execution time and maps failures to `ERR_*`.
 pub fn detectCapabilities(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) CapabilityProbe {
-    if (envFlag(environ, "SHAULA_PORTAL_AVAILABLE")) |available| {
+    if (env.flag(environ, "SHAULA_PORTAL_AVAILABLE")) |available| {
         return .{
             .available = available,
-            .window_capable = available and (envFlag(environ, "SHAULA_PORTAL_WINDOW_CAPABLE") orelse false),
+            .window_capable = available and (env.flag(environ, "SHAULA_PORTAL_WINDOW_CAPABLE") orelse false),
         };
     }
 
@@ -83,13 +85,5 @@ fn parseLastUnsigned(raw: []const u8) ?u64 {
         while (start > 0 and std.ascii.isDigit(raw[start - 1])) start -= 1;
         return std.fmt.parseInt(u64, raw[start..end], 10) catch null;
     }
-    return null;
-}
-
-fn envFlag(environ: std.process.Environ, key: []const u8) ?bool {
-    const raw_z = environ.getPosix(key) orelse return null;
-    const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-    if (std.mem.eql(u8, raw, "1") or std.ascii.eqlIgnoreCase(raw, "true") or std.ascii.eqlIgnoreCase(raw, "yes")) return true;
-    if (std.mem.eql(u8, raw, "0") or std.ascii.eqlIgnoreCase(raw, "false") or std.ascii.eqlIgnoreCase(raw, "no")) return false;
     return null;
 }

@@ -1,6 +1,9 @@
 const std = @import("std");
+const backend_contract = @import("../backends/capture_backend_contract.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
+const env = @import("../runtime/env.zig");
 const portal_screenshot = @import("../backends/portal_screenshot.zig");
+const tool_lookup = @import("../runtime/tool_lookup.zig");
 
 pub const BackendKind = enum {
     niri_wayland_direct,
@@ -35,8 +38,37 @@ pub const RuntimeDecision = struct {
     portal_window_capable: bool = false,
     compositor: compositor_runtime.Detection,
 
-    pub fn withPortalFallback(self: *RuntimeDecision) void {
+    pub fn backendUsedLabel(self: RuntimeDecision) []const u8 {
+        return backendLabel(self.backend);
+    }
+
+    pub fn usesPortalBackend(self: RuntimeDecision) bool {
+        return self.backend == .portal_screenshot;
+    }
+
+    pub fn degradedBackend(self: RuntimeDecision) bool {
+        return self.usesPortalBackend();
+    }
+
+    pub fn shouldBypassOverlaySelection(self: RuntimeDecision) bool {
+        return self.usesPortalBackend() or !self.overlay_supported;
+    }
+
+    pub fn portalSelectionAvailable(self: RuntimeDecision) bool {
+        return self.usesPortalBackend() or self.portal_available;
+    }
+
+    pub fn previousAreaSupported(self: RuntimeDecision) bool {
+        return self.backend != .portal_screenshot;
+    }
+
+    pub fn selectPortalFallback(self: *RuntimeDecision) void {
         self.backend = .portal_screenshot;
+        self.capture = captureModesFor(self.backend, self.compositor_supported);
+    }
+
+    pub fn withPortalFallback(self: *RuntimeDecision) void {
+        self.selectPortalFallback();
     }
 };
 
@@ -67,21 +99,17 @@ pub fn resolve(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
 /// 4. wlroots probe -> `grim_wlroots`
 /// 5. generic Wayland with portal -> `portal_screenshot`
 pub fn resolveBackend(environ: std.process.Environ, compositor: compositor_runtime.Detection, portal_available: bool, grim_available: bool) BackendKind {
-    if (environ.getPosix("SHAULA_CAPTURE_BACKEND")) |value| {
-        const token = std.mem.sliceTo(value, 0);
-        if (std.mem.eql(u8, token, "__stub__")) {
+    if (env.trimmed(environ, "SHAULA_CAPTURE_BACKEND")) |token| {
+        if (std.mem.eql(u8, token, backend_contract.backend_stub)) {
             return .stub;
         }
-        if (std.mem.eql(u8, token, "portal-screenshot")) return .portal_screenshot;
-        if (std.mem.eql(u8, token, "grim-wlroots")) return .grim_wlroots;
-        if (std.mem.eql(u8, token, "niri-wayland-direct")) return .niri_wayland_direct;
+        if (std.mem.eql(u8, token, backend_contract.backend_portal_screenshot)) return .portal_screenshot;
+        if (std.mem.eql(u8, token, backend_contract.backend_grim_wlroots)) return .grim_wlroots;
+        if (std.mem.eql(u8, token, backend_contract.backend_niri_wayland_direct)) return .niri_wayland_direct;
     }
 
-    if (environ.getPosix("SHAULA_CAPTURE_FORCE_PORTAL")) |value| {
-        const token = std.mem.sliceTo(value, 0);
-        if (std.mem.eql(u8, token, "1") or std.ascii.eqlIgnoreCase(token, "true")) {
-            return .portal_screenshot;
-        }
+    if (env.flagEnabled(environ, "SHAULA_CAPTURE_FORCE_PORTAL")) {
+        return .portal_screenshot;
     }
 
     if (compositor.kind == .niri) {
@@ -100,21 +128,16 @@ pub fn resolveBackend(environ: std.process.Environ, compositor: compositor_runti
 }
 
 fn grimAvailable(io: std.Io) bool {
-    const paths = [_][]const u8{ "/usr/bin/grim", "/bin/grim", "/usr/local/bin/grim" };
-    for (paths) |path| {
-        std.Io.Dir.accessAbsolute(io, path, .{}) catch continue;
-        return true;
-    }
-    return false;
+    return tool_lookup.grimPath(io) != null;
 }
 
 /// Stable backend label used in JSON responses and QA assertions.
 pub fn backendLabel(kind: BackendKind) []const u8 {
     return switch (kind) {
-        .niri_wayland_direct => "niri-wayland-direct",
-        .grim_wlroots => "grim-wlroots",
-        .portal_screenshot => "portal-screenshot",
-        .stub => "__stub__",
+        .niri_wayland_direct => backend_contract.backend_niri_wayland_direct,
+        .grim_wlroots => backend_contract.backend_grim_wlroots,
+        .portal_screenshot => backend_contract.backend_portal_screenshot,
+        .stub => backend_contract.backend_stub,
     };
 }
 
@@ -133,10 +156,10 @@ pub fn modeSupported(capture: CaptureModes, mode: []const u8) bool {
 /// Ordered fallback backend labels for observability and deterministic runtime selection.
 pub fn fallbacksFor(backend: BackendKind) []const []const u8 {
     return switch (backend) {
-        .niri_wayland_direct => &.{"portal-screenshot"},
-        .grim_wlroots => &.{"portal-screenshot"},
+        .niri_wayland_direct => &.{backend_contract.backend_portal_screenshot},
+        .grim_wlroots => &.{backend_contract.backend_portal_screenshot},
         .portal_screenshot => &.{},
-        .stub => &.{"portal-screenshot"},
+        .stub => &.{backend_contract.backend_portal_screenshot},
     };
 }
 

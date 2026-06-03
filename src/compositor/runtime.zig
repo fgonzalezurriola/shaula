@@ -1,4 +1,5 @@
 const std = @import("std");
+const env = @import("../runtime/env.zig");
 
 pub const Kind = enum {
     niri,
@@ -18,24 +19,22 @@ pub const Detection = struct {
 /// - generic Wayland support is gated by portal availability in runtime
 ///   capabilities, while overlay remains limited to Niri/wlroots tokens.
 pub fn detect(environ: std.process.Environ) Detection {
-    if (environ.getPosix("SHAULA_COMPOSITOR")) |value| {
-        const explicit = std.mem.trim(u8, std.mem.sliceTo(value, 0), " \t\r\n");
-        if (explicit.len > 0) return classifyLabel(explicit);
+    if (env.trimmed(environ, "SHAULA_COMPOSITOR")) |explicit| {
+        return classifyLabel(explicit);
     }
 
     if (environ.getPosix("NIRI_SOCKET") != null) {
         return .{ .kind = .niri, .label = "niri" };
     }
 
-    if (environ.getPosix("XDG_CURRENT_DESKTOP")) |value| {
-        if (extractDesktopToken(std.mem.sliceTo(value, 0))) |token| {
+    if (env.slice(environ, "XDG_CURRENT_DESKTOP")) |value| {
+        if (env.firstDesktopToken(value)) |token| {
             return classifyLabel(token);
         }
     }
 
-    if (environ.getPosix("XDG_SESSION_DESKTOP")) |value| {
-        const token = std.mem.trim(u8, std.mem.sliceTo(value, 0), " \t\r\n");
-        if (token.len > 0) return classifyLabel(token);
+    if (env.trimmed(environ, "XDG_SESSION_DESKTOP")) |token| {
+        return classifyLabel(token);
     }
 
     if (environ.getPosix("WAYLAND_DISPLAY") != null) {
@@ -104,18 +103,6 @@ fn isWlrootsToken(value: []const u8) bool {
         if (std.ascii.eqlIgnoreCase(value, token)) return true;
     }
     return false;
-}
-
-fn extractDesktopToken(value: []const u8) ?[]const u8 {
-    var it_colon = std.mem.splitScalar(u8, value, ':');
-    while (it_colon.next()) |chunk| {
-        var it_semicolon = std.mem.splitScalar(u8, chunk, ';');
-        while (it_semicolon.next()) |subchunk| {
-            const token = std.mem.trim(u8, subchunk, " \t");
-            if (token.len > 0) return token;
-        }
-    }
-    return null;
 }
 
 test "detects niri from explicit override" {

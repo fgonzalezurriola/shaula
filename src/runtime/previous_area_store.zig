@@ -1,4 +1,5 @@
 const std = @import("std");
+const backend_contract = @import("../backends/capture_backend_contract.zig");
 const capture_types = @import("../capture/types.zig");
 const runtime_paths = @import("paths.zig");
 
@@ -67,7 +68,7 @@ pub fn load(
 }
 
 pub fn supportedForBackendLabel(backend_label: []const u8) bool {
-    return !std.mem.eql(u8, backend_label, "portal-screenshot");
+    return !backend_contract.labelIsPortal(backend_label);
 }
 
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {

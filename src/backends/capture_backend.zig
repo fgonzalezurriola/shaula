@@ -7,6 +7,7 @@ const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
 const capture_types = @import("../capture/types.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
+const env = @import("../runtime/env.zig");
 
 pub const BackendKind = runtime_capabilities.BackendKind;
 pub const RuntimeDecision = runtime_capabilities.RuntimeDecision;
@@ -38,8 +39,8 @@ pub fn execute(
     }
 
     const backend = resolved.runtime.backend;
-    const backend_used = backendString(backend);
-    const degraded_backend = backend == .portal_screenshot;
+    const backend_used = resolved.runtime.backendUsedLabel();
+    const degraded_backend = resolved.runtime.degradedBackend();
 
     if (backend == .stub) {
         return failure.backendUnavailable(capture_types, request.mode, backend_used);
@@ -75,6 +76,7 @@ pub fn execute(
         null;
 
     runtime_exec.writeRuntimeCapture(
+        allocator,
         io,
         environ,
         backend_used,
@@ -132,10 +134,6 @@ pub fn deinitOutcome(allocator: std.mem.Allocator, outcome: *capture_types.Captu
     }
 }
 
-fn backendString(kind: BackendKind) []const u8 {
-    return runtime_capabilities.backendLabel(kind);
-}
-
 fn operationForMode(mode: capture_types.CaptureMode) execution_plan.Operation {
     return switch (mode) {
         .area => .area,
@@ -150,16 +148,12 @@ fn resolveWindowTarget(request: capture_types.CaptureRequest, environ: std.proce
         if (window_id.len > 0) return window_id;
     }
 
-    if (environ.getPosix("SHAULA_WINDOW_ID")) |window_id_z| {
-        const window_id = std.mem.sliceTo(window_id_z, 0);
-        if (window_id.len > 0) return window_id;
+    if (env.trimmed(environ, "SHAULA_WINDOW_ID")) |window_id| {
+        return window_id;
     }
 
-    if (environ.getPosix("SHAULA_WINDOW_TARGET_RESOLVED")) |resolved_z| {
-        const resolved = std.mem.sliceTo(resolved_z, 0);
-        if (std.mem.eql(u8, resolved, "1") or std.ascii.eqlIgnoreCase(resolved, "true")) {
-            return "active-window";
-        }
+    if (env.flagEnabled(environ, "SHAULA_WINDOW_TARGET_RESOLVED")) {
+        return "active-window";
     }
 
     return null;

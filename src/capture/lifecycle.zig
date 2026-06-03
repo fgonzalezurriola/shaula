@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const capture_backend = @import("../backends/capture_backend.zig");
+const backend_contract = @import("../backends/capture_backend_contract.zig");
 const capture_backend_failure = @import("../backends/capture_backend_failure.zig");
 const capture_backend_output_path = @import("../backends/capture_backend_output_path.zig");
 const capture_backend_png_meta = @import("../backends/capture_backend_png_meta.zig");
@@ -18,10 +19,12 @@ const overlay_session = @import("../overlay/selection_session.zig");
 const overlay_draft_store = @import("../overlay/selection_draft_store.zig");
 const post_capture_pipeline = @import("../pipeline/post_capture.zig");
 const capture_session_lock = @import("../runtime/capture_session_lock.zig");
+const env = @import("../runtime/env.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const selection = @import("../selection/selection.zig");
+const warning_tokens = @import("warnings.zig");
 
 const CaptureSessionAcquire = struct {
     lock: ?capture_session_lock.CaptureSessionLock = null,
@@ -342,14 +345,14 @@ fn runOverlayMode(
         const unsupported_rc = try guards.enforceModeSupported(runtime, io, command, backend_mode);
         if (unsupported_rc) |code| return code;
 
-        if (runtime.backend == .portal_screenshot or !runtime.overlay_supported) {
+        if (runtime.shouldBypassOverlaySelection()) {
             const options = switch (mode) {
                 .quick => invocation.quick(parsed, region_capture_mode, null),
                 .area => invocation.area(parsed, region_capture_mode, null),
                 .all_in_one => invocation.allInOne(parsed, region_capture_mode, null),
                 else => unreachable,
             };
-            return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, "capture_selection_portal");
+            return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, warning_tokens.selection_portal);
         }
     }
 
@@ -379,8 +382,8 @@ fn runOverlayMode(
     if (selection_result.exit_code) |code| return code;
     const selected = selection_result.selection;
 
-    if (selection_result.selection_warning != null and std.mem.eql(u8, selection_result.selection_warning.?, "capture_selection_portal")) {
-        runtime.withPortalFallback();
+    if (selection_result.selection_warning != null and std.mem.eql(u8, selection_result.selection_warning.?, warning_tokens.selection_portal)) {
+        runtime.selectPortalFallback();
     }
 
     if (parsed.dry_run) {
@@ -402,7 +405,7 @@ fn runOverlayMode(
             reported_mode,
             null,
             false,
-            &.{"frozen_source_missing"},
+            &.{warning_tokens.frozen_source_missing},
         );
         return recovery_policy.exitCodeFor("ERR_CAPTURE_BACKEND_UNAVAILABLE");
     }
@@ -453,8 +456,8 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
     const unsupported_rc = try guards.enforceModeSupported(runtime, io, "capture previous-area", backend_mode);
     if (unsupported_rc) |code| return code;
 
-    const backend_label = runtime_capabilities.backendLabel(runtime.backend);
-    if (!previous_area_store.supportedForBackendLabel(backend_label)) {
+    const backend_label = runtime.backendUsedLabel();
+    if (!runtime.previousAreaSupported() or !previous_area_store.supportedForBackendLabel(backend_label)) {
         try json.writeErrorJson(
             io,
             "capture previous-area",
@@ -464,7 +467,7 @@ pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.pr
             reported_mode,
             backend_label,
             false,
-            &.{"capability_execution_mismatch_guard"},
+            &.{warning_tokens.capability_execution_mismatch_guard},
         );
         return recovery_policy.exitCodeFor("ERR_CAPTURE_MODE_UNSUPPORTED");
     }
@@ -505,7 +508,7 @@ fn beginCaptureSession(
                 reported_mode,
                 null,
                 false,
-                &.{"capture_session_busy"},
+                &.{warning_tokens.capture_session_busy},
             );
             return .{ .exit_code = recovery_policy.exitCodeFor("ERR_CAPTURE_IN_PROGRESS") };
         },
@@ -588,7 +591,7 @@ fn resolveOverlaySelection(
     dry_run: bool,
     simulate_cancel: bool,
 ) !OverlaySelectionOutcome {
-    const force_noninteractive_selection = envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
+    const force_noninteractive_selection = env.flagEnabled(environ, "SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION");
     const use_overlay_dry_run = dry_run or force_noninteractive_selection;
     var result = try overlay_session.runSelection(
         allocator,
@@ -611,8 +614,8 @@ fn resolveOverlaySelection(
     }
 
     if (result.unavailable) {
-        if (runtime.backend == .portal_screenshot or runtime.portal_available) {
-            return .{ .selection = result.result, .selection_warning = "capture_selection_portal" };
+        if (runtime.portalSelectionAvailable()) {
+            return .{ .selection = result.result, .selection_warning = warning_tokens.selection_portal };
         }
     }
 
@@ -651,7 +654,7 @@ fn writeCaptureOutcome(
                 warning_count += 1;
             }
             if (success.degraded) {
-                warnings[warning_count] = "capture_backend_degraded";
+                warnings[warning_count] = backend_contract.warning_capture_backend_degraded;
                 warning_count += 1;
             }
 
@@ -674,7 +677,7 @@ fn writeCaptureOutcome(
                 warning_count += 1;
             }
             if (failure.degraded) {
-                warnings[warning_count] = "window_capture_degraded";
+                warnings[warning_count] = backend_contract.warning_window_capture_degraded;
                 warning_count += 1;
             }
 
@@ -694,14 +697,6 @@ fn writeCaptureOutcome(
     }
 }
 
-fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
-    if (environ.getPosix(key)) |raw_z| {
-        const raw = std.mem.sliceTo(raw_z, 0);
-        return std.mem.eql(u8, raw, "1") or std.ascii.eqlIgnoreCase(raw, "true") or std.ascii.eqlIgnoreCase(raw, "yes");
-    }
-    return false;
-}
-
 fn resolveRegionCaptureMode(
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -711,8 +706,7 @@ fn resolveRegionCaptureMode(
     if (explicit) |token| {
         return core_capture_mode.parseRegionCaptureMode(token) orelse .live;
     }
-    if (environ.getPosix("SHAULA_REGION_CAPTURE_MODE")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
+    if (env.trimmed(environ, "SHAULA_REGION_CAPTURE_MODE")) |raw| {
         if (core_capture_mode.parseRegionCaptureMode(raw)) |mode| return mode;
     }
 
@@ -729,11 +723,7 @@ fn settleAfterLiveOverlay(
 ) void {
     if (region_capture_mode != .live) return;
 
-    const default_ms: u64 = 50;
-    const settle_ms = if (environ.getPosix("SHAULA_LIVE_REGION_SETTLE_MS")) |raw_z| blk: {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        break :blk std.fmt.parseInt(u64, raw, 10) catch default_ms;
-    } else default_ms;
+    const settle_ms = env.unsignedOrDefault(u64, environ, "SHAULA_LIVE_REGION_SETTLE_MS", 50);
     if (settle_ms == 0) return;
     const millis_i64: i64 = @intCast(settle_ms);
     const duration: std.Io.Clock.Duration = .{ .raw = std.Io.Duration.fromMilliseconds(millis_i64), .clock = .real };

@@ -1,5 +1,6 @@
 const std = @import("std");
 const compositor_runtime = @import("runtime.zig");
+const env = @import("../runtime/env.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
 const NiriFocusedOutput = struct {
@@ -22,9 +23,8 @@ pub fn resolveName(
     io: std.Io,
     environ: std.process.Environ,
 ) !?[]u8 {
-    if (environ.getPosix("SHAULA_OVERLAY_OUTPUT_NAME")) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return try allocator.dupe(u8, raw);
+    if (env.trimmed(environ, "SHAULA_OVERLAY_OUTPUT_NAME")) |raw| {
+        return try allocator.dupe(u8, raw);
     }
 
     const compositor = compositor_runtime.detect(environ);

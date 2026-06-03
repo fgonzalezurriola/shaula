@@ -1,10 +1,12 @@
 const std = @import("std");
+const backend_contract = @import("capture_backend_contract.zig");
 const execution_plan = @import("capture_execution_plan.zig");
 const process_exec = @import("../runtime/process_exec.zig");
 
 /// Dispatch runtime capture to helper, portal, or grim and map failures to
 /// deterministic taxonomy-facing errors.
 pub fn writeRuntimeCapture(
+    allocator: std.mem.Allocator,
     io: std.Io,
     environ: std.process.Environ,
     backend_label: []const u8,
@@ -18,7 +20,7 @@ pub fn writeRuntimeCapture(
         try std.Io.Dir.cwd().createDirPath(io, parent);
     }
 
-    var plan = execution_plan.resolve(std.heap.smp_allocator, io, environ, .{
+    var plan = execution_plan.resolve(allocator, io, environ, .{
         .backend_label = backend_label,
         .mode_string = mode_string,
         .operation = operation,
@@ -28,10 +30,10 @@ pub fn writeRuntimeCapture(
     }) catch |err| switch (err) {
         error.BackendUnavailable => return error.BackendUnavailable,
     };
-    defer plan.deinit(std.heap.smp_allocator);
+    defer plan.deinit(allocator);
 
     const result = process_exec.run(
-        std.heap.smp_allocator,
+        allocator,
         io,
         plan.argv(),
         0,
@@ -40,19 +42,14 @@ pub fn writeRuntimeCapture(
         error.FileNotFound => return error.BackendUnavailable,
         else => return err,
     };
-    defer result.deinit(std.heap.smp_allocator);
+    defer result.deinit(allocator);
 
     if (result.exitedZero()) {
         return;
     }
     std.Io.Dir.deleteFileAbsolute(io, output_path) catch {};
     return switch (result.term) {
-        .exited => |code| switch (code) {
-            23 => error.IpcTimeout,
-            33 => error.SelectionCancelled,
-            99 => error.UnknownUnmapped,
-            else => error.BackendUnavailable,
-        },
+        .exited => |code| backend_contract.runtimeErrorForExitCode(code),
         else => error.BackendUnavailable,
     };
 }

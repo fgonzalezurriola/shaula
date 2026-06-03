@@ -20,6 +20,46 @@ and the working diff.
   `previous-area` is unsupported under the portal backend because the portal does
   not return reliable geometry. `preflight`, `capabilities list`, and `doctor`
   now expose portal availability/window-capability and backend selection.
+- Wayland runtime architecture has a compact handoff context for future agents:
+  `runtime/env.zig` owns borrowed environment parsing, `runtime/tool_lookup.zig`
+  owns fixed `grim` candidates plus PATH-aware diagnostics lookup,
+  `backends/capture_backend_contract.zig` owns public backend labels, degraded
+  warning tokens, and helper exit-code mapping, and `capture/warnings.zig` owns
+  capture-specific warning tokens. `capabilities/runtime.zig` remains the runtime
+  decision Module and exposes the leverage methods callers should use:
+  `backendUsedLabel`, `degradedBackend`, `shouldBypassOverlaySelection`,
+  `portalSelectionAvailable`, `previousAreaSupported`, and
+  `selectPortalFallback`. Do not reintroduce string comparisons for
+  `portal-screenshot`, `__stub__`, `portal_fallback`,
+  `capture_backend_degraded`, `window_capture_degraded`, or
+  `capture_selection_portal` outside those contract Modules.
+- Manual Wayland evidence planning lives in `docs/wayland-runtime-test-plan.md`.
+  Preferred strategy is hybrid: use the real host for Niri, overlay, clipboard,
+  notification, Noctalia, scale, and timing behavior; use VMs or spare machines
+  for GNOME/KDE portal and extra wlroots coverage. Keep VM disks, temp files,
+  captures, and Zig caches off `/` when root filesystem space is tight. On
+  2026-05-31, direct QEMU/KVM evidence was captured under
+  `/home/fgonz/shaula-lab` for Fedora 44 Cloud and Ubuntu 26.04 LTS Cloud. Both
+  guests verified official image checksums, copied the current working tree and
+  local Zig 0.16.0, installed distro GTK/gtk4-layer-shell/wlroots portal
+  packages, passed `zig build`, passed portal/unsupported-compositor contract
+  smoke, passed `./dev check` inside Sway headless, and produced 1280x720 PNGs
+  for `capture fullscreen` and `capture all-screens` with backend
+  `grim-wlroots`. Running `./dev check` from plain SSH after installing `grim`
+  fails the optional real-backend test because there is no active Wayland
+  compositor; use the Sway headless wrapper for VM checks or run non-graphical
+  package smoke before installing `grim`. Extra Ubuntu 26.04 headless desktop
+  evidence: GNOME Shell 50 with `xdg-desktop-portal-gnome` exposed the
+  Screenshot portal and Shaula reported backend `portal-screenshot`,
+  `portal_available=true`, and `overlay_supported=false`; unattended fullscreen
+  capture timed out because the portal needs an interactive prompt/window
+  association. KWin/Plasma 6.6 virtual mode started, but
+  `xdg-desktop-portal-kde` did not expose `org.freedesktop.portal.Screenshot`
+  in that headless lane, so Shaula returned `ERR_UNSUPPORTED_COMPOSITOR` and
+  the capture guard returned `ERR_CAPTURE_MODE_UNSUPPORTED` instead of
+  pretending KDE portal capture was available. Detailed outputs live in
+  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out` and
+  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
 - Preview annotation multi-select is the final v0.1.x editor feature before
   icon/release work. The GTK preview now uses `selected_annotation_ids` as the
   annotation selection source of truth, keeps the legacy

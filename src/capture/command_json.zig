@@ -4,13 +4,14 @@ const cli_json = @import("../cli/json.zig");
 const protocol = @import("../ipc/protocol.zig");
 const selection = @import("../selection/selection.zig");
 const capture_types = @import("types.zig");
+const warning_tokens = @import("warnings.zig");
 
 pub const jsonStringAlloc = cli_json.stringAlloc;
 pub const jsonNullableStringAlloc = cli_json.nullableStringAlloc;
 pub const warningsJson = cli_json.warningsAlloc;
 pub const nowIso8601 = cli_json.nowIso8601;
 
-pub const known_warning_capture_selection_portal = "capture_selection_portal";
+pub const known_warning_capture_selection_portal = warning_tokens.selection_portal;
 
 pub fn writeSuccessJson(
     allocator: std.mem.Allocator,

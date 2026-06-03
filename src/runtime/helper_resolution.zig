@@ -1,4 +1,5 @@
 const std = @import("std");
+const env = @import("env.zig");
 
 /// Resolves installed helper binaries from the CLI runtime location.
 ///
@@ -12,9 +13,8 @@ pub fn resolveSiblingHelper(
     env_var: []const u8,
     binary_name: []const u8,
 ) ![]u8 {
-    if (environ.getPosix(env_var)) |raw_z| {
-        const raw = std.mem.trim(u8, std.mem.sliceTo(raw_z, 0), " \t\r\n");
-        if (raw.len > 0) return allocator.dupe(u8, raw);
+    if (env.trimmed(environ, env_var)) |raw| {
+        return allocator.dupe(u8, raw);
     }
 
     const exe_dir = std.process.executableDirPathAlloc(io, allocator) catch return allocator.dupe(u8, binary_name);

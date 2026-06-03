@@ -1,5 +1,8 @@
 const std = @import("std");
+const backend_contract = @import("capture_backend_contract.zig");
 const portal_screenshot = @import("portal_screenshot.zig");
+const env = @import("../runtime/env.zig");
+const tool_lookup = @import("../runtime/tool_lookup.zig");
 
 pub const Options = struct {
     backend_label: []const u8,
@@ -47,7 +50,7 @@ pub fn resolve(
         return helperPlan(helper_path, options);
     }
 
-    if (std.mem.eql(u8, options.backend_label, portal_screenshot.backend_label)) {
+    if (backend_contract.labelIsPortal(options.backend_label)) {
         const helper_path = portal_screenshot.resolveHelperBinary(allocator, io, environ) catch return error.BackendUnavailable;
         var plan = staticPlan(&.{
             helper_path,
@@ -62,7 +65,7 @@ pub fn resolve(
         return plan;
     }
 
-    const grim_path = findGrimBinary(io) orelse return error.BackendUnavailable;
+    const grim_path = tool_lookup.grimPath(io) orelse return error.BackendUnavailable;
     return switch (options.operation) {
         .area => blk: {
             const geometry = options.area_geometry orelse return error.BackendUnavailable;
@@ -105,6 +108,7 @@ fn helperPlan(helper_path: []const u8, options: Options) Plan {
 
 fn staticPlan(argv: []const []const u8) Plan {
     var plan: Plan = .{};
+    std.debug.assert(argv.len <= plan.argv_storage.len);
     for (argv, 0..) |arg, index| {
         plan.argv_storage[index] = arg;
     }
@@ -113,24 +117,9 @@ fn staticPlan(argv: []const []const u8) Plan {
 }
 
 fn configuredRuntimeCaptureHelper(environ: std.process.Environ) ?[]const u8 {
-    if (environ.getPosix("SHAULA_RUNTIME_CAPTURE_HELPER")) |helper_path_z| {
-        const configured = std.mem.sliceTo(helper_path_z, 0);
-        if (configured.len > 0) return configured;
+    if (env.trimmed(environ, "SHAULA_RUNTIME_CAPTURE_HELPER")) |helper_path| {
+        return helper_path;
     }
 
-    return null;
-}
-
-fn findGrimBinary(io: std.Io) ?[]const u8 {
-    const grim_candidate_paths = [_][]const u8{
-        "/usr/bin/grim",
-        "/bin/grim",
-        "/usr/local/bin/grim",
-    };
-
-    for (grim_candidate_paths) |candidate| {
-        std.Io.Dir.accessAbsolute(io, candidate, .{}) catch continue;
-        return candidate;
-    }
     return null;
 }

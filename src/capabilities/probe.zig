@@ -1,5 +1,6 @@
 const std = @import("std");
 const root = @import("root");
+const backend_contract = @import("../backends/capture_backend_contract.zig");
 const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 
@@ -42,17 +43,16 @@ else
     standalone_recovery_policy;
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !u8 {
-    const compositor = compositor_runtime.detect(environ);
     const runtime = runtime_capabilities.resolve(allocator, io, environ);
     if (!runtime.compositor_supported) {
-        try writeErrorJson(io, "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, compositor.label);
+        try writeErrorJson(io, "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, runtime.compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
 
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
 
-    const backend = runtime_capabilities.backendLabel(runtime.backend);
+    const backend = runtime.backendUsedLabel();
     const fallbacks = runtime_capabilities.fallbacksFor(runtime.backend);
     const fallbacks_json = try stringArrayJson(allocator, fallbacks);
     defer allocator.free(fallbacks_json);
@@ -60,11 +60,11 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     var warning_values: [2][]const u8 = undefined;
     var warning_count: usize = 0;
     if (!runtime.capture.window) {
-        warning_values[warning_count] = "window_capture_degraded";
+        warning_values[warning_count] = backend_contract.warning_window_capture_degraded;
         warning_count += 1;
     }
-    if (runtime.backend == .portal_screenshot) {
-        warning_values[warning_count] = "portal_fallback";
+    if (runtime.usesPortalBackend()) {
+        warning_values[warning_count] = backend_contract.warning_portal_fallback;
         warning_count += 1;
     }
     const warnings = try cli_json.warningsAlloc(allocator, warning_values[0..warning_count]);
@@ -90,7 +90,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             boolToJson(runtime.capture.window),
             backend,
             fallbacks_json,
-            compositor.label,
+            runtime.compositor.label,
             protocol.ipc_version,
             boolToJson(runtime.portal_available),
             boolToJson(runtime.portal_window_capable),

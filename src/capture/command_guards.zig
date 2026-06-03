@@ -4,6 +4,7 @@ const precondition_guard = @import("precondition_guard.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
 const recovery_policy = @import("../recovery/policy.zig");
 const command_json = @import("command_json.zig");
+const warnings = @import("warnings.zig");
 
 /// Enforce strict runtime capability contract before backend execution.
 ///
@@ -42,7 +43,7 @@ pub fn enforceModeSupported(runtime: runtime_capabilities.RuntimeDecision, io: s
         mode,
         backend_used,
         modeDegraded(mode),
-        &.{"capability_execution_mismatch_guard"},
+        &.{warnings.capability_execution_mismatch_guard},
     );
 
     return recovery_policy.exitCodeFor("ERR_CAPTURE_MODE_UNSUPPORTED");
@@ -76,7 +77,7 @@ pub fn enforcePreCaptureGuard(
                 mode,
                 backend_used,
                 modeDegraded(mode),
-                &.{"capture_precondition_guard_timeout"},
+                &.{warnings.precondition_guard_timeout},
             );
 
             return error.PreconditionTimeout;
