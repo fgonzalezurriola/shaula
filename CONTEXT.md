@@ -39,7 +39,7 @@ and the working diff.
   for GNOME/KDE portal and extra wlroots coverage. Keep VM disks, temp files,
   captures, and Zig caches off `/` when root filesystem space is tight. On
   2026-05-31, direct QEMU/KVM evidence was captured under
-  `/home/fgonz/shaula-lab` for Fedora 44 Cloud and Ubuntu 26.04 LTS Cloud. Both
+  `/home/fgonz/dev/shaula-lab` for Fedora 44 Cloud and Ubuntu 26.04 LTS Cloud. Both
   guests verified official image checksums, copied the current working tree and
   local Zig 0.16.0, installed distro GTK/gtk4-layer-shell/wlroots portal
   packages, passed `zig build`, passed portal/unsupported-compositor contract
@@ -58,8 +58,8 @@ and the working diff.
   in that headless lane, so Shaula returned `ERR_UNSUPPORTED_COMPOSITOR` and
   the capture guard returned `ERR_CAPTURE_MODE_UNSUPPORTED` instead of
   pretending KDE portal capture was available. Detailed outputs live in
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out` and
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out` and
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
 - Preview annotation multi-select is the final v0.1.x editor feature before
   icon/release work. The GTK preview now uses `selected_annotation_ids` as the
   annotation selection source of truth, keeps the legacy

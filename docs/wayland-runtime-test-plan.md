@@ -31,7 +31,7 @@ du -sh ~/.cache/zig ~/.cache 2>/dev/null || true
 Prefer a large non-root path for temporary work:
 
 ```bash
-export SHAULA_LAB_ROOT=/path/on/big/disk/shaula-lab
+export SHAULA_LAB_ROOT=$HOME/dev/shaula-lab
 mkdir -p "$SHAULA_LAB_ROOT"/{tmp,zig-cache,vm-images,captures}
 export TMPDIR="$SHAULA_LAB_ROOT/tmp"
 export ZIG_GLOBAL_CACHE_DIR="$SHAULA_LAB_ROOT/zig-cache"
@@ -208,7 +208,7 @@ Expected results:
 
 ## Evidence Captured 2026-05-31
 
-Lab root: `/home/fgonz/shaula-lab` on `/home`, not `/`. Total lab size after
+Lab root: `/home/fgonz/dev/shaula-lab` on `/home`, not `/`. Total lab size after
 two guests was about 5.5 GiB: 1.4 GiB images, 4.1 GiB VM overlays, 84 KiB
 captured artifacts.
 
@@ -246,14 +246,14 @@ package/build smoke.
 
 Artifacts kept outside the repository:
 
-- `/home/fgonz/shaula-lab/artifacts/fedora44/`
-- `/home/fgonz/shaula-lab/artifacts/ubuntu2604/`
-- `/home/fgonz/shaula-lab/artifacts/run-dev-check-in-sway.sh`
+- `/home/fgonz/dev/shaula-lab/artifacts/fedora44/`
+- `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/`
+- `/home/fgonz/dev/shaula-lab/artifacts/run-dev-check-in-sway.sh`
 - GNOME/KDE runners and outputs under
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/run-gnome-portal-test.sh`,
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out`,
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/run-kde-portal-test.sh`, and
-  `/home/fgonz/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/run-gnome-portal-test.sh`,
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out`,
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/run-kde-portal-test.sh`, and
+  `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
 
 Remaining gaps:
 
