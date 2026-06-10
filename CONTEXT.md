@@ -608,6 +608,9 @@ and the working diff.
 - Overlay Enter/Return is handled in key-capture phase by the overlay window:
   even when the aspect dropdown was just used or remains open, Enter closes the
   dropdown if needed and confirms the capture instead of reopening the menu.
+- Overlay Ctrl+C confirms the current valid selection with helper
+  `action:"copy"`; the Zig lifecycle turns that into immediate clipboard copy
+  with preview disabled for that capture. Q/N/Backspace remain cancel shortcuts.
 - Area overlay hit-testing is handle-biased: the 8 corner and mid-point handles
   keep resize cursors, while edges themselves and the inner 24px rim keep move behavior,
   and dragging in the selection interior starts a new region. This makes it

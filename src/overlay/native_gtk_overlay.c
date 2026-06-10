@@ -905,18 +905,18 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   }
 }
 
-static void confirm(void) {
+static void confirm_with_action(const char *action) {
   if (!state.has_selection || state.selection.width <= 0 ||
       state.selection.height <= 0)
     return;
   const char *aspect = state.has_aspect ? state.aspect_output_label : "Free";
   const char *output_name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
   ShaulaPoint bounds = initial_surface_size();
-  printf("{\"status\":\"ok\",\"action\":\"capture\",\"aspect\":\"%s\","
+  printf("{\"status\":\"ok\",\"action\":\"%s\",\"aspect\":\"%s\","
          "\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
          "\"local_geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
          "\"output\":{\"name\":",
-         aspect, state.selection.x + state.output_origin.x,
+         action, aspect, state.selection.x + state.output_origin.x,
          state.selection.y + state.output_origin.y, state.selection.width,
          state.selection.height, state.selection.x, state.selection.y,
          state.selection.width, state.selection.height);
@@ -938,6 +938,10 @@ static void confirm(void) {
   if (state.main_loop != NULL)
     g_main_loop_quit(state.main_loop);
 }
+
+static void confirm(void) { confirm_with_action("capture"); }
+
+static void copy_now(void) { confirm_with_action("copy"); }
 
 static void cancel(void) {
   if (state.has_selection && state.selection.width > 0 &&
@@ -1129,10 +1133,13 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     cancel();
     return TRUE;
   }
+  if ((modifiers & GDK_CONTROL_MASK) != 0 &&
+      (keyval == GDK_KEY_c || keyval == GDK_KEY_C)) {
+    copy_now();
+    return TRUE;
+  }
   if (keyval == GDK_KEY_BackSpace || keyval == GDK_KEY_n ||
-      keyval == GDK_KEY_N || keyval == GDK_KEY_q ||
-      ((modifiers & GDK_CONTROL_MASK) != 0 &&
-       (keyval == GDK_KEY_c || keyval == GDK_KEY_C))) {
+      keyval == GDK_KEY_N || keyval == GDK_KEY_q) {
     cancel();
     return TRUE;
   }

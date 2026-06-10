@@ -417,7 +417,14 @@ fn runOverlayMode(
         .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
         else => unreachable,
     };
-    return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
+    var resolved_options = options;
+    if (selection_result.copy_requested) {
+        resolved_options.post_flags.copy = true;
+        resolved_options.post_flags.copy_explicit = true;
+        resolved_options.post_flags.preview = false;
+        resolved_options.post_flags.preview_explicit = true;
+    }
+    return executeLifecycle(runtime, allocator, io, environ, resolved_options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
 }
 
 fn runDirectMode(
@@ -567,6 +574,7 @@ fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeS
 const OverlaySelectionOutcome = struct {
     selection: selection.SelectionResult,
     frozen_source: ?overlay_session.FrozenSource = null,
+    copy_requested: bool = false,
     selection_warning: ?[]const u8 = null,
     exit_code: ?u8 = null,
 
@@ -609,8 +617,9 @@ fn resolveOverlaySelection(
     defer result.deinit(allocator, io);
     if (!result.result.cancelled) {
         const frozen_source = result.frozen_source;
+        const copy_requested = result.copy_requested;
         result.frozen_source = null;
-        return .{ .selection = result.result, .frozen_source = frozen_source };
+        return .{ .selection = result.result, .frozen_source = frozen_source, .copy_requested = copy_requested };
     }
 
     if (result.unavailable) {

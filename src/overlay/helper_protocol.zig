@@ -11,6 +11,7 @@ const HelperStatus = enum {
 
 const HelperAction = enum {
     capture,
+    copy,
     cancel,
 };
 
@@ -75,7 +76,7 @@ pub const AspectOverride = union(enum) {
 /// Parse helper stdio envelope v1 into the selection contract.
 ///
 /// Contract constraints:
-/// - `status:"ok"` requires `action:"capture"` and valid non-zero geometry.
+/// - `status:"ok"` requires a confirming action and valid non-zero geometry.
 /// - `status:"cancel"` and `status:"error"` map to `cancelled=true`.
 /// - malformed payloads are treated as cancelled so caller boundaries emit
 ///   deterministic `ERR_SELECTION_CANCELLED` or overlay-specific `ERR_*`.
@@ -93,7 +94,7 @@ pub fn parseSelectionEnvelope(
     const envelope = parsed.value;
     switch (envelope.status) {
         .ok => {
-            if (envelope.action == null or envelope.action.? != .capture) {
+            if (!isConfirmAction(envelope.action)) {
                 return cancelledSelection(mode, constraint);
             }
 
@@ -111,6 +112,18 @@ pub fn parseSelectionEnvelope(
             return cancelledSelection(mode, constraint);
         },
     }
+}
+
+/// Extract whether the helper asked the capture lifecycle to copy immediately.
+///
+/// Contract constraint: this is only advisory after a valid confirmed selection;
+/// malformed payloads and cancelled sessions never request clipboard side effects.
+pub fn parseCopyRequested(allocator: std.mem.Allocator, payload: []const u8) bool {
+    const parsed = std.json.parseFromSlice(HelperEnvelope, allocator, payload, .{}) catch return false;
+    defer parsed.deinit();
+
+    const envelope = parsed.value;
+    return envelope.status == .ok and envelope.action != null and envelope.action.? == .copy and validEnvelopeGeometry(envelope.geometry) != null;
 }
 
 /// Extract the optional final aspect emitted by the native helper.
@@ -136,7 +149,7 @@ pub fn parseConfirmedLocalSelectionAlloc(allocator: std.mem.Allocator, payload: 
     defer parsed.deinit();
 
     const envelope = parsed.value;
-    if (envelope.status != .ok or envelope.action == null or envelope.action.? != .capture) return null;
+    if (envelope.status != .ok or !isConfirmAction(envelope.action)) return null;
     const local = validEnvelopeGeometry(envelope.local_geometry) orelse return null;
     const output = envelope.output orelse return null;
     if (output.width == 0 or output.height == 0) return null;
@@ -154,6 +167,11 @@ pub fn parseConfirmedLocalSelectionAlloc(allocator: std.mem.Allocator, payload: 
             .height = local.height,
         },
     };
+}
+
+fn isConfirmAction(action: ?HelperAction) bool {
+    const value = action orelse return false;
+    return value == .capture or value == .copy;
 }
 
 pub fn reportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {

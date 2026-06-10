@@ -58,6 +58,7 @@ pub const FrozenSource = struct {
 pub const SelectionOutcome = struct {
     result: selection.SelectionResult,
     frozen_source: ?FrozenSource = null,
+    copy_requested: bool = false,
     unavailable: bool = false,
 
     pub fn deinit(self: *SelectionOutcome, allocator: std.mem.Allocator, io: std.Io) void {
@@ -153,7 +154,7 @@ pub fn runSelection(
             persistToolbarPositionForSelection(allocator, io, environ, result) catch {};
             const frozen_source = helper_selection.frozen_source;
             helper_selection.frozen_source = null;
-            return .{ .result = result, .frozen_source = frozen_source };
+            return .{ .result = result, .frozen_source = frozen_source, .copy_requested = helper_selection.copy_requested };
         },
         .unavailable => return .{ .result = cancelledSelection(mode, constraint), .unavailable = true },
     }
@@ -243,6 +244,7 @@ const HelperSelection = struct {
     final_aspect: ?[]u8 = null,
     local_selection: ?helper_protocol.LocalSelection = null,
     frozen_source: ?FrozenSource = null,
+    copy_requested: bool = false,
     debug_stderr: ?[]const u8 = null,
 
     fn deinit(self: HelperSelection, allocator: std.mem.Allocator, io: std.Io) void {
@@ -338,6 +340,7 @@ fn runHelperSelectionAttempt(
     }
 
     const result = helper_protocol.parseSelectionEnvelope(allocator, helper.stdout, mode, constraint);
+    const copy_requested = helper_protocol.parseCopyRequested(allocator, helper.stdout);
     const aspect_override = try helper_protocol.parseAspectOverrideAlloc(allocator, helper.stdout);
     defer aspect_override.deinit(allocator);
     const local_selection = try helper_protocol.parseConfirmedLocalSelectionAlloc(allocator, helper.stdout);
@@ -358,6 +361,7 @@ fn runHelperSelectionAttempt(
                 null,
             .local_selection = local_selection,
             .frozen_source = frozen_source,
+            .copy_requested = !result.cancelled and copy_requested,
             .debug_stderr = owned_stderr,
         },
     };
