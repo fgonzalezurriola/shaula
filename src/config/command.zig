@@ -8,6 +8,7 @@ const loader = @import("loader.zig");
 const niri_rule = @import("niri_rule.zig");
 const niri_keybinds = @import("niri_keybinds.zig");
 const manager = @import("manager.zig");
+const save_args = @import("save_args.zig");
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     if (argv.len < 3) {
@@ -69,158 +70,18 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             apply_niri = true;
             continue;
         }
-        if (std.mem.eql(u8, arg, "--region-mode")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--region-mode is supported only for save and requires a value", false, null, null, null);
+        const maybe_next = if (i + 1 < argv.len) argToSlice(argv[i + 1]) else null;
+        switch (save_args.apply(&save_config, subcommand, arg, maybe_next)) {
+            .applied => |consumed| {
+                i += consumed;
+                save_options_seen = true;
+                continue;
+            },
+            .invalid => |invalid| {
+                try writeErrorJson(io, command, "ERR_CLI_USAGE", invalid.message, false, null, null, invalid.field);
                 return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            const value = argToSlice(argv[i]);
-            save_config.capture.region_capture_mode = config_types.parseRegionCaptureMode(value) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --region-mode", false, null, null, "region_mode");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--preview-mode")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--preview-mode is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            const value = argToSlice(argv[i]);
-            save_config.preview.window.mode = config_types.parsePreviewWindowMode(value) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --preview-mode", false, null, null, "preview_mode");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--focused")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--focused is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            save_config.preview.window.focused = parseBoolArg(argToSlice(argv[i])) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --focused", false, null, null, "focused");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--close-preview-on-save")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--close-preview-on-save is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            save_config.preview.window.close_preview_on_save = parseBoolArg(argToSlice(argv[i])) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --close-preview-on-save", false, null, null, "close_preview_on_save");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--width")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--width is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            save_config.preview.window.width = parsePositiveU32Arg(argToSlice(argv[i])) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --width", false, null, null, "width");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--height")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--height is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            save_config.preview.window.height = parsePositiveU32Arg(argToSlice(argv[i])) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --height", false, null, null, "height");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--floating-position")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--floating-position is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            const value = argToSlice(argv[i]);
-            if (std.mem.eql(u8, value, "centered")) {
-                save_config.preview.window.floating_position.x = null;
-                save_config.preview.window.floating_position.y = null;
-                save_config.preview.window.floating_position.relative_to = .top_left;
-            } else if (std.mem.eql(u8, value, "top-left")) {
-                save_config.preview.window.floating_position.x = 80;
-                save_config.preview.window.floating_position.y = 80;
-                save_config.preview.window.floating_position.relative_to = .top_left;
-            } else if (std.mem.eql(u8, value, "top-right")) {
-                save_config.preview.window.floating_position.x = 80;
-                save_config.preview.window.floating_position.y = 80;
-                save_config.preview.window.floating_position.relative_to = .top_right;
-            } else {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --floating-position", false, null, null, "floating_position");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--after-quick-skip-preview") or
-            std.mem.eql(u8, arg, "--after-area-skip-preview") or
-            std.mem.eql(u8, arg, "--after-fullscreen-skip-preview") or
-            std.mem.eql(u8, arg, "--after-all-screens-skip-preview") or
-            std.mem.eql(u8, arg, "--after-quick-copy") or
-            std.mem.eql(u8, arg, "--after-area-copy") or
-            std.mem.eql(u8, arg, "--after-fullscreen-copy") or
-            std.mem.eql(u8, arg, "--after-all-screens-copy") or
-            std.mem.eql(u8, arg, "--after-quick-save") or
-            std.mem.eql(u8, arg, "--after-area-save") or
-            std.mem.eql(u8, arg, "--after-fullscreen-save") or
-            std.mem.eql(u8, arg, "--after-all-screens-save") or
-            std.mem.eql(u8, arg, "--notifications-success") or
-            std.mem.eql(u8, arg, "--notifications-errors") or
-            std.mem.eql(u8, arg, "--notifications-thumbnails"))
-        {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "after-capture setting requires a boolean value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            const value = parseBoolArg(argToSlice(argv[i])) orelse {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid after-capture boolean", false, null, null, arg);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            applyBoolSetting(&save_config, arg, value);
-            save_options_seen = true;
-            continue;
-        }
-        if (std.mem.eql(u8, arg, "--save-folder")) {
-            if (!std.mem.eql(u8, subcommand, "save") or i + 1 >= argv.len) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "--save-folder is supported only for save and requires a value", false, null, null, null);
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            i += 1;
-            const folder = argToSlice(argv[i]);
-            if (!validSaveFolderArg(folder)) {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --save-folder", false, null, null, "save_folder");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            }
-            save_config.capture.after.save_folder.set(argToSlice(argv[i])) catch {
-                try writeErrorJson(io, command, "ERR_CLI_USAGE", "invalid --save-folder", false, null, null, "save_folder");
-                return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-            };
-            save_options_seen = true;
-            continue;
+            },
+            .not_save_setting => {},
         }
         if (std.mem.eql(u8, arg, "--path")) {
             const path_supported = std.mem.eql(u8, subcommand, "niri-install") or
@@ -485,32 +346,6 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     }
     try writeNiriRuleJson(allocator, io, command, loaded, rendered);
     return 0;
-}
-
-fn validSaveFolderArg(value: []const u8) bool {
-    if (value.len == 0) return true;
-    if (std.mem.indexOfAny(u8, value, "\"\\") != null) return false;
-    if (std.mem.eql(u8, value, "~")) return true;
-    if (std.mem.startsWith(u8, value, "~/")) return true;
-    return std.fs.path.isAbsolute(value);
-}
-
-fn applyBoolSetting(config: *config_types.Config, arg: []const u8, value: bool) void {
-    if (std.mem.eql(u8, arg, "--after-quick-skip-preview")) config.capture.after.quick.skip_preview = value;
-    if (std.mem.eql(u8, arg, "--after-area-skip-preview")) config.capture.after.area.skip_preview = value;
-    if (std.mem.eql(u8, arg, "--after-fullscreen-skip-preview")) config.capture.after.fullscreen.skip_preview = value;
-    if (std.mem.eql(u8, arg, "--after-all-screens-skip-preview")) config.capture.after.all_screens.skip_preview = value;
-    if (std.mem.eql(u8, arg, "--after-quick-copy")) config.capture.after.quick.copy_to_clipboard = value;
-    if (std.mem.eql(u8, arg, "--after-area-copy")) config.capture.after.area.copy_to_clipboard = value;
-    if (std.mem.eql(u8, arg, "--after-fullscreen-copy")) config.capture.after.fullscreen.copy_to_clipboard = value;
-    if (std.mem.eql(u8, arg, "--after-all-screens-copy")) config.capture.after.all_screens.copy_to_clipboard = value;
-    if (std.mem.eql(u8, arg, "--after-quick-save")) config.capture.after.quick.save_to_folder = value;
-    if (std.mem.eql(u8, arg, "--after-area-save")) config.capture.after.area.save_to_folder = value;
-    if (std.mem.eql(u8, arg, "--after-fullscreen-save")) config.capture.after.fullscreen.save_to_folder = value;
-    if (std.mem.eql(u8, arg, "--after-all-screens-save")) config.capture.after.all_screens.save_to_folder = value;
-    if (std.mem.eql(u8, arg, "--notifications-success")) config.notifications.success = value;
-    if (std.mem.eql(u8, arg, "--notifications-errors")) config.notifications.errors = value;
-    if (std.mem.eql(u8, arg, "--notifications-thumbnails")) config.notifications.thumbnails = value;
 }
 
 fn writeInitJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, result: manager.InitResult) !void {
@@ -971,17 +806,4 @@ fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
-}
-
-fn parseBoolArg(value: []const u8) ?bool {
-    if (std.mem.eql(u8, value, "true")) return true;
-    if (std.mem.eql(u8, value, "false")) return false;
-    return null;
-}
-
-fn parsePositiveU32Arg(value: []const u8) ?u32 {
-    if (std.mem.startsWith(u8, value, "-")) return null;
-    const parsed = std.fmt.parseInt(u32, value, 10) catch return null;
-    if (parsed == 0) return null;
-    return parsed;
 }

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "preview_document_edit.h"
+#include "preview_paths.h"
 #include "preview_toolbar.h"
 
 #define SHAULA_CROP_MIN_SIZE_PX 4
@@ -21,34 +22,6 @@ static gboolean rect_fits_image(ShaulaRect rect, double image_width,
   rect = shaula_rect_normalized(rect);
   return rect.x >= 0.0 && rect.y >= 0.0 && rect.x + rect.width <= image_width &&
          rect.y + rect.height <= image_height;
-}
-
-static gboolean path_has_prefix_dir(const char *path, const char *dir) {
-  if (path == NULL || dir == NULL || dir[0] == '\0')
-    return FALSE;
-  gsize len = strlen(dir);
-  return g_str_has_prefix(path, dir) &&
-         (path[len] == '\0' || path[len] == G_DIR_SEPARATOR);
-}
-
-static gboolean preview_path_is_temporary_capture(const char *path) {
-  /* Mirrors runtime/paths.zig capture artifact detection on the C helper side
-   * until runtime-path checks can cross the C/Zig seam directly.
-   */
-  if (path == NULL)
-    return FALSE;
-  if (g_str_has_prefix(path, "/tmp/shaula/captures/"))
-    return TRUE;
-  const char *runtime_dir = g_getenv("XDG_RUNTIME_DIR");
-  if (runtime_dir != NULL && runtime_dir[0] != '\0') {
-    char *runtime_captures =
-        g_build_filename(runtime_dir, "shaula", "captures", NULL);
-    gboolean temporary = path_has_prefix_dir(path, runtime_captures);
-    g_free(runtime_captures);
-    if (temporary)
-      return TRUE;
-  }
-  return FALSE;
 }
 
 static ShaulaAnnotation *
@@ -161,7 +134,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   memset(state, 0, sizeof(*state));
   shaula_preview_document_init(&state->document, path, image);
   state->managed_temp_path =
-      preview_path_is_temporary_capture(path) ? g_strdup(path) : NULL;
+      shaula_preview_path_is_temporary_capture(path) ? g_strdup(path) : NULL;
   state->zoom = 1.0;
   state->fit_zoom = 1.0;
   state->fit_mode = TRUE;

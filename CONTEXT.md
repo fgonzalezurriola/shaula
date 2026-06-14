@@ -46,6 +46,15 @@ and the working diff.
   `portal-screenshot`, `__stub__`, `portal_fallback`,
   `capture_backend_degraded`, `window_capture_degraded`, or
   `capture_selection_portal` outside those contract Modules.
+- Config/preview architecture cleanup: `config/save_args.zig` owns the
+  `shaula config save` setting-flag grammar and applies those flags to the
+  config draft, while `config/command.zig` keeps command-level flags,
+  orchestration, and JSON envelopes. `preview/preview_paths.{c,h}` owns the C
+  helper-side temporary capture path contract used by preview state cleanup,
+  copy notifications, Done/accept save promotion, and Save As default naming.
+  Keep this aligned with `runtime/paths.zig`; do not reintroduce duplicate
+  `/tmp/shaula/captures` or `XDG_RUNTIME_DIR/shaula/captures` checks inside
+  preview action/state modules.
 - Manual Wayland evidence planning lives in `docs/wayland-runtime-test-plan.md`.
   Preferred strategy is hybrid: use the real host for Niri, overlay, clipboard,
   notification, Noctalia, scale, and timing behavior; use VMs or spare machines

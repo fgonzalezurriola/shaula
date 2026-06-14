@@ -8,6 +8,7 @@
 #include "preview_clipboard.h"
 #include "preview_commands.h"
 #include "preview_image_io.h"
+#include "preview_paths.h"
 #include "preview_render.h"
 #include "preview_toolbar.h"
 
@@ -155,34 +156,6 @@ static gboolean shaula_preview_notify_saved(const char *path,
   g_free(log_path);
   g_free(absolute_path);
   return TRUE;
-}
-
-static gboolean path_has_prefix_dir(const char *path, const char *dir) {
-  if (path == NULL || dir == NULL || dir[0] == '\0')
-    return FALSE;
-  gsize len = strlen(dir);
-  return g_str_has_prefix(path, dir) &&
-         (path[len] == '\0' || path[len] == G_DIR_SEPARATOR);
-}
-
-static gboolean is_temporary_capture_path(const char *path) {
-  /* Keep this C-side check aligned with runtime/paths.zig. It intentionally
-   * remains local until preview actions can call the Zig runtime path helper.
-   */
-  if (path == NULL)
-    return TRUE;
-  if (g_str_has_prefix(path, "/tmp/shaula/captures/"))
-    return TRUE;
-  const char *runtime_dir = g_getenv("XDG_RUNTIME_DIR");
-  if (runtime_dir != NULL && runtime_dir[0] != '\0') {
-    char *runtime_captures =
-        g_build_filename(runtime_dir, "shaula", "captures", NULL);
-    gboolean temporary = path_has_prefix_dir(path, runtime_captures);
-    g_free(runtime_captures);
-    if (temporary)
-      return TRUE;
-  }
-  return FALSE;
 }
 
 static gboolean ensure_writable_dir(const char *dir, GError **error) {
@@ -377,7 +350,8 @@ void shaula_preview_action_copy(ShaulaPreviewState *state) {
   } else {
     state->document.copied = TRUE;
     const char *thumbnail_path =
-        is_temporary_capture_path(source) ? NULL : thumbnail_path_or_null(source);
+        shaula_preview_path_is_temporary_capture(source) ? NULL
+                                                        : thumbnail_path_or_null(source);
     if (success_notifications_enabled())
       state->notified = shaula_preview_notify(
           "Screenshot captured", "You can paste the image from the clipboard.",
@@ -448,7 +422,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   }
 
   char *target = NULL;
-  if (is_temporary_capture_path(state->document.path))
+  if (shaula_preview_path_is_temporary_capture(state->document.path))
     target = timestamped_quick_save_path(&error);
   else
     target = shaula_image_io_with_png_extension(state->document.path);
@@ -585,7 +559,7 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
       "Save Shaula Preview", GTK_WINDOW(state->window),
       GTK_FILE_CHOOSER_ACTION_SAVE, "Save", "Cancel");
   if (state->document.path != NULL) {
-    char *basename = is_temporary_capture_path(state->document.path)
+    char *basename = shaula_preview_path_is_temporary_capture(state->document.path)
                          ? timestamped_screenshot_basename()
                          : g_path_get_basename(state->document.path);
     char *png_name = shaula_image_io_with_png_extension(basename);
