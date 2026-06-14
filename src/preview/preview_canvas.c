@@ -730,7 +730,7 @@ static gboolean on_text_entry_key(GtkEventControllerKey *controller,
   (void)keycode;
   ShaulaPreviewState *state = data;
   if (keyval == GDK_KEY_Escape) {
-    shaula_preview_cancel_operation(state);
+    finish_text_entry(state);
     return TRUE;
   }
   if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {

@@ -804,9 +804,9 @@ and the working diff.
   previously selected committed text annotation. Drag release must keep
   `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks draft
   rendering and click-to-commit flow because the draft path is operation-gated.
-  `Enter` commits non-empty text, `Shift+Enter` inserts a newline,
-  `Escape` cancels text entry, and clicking back on the canvas commits
-  non-empty text without closing. After a
+  `Enter` and `Escape` both commit non-empty text, `Shift+Enter` inserts a
+  newline, and clicking back on the canvas commits non-empty text without
+  closing. After a
   canvas-only text commit, Text returns to Select mode with the new annotation
   selected so it can be moved immediately.
 - `shaula-measure-symbolic` Measure: implemented.
