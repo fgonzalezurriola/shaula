@@ -5,9 +5,9 @@ const execution_plan = @import("capture_execution_plan.zig");
 const output_path = @import("capture_backend_output_path.zig");
 const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
-const capture_types = @import("../capture/types.zig");
-const runtime_capabilities = @import("../capabilities/runtime.zig");
-const env = @import("../runtime/env.zig");
+const capture_types = @import("../types.zig");
+const runtime_capabilities = @import("../../capabilities/runtime.zig");
+const env = @import("../../runtime/env.zig");
 
 pub const BackendKind = runtime_capabilities.BackendKind;
 pub const RuntimeDecision = runtime_capabilities.RuntimeDecision;

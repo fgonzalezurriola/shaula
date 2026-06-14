@@ -5,6 +5,19 @@ and the working diff.
 
 ## Current focus
 
+- `shaula settings --json` is the built-in agent discovery entry point. It is
+  read-only, does not launch GTK, does not capture pixels, and tells agents the
+  recommended flow (`settings --json`, `doctor --json`,
+  `capabilities list --json`, `explore --json [--brief]`, then capture) plus
+  privacy constraints and stable JSON paths. Plain `shaula settings` still
+  launches the GTK helper for humans.
+- `shaula explore --json [--brief]` is the read-only desktop inventory command
+  for agent visual loops. It emits the shared JSON envelope, compositor
+  kind/label, focused output/workspace/window IDs, normalized Niri
+  outputs/workspaces/windows, and `recommended_capture`. It never captures
+  pixels or mutates desktop state; Niri inventory failures degrade to empty
+  arrays with `explore_inventory_unavailable`. Window titles are exposed as
+  visible desktop metadata and may contain sensitive user content.
 - Generic Wayland support is now implemented through an xdg-desktop-portal
   Screenshot compatibility backend. Runtime selection prefers the test stub,
   forced portal, Niri direct, wlroots `grim` when `grim` is installed, and then
@@ -23,7 +36,7 @@ and the working diff.
 - Wayland runtime architecture has a compact handoff context for future agents:
   `runtime/env.zig` owns borrowed environment parsing, `runtime/tool_lookup.zig`
   owns fixed `grim` candidates plus PATH-aware diagnostics lookup,
-  `backends/capture_backend_contract.zig` owns public backend labels, degraded
+  `capture/backends/capture_backend_contract.zig` owns public backend labels, degraded
   warning tokens, and helper exit-code mapping, and `capture/warnings.zig` owns
   capture-specific warning tokens. `capabilities/runtime.zig` remains the runtime
   decision Module and exposes the leverage methods callers should use:
@@ -186,7 +199,8 @@ and the working diff.
   packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
   and runs `scripts/install.sh` against `file://` URLs. Use
   `./dev dev-install --yes` for a non-interactive install of the exact local
-  build. `./dev install` remains as a deprecated alias with a warning.
+  build. The old `./dev install` deprecated alias was removed during repo
+  cleanup; use `./dev dev-install` for local checkout installs.
   The dev wrapper sets `SHAULA_INSTALL_CONTEXT=dev`, prints a local-dev banner,
   and makes install/Noctalia prompts explicitly say they are installing or
   reloading this local dev build rather than a GitHub release. When
@@ -269,10 +283,12 @@ and the working diff.
   integration, Advanced) with a compact capture-mode matrix for skip/copy/save
   combinations, a dedicated saving section, a readable Niri status card, and a
   fixed sticky footer for the primary Save and Cancel actions.
-- Public docs have been split: `README.md` is now the shorter product-facing
+- Public docs live primarily in `README.md`, the shorter product-facing
   install/usage/dev-basics page with `docs/assets/shaula-preview.png` as the
-  product preview image. `DEV.md` holds internal workflow and integration notes,
-  and `docs/roadmap.md` tracks future features.
+  product preview image; `docs/roadmap.md` tracks future features. The old
+  internal `DEV.md`, completed `PLAN_WAYLAND.md`, stale `STATE.md`, unreferenced
+  UI wrapper PoC, unused demo video variants, and orphaned spec-validation
+  scripts were removed during repo cleanup.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - Undo/Redo now has a reusable preview history foundation for document edits.
@@ -383,12 +399,12 @@ and the working diff.
 - Architecture deepening pass: capture grammar now lives in
   `capture/command_grammar.zig`; capture invocation assembly lives in
   `capture/invocation.zig`; backend execution planning is typed in
-  `backends/capture_execution_plan.zig`; backend failure construction lives in
-  `backends/capture_backend_failure.zig`; overlay orchestration lives behind
+  `capture/backends/capture_execution_plan.zig`; backend failure construction lives in
+  `capture/backends/capture_backend_failure.zig`; overlay orchestration lives behind
   `overlay/selection_session.zig`; doctor discovery lives in
   `doctor/diagnostics.zig`; and post-capture work separates side effects,
-  typed outcomes, and JSON rendering across `pipeline/post_capture.zig`,
-  `pipeline/post_capture_types.zig`, and `pipeline/post_capture_json.zig`.
+  typed outcomes, and JSON rendering across `capture/post_capture.zig`,
+  `capture/post_capture_types.zig`, and `capture/post_capture_json.zig`.
 - Compositor seam foundation now exists in `compositor/runtime.zig` plus
   `compositor/focused_output.zig`. Runtime detection now distinguishes
   `niri`, generic Wayland compositors, and unsupported environments; current
@@ -522,7 +538,7 @@ and the working diff.
 - `runtime/process_exec.zig` is the shared process execution adapter for
   capture/overlay runtime boundaries. Callers still own stdout/stderr limits,
   output cleanup, and deterministic failure mapping.
-- `backends/capture_backend_failure.zig` centralizes backend `CaptureOutcome`
+- `capture/backends/capture_backend_failure.zig` centralizes backend `CaptureOutcome`
   failure construction so `capture_backend.execute` keeps one external seam
   while preserving deterministic `ERR_*` attributes at each failure site.
 - `capture_backend.execute` receives a resolved runtime decision and optional
@@ -540,11 +556,11 @@ and the working diff.
 - `capture/command_grammar.zig` owns capture flag membership and deterministic
   command-specific `ERR_CLI_USAGE` messages. `capture/command_flags.zig` now
   declares per-mode flag structs and delegates parsing to that grammar.
-- `backends/capture_execution_plan.zig` now receives a typed operation
+- `capture/backends/capture_execution_plan.zig` now receives a typed operation
   (`area`, `current_output`, `all_outputs`, or `window`) instead of mode booleans
   so current-output fullscreen and all-screens capture cannot drift.
-- `pipeline/post_capture.zig` gathers `PostCaptureOutcome` state for history,
-  clipboard, and preview. `pipeline/post_capture_json.zig` owns the stable JSON
+- `capture/post_capture.zig` gathers `PostCaptureOutcome` state for history,
+  clipboard, and preview. `capture/post_capture_json.zig` owns the stable JSON
   envelope, duplicated top-level/result fields, and partial/degraded rules.
 
 ## Overlay Capture

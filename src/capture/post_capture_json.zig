@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const protocol = @import("../ipc/protocol.zig");
-const capture_types = @import("../capture/types.zig");
+const capture_types = @import("types.zig");
 const cli_json = @import("../cli/json.zig");
 const types = @import("post_capture_types.zig");
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const runtime_paths = @import("../runtime/paths.zig");
+const runtime_paths = @import("../../runtime/paths.zig");
 
 pub fn resolveOutputPath(
     allocator: std.mem.Allocator,

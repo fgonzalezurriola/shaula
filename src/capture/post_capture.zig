@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const capture_types = @import("../capture/types.zig");
+const capture_types = @import("types.zig");
 const history_store = @import("../history/store.zig");
 const clipboard_service = @import("../clipboard/service.zig");
 const preview_service = @import("../preview/service.zig");

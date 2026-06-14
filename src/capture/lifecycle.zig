@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const capture_backend = @import("../backends/capture_backend.zig");
-const backend_contract = @import("../backends/capture_backend_contract.zig");
-const capture_backend_failure = @import("../backends/capture_backend_failure.zig");
-const capture_backend_output_path = @import("../backends/capture_backend_output_path.zig");
-const capture_backend_png_meta = @import("../backends/capture_backend_png_meta.zig");
+const capture_backend = @import("backends/capture_backend.zig");
+const backend_contract = @import("backends/capture_backend_contract.zig");
+const capture_backend_failure = @import("backends/capture_backend_failure.zig");
+const capture_backend_output_path = @import("backends/capture_backend_output_path.zig");
+const capture_backend_png_meta = @import("backends/capture_backend_png_meta.zig");
 const capture_types = @import("types.zig");
 const compositor_focused_output = @import("../compositor/focused_output.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
@@ -17,7 +17,7 @@ const invocation = @import("invocation.zig");
 const json = @import("command_json.zig");
 const overlay_session = @import("../overlay/selection_session.zig");
 const overlay_draft_store = @import("../overlay/selection_draft_store.zig");
-const post_capture_pipeline = @import("../pipeline/post_capture.zig");
+const post_capture_pipeline = @import("post_capture.zig");
 const capture_session_lock = @import("../runtime/capture_session_lock.zig");
 const env = @import("../runtime/env.zig");
 const previous_area_store = @import("../runtime/previous_area_store.zig");

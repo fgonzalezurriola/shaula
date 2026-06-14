@@ -1,8 +1,8 @@
 const std = @import("std");
-const backend_contract = @import("../backends/capture_backend_contract.zig");
+const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 const env = @import("../runtime/env.zig");
-const portal_screenshot = @import("../backends/portal_screenshot.zig");
+const portal_screenshot = @import("../capture/backends/portal_screenshot.zig");
 const tool_lookup = @import("../runtime/tool_lookup.zig");
 
 pub const BackendKind = enum {

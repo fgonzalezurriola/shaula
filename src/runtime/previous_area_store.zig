@@ -1,5 +1,5 @@
 const std = @import("std");
-const backend_contract = @import("../backends/capture_backend_contract.zig");
+const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
 const capture_types = @import("../capture/types.zig");
 const runtime_paths = @import("paths.zig");
 

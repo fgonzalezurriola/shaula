@@ -23,7 +23,7 @@ See [spec/requirements.md](requirements.md) for product direction and [spec/algo
 ```text
 shaula <command-family> <command> [flags]
 
-command-family := capture | preview | config | daemon | capabilities | history | clipboard
+command-family := capture | preview | config | daemon | capabilities | history | clipboard | explore | settings
 
 capture command := area | fullscreen | all-screens | window | previous-area
 preview command := <file>
@@ -32,6 +32,8 @@ daemon command := start | status | stop
 capabilities command := list
 history command := list | show
 clipboard command := copy-image | import-image
+explore command := <none>
+settings command := <none>
 ```
 
 ### Command Inventory and Required Flags
@@ -78,6 +80,25 @@ Copy defaults:
 #### Capabilities family
 
 - `shaula capabilities list --json`
+
+#### Explore family
+
+- `shaula explore --json [--brief]`
+
+`explore` is read-only desktop inventory for agent visual loops. It never
+captures pixels or mutates desktop state. On Niri it normalizes outputs,
+workspaces, windows, focused IDs, and a recommended capture target. Window
+titles are visible desktop metadata and may contain sensitive user content.
+
+#### Settings family
+
+- `shaula settings`
+- `shaula settings --json`
+
+Plain `settings` launches the GTK settings UI. `settings --json` is the
+machine-readable discovery entry point for agents: it explains the safe command
+flow, privacy constraints, and JSON paths without opening UI or capturing
+pixels.
 
 #### History family
 

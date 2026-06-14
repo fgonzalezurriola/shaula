@@ -1,9 +1,9 @@
 const std = @import("std");
 
 const backend_contract = @import("capture_backend_contract.zig");
-const env = @import("../runtime/env.zig");
-const helper_resolution = @import("../runtime/helper_resolution.zig");
-const process_exec = @import("../runtime/process_exec.zig");
+const env = @import("../../runtime/env.zig");
+const helper_resolution = @import("../../runtime/helper_resolution.zig");
+const process_exec = @import("../../runtime/process_exec.zig");
 
 pub const backend_label = backend_contract.backend_portal_screenshot;
 pub const helper_env_var = "SHAULA_PORTAL_SCREENSHOT_HELPER_BIN";

@@ -1,7 +1,7 @@
 const std = @import("std");
 const capture_backend = @import("capture_backend.zig");
-const capture_types = @import("../capture/types.zig");
-const runtime_capabilities = @import("../capabilities/runtime.zig");
+const capture_types = @import("../types.zig");
+const runtime_capabilities = @import("../../capabilities/runtime.zig");
 
 const EnvPair = struct {
     key: []const u8,

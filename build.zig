@@ -205,7 +205,7 @@ fn buildNativeCropImageHelper(b: *std.Build) std.Build.LazyPath {
         "build-shaula-crop-image",
     });
     const output = command.addOutputFileArg("shaula-crop-image");
-    command.addFileArg(b.path("src/backends/native_crop_image.c"));
+    command.addFileArg(b.path("src/capture/backends/native_crop_image.c"));
     return output;
 }
 
@@ -221,7 +221,7 @@ fn buildNativePortalScreenshotHelper(b: *std.Build) std.Build.LazyPath {
         "build-shaula-portal-screenshot",
     });
     const output = command.addOutputFileArg("shaula-portal-screenshot");
-    command.addFileArg(b.path("src/backends/native_portal_screenshot.c"));
+    command.addFileArg(b.path("src/capture/backends/native_portal_screenshot.c"));
     return output;
 }
 

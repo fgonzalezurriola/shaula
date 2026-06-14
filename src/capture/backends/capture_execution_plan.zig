@@ -1,8 +1,8 @@
 const std = @import("std");
 const backend_contract = @import("capture_backend_contract.zig");
 const portal_screenshot = @import("portal_screenshot.zig");
-const env = @import("../runtime/env.zig");
-const tool_lookup = @import("../runtime/tool_lookup.zig");
+const env = @import("../../runtime/env.zig");
+const tool_lookup = @import("../../runtime/tool_lookup.zig");
 
 pub const Options = struct {
     backend_label: []const u8,

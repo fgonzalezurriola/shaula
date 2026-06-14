@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const output_path = @import("../backends/capture_backend_output_path.zig");
+const output_path = @import("../capture/backends/capture_backend_output_path.zig");
 const cli_json = @import("../cli/json.zig");
 const config_loader = @import("../config/loader.zig");
 const process_exec = @import("../runtime/process_exec.zig");

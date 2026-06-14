@@ -61,6 +61,8 @@ Shaula can also be called from the terminal:
 shaula capture quick --json
 shaula capture area --json
 shaula capture area --json --no-preview
+shaula settings --json
+shaula explore --json --brief
 ```
 
 Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use

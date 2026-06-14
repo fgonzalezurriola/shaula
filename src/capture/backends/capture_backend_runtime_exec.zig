@@ -1,7 +1,7 @@
 const std = @import("std");
 const backend_contract = @import("capture_backend_contract.zig");
 const execution_plan = @import("capture_execution_plan.zig");
-const process_exec = @import("../runtime/process_exec.zig");
+const process_exec = @import("../../runtime/process_exec.zig");
 
 /// Dispatch runtime capture to helper, portal, or grim and map failures to
 /// deterministic taxonomy-facing errors.

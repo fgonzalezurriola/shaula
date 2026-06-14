@@ -391,10 +391,6 @@ release-arm)
   dev-install)
     install_local "$@"
     ;;
-  install)
-    echo "warning: ./dev install is deprecated; use ./dev dev-install for local checkout installs" >&2
-    install_local "$@"
-    ;;
 capture)
 	run_shaula capture area --json "$@"
 	;;

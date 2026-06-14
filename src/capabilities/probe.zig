@@ -1,6 +1,6 @@
 const std = @import("std");
 const root = @import("root");
-const backend_contract = @import("../backends/capture_backend_contract.zig");
+const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
 const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 
