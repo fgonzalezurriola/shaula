@@ -1,0 +1,164 @@
+---
+const installCommands = {
+  curl: "curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh",
+  aur: "paru -S shaula",
+};
+---
+
+<section class="relative pt-14 overflow-hidden bg-shaula-surface">
+  <!-- Layered Premium Orange Glow (Centered behind title and content) -->
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1400px] h-[750px] pointer-events-none overflow-hidden select-none z-0">
+    <!-- Primary deep ambient glow -->
+    <div class="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-shaula-orange/[0.12] rounded-full blur-[130px]" />
+    <!-- Secondary bright accent glow -->
+    <div class="absolute top-[-5%] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-shaula-orange-light/[0.08] rounded-full blur-[80px]" />
+    <!-- Faint broad background wash -->
+    <div class="absolute top-[-25%] left-1/2 -translate-x-1/2 w-[1300px] h-[650px] bg-shaula-orange-dim/[0.04] rounded-full blur-[160px]" />
+  </div>
+
+  <!-- Ambient grid layer -->
+  <div class="hero-grid absolute inset-0 pointer-events-none z-0" />
+
+  <div class="relative z-10 max-w-3xl mx-auto px-6 pt-20 sm:pt-28 pb-8 text-center">
+    <!-- Title -->
+    <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-6 animate-fade-up" style="animation-delay: 0.1s; animation-fill-mode: backwards;">
+      A <span class="text-shaula-orange">Wayland-first</span><br class="hidden sm:inline" />
+      screenshot app<br class="hidden sm:inline" />
+      <span class="text-white/30 font-light">with annotations.</span>
+    </h1>
+
+    <!-- Description -->
+    <p class="text-white/50 text-base sm:text-lg max-w-xl mx-auto mb-10 leading-relaxed font-normal animate-fade-up" style="animation-delay: 0.2s; animation-fill-mode: backwards;">
+      Built specifically for Niri. Capture, annotate, and copy screenshots without leaving your keyboard.
+    </p>
+
+    <div class="max-w-2xl mx-auto mb-10 animate-fade-up" style="animation-delay: 0.3s; animation-fill-mode: backwards;">
+      <div class="code-block overflow-hidden">
+        <div class="border-b border-shaula-surface-border px-4 py-1.5">
+          <div class="flex justify-center w-[80%] mx-auto" id="hero-tabs">
+            <button
+              data-tab="curl"
+              class="hero-tab flex-1 text-center py-2 text-xs sm:text-sm font-medium transition-colors relative text-shaula-orange cursor-pointer"
+            >
+              curl
+              <span class="hero-tab-indicator absolute bottom-0 left-0 right-0 h-0.5 bg-shaula-orange" />
+            </button>
+            <button
+              data-tab="aur"
+              class="hero-tab flex-1 text-center py-2 text-xs sm:text-sm font-medium transition-colors relative text-white/40 cursor-pointer"
+            >
+              aur
+            </button>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 flex items-center justify-between gap-4">
+          <div class="flex items-start gap-3 min-w-0 flex-1">
+            <span class="text-shaula-orange select-none shrink-0 text-sm leading-7">$</span>
+            <code id="hero-command" class="text-white/80 text-sm leading-7 overflow-x-auto whitespace-nowrap block w-full text-left pb-1.5">{installCommands.curl}</code>
+          </div>
+          <button
+            id="hero-copy"
+            class="text-white/30 hover:text-white/60 transition-colors p-2 hover:bg-white/[0.05] rounded-md shrink-0 cursor-pointer"
+            title="Copy to clipboard"
+          >
+            <svg id="hero-copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg id="hero-check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden text-shaula-orange">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-14 animate-fade-up" style="animation-delay: 0.4s; animation-fill-mode: backwards;">
+      <a
+        href="https://github.com/fgonzalezurriola/shaula"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-shaula-surface hover:bg-white/90 font-medium text-sm transition-all duration-200 shadow-lg shadow-white/5 active:scale-98"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+        </svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+
+  <div class="relative z-10 max-w-4xl mx-auto px-6 pb-8">
+    <div class="relative rounded-xl overflow-hidden border border-shaula-surface-border bg-shaula-surface-raised animate-fade-up" style="animation-delay: 0.5s; animation-fill-mode: backwards;">
+      <img
+        src="/shaula-demo.gif"
+        alt="Shaula screenshot tool demo — area capture with annotation and copy workflow"
+        class="w-full h-auto"
+        loading="eager"
+      />
+      <div class="absolute inset-0 pointer-events-none rounded-xl ring-1 ring-inset ring-white/[0.04]" />
+    </div>
+  </div>
+
+  <div class="relative h-20 bg-gradient-to-t from-shaula-surface to-transparent pointer-events-none" />
+</section>
+
+<script>
+  const commands: Record<string, string> = {
+    curl: "curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh",
+    aur: "paru -S shaula",
+  };
+
+  let activeTab = "curl";
+
+  const commandEl = document.getElementById("hero-command")!;
+  const tabs = document.querySelectorAll<HTMLButtonElement>(".hero-tab");
+  const copyBtn = document.getElementById("hero-copy")!;
+  const copyIcon = document.getElementById("hero-copy-icon")!;
+  const checkIcon = document.getElementById("hero-check-icon")!;
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const next = tab.dataset.tab!;
+      if (next === activeTab) return;
+      activeTab = next;
+      commandEl.textContent = commands[next];
+
+      tabs.forEach((t) => {
+        const isActive = t.dataset.tab === next;
+        t.classList.toggle("text-shaula-orange", isActive);
+        t.classList.toggle("text-white/40", !isActive);
+        const indicator = t.querySelector(".hero-tab-indicator");
+        if (indicator) indicator.remove();
+        if (isActive) {
+          const bar = document.createElement("span");
+          bar.className = "hero-tab-indicator absolute bottom-0 left-0 right-0 h-0.5 bg-shaula-orange";
+          t.appendChild(bar);
+        }
+      });
+    });
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(commands[activeTab]);
+      copyIcon.classList.add("hidden");
+      checkIcon.classList.remove("hidden");
+      setTimeout(() => {
+        checkIcon.classList.add("hidden");
+        copyIcon.classList.remove("hidden");
+      }, 1500);
+    } catch {
+      /* clipboard not available */
+    }
+  });
+
+  // Enable horizontal scrolling with mouse wheel (vertical scroll translates to horizontal)
+  commandEl.addEventListener("wheel", (e) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      commandEl.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+</script>

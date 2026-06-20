@@ -994,3 +994,20 @@ and the working diff.
 ## Planned: QuickShell Integration
 
 A general QuickShell integration layer is planned to expand beyond the Noctalia-specific plugin. The design introduces `ShaulaService.qml` (a QuickShell Singleton + IpcHandler) that any QS-based shell can use, an IPC-based panel-hide handshake replacing file-token polling, and a standalone bar widget for non-Noctalia QS configs. Full plan: `docs/plan-quickshell-integration.md`. Phases: (0) extract shaula-core QML module, (1) refactor Noctalia plugin to use ShaulaService, (2) IPC-based panel-hide handshake + `shaula ipc` CLI subcommand, (3) bidirectional capture state feedback, (4) standalone widget distribution and setup.
+
+## Landing page (`web/`)
+
+- `web/` is a static one-page landing built with `Astro 5 + Tailwind CSS 4`.
+- Purpose: product page showing what Shaula is and how to install it.
+- Structure: Hero (title + curl/AUR tabs with copy button + demo gif) -> Features
+  (6 cards) -> Open source -> Support (Ko-fi).
+- Commands: `pnpm install`, `pnpm dev` (localhost:4321), `pnpm build`,
+  `pnpm preview`. All run from `web/`.
+- Demo asset: `web/public/shaula-demo.gif` is copied from
+  `docs/assets/shaula-demo.gif`. Replace with a better asset by dropping a new
+  file into `web/public/` and updating `src/components/product-media.astro`.
+- Visual direction: premium dark theme with a warm layered radial orange/amber glow behind the text and a subtle, dense white/gray grid (`48px`) that covers the hero section. Includes a three-line title typography where `with annotations.` is muted (`text-white/30`) and a description paragraph.
+- Ko-fi link uses the real `https://ko-fi.com/fgonzalezurriola` from README.
+- Deploy is not configured yet; the build outputs to `web/dist/`.
+- The `web/` directory is independent from the Zig/GTK main codebase; `./dev
+  check` and `git diff --check` are unaffected.

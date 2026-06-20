@@ -1,0 +1,105 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  --color-shaula-orange: #E8651A;
+  --color-shaula-orange-light: #F28C38;
+  --color-shaula-orange-dim: #C45516;
+  --color-shaula-surface: #0A0A0A;
+  --color-shaula-surface-raised: #141414;
+  --color-shaula-surface-border: #1E1E1E;
+  --color-shaula-muted: #888888;
+  --font-sans: Geist, system-ui, -apple-system, sans-serif;
+  --font-mono: Geist Mono, JetBrains Mono, monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-shaula-surface-border);
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-shaula-orange) 30%, transparent);
+    color: white;
+  }
+}
+
+@layer components {
+  .hero-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 85% 70% at 50% 35%, black 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 35%, black 40%, transparent 100%);
+  }
+
+  .code-block {
+    background-color: #0D0D0D;
+    border: 1px solid var(--color-shaula-surface-border);
+    border-radius: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+  }
+
+  /* Custom scrollbar for hero command block */
+  #hero-command::-webkit-scrollbar {
+    height: 6px;
+  }
+  #hero-command::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 9999px;
+  }
+  #hero-command::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+  }
+  #hero-command::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  .btn-github {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-shaula-surface-border);
+    background-color: var(--color-shaula-surface-raised);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .btn-github:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out forwards;
+}
