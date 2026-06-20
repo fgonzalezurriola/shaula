@@ -9,7 +9,6 @@
 #include "preview_toolbar.h"
 
 #define SHAULA_CROP_MIN_SIZE_PX 4
-#define SHAULA_DUPLICATE_OFFSET_PX 12.0
 #define SHAULA_PASTE_OFFSET_PX 12.0
 #define SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL 16
 #define SHAULA_ERASE_COLOR_BUCKET_COUNT                                        \
@@ -36,12 +35,36 @@ annotation_clone_with_offset(const ShaulaAnnotation *base, double dx,
   return clone;
 }
 
-static void move_annotation_inside_image(ShaulaAnnotation *annotation,
-                                         double image_width,
-                                         double image_height) {
-  if (annotation == NULL)
+static ShaulaRect annotation_array_bounds(GPtrArray *annotations) {
+  ShaulaRect bounds = {0};
+  gboolean initialized = FALSE;
+  if (annotations == NULL)
+    return bounds;
+  for (guint i = 0; i < annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(annotations, i);
+    if (annotation == NULL)
+      continue;
+    ShaulaRect next = shaula_rect_normalized(annotation->bounds);
+    bounds = initialized ? shaula_rect_union(bounds, next) : next;
+    initialized = TRUE;
+  }
+  return bounds;
+}
+
+static void move_annotation_array(GPtrArray *annotations, double dx,
+                                  double dy) {
+  if (annotations == NULL || (dx == 0.0 && dy == 0.0))
     return;
-  ShaulaRect bounds = shaula_rect_normalized(annotation->bounds);
+  for (guint i = 0; i < annotations->len; i++)
+    shaula_annotation_move(g_ptr_array_index(annotations, i), dx, dy);
+}
+
+static void move_annotation_array_inside_image(GPtrArray *annotations,
+                                               double image_width,
+                                               double image_height) {
+  if (annotations == NULL || annotations->len == 0)
+    return;
+  ShaulaRect bounds = annotation_array_bounds(annotations);
   double dx = 0.0;
   double dy = 0.0;
 
@@ -63,13 +86,39 @@ static void move_annotation_inside_image(ShaulaAnnotation *annotation,
     dy = -bounds.y;
   }
 
-  if (dx != 0.0 || dy != 0.0)
-    shaula_annotation_move(annotation, dx, dy);
+  move_annotation_array(annotations, dx, dy);
 }
 
-static ShaulaAnnotation *
-annotation_clone_for_paste(const ShaulaAnnotation *base, double image_width,
-                           double image_height) {
+static gboolean annotation_array_fits_image(GPtrArray *annotations,
+                                            double image_width,
+                                            double image_height) {
+  if (annotations == NULL || annotations->len == 0)
+    return FALSE;
+  return rect_fits_image(annotation_array_bounds(annotations), image_width,
+                         image_height);
+}
+
+static GPtrArray *annotation_array_clone_with_offset(GPtrArray *base,
+                                                     double dx, double dy) {
+  GPtrArray *clone = g_ptr_array_new_with_free_func(shaula_annotation_free);
+  if (base == NULL)
+    return clone;
+
+  for (guint i = 0; i < base->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(base, i);
+    ShaulaAnnotation *copy = annotation_clone_with_offset(annotation, dx, dy);
+    if (copy == NULL) {
+      g_ptr_array_unref(clone);
+      return NULL;
+    }
+    g_ptr_array_add(clone, copy);
+  }
+  return clone;
+}
+
+static GPtrArray *annotation_array_clone_for_paste(GPtrArray *base,
+                                                   double image_width,
+                                                   double image_height) {
   static const ShaulaPoint offsets[] = {
       {SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
       {-SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
@@ -77,20 +126,23 @@ annotation_clone_for_paste(const ShaulaAnnotation *base, double image_width,
       {-SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX},
   };
 
+  if (base == NULL || base->len == 0)
+    return NULL;
+
   for (guint i = 0; i < G_N_ELEMENTS(offsets); i++) {
-    ShaulaAnnotation *candidate =
-        annotation_clone_with_offset(base, offsets[i].x, offsets[i].y);
+    GPtrArray *candidate =
+        annotation_array_clone_with_offset(base, offsets[i].x, offsets[i].y);
     if (candidate == NULL)
       return NULL;
-    if (rect_fits_image(candidate->bounds, image_width, image_height))
+    if (annotation_array_fits_image(candidate, image_width, image_height))
       return candidate;
-    shaula_annotation_free(candidate);
+    g_ptr_array_unref(candidate);
   }
 
-  ShaulaAnnotation *candidate = annotation_clone_with_offset(
+  GPtrArray *candidate = annotation_array_clone_with_offset(
       base, SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX);
   if (candidate != NULL)
-    move_annotation_inside_image(candidate, image_width, image_height);
+    move_annotation_array_inside_image(candidate, image_width, image_height);
   return candidate;
 }
 
@@ -593,8 +645,7 @@ void shaula_preview_add_annotation(ShaulaPreviewState *state,
 }
 
 gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state) {
-  return state != NULL && shaula_preview_selected_count(state) == 1 &&
-         state->selected_annotation != NULL;
+  return state != NULL && shaula_preview_has_selection(state);
 }
 
 gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state) {
@@ -603,23 +654,7 @@ gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state) {
 
 gboolean
 shaula_preview_can_copy_selected_annotation(ShaulaPreviewState *state) {
-  return state != NULL && shaula_preview_selected_count(state) == 1 &&
-         state->selected_annotation != NULL;
-}
-
-gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state) {
-  if (!shaula_preview_can_copy_selected_annotation(state))
-    return FALSE;
-
-  ShaulaAnnotation *copy = shaula_annotation_clone(state->selected_annotation);
-  if (copy == NULL)
-    return FALSE;
-
-  shaula_preview_annotation_clipboard_clear(
-      &state->document.annotation_clipboard);
-  copy->selected = FALSE;
-  g_ptr_array_add(state->document.annotation_clipboard.annotations, copy);
-  return TRUE;
+  return state != NULL && shaula_preview_has_selection(state);
 }
 
 gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state) {
@@ -628,56 +663,143 @@ gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state) {
          state->document.annotation_clipboard.annotations->len > 0;
 }
 
-gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
-  if (!shaula_preview_can_duplicate_selected(state))
+static GPtrArray *selected_annotations_payload(ShaulaPreviewState *state) {
+  GPtrArray *payload = g_ptr_array_new_with_free_func(shaula_annotation_free);
+  if (state == NULL || state->document.annotations == NULL)
+    return payload;
+
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, i);
+    if (!shaula_preview_is_annotation_selected(state, annotation))
+      continue;
+    ShaulaAnnotation *copy = shaula_annotation_clone(annotation);
+    if (copy == NULL) {
+      g_ptr_array_unref(payload);
+      return NULL;
+    }
+    copy->selected = FALSE;
+    g_ptr_array_add(payload, copy);
+  }
+  return payload;
+}
+
+static GPtrArray *last_pasted_annotations_payload(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return NULL;
+  ShaulaAnnotationClipboard *clipboard = &state->document.annotation_clipboard;
+  if (clipboard->last_pasted_ids == NULL || clipboard->last_pasted_ids->len == 0 ||
+      clipboard->last_pasted_ids->len != clipboard->annotations->len)
+    return NULL;
+
+  GPtrArray *payload = g_ptr_array_new();
+  for (guint i = 0; i < clipboard->last_pasted_ids->len; i++) {
+    int id = g_array_index(clipboard->last_pasted_ids, int, i);
+    ShaulaAnnotation *annotation = annotation_by_id(state, id);
+    if (annotation == NULL) {
+      g_ptr_array_unref(payload);
+      return NULL;
+    }
+    g_ptr_array_add(payload, annotation);
+  }
+  return payload;
+}
+
+static gboolean paste_annotation_payload(ShaulaPreviewState *state,
+                                         GPtrArray *payload,
+                                         gboolean remember_last_paste) {
+  if (state == NULL || payload == NULL || payload->len == 0)
     return FALSE;
 
-  ShaulaAnnotation *duplicate =
-      shaula_annotation_clone(state->selected_annotation);
-  if (duplicate == NULL)
+  GPtrArray *pasted = annotation_array_clone_for_paste(
+      payload, shaula_preview_image_width(state), shaula_preview_image_height(state));
+  if (pasted == NULL)
     return FALSE;
 
   shaula_preview_push_undo(state);
-  duplicate->selected = FALSE;
-  shaula_annotation_move(duplicate, SHAULA_DUPLICATE_OFFSET_PX,
-                         SHAULA_DUPLICATE_OFFSET_PX);
-  shaula_preview_document_add_annotation(&state->document, duplicate);
-  shaula_preview_select_annotation(state, duplicate);
+  state->has_region_selection = FALSE;
+  g_array_set_size(state->selected_annotation_ids, 0);
+  if (remember_last_paste &&
+      state->document.annotation_clipboard.last_pasted_ids != NULL)
+    g_array_set_size(state->document.annotation_clipboard.last_pasted_ids, 0);
+
+  for (guint i = 0; i < pasted->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(pasted, i);
+    shaula_preview_document_add_annotation(&state->document, annotation);
+    g_ptr_array_index(pasted, i) = NULL;
+    selected_ids_add(state, annotation->id);
+    if (remember_last_paste &&
+        state->document.annotation_clipboard.last_pasted_ids != NULL) {
+      int id = annotation->id;
+      g_array_append_val(state->document.annotation_clipboard.last_pasted_ids,
+                         id);
+    }
+  }
+
+  g_ptr_array_unref(pasted);
+  sync_selection_from_ids(state);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
   shaula_preview_toolbar_update_selection_state(state);
   return TRUE;
 }
 
+gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state) {
+  if (!shaula_preview_can_copy_selected_annotation(state))
+    return FALSE;
+
+  GPtrArray *payload = selected_annotations_payload(state);
+  if (payload == NULL || payload->len == 0) {
+    if (payload != NULL)
+      g_ptr_array_unref(payload);
+    return FALSE;
+  }
+
+  shaula_preview_annotation_clipboard_clear(
+      &state->document.annotation_clipboard);
+  for (guint i = 0; i < payload->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(payload, i);
+    g_ptr_array_add(state->document.annotation_clipboard.annotations,
+                    annotation);
+    g_ptr_array_index(payload, i) = NULL;
+  }
+  g_ptr_array_unref(payload);
+  return TRUE;
+}
+
+gboolean shaula_preview_cut_selected_annotation(ShaulaPreviewState *state) {
+  if (!shaula_preview_copy_selected_annotation(state))
+    return FALSE;
+  shaula_preview_delete_selected(state);
+  return TRUE;
+}
+
+gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state) {
+  if (!shaula_preview_can_duplicate_selected(state))
+    return FALSE;
+
+  GPtrArray *payload = selected_annotations_payload(state);
+  if (payload == NULL)
+    return FALSE;
+  gboolean pasted = paste_annotation_payload(state, payload, FALSE);
+  g_ptr_array_unref(payload);
+  return pasted;
+}
+
 gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state) {
   if (!shaula_preview_can_paste_annotation(state))
     return FALSE;
 
-  const ShaulaAnnotation *base = NULL;
-  if (state->selected_annotation != NULL &&
-      state->selected_annotation->id ==
-          state->document.annotation_clipboard.last_pasted_id)
-    base = state->selected_annotation;
-  if (base == NULL)
-    base = g_ptr_array_index(state->document.annotation_clipboard.annotations, 0);
-  if (base == NULL)
-    return FALSE;
-
-  ShaulaAnnotation *pasted =
-      annotation_clone_for_paste(base, shaula_preview_image_width(state),
-                                 shaula_preview_image_height(state));
-  if (pasted == NULL)
-    return FALSE;
-
-  shaula_preview_push_undo(state);
-  pasted->selected = FALSE;
-  shaula_preview_document_add_annotation(&state->document, pasted);
-  shaula_preview_select_annotation(state, pasted);
-  state->document.annotation_clipboard.last_pasted_id = pasted->id;
-  shaula_preview_queue_draw(state);
-  shaula_preview_toolbar_update_history_state(state);
-  shaula_preview_toolbar_update_selection_state(state);
-  return TRUE;
+  GPtrArray *base = last_pasted_annotations_payload(state);
+  gboolean owns_base = TRUE;
+  if (base == NULL) {
+    base = state->document.annotation_clipboard.annotations;
+    owns_base = FALSE;
+  }
+  gboolean pasted = paste_annotation_payload(state, base, TRUE);
+  if (owns_base)
+    g_ptr_array_unref(base);
+  return pasted;
 }
 
 void shaula_preview_delete_selected(ShaulaPreviewState *state) {

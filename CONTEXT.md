@@ -510,14 +510,13 @@ and the working diff.
   screen-pixel-stable padding so selection chrome stays aligned at every
   location/zoom. Multi-select made the old stroke-plus-handles-only affordance
   too subtle for dashed rectangles.
-- Pan and Crop are fixed navigation/utility tools after Copy, Save, Undo, and
-  Redo. Numbered canvas tools are ordered Select `1`, Rectangle `2`, Arrow `3`,
-  reserved Line `4`, Text `5`, Pen `6`, Highlight `7`, Measure `8`, and
-  Spotlight `9`; only implemented numbered tools show subtle GTK keycap badges.
-- Fit to screen, Actual size, and Reset annotations are responsive utility
-  actions: they appear as icon buttons before `...` when there is room, and move
-  back into the overflow menu when the headerbar is narrow. Save As remains a
-  More-menu action.
+- Pan, Crop, and Annotation Eraser are fixed navigation/utility tools after
+  Copy, Save, Undo, and Redo. Numbered canvas tools are ordered Annotation
+  Eraser `0`, Select `1`, Rectangle `2`, Arrow `3`, reserved Line `4`, Text
+  `5`, Pen `6`, Highlight `7`, Measure `8`, and Spotlight `9`; only
+  implemented numbered tools show subtle GTK keycap badges.
+- Fit to screen, Actual size, and Reset annotations are overflow utility
+  actions. Save As remains a More-menu action.
 - Spotlight regions are vector effect rectangles stored in image coordinates,
   matching the drag draft exactly. Do not route Spotlight creation through the
   crop/blur/erase pixel helper; that helper may round to integer pixels and is
@@ -734,20 +733,63 @@ and the working diff.
   contrast reinforcement. Catppuccin Latte/light themes must prefer dark icon
   foregrounds even if `gtk-application-prefer-dark-theme` is set.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
-  the contextual group and `Ctrl+D`; clones the selected annotation, assigns a
-  new id, offsets it by 12 px on both axes, selects the duplicate, and commits
-  one undo entry.
-- Annotation copy/paste v1: implemented as an in-memory clipboard scoped to
-  the current preview window only. `Ctrl+C` copies the selected annotation
-  without touching the system clipboard; `Ctrl+V` pastes that internal
-  annotation through clone/new-id/offset/undo. The clipboard lives in
-  `ShaulaPreviewState`, stays out of undo/redo snapshots, uses a list-shaped
-  structure for future multi-selection, and currently stores one annotation.
-  Paste prefers a 12 px up-right offset, falls back around the source if needed,
-  clamps best-effort inside the current image, selects the pasted object, and
-  repeats from the last pasted object when it remains selected. Pasting external
-  `text/plain` as a text annotation is future work and should stay out of v1 so
-  paste does not read the system clipboard yet.
+  the contextual group and `Ctrl+D`; duplicates the selected annotation set
+  through the same multi-object paste path without replacing the internal
+  clipboard, assigns new ids, selects the duplicate set, and commits one undo
+  entry.
+- Annotation copy/paste uses an in-memory clipboard scoped to the current
+  preview window. With canvas focus, `Ctrl+C` copies the selected annotation
+  set without touching the system clipboard; with no object selection it still
+  copies the rendered image. `Ctrl+X` copies the selected set and deletes it as
+  one undoable edit. `Ctrl+V` clones the internal set with new ids, selects only
+  the newly pasted objects, and repeated paste offsets from the previous pasted
+  set. `Ctrl+D` uses the same multi-object paste path without replacing the
+  internal clipboard. While the text editor has focus, GTK owns normal
+  text-level `Ctrl+A/C/X/V`. Pasting external `text/plain` or image data as
+  annotations is future work and should stay behind explicit system-paste
+  behavior such as `Ctrl+Shift+V`.
+- Text entry contract: while drafting text, `Enter` inserts a newline and
+  `Esc`/`Ctrl+Enter` finish the text edit instead of cancelling/deleting the draft.
+  Selected annotation deletion is only bound to `Delete`; `Backspace` remains
+  text-editor behavior when the hidden `GtkTextView` has focus.
+- Annotation Eraser is distinct from pixel Erase: it targets committed
+  annotations/objects only, never pixels from the captured base image. Pixel
+  Erase remains the region redaction action alongside Blur/Crop/Spotlight.
+  Its hit target is visible annotation geometry with tolerance, not coarse
+  bounding boxes; transparent interiors should not erase unfilled shapes.
+  Eraser drags are cumulative: annotations touched during the drag become
+  pending erase targets, render translucent until release, and are deleted
+  together as one undoable edit on mouse release or tool exit. `Esc` is the
+  explicit cancellation path and clears pending targets without mutating the
+  document; accidental commits are recovered with Undo.
+  Annotation Eraser is a modal tool with previous-tool toggle semantics: using
+  `E` from another creation/select tool switches to Eraser and remembers that
+  tool; pressing `E` again while Eraser is active restores the remembered tool,
+  including utility tools such as Hand/Pan and Crop.
+  Selection and Annotation Eraser are independent modes: entering Eraser clears
+  existing annotation/region selection, and erasing is based only on geometric
+  contact with annotations in the document.
+  The Eraser cursor is a fixed 14 screen-pixel circle; hit tolerance should be
+  derived from that screen radius and current zoom so the tool feels stable at
+  every zoom level. The circle is visible while hovering in Eraser mode; a tail
+  animation appears only during active click-drag erasing. The tail is part of
+  hit-testing: each drag segment should erase against the swept capsule between
+  the previous and current pointer positions, using the same 14 px screen radius.
+  Pending erase annotations render at 35% opacity until the eraser gesture commits.
+  Pending erase annotations are not selectable and must not render selection
+  outlines or resize/adjust handles. Once an annotation is pending erase, later
+  hits during the same gesture do not change its state; it remains pending until
+  commit or cancellation. Empty eraser gestures that hit no annotations do not
+  create undo entries or mark the document modified. A simple click without
+  pointer movement still evaluates the initial eraser circle and can erase the
+  annotation geometry under it. When multiple annotations overlap the eraser
+  circle or swept capsule, all geometrically touched annotations are marked
+  pending erase, not only the topmost annotation. Confirming an erase gesture
+  keeps Eraser active; only the explicit `E` toggle restores the remembered
+  previous tool. `Esc` in Eraser cancels any pending erase gesture and exits to
+  Select; with no active gesture, `Esc` exits Eraser to Select. Holding Space
+  for temporary Hand/Pan still works from Eraser and restores Eraser on release;
+  entering Pan during an active erase gesture commits pending erase targets first.
 - `shaula-crop-symbolic` Crop selected: implemented in the contextual group
   for selected rectangle annotations only. It dispatches through
   `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.

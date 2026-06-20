@@ -28,7 +28,7 @@ typedef struct {
 
 typedef struct {
   GPtrArray *annotations;
-  int last_pasted_id;
+  GArray *last_pasted_ids;
 } ShaulaAnnotationClipboard;
 
 /* Output-affecting preview document state. View/tool/HUD state stays in

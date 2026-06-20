@@ -17,6 +17,8 @@ typedef struct {
 static const ShaulaPreviewCommandSpec command_specs[] = {
     {SHAULA_PREVIEW_COMMAND_COPY, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_c,
      GDK_CONTROL_MASK, "Ctrl+C"},
+    {SHAULA_PREVIEW_COMMAND_CUT_SELECTED_ANNOTATION, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_x, GDK_CONTROL_MASK, "Ctrl+X"},
     {SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_v, GDK_CONTROL_MASK, "Ctrl+V"},
     {SHAULA_PREVIEW_COMMAND_SAVE, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_s,
@@ -38,8 +40,6 @@ static const ShaulaPreviewCommandSpec command_specs[] = {
      GDK_KEY_d, GDK_CONTROL_MASK, "Ctrl+D"},
     {SHAULA_PREVIEW_COMMAND_DELETE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_Delete, 0, "Delete"},
-    {SHAULA_PREVIEW_COMMAND_DELETE_SELECTED, FALSE, SHAULA_TOOL_SELECT,
-     GDK_KEY_BackSpace, 0, "Delete"},
     {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_a, GDK_CONTROL_MASK, "Ctrl+A"},
     {SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS, FALSE, SHAULA_TOOL_SELECT,
@@ -197,13 +197,14 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return shaula_preview_can_duplicate_selected(state);
   case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
     return shaula_preview_can_copy_selected_annotation(state);
+  case SHAULA_PREVIEW_COMMAND_CUT_SELECTED_ANNOTATION:
+    return shaula_preview_can_copy_selected_annotation(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
     return shaula_preview_can_paste_annotation(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     return shaula_preview_can_delete_selected(state);
   case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
-    return state->active_tool == SHAULA_TOOL_SELECT &&
-           state->operation == SHAULA_OPERATION_NONE &&
+    return state->operation == SHAULA_OPERATION_NONE &&
            state->document.annotations != NULL &&
            state->document.annotations->len > 0;
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
@@ -225,6 +226,7 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP:
     return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY:
+    return state->document.image != NULL || shaula_preview_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_SAVE:
   case SHAULA_PREVIEW_COMMAND_SAVE_AS:
   case SHAULA_PREVIEW_COMMAND_DONE:
@@ -268,10 +270,14 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
 
   switch (command) {
   case SHAULA_PREVIEW_COMMAND_COPY:
+    if (shaula_preview_has_selection(state))
+      return shaula_preview_copy_selected_annotation(state);
     shaula_preview_action_copy(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
     return shaula_preview_copy_selected_annotation(state);
+  case SHAULA_PREVIEW_COMMAND_CUT_SELECTED_ANNOTATION:
+    return shaula_preview_cut_selected_annotation(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
     return shaula_preview_paste_annotation(state);
   case SHAULA_PREVIEW_COMMAND_SAVE:

@@ -122,7 +122,7 @@ void shaula_preview_history_push_redo(ShaulaHistoryStack *history,
 static void annotation_clipboard_init(ShaulaAnnotationClipboard *clipboard) {
   clipboard->annotations =
       g_ptr_array_new_with_free_func(shaula_annotation_free);
-  clipboard->last_pasted_id = 0;
+  clipboard->last_pasted_ids = g_array_new(FALSE, FALSE, sizeof(int));
 }
 
 void shaula_preview_annotation_clipboard_clear(
@@ -131,7 +131,8 @@ void shaula_preview_annotation_clipboard_clear(
     return;
   if (clipboard->annotations != NULL)
     g_ptr_array_set_size(clipboard->annotations, 0);
-  clipboard->last_pasted_id = 0;
+  if (clipboard->last_pasted_ids != NULL)
+    g_array_set_size(clipboard->last_pasted_ids, 0);
 }
 
 static void annotation_clipboard_free(ShaulaAnnotationClipboard *clipboard) {
@@ -140,7 +141,9 @@ static void annotation_clipboard_free(ShaulaAnnotationClipboard *clipboard) {
   if (clipboard->annotations != NULL)
     g_ptr_array_unref(clipboard->annotations);
   clipboard->annotations = NULL;
-  clipboard->last_pasted_id = 0;
+  if (clipboard->last_pasted_ids != NULL)
+    g_array_unref(clipboard->last_pasted_ids);
+  clipboard->last_pasted_ids = NULL;
 }
 
 void shaula_preview_document_init(ShaulaPreviewDocument *document,

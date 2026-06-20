@@ -219,6 +219,7 @@ gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state);
 gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state);
 gboolean shaula_preview_can_copy_selected_annotation(ShaulaPreviewState *state);
 gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state);
+gboolean shaula_preview_cut_selected_annotation(ShaulaPreviewState *state);
 gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state);
 gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state);
 void shaula_preview_delete_selected(ShaulaPreviewState *state);

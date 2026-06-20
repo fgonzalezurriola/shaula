@@ -734,13 +734,11 @@ static gboolean on_text_entry_key(GtkEventControllerKey *controller,
     return TRUE;
   }
   if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
-    if ((modifiers & GDK_SHIFT_MASK) != 0) {
-      /* Let GtkTextView handle Shift+Enter for newlines */
-      return FALSE;
-    } else {
+    if ((modifiers & GDK_CONTROL_MASK) != 0) {
       finish_text_entry(state);
       return TRUE;
     }
+    return FALSE;
   }
   return FALSE;
 }
@@ -1576,7 +1574,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
                          : NULL;
   if (focus_is_editable_text(state, focus)) {
     if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
-      shaula_preview_cancel_operation(state);
+      finish_text_entry(state);
       return TRUE;
     }
     return FALSE;

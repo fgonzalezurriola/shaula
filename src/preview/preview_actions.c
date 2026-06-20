@@ -727,7 +727,7 @@ void shaula_preview_action_open_containing_folder(ShaulaPreviewState *state) {
 
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data) {
   (void)button;
-  shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_COPY);
+  shaula_preview_action_copy(data);
 }
 
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
