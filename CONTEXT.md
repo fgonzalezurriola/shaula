@@ -107,11 +107,15 @@ and the working diff.
   Selection-box movement is edge-only for single Pen, Highlight, Arrow/Line,
   Text, Measure, Rectangle, and the multi-selection group box. A shared helper
   tests the four border segments with an 8-screen-pixel zoom-adjusted tolerance
-  in both press and hover paths. Hit priority is resize/curvature handles, box
-  edges, visible annotation geometry, then empty-space marquee. Group-edge drags
-  preserve and move the full selection; an edge click without movement leaves
-  selection unchanged, and empty group-box interiors remain transparent so
-  objects behind them can still be selected. Rectangle annotations can be
+  in both press and hover paths; resize/curvature handles use the same fixed
+  screen-space target instead of a zoom-growing minimum. Hit priority is
+  resize/curvature handles, box edges, visible annotation geometry, then
+  empty-space marquee. Handles can act only when already visible on the current
+  single selection, so initially selecting an Arrow/Line near its midpoint must
+  not bend it. Group-edge drags preserve and move the full selection; an edge
+  click without movement leaves selection unchanged, and empty group-box
+  interiors remain transparent so objects behind them can still be selected.
+  Rectangle annotations can be
   selected by clicking inside their bounds, even when unfilled, because
   edge-only geometry hit testing made Select feel broken.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
@@ -410,7 +414,9 @@ and the working diff.
   Pen, Highlight, Arrow, and Line use per-object bounding boxes for single
   selection. Highlight and Pen have no endpoint handles; Arrow and Line keep
   start/end/control handles only for single selection. Multi-selection replaces
-  every per-object box with one group bounding box and no handles.
+  every per-object box with one group bounding box and no handles. Arrow/Line
+  single-selection chrome uses visible geometry bounds, while broader annotation
+  bounds remain unchanged for hit testing and the existing multi-select union.
   Freehand bounds are computed in C from explicit point min/max extents, while
   Arrow bounds include exact quadratic extrema and the visible arrowhead. Moving
   any of these annotations cannot change its box size.

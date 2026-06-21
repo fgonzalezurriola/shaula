@@ -48,7 +48,7 @@ Temporary region selections are not annotations, are not exported, and do not en
 
 Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch duplication, batch deletion, and moving the selected set as one undoable gesture. A successful marquee clears its temporary region rectangle after selecting objects. A drag with no annotation matches remains a contextual region. Multi-selection suppresses all per-object selection boxes and handles, then draws one group bounding box around the selected set.
 
-Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rectangle, and the multi-selection group box. Only the four border segments are move targets; empty box interiors remain transparent to hit testing so visible objects behind them can still be selected. Edge tolerance is 8 screen pixels converted through the current zoom. Input priority is resize/curvature handles, selection-box edges, visible annotation geometry, then empty-space marquee. Edge drags preserve the current single or grouped selection, use `grab`/`grabbing` cursors, and commit movement as one history gesture. A press and release without movement does not collapse or otherwise change the selection.
+Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rectangle, and the multi-selection group box. Only the four border segments are move targets; empty box interiors remain transparent to hit testing so visible objects behind them can still be selected. Edge and handle tolerances are 8 screen pixels converted through the current zoom. Input priority is resize/curvature handles, selection-box edges, visible annotation geometry, then empty-space marquee. Edge drags preserve the current single or grouped selection, use `grab`/`grabbing` cursors, and commit movement as one history gesture. A press and release without movement does not collapse or otherwise change the selection. Resize and curvature can begin only from handles already visible on the current single selection; selecting an Arrow or Line near its midpoint must not bend it.
 
 ## Crop
 
@@ -177,7 +177,7 @@ The Arrow HUD exposes stroke style: normal, dashed, or dotted. A real style chan
 
 `shaula-line-symbolic` shares Arrow geometry, styling, hit testing, history, duplication, and clipboard behavior.
 
-Line stores `data.arrow.has_head = FALSE` during draft and commit. `shaula_annotation_new_arrow` defaults to a headed arrow, so Line must explicitly clear the flag. Selected Lines use the same per-object bounding box and single-selection handles as Arrow, without arrowhead expansion.
+Line stores `data.arrow.has_head = FALSE` during draft and commit. `shaula_annotation_new_arrow` defaults to a headed arrow, so Line must explicitly clear the flag. Selected Lines use the same per-object bounding box and single-selection handles as Arrow, without arrowhead expansion. Their single-selection box uses visible line bounds rather than the broader geometry hit-test bounds, while multi-selection keeps the existing group-bound union contract.
 
 ## Text
 

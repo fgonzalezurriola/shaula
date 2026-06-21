@@ -94,7 +94,7 @@ static ShaulaRect arrow_head_bounds_c(ShaulaPoint direction, ShaulaPoint end,
   return path_bounds_c((ShaulaPenPath){points, 4, 4});
 }
 
-static ShaulaRect arrow_bounds_c(const ShaulaAnnotation *annotation) {
+static ShaulaRect arrow_visual_bounds_c(const ShaulaAnnotation *annotation) {
   ShaulaPoint start = annotation->data.arrow.start;
   ShaulaPoint end = annotation->data.arrow.end;
   ShaulaRect bounds = annotation->data.arrow.is_curved
@@ -109,7 +109,11 @@ static ShaulaRect arrow_bounds_c(const ShaulaAnnotation *annotation) {
     bounds = rect_union_c(
         bounds, arrow_head_bounds_c(direction, end, annotation->stroke_width));
   }
-  return rect_expanded_c(bounds, annotation->stroke_width / 2.0 + 6.0);
+  return rect_expanded_c(bounds, annotation->stroke_width / 2.0);
+}
+
+static ShaulaRect arrow_bounds_c(const ShaulaAnnotation *annotation) {
+  return rect_expanded_c(arrow_visual_bounds_c(annotation), 6.0);
 }
 
 static ShaulaAnnotation *annotation_alloc(ShaulaAnnotationType type,
@@ -415,6 +419,17 @@ gboolean shaula_annotations_selected_bounds(GPtrArray *annotations,
   return found;
 }
 
+ShaulaRect
+shaula_annotation_selection_bounds(const ShaulaAnnotation *annotation) {
+  if (annotation == NULL)
+    return (ShaulaRect){0, 0, 0, 0};
+  if (annotation->type == SHAULA_ANNOTATION_ARROW)
+    return arrow_visual_bounds_c(annotation);
+  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE)
+    return shaula_rect_normalized(annotation->data.rectangle.rect);
+  return shaula_rect_normalized(annotation->bounds);
+}
+
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
   if (annotation == NULL)
     return;
@@ -544,12 +559,13 @@ static void draw_square_handle(cairo_t *cr, ShaulaPoint point) {
 }
 
 static void draw_round_handle(cairo_t *cr, ShaulaPoint point) {
+  double px = screen_px_to_user(cr, 1.0);
   cairo_save(cr);
-  cairo_arc(cr, point.x, point.y, 4.5, 0, 2 * G_PI);
+  cairo_arc(cr, point.x, point.y, 4.5 * px, 0, 2 * G_PI);
   cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0);
   cairo_fill_preserve(cr);
   cairo_set_source_rgba(cr, 0.08, 0.09, 0.10, 0.9);
-  cairo_set_line_width(cr, 1.5);
+  cairo_set_line_width(cr, MAX(1.5 * px, 0.6));
   cairo_stroke(cr);
   cairo_restore(cr);
 }
@@ -1203,11 +1219,7 @@ void shaula_annotation_draw_preview(cairo_t *cr,
   }
 
   if (annotation->selected && show_selection) {
-    if (annotation->type == SHAULA_ANNOTATION_PEN) {
-      shaula_annotation_draw_selection_box(cr, annotation->bounds);
-    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-      shaula_annotation_draw_selection_box(cr, annotation->bounds);
-    } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+    if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       draw_rectangle_selection(cr, annotation->data.rectangle.rect);
       set_annotation_color(cr, annotation->color, 1.0);
       cairo_set_line_width(cr, annotation->stroke_width);
@@ -1218,11 +1230,11 @@ void shaula_annotation_draw_preview(cairo_t *cr,
       cairo_stroke(cr);
       if (show_edit_handles)
         draw_rectangle_handles(cr, annotation->data.rectangle.rect);
-    } else if (annotation->type != SHAULA_ANNOTATION_ARROW) {
-      shaula_annotation_draw_selection_box(cr, annotation->bounds);
+    } else {
+      shaula_annotation_draw_selection_box(
+          cr, shaula_annotation_selection_bounds(annotation));
     }
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-      shaula_annotation_draw_selection_box(cr, annotation->bounds);
       if (show_edit_handles) {
         ShaulaPoint p0 = annotation->data.arrow.start;
         ShaulaPoint p2 = annotation->data.arrow.end;
@@ -1233,14 +1245,7 @@ void shaula_annotation_draw_preview(cairo_t *cr,
                                 (p0.y + p2.y) / 2.0};
         ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
                            0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
-        cairo_save(cr);
-        cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.88);
-        cairo_arc(cr, mid.x, mid.y, 4.0, 0, 2 * G_PI);
-        cairo_fill_preserve(cr);
-        cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.72);
-        cairo_set_line_width(cr, 1.25);
-        cairo_stroke(cr);
-        cairo_restore(cr);
+        draw_round_handle(cr, mid);
         draw_round_handle(cr, p0);
         draw_round_handle(cr, p2);
       }

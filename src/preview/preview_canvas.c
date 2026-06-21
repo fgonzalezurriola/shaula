@@ -15,6 +15,7 @@
 #define SHAULA_ERASER_TAIL_FADE_US 220000
 #define SHAULA_ERASER_TAIL_SAMPLE_PX 5.0
 #define SHAULA_SELECTION_EDGE_TARGET_PX 8.0
+#define SHAULA_SELECTION_HANDLE_TARGET_PX 8.0
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -1127,11 +1128,12 @@ selected_selection_box_edge_at(ShaulaPreviewState *state,
     frame = shaula_rect_expanded(frame, 2.0);
   } else if (selected_count == 1 && state->selected_annotation != NULL) {
     ShaulaAnnotation *annotation = state->selected_annotation;
+    ShaulaRect bounds = shaula_annotation_selection_bounds(annotation);
     if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       double pad = MAX(3.0 / state->zoom, 1.0);
-      frame = shaula_rect_expanded(annotation->data.rectangle.rect, pad);
+      frame = shaula_rect_expanded(bounds, pad);
     } else {
-      frame = shaula_rect_expanded(annotation->bounds, 2.0);
+      frame = shaula_rect_expanded(bounds, 2.0);
     }
   } else {
     return FALSE;
@@ -1384,8 +1386,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     double hit_tolerance = MAX(4.0, 8.0 / state->zoom);
     ShaulaAnnotationHit hit_result = {NULL, SHAULA_ANNOTATION_HIT_NONE};
     ShaulaAnnotationResizeHandle resize_handle =
-        inside ? selected_resize_handle_at(state, image_point,
-                                           MAX(8.0, 16.0 / state->zoom))
+        inside ? selected_resize_handle_at(
+                     state, image_point,
+                     SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
                : SHAULA_RESIZE_HANDLE_NONE;
     gboolean selection_edge_hit =
         resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&
@@ -1423,33 +1426,15 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
       }
       shaula_preview_begin_history_gesture(state);
 
-      gboolean is_bend = FALSE;
       if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
         capture_resize_origin(state, resize_handle);
         start_operation(state, SHAULA_OPERATION_RESIZE_ANNOTATION, image_point);
         gtk_widget_set_cursor_from_name(
             state->area, cursor_for_resize_handle(resize_handle));
         break;
-      } else if (shaula_preview_selected_count(state) == 1 &&
-                 hit->type == SHAULA_ANNOTATION_ARROW) {
-        ShaulaPoint p0 = hit->data.arrow.start;
-        ShaulaPoint p2 = hit->data.arrow.end;
-        ShaulaPoint p1 =
-            hit->data.arrow.is_curved
-                ? hit->data.arrow.control
-                : (ShaulaPoint){(p0.x + p2.x) / 2.0, (p0.y + p2.y) / 2.0};
-        ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
-                           0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
-        if (hit_result.kind == SHAULA_ANNOTATION_HIT_HANDLE ||
-            shaula_point_distance(image_point, mid) <=
-                MAX(8.0, 16.0 / state->zoom)) {
-          is_bend = TRUE;
-        }
       }
 
-      start_operation(
-          state, is_bend ? SHAULA_OPERATION_BEND_ARROW : SHAULA_OPERATION_MOVE,
-          image_point);
+      start_operation(state, SHAULA_OPERATION_MOVE, image_point);
       gtk_widget_set_cursor_from_name(state->area, "grabbing");
     } else if (inside) {
       shaula_preview_clear_selection(state);
@@ -1708,8 +1693,9 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
     gboolean inside = image_point_is_inside(state, image_point);
     ShaulaAnnotationHit hit = {NULL, SHAULA_ANNOTATION_HIT_NONE};
     ShaulaAnnotationResizeHandle resize_handle =
-        inside ? selected_resize_handle_at(state, image_point,
-                                           MAX(8.0, 16.0 / state->zoom))
+        inside ? selected_resize_handle_at(
+                     state, image_point,
+                     SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
                : SHAULA_RESIZE_HANDLE_NONE;
     gboolean selection_edge_hit =
         resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&

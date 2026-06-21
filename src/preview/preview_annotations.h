@@ -135,6 +135,11 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
 void shaula_annotation_draw_preview(cairo_t *cr,
                                     const ShaulaAnnotation *annotation,
                                     ShaulaAnnotationPreviewFlags flags);
+/* Single-selection chrome bounds stay separate from broader geometry hit-test
+ * bounds; multi-selection intentionally continues to union annotation bounds.
+ */
+ShaulaRect
+shaula_annotation_selection_bounds(const ShaulaAnnotation *annotation);
 void shaula_annotation_draw_selection_box(cairo_t *cr, ShaulaRect bounds);
 gboolean shaula_annotations_selected_bounds(GPtrArray *annotations,
                                              ShaulaRect *bounds_out);
