@@ -591,6 +591,17 @@ static double segment_to_rect_distance(ShaulaPoint a, ShaulaPoint b,
   return best;
 }
 
+static double segment_to_segment_distance(ShaulaPoint a, ShaulaPoint b,
+                                          ShaulaPoint c, ShaulaPoint d) {
+  if (segments_intersect(a, b, c, d))
+    return 0.0;
+  double best = shaula_point_distance_to_segment(a, c, d);
+  best = MIN(best, shaula_point_distance_to_segment(b, c, d));
+  best = MIN(best, shaula_point_distance_to_segment(c, a, b));
+  best = MIN(best, shaula_point_distance_to_segment(d, a, b));
+  return best;
+}
+
 static double path_to_rect_distance(ShaulaPenPath path, ShaulaRect rect) {
   if (path.len <= 0)
     return G_MAXDOUBLE;
@@ -601,6 +612,20 @@ static double path_to_rect_distance(ShaulaPenPath path, ShaulaRect rect) {
   for (int i = 1; i < path.len; i++)
     best = MIN(best,
                segment_to_rect_distance(path.points[i - 1], path.points[i], rect));
+  return best;
+}
+
+static double path_to_segment_distance(ShaulaPenPath path, ShaulaPoint start,
+                                       ShaulaPoint end) {
+  if (path.len <= 0)
+    return G_MAXDOUBLE;
+  if (path.len == 1)
+    return shaula_point_distance_to_segment(path.points[0], start, end);
+
+  double best = G_MAXDOUBLE;
+  for (int i = 1; i < path.len; i++)
+    best = MIN(best, segment_to_segment_distance(path.points[i - 1],
+                                                 path.points[i], start, end));
   return best;
 }
 
@@ -617,6 +642,22 @@ static double rectangle_edge_distance_to_rect(ShaulaRect rectangle,
   best = MIN(best, segment_to_rect_distance(top_right, bottom_right, selection));
   best = MIN(best, segment_to_rect_distance(bottom_right, bottom_left, selection));
   best = MIN(best, segment_to_rect_distance(bottom_left, top_left, selection));
+  return best;
+}
+
+static double rectangle_edge_distance_to_segment(ShaulaRect rectangle,
+                                                 ShaulaPoint start,
+                                                 ShaulaPoint end) {
+  rectangle = shaula_rect_normalized(rectangle);
+  ShaulaPoint top_left = {rectangle.x, rectangle.y};
+  ShaulaPoint top_right = {rectangle.x + rectangle.width, rectangle.y};
+  ShaulaPoint bottom_right = {rectangle.x + rectangle.width,
+                              rectangle.y + rectangle.height};
+  ShaulaPoint bottom_left = {rectangle.x, rectangle.y + rectangle.height};
+  double best = segment_to_segment_distance(top_left, top_right, start, end);
+  best = MIN(best, segment_to_segment_distance(top_right, bottom_right, start, end));
+  best = MIN(best, segment_to_segment_distance(bottom_right, bottom_left, start, end));
+  best = MIN(best, segment_to_segment_distance(bottom_left, top_left, start, end));
   return best;
 }
 
@@ -688,6 +729,23 @@ static double arrow_curve_distance_to_rect(ShaulaPoint start,
     ShaulaPoint current =
         arrow_curve_point(start, control, end, (double)i / 24.0);
     best = MIN(best, segment_to_rect_distance(previous, current, rect));
+    previous = current;
+  }
+  return best;
+}
+
+static double arrow_curve_distance_to_segment(ShaulaPoint start,
+                                              ShaulaPoint control,
+                                              ShaulaPoint end,
+                                              ShaulaPoint eraser_start,
+                                              ShaulaPoint eraser_end) {
+  double best = G_MAXDOUBLE;
+  ShaulaPoint previous = start;
+  for (int i = 1; i <= 24; i++) {
+    ShaulaPoint current =
+        arrow_curve_point(start, control, end, (double)i / 24.0);
+    best = MIN(best, segment_to_segment_distance(previous, current,
+                                                eraser_start, eraser_end));
     previous = current;
   }
   return best;
@@ -859,6 +917,20 @@ static gboolean polygon_intersects_rect(const ShaulaPoint *polygon, int len,
   return FALSE;
 }
 
+static double polygon_to_segment_distance(const ShaulaPoint *polygon, int len,
+                                          ShaulaPoint start, ShaulaPoint end) {
+  if (point_in_polygon(start, polygon, len) ||
+      point_in_polygon(end, polygon, len))
+    return 0.0;
+
+  double best = G_MAXDOUBLE;
+  for (int i = 0; i < len; i++) {
+    ShaulaPoint next = polygon[(i + 1) % len];
+    best = MIN(best, segment_to_segment_distance(polygon[i], next, start, end));
+  }
+  return best;
+}
+
 static gboolean arrow_head_intersects_rect(const ShaulaAnnotation *annotation,
                                            ShaulaRect rect) {
   if (!annotation->data.arrow.has_head)
@@ -880,6 +952,30 @@ static gboolean arrow_head_intersects_rect(const ShaulaAnnotation *annotation,
        end.y + sin(angle + G_PI + 0.42) * head_len},
   };
   return polygon_intersects_rect(polygon, 4, rect);
+}
+
+static gboolean arrow_head_intersects_segment(
+    const ShaulaAnnotation *annotation, ShaulaPoint start, ShaulaPoint end,
+    double radius) {
+  if (!annotation->data.arrow.has_head)
+    return FALSE;
+
+  ShaulaPoint arrow_end = annotation->data.arrow.end;
+  ShaulaPoint dir_point = annotation->data.arrow.is_curved
+                              ? annotation->data.arrow.control
+                              : annotation->data.arrow.start;
+  double head_len = MAX(12.0, annotation->stroke_width * 4.5);
+  double angle = atan2(arrow_end.y - dir_point.y, arrow_end.x - dir_point.x);
+  ShaulaPoint polygon[] = {
+      arrow_end,
+      {arrow_end.x + cos(angle + G_PI - 0.42) * head_len,
+       arrow_end.y + sin(angle + G_PI - 0.42) * head_len},
+      {arrow_end.x + cos(angle + G_PI) * head_len * 0.65,
+       arrow_end.y + sin(angle + G_PI) * head_len * 0.65},
+      {arrow_end.x + cos(angle + G_PI + 0.42) * head_len,
+       arrow_end.y + sin(angle + G_PI + 0.42) * head_len},
+  };
+  return polygon_to_segment_distance(polygon, 4, start, end) <= radius;
 }
 
 static void draw_arrow_shape(cairo_t *cr, const ShaulaAnnotation *annotation) {
@@ -1334,5 +1430,55 @@ gboolean shaula_annotation_intersects_selection_rect(
     return shaula_rect_intersects(annotation->bounds, rect);
   }
 
+  return FALSE;
+}
+
+gboolean shaula_annotation_intersects_eraser_segment(
+    const ShaulaAnnotation *annotation, ShaulaPoint start, ShaulaPoint end,
+    double radius) {
+  if (annotation == NULL || radius < 0.0)
+    return FALSE;
+
+  double stroke_tolerance = MAX(radius, annotation->stroke_width / 2.0 + radius);
+
+  switch (annotation->type) {
+  case SHAULA_ANNOTATION_ARROW: {
+    ShaulaPoint shaft_end =
+        annotation->data.arrow.has_head
+            ? arrow_shaft_end(annotation->data.arrow.start,
+                              annotation->data.arrow.end,
+                              annotation->stroke_width)
+            : annotation->data.arrow.end;
+    double shaft_distance =
+        annotation->data.arrow.is_curved
+            ? arrow_curve_distance_to_segment(annotation->data.arrow.start,
+                                              annotation->data.arrow.control,
+                                              shaft_end, start, end)
+            : segment_to_segment_distance(annotation->data.arrow.start,
+                                          shaft_end, start, end);
+    return shaft_distance <= stroke_tolerance ||
+           arrow_head_intersects_segment(annotation, start, end, radius);
+  }
+  case SHAULA_ANNOTATION_MEASURE:
+    return segment_to_segment_distance(annotation->data.measure.start,
+                                       annotation->data.measure.end, start,
+                                       end) <= stroke_tolerance;
+  case SHAULA_ANNOTATION_RECTANGLE: {
+    ShaulaRect rect = shaula_rect_normalized(annotation->data.rectangle.rect);
+    if (annotation->data.rectangle.filled &&
+        segment_to_rect_distance(start, end, rect) <= radius)
+      return TRUE;
+    return rectangle_edge_distance_to_segment(rect, start, end) <=
+           stroke_tolerance;
+  }
+  case SHAULA_ANNOTATION_TEXT:
+    return segment_to_rect_distance(start, end, annotation->bounds) <= radius;
+  case SHAULA_ANNOTATION_HIGHLIGHT:
+    return path_to_segment_distance(annotation->data.highlight, start, end) <=
+           MAX(radius, annotation->stroke_width / 2.0 + radius);
+  case SHAULA_ANNOTATION_PEN:
+    return path_to_segment_distance(annotation->data.pen, start, end) <=
+           MAX(radius, annotation->stroke_width / 2.0 + radius);
+  }
   return FALSE;
 }

@@ -732,6 +732,12 @@ and the working diff.
   custom SVG icon recoloring should follow GTK theme colors with explicit
   contrast reinforcement. Catppuccin Latte/light themes must prefer dark icon
   foregrounds even if `gtk-application-prefer-dark-theme` is set.
+- Toolbar and overflow-menu icon hover states use both GTK `:hover` and a
+  `shaula-stable-hover` CSS class driven by pointer enter/leave events. This is
+  intentional: GTK can drop the pseudo hover state during keyboard input or
+  capture grabs, but Shaula screenshots/docs need the visual hover to remain
+  capturable while the pointer is still over the button. Do not use this to
+  pin GTK tooltips; tooltips remain transient GTK popups.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; duplicates the selected annotation set
   through the same multi-object paste path without replacing the internal
@@ -761,20 +767,28 @@ and the working diff.
   pending erase targets, render translucent until release, and are deleted
   together as one undoable edit on mouse release or tool exit. `Esc` is the
   explicit cancellation path and clears pending targets without mutating the
-  document; accidental commits are recovered with Undo.
+  document; accidental commits are recovered with Undo. Save, Copy, Done, close,
+  and switching toolbar tools all commit pending erase targets before continuing.
+  Undo/redo treats each confirmed erase gesture as one document edit regardless
+  of how many annotations were removed.
   Annotation Eraser is a modal tool with previous-tool toggle semantics: using
   `E` from another creation/select tool switches to Eraser and remembers that
   tool; pressing `E` again while Eraser is active restores the remembered tool,
   including utility tools such as Hand/Pan and Crop.
   Selection and Annotation Eraser are independent modes: entering Eraser clears
   existing annotation/region selection, and erasing is based only on geometric
-  contact with annotations in the document.
+  contact with annotations in the document. Recently created or previously
+  selected annotations are not erased merely by switching into Eraser; they are
+  erased only if the eraser circle or swept capsule touches their visible geometry.
   The Eraser cursor is a fixed 14 screen-pixel circle; hit tolerance should be
   derived from that screen radius and current zoom so the tool feels stable at
   every zoom level. The circle is visible while hovering in Eraser mode; a tail
-  animation appears only during active click-drag erasing. The tail is part of
-  hit-testing: each drag segment should erase against the swept capsule between
-  the previous and current pointer positions, using the same 14 px screen radius.
+  animation appears during active click-drag erasing and fades out over roughly
+  220 ms after release. The tail is part of hit-testing: each drag segment
+  should erase against the swept capsule between the previous and current
+  pointer positions, using the same 14 px screen radius. The visual tail shows
+  only the recent path, roughly the last 300 ms, and uses the theme foreground
+  color with alpha rather than a tool-specific color.
   Pending erase annotations render at 35% opacity until the eraser gesture commits.
   Pending erase annotations are not selectable and must not render selection
   outlines or resize/adjust handles. Once an annotation is pending erase, later
@@ -790,11 +804,25 @@ and the working diff.
   Select; with no active gesture, `Esc` exits Eraser to Select. Holding Space
   for temporary Hand/Pan still works from Eraser and restores Eraser on release;
   entering Pan during an active erase gesture commits pending erase targets first.
+  Eraser v1 has no properties HUD or size controls; the 14 px screen radius is fixed.
+  UI naming uses `Eraser` with `shaula-eraser-symbolic.svg`,
+  `SHAULA_TOOL_ERASER`, `SHAULA_PREVIEW_COMMAND_SET_TOOL_ERASER`, and
+  `SHAULA_OPERATION_ERASE_ANNOTATIONS` to avoid collision with pixel
+  `ERASE_REGION`. The toolbar button is active/checked while Eraser is the
+  current tool. While hovering the canvas in Eraser mode, the native pointer is
+  hidden and the drawn 14 px eraser circle is the visible cursor. Only primary
+  button click-drag erases; right click has no Eraser-specific behavior.
+  Implementation note: eraser input/rendering lives in
+  `src/preview/preview_canvas.c`, pending/commit state lives in
+  `src/preview/preview_state.c`, geometry hit-testing lives in
+  `src/preview/preview_annotations.c`, and the toolbar/shortcut entry points
+  are `preview_toolbar.c` plus `preview_commands.c`. The icon is
+  `src/preview/icons/hicolor/scalable/actions/shaula-eraser-symbolic.svg`.
 - `shaula-crop-symbolic` Crop selected: implemented in the contextual group
   for selected rectangle annotations only. It dispatches through
   `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.
 - `shaula-trash-symbolic` Delete selected: implemented. Available from the
-  contextual group and Delete/Backspace when text entry is not active.
+  contextual group and Delete when text entry is not active.
 - `shaula-arrow-symbolic` Arrow: implemented as a one-shot creation tool.
   After a valid arrow is drawn, preview selects the new arrow, opens the Arrow
   properties HUD, and returns to Select mode. Moving and bend editing for
@@ -846,11 +874,10 @@ and the working diff.
   previously selected committed text annotation. Drag release must keep
   `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks draft
   rendering and click-to-commit flow because the draft path is operation-gated.
-  `Enter` and `Escape` both commit non-empty text, `Shift+Enter` inserts a
-  newline, and clicking back on the canvas commits non-empty text without
-  closing. After a
-  canvas-only text commit, Text returns to Select mode with the new annotation
-  selected so it can be moved immediately.
+  `Enter` inserts a newline. `Esc` and `Ctrl+Enter` finish the draft and commit
+  non-empty text; clicking back on the canvas also commits non-empty text
+  without closing. After a canvas-only text commit, Text returns to Select mode
+  with the new annotation selected so it can be moved immediately.
 - `shaula-measure-symbolic` Measure: implemented.
 - `shaula-rectangle-symbolic` Rectangle: implemented as a one-shot creation
   tool matching Arrow's post-create flow. After a valid rectangle is drawn,

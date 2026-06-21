@@ -28,6 +28,7 @@ typedef enum {
   SHAULA_TOOL_SELECT,
   SHAULA_TOOL_HAND,
   SHAULA_TOOL_CROP,
+  SHAULA_TOOL_ERASER,
   SHAULA_TOOL_ARROW,
   SHAULA_TOOL_LINE,
   SHAULA_TOOL_TEXT,
@@ -47,6 +48,7 @@ typedef enum {
   SHAULA_OPERATION_RESIZE_ANNOTATION,
   SHAULA_OPERATION_SELECT_REGION,
   SHAULA_OPERATION_CROP,
+  SHAULA_OPERATION_ERASE_ANNOTATIONS,
   SHAULA_OPERATION_ARROW,
   SHAULA_OPERATION_LINE,
   SHAULA_OPERATION_RECTANGLE,
@@ -71,6 +73,12 @@ typedef enum {
   SHAULA_RESIZE_HANDLE_ARROW_END,
   SHAULA_RESIZE_HANDLE_ARROW_CONTROL
 } ShaulaAnnotationResizeHandle;
+
+typedef struct {
+  double x;
+  double y;
+  gint64 time_us;
+} ShaulaEraserTrailPoint;
 
 typedef struct {
   GtkApplication *app;
@@ -114,6 +122,7 @@ typedef struct {
 
   ShaulaTool active_tool;
   ShaulaTool previous_tool_before_space_pan;
+  ShaulaTool previous_tool_before_eraser;
   ShaulaPreviewOperation operation;
   gboolean operation_changed;
   gboolean space_pan_active;
@@ -139,6 +148,15 @@ typedef struct {
   gboolean has_region_selection;
   ShaulaRect region_selection_rect;
   GArray *draft_pen_points;
+  GArray *eraser_pending_annotation_ids;
+  GArray *eraser_trail;
+  gboolean eraser_hover_valid;
+  gboolean eraser_drag_active;
+  gboolean eraser_tail_fading;
+  guint eraser_tail_timeout_id;
+  gint64 eraser_tail_fade_start_us;
+  ShaulaPoint eraser_hover_screen;
+  ShaulaPoint eraser_last_screen;
   ShaulaPoint text_anchor_image;
 
   GArray *selected_annotation_ids;
@@ -224,6 +242,11 @@ gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state);
 gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state);
 void shaula_preview_delete_selected(ShaulaPreviewState *state);
 void shaula_preview_reset_annotations(ShaulaPreviewState *state);
+gboolean shaula_preview_is_annotation_pending_erase(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
+void shaula_preview_clear_eraser_pending(ShaulaPreviewState *state);
+gboolean shaula_preview_commit_eraser_pending(ShaulaPreviewState *state);
+void shaula_preview_cancel_eraser_gesture(ShaulaPreviewState *state);
 
 void shaula_preview_push_undo(ShaulaPreviewState *state);
 void shaula_preview_begin_history_gesture(ShaulaPreviewState *state);

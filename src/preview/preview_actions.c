@@ -291,6 +291,18 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
   if (tool == SHAULA_TOOL_CROP && state->active_tool == SHAULA_TOOL_SELECT &&
       shaula_preview_apply_crop_to_selected_rect(state))
     return;
+
+  if (state->active_tool == SHAULA_TOOL_ERASER && tool == SHAULA_TOOL_ERASER) {
+    tool = state->previous_tool_before_eraser;
+  } else if (tool == SHAULA_TOOL_ERASER &&
+             state->active_tool != SHAULA_TOOL_ERASER) {
+    state->previous_tool_before_eraser = state->active_tool;
+  }
+
+  if (state->active_tool == SHAULA_TOOL_ERASER &&
+      tool != SHAULA_TOOL_ERASER)
+    shaula_preview_commit_eraser_pending(state);
+
   shaula_preview_commit_history_gesture(state, TRUE);
   if (tool == SHAULA_TOOL_HAND) {
     if (state->operation != SHAULA_OPERATION_NONE)
@@ -318,6 +330,8 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
       cursor = "grab";
     else if (tool == SHAULA_TOOL_TEXT)
       cursor = "text";
+    else if (tool == SHAULA_TOOL_ERASER)
+      cursor = "none";
     gtk_widget_set_cursor_from_name(state->area, cursor);
   }
 }
@@ -325,6 +339,7 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
 void shaula_preview_action_copy(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_preview_commit_eraser_pending(state);
   state->last_action = "copy";
   state->document.copied = FALSE;
   state->notified = FALSE;
@@ -368,6 +383,7 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   if (state == NULL || state->document.image == NULL)
     return;
 
+  shaula_preview_commit_eraser_pending(state);
   state->last_action = "save";
   state->document.saved = FALSE;
   state->notified = FALSE;
@@ -401,6 +417,7 @@ void shaula_preview_action_accept(ShaulaPreviewState *state,
   if (state == NULL || state->document.path == NULL)
     return;
 
+  shaula_preview_commit_eraser_pending(state);
   state->last_action = copy_to_clipboard ? "copy" : "save";
   state->document.saved = FALSE;
   state->document.copied = FALSE;
@@ -499,6 +516,7 @@ void shaula_preview_action_done(ShaulaPreviewState *state) {
 void shaula_preview_action_close(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_preview_commit_eraser_pending(state);
   state->last_action = "close";
   state->notified = FALSE;
   if (state->app != NULL)
@@ -555,6 +573,7 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
 }
 
 void shaula_preview_action_save_as(ShaulaPreviewState *state) {
+  shaula_preview_commit_eraser_pending(state);
   GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
       "Save Shaula Preview", GTK_WINDOW(state->window),
       GTK_FILE_CHOOSER_ACTION_SAVE, "Save", "Cancel");
@@ -575,6 +594,7 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
 void shaula_preview_action_discard(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_preview_commit_eraser_pending(state);
   state->last_action = "discard";
   state->notified = FALSE;
   if (state->app != NULL)
@@ -701,6 +721,7 @@ void shaula_preview_action_use_hover_color(ShaulaPreviewState *state) {
     case SHAULA_TOOL_SELECT:
     case SHAULA_TOOL_HAND:
     case SHAULA_TOOL_CROP:
+    case SHAULA_TOOL_ERASER:
     case SHAULA_TOOL_COUNT:
       shaula_preview_set_arrow_color(state, color);
       shaula_preview_set_rectangle_color(state, color);
@@ -880,6 +901,9 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
     break;
   case SHAULA_TOOL_CROP:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP;
+    break;
+  case SHAULA_TOOL_ERASER:
+    command = SHAULA_PREVIEW_COMMAND_SET_TOOL_ERASER;
     break;
   case SHAULA_TOOL_ARROW:
     command = SHAULA_PREVIEW_COMMAND_SET_TOOL_ARROW;

@@ -45,7 +45,7 @@ static const ToolActionSpec secondary_tools[] = {
 static const MenuActionSpec utility_actions[] = {
     {"shaula-fit-to-screen-symbolic", "Fit to screen", "Fit to screen (F)",
      G_CALLBACK(shaula_preview_on_fit_clicked)},
-    {"shaula-actual-size-symbolic", "Actual size", "Actual size (0)",
+    {"shaula-actual-size-symbolic", "Actual size", "Actual size",
      G_CALLBACK(shaula_preview_on_actual_clicked)},
     {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
      G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
@@ -109,7 +109,9 @@ static void install_toolbar_css(void) {
                     "  background: transparent;"
                     "}"
                     "headerbar.shaula-preview-toolbar button.flat:hover,"
-                    "popover.shaula-preview-popover button.flat:hover {"
+                    "popover.shaula-preview-popover button.flat:hover,"
+                    "headerbar.shaula-preview-toolbar button.shaula-stable-hover,"
+                    "popover.shaula-preview-popover button.shaula-stable-hover {"
                     "  background: alpha(@theme_fg_color, 0.08);"
                     "  border-color: alpha(@theme_fg_color, 0.12);"
                     "}"
@@ -150,6 +152,33 @@ static void install_toolbar_css(void) {
   installed = TRUE;
 }
 
+static void on_stable_hover_enter(GtkEventControllerMotion *controller,
+                                  double x, double y, gpointer data) {
+  (void)x;
+  (void)y;
+  (void)data;
+  GtkWidget *widget =
+      gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(controller));
+  if (widget != NULL)
+    gtk_widget_add_css_class(widget, "shaula-stable-hover");
+}
+
+static void on_stable_hover_leave(GtkEventControllerMotion *controller,
+                                  gpointer data) {
+  (void)data;
+  GtkWidget *widget =
+      gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(controller));
+  if (widget != NULL)
+    gtk_widget_remove_css_class(widget, "shaula-stable-hover");
+}
+
+static void install_stable_hover(GtkWidget *widget) {
+  GtkEventController *motion = gtk_event_controller_motion_new();
+  g_signal_connect(motion, "enter", G_CALLBACK(on_stable_hover_enter), NULL);
+  g_signal_connect(motion, "leave", G_CALLBACK(on_stable_hover_leave), NULL);
+  gtk_widget_add_controller(widget, motion);
+}
+
 static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
                                       const char *icon_name,
                                       const char *tooltip, GCallback callback) {
@@ -160,6 +189,7 @@ static GtkWidget *make_toolbar_button(ShaulaPreviewState *state,
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 32, 32);
+  install_stable_hover(button);
   g_signal_connect(button, "clicked", callback, state);
   return button;
 }
@@ -213,6 +243,7 @@ static GtkWidget *make_tool_toggle(ShaulaPreviewState *state,
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 32, 32);
+  install_stable_hover(button);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),
                                state->active_tool == tool);
   g_object_set_data(G_OBJECT(button), "tool", GINT_TO_POINTER(tool));
@@ -236,6 +267,7 @@ static GtkWidget *make_menu_action_row(ShaulaPreviewState *state,
   gtk_widget_set_tooltip_text(button, spec->tooltip);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  install_stable_hover(button);
   g_signal_connect(button, "clicked", spec->callback, state);
   return button;
 }
@@ -254,6 +286,7 @@ static GtkWidget *make_menu_tool_row(ShaulaPreviewState *state,
   gtk_widget_set_tooltip_text(button, spec->tooltip);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  install_stable_hover(button);
   g_object_set_data(G_OBJECT(button), "tool", GINT_TO_POINTER(spec->tool));
   g_signal_connect(button, "clicked",
                    G_CALLBACK(shaula_preview_on_tool_clicked), state);
@@ -314,13 +347,8 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   if (has_hidden_tools)
     append_separator(state->more_menu_box);
 
-  int visible_utility_count =
-      MAX(0, visible_count - state->toolbar_secondary_count);
-  visible_utility_count =
-      MIN(visible_utility_count, state->toolbar_utility_action_count);
   gboolean has_hidden_utilities = FALSE;
-  for (int i = visible_utility_count; i < state->toolbar_utility_action_count;
-       i++) {
+  for (int i = 0; i < (int)G_N_ELEMENTS(utility_actions); i++) {
     gtk_box_append(GTK_BOX(state->more_menu_box),
                    make_menu_action_row(state, &utility_actions[i]));
     has_hidden_utilities = TRUE;
@@ -352,13 +380,6 @@ static void update_toolbar_overflow(ShaulaPreviewState *state, int width) {
 
   for (int i = 0; i < state->toolbar_secondary_count; i++)
     gtk_widget_set_visible(state->toolbar_secondary[i], i < visible_count);
-  int visible_utility_count =
-      MAX(0, visible_count - state->toolbar_secondary_count);
-  visible_utility_count =
-      MIN(visible_utility_count, state->toolbar_utility_action_count);
-  for (int i = 0; i < state->toolbar_utility_action_count; i++)
-    gtk_widget_set_visible(state->toolbar_utility_actions[i],
-                           i < visible_utility_count);
 
   rebuild_more_menu(state, visible_count);
   state->toolbar_overflow_visible_count = visible_count;
@@ -401,6 +422,7 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 32, 32);
+  install_stable_hover(button);
   gtk_widget_set_margin_top(menu_box, 6);
   gtk_widget_set_margin_bottom(menu_box, 6);
   gtk_widget_set_margin_start(menu_box, 6);
@@ -425,17 +447,6 @@ static void append_secondary_toolbar_button(ShaulaPreviewState *state,
   state->toolbar_secondary_tools[state->toolbar_secondary_count] =
       secondary_tools[index].tool;
   state->toolbar_secondary_count++;
-}
-
-static void append_utility_toolbar_button(ShaulaPreviewState *state,
-                                          GtkWidget *actions, int index) {
-  GtkWidget *button = make_toolbar_button(
-      state, utility_actions[index].icon_name, utility_actions[index].tooltip,
-      utility_actions[index].callback);
-  gtk_widget_set_visible(button, FALSE);
-  gtk_box_append(GTK_BOX(actions), button);
-  state->toolbar_utility_actions[state->toolbar_utility_action_count] = button;
-  state->toolbar_utility_action_count++;
 }
 
 static GtkWidget *make_muted_label(const char *text) {
@@ -527,8 +538,11 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
 
   for (int i = 0; i < (int)G_N_ELEMENTS(secondary_tools); i++)
     append_secondary_toolbar_button(state, actions, i);
-  for (int i = 0; i < (int)G_N_ELEMENTS(utility_actions); i++)
-    append_utility_toolbar_button(state, actions, i);
+
+  gtk_box_append(GTK_BOX(actions),
+                 make_tool_toggle(state, "shaula-eraser-symbolic",
+                                  "Eraser (0, E)", "0",
+                                  SHAULA_TOOL_ERASER));
 
   gtk_box_append(GTK_BOX(actions), make_more_button(state));
 

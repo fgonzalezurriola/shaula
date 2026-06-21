@@ -141,5 +141,8 @@ ShaulaAnnotation *shaula_annotations_hit_test(GPtrArray *annotations,
                                               double tolerance);
 gboolean shaula_annotation_intersects_selection_rect(
     const ShaulaAnnotation *annotation, ShaulaRect rect);
+gboolean shaula_annotation_intersects_eraser_segment(
+    const ShaulaAnnotation *annotation, ShaulaPoint start, ShaulaPoint end,
+    double radius);
 
 #endif

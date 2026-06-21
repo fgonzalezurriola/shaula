@@ -10,6 +10,11 @@
 #include "preview_spotlight.h"
 #include "preview_toolbar.h"
 
+#define SHAULA_ERASER_RADIUS_SCREEN_PX 14.0
+#define SHAULA_ERASER_PENDING_OPACITY 0.35
+#define SHAULA_ERASER_TAIL_RECENT_US 300000
+#define SHAULA_ERASER_TAIL_FADE_US 220000
+
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
   if (state->zoom <= 0.0)
@@ -45,6 +50,8 @@ static const char *cursor_name_for_tool(ShaulaTool tool) {
     return "grab";
   case SHAULA_TOOL_TEXT:
     return "text";
+  case SHAULA_TOOL_ERASER:
+    return "none";
   case SHAULA_TOOL_CROP:
   case SHAULA_TOOL_ARROW:
   case SHAULA_TOOL_LINE:
@@ -74,6 +81,8 @@ static gboolean is_space_key(guint keyval) {
   return keyval == GDK_KEY_space || keyval == GDK_KEY_KP_Space;
 }
 
+static void eraser_start_tail_fade(ShaulaPreviewState *state);
+
 static void restore_space_pan_tool(ShaulaPreviewState *state) {
   if (state == NULL || !state->space_pan_active)
     return;
@@ -96,6 +105,14 @@ static gboolean begin_space_pan_tool(ShaulaPreviewState *state,
   if ((modifiers & (GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK)) != 0)
     return FALSE;
 
+  if (state->active_tool == SHAULA_TOOL_ERASER &&
+      state->operation == SHAULA_OPERATION_ERASE_ANNOTATIONS) {
+    shaula_preview_commit_eraser_pending(state);
+    state->operation = SHAULA_OPERATION_NONE;
+    state->eraser_drag_active = FALSE;
+    eraser_start_tail_fade(state);
+  }
+
   state->previous_tool_before_space_pan = state->active_tool;
   state->space_pan_active = TRUE;
   state->space_pan_restore_pending = FALSE;
@@ -107,6 +124,63 @@ static gboolean begin_space_pan_tool(ShaulaPreviewState *state,
       gtk_widget_set_cursor_from_name(state->area, "grab");
   }
   return TRUE;
+}
+
+static double eraser_radius_image(ShaulaPreviewState *state) {
+  return state != NULL && state->zoom > 0.0
+             ? SHAULA_ERASER_RADIUS_SCREEN_PX / state->zoom
+             : SHAULA_ERASER_RADIUS_SCREEN_PX;
+}
+
+static void eraser_prune_trail(ShaulaPreviewState *state, gint64 now_us) {
+  if (state == NULL || state->eraser_trail == NULL)
+    return;
+  while (state->eraser_trail->len > 0) {
+    ShaulaEraserTrailPoint first =
+        g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, 0);
+    if (now_us - first.time_us <= SHAULA_ERASER_TAIL_RECENT_US)
+      break;
+    g_array_remove_index(state->eraser_trail, 0);
+  }
+}
+
+static void eraser_add_trail_point(ShaulaPreviewState *state, double x,
+                                   double y, gint64 now_us) {
+  if (state == NULL || state->eraser_trail == NULL)
+    return;
+  eraser_prune_trail(state, now_us);
+  ShaulaEraserTrailPoint point = {x, y, now_us};
+  g_array_append_val(state->eraser_trail, point);
+}
+
+static gboolean eraser_tail_fade_tick(gpointer data) {
+  ShaulaPreviewState *state = data;
+  if (state == NULL)
+    return G_SOURCE_REMOVE;
+  gint64 now = g_get_monotonic_time();
+  if (!state->eraser_tail_fading ||
+      now - state->eraser_tail_fade_start_us >= SHAULA_ERASER_TAIL_FADE_US) {
+    state->eraser_tail_fading = FALSE;
+    state->eraser_tail_timeout_id = 0;
+    if (state->eraser_trail != NULL)
+      g_array_set_size(state->eraser_trail, 0);
+    shaula_preview_queue_draw(state);
+    return G_SOURCE_REMOVE;
+  }
+  shaula_preview_queue_draw(state);
+  return G_SOURCE_CONTINUE;
+}
+
+static void eraser_start_tail_fade(ShaulaPreviewState *state) {
+  if (state == NULL || state->eraser_trail == NULL ||
+      state->eraser_trail->len == 0)
+    return;
+  state->eraser_tail_fading = TRUE;
+  state->eraser_tail_fade_start_us = g_get_monotonic_time();
+  eraser_prune_trail(state, state->eraser_tail_fade_start_us);
+  if (state->eraser_tail_timeout_id == 0)
+    state->eraser_tail_timeout_id =
+        g_timeout_add(16, eraser_tail_fade_tick, state);
 }
 
 static gboolean spotlight_debug_enabled(void) {
@@ -297,6 +371,23 @@ static void draw_checker_background(ShaulaPreviewState *state, cairo_t *cr,
   }
 }
 
+static void draw_annotation_preview(ShaulaPreviewState *state, cairo_t *cr,
+                                    ShaulaAnnotation *annotation) {
+  if (annotation == NULL)
+    return;
+
+  gboolean selected = annotation->selected;
+  ShaulaColor color = annotation->color;
+  gboolean pending = shaula_preview_is_annotation_pending_erase(state, annotation);
+  if (pending) {
+    annotation->selected = FALSE;
+    annotation->color.a *= SHAULA_ERASER_PENDING_OPACITY;
+  }
+  shaula_annotation_draw(cr, annotation);
+  annotation->selected = selected;
+  annotation->color = color;
+}
+
 static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   int image_w = shaula_preview_image_width(state);
   int image_h = shaula_preview_image_height(state);
@@ -321,8 +412,10 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
   for (guint i = 0; state->document.annotations != NULL && i < state->document.annotations->len;
-       i++)
-    shaula_annotation_draw(cr, g_ptr_array_index(state->document.annotations, i));
+       i++) {
+    draw_annotation_preview(
+        state, cr, g_ptr_array_index(state->document.annotations, i));
+  }
   cairo_restore(cr);
 
   if (state->is_dark) {
@@ -648,6 +741,7 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
                           state->properties_hud.spotlight_border_color, FALSE);
     break;
   case SHAULA_OPERATION_CROP:
+  case SHAULA_OPERATION_ERASE_ANNOTATIONS:
   case SHAULA_OPERATION_NONE:
   case SHAULA_OPERATION_PAN:
   case SHAULA_OPERATION_MOVE:
@@ -659,6 +753,60 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
   draw_region_selection(cr, state);
   draw_crop_overlay(cr, state);
   cairo_restore(cr);
+}
+
+static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
+  if (state == NULL || state->area == NULL ||
+      (state->active_tool != SHAULA_TOOL_ERASER &&
+       !state->eraser_tail_fading))
+    return;
+
+  GdkRGBA fg;
+  gtk_style_context_get_color(gtk_widget_get_style_context(state->area), &fg);
+  gint64 now = g_get_monotonic_time();
+  double fade = 1.0;
+  if (state->eraser_tail_fading) {
+    fade = 1.0 - (double)(now - state->eraser_tail_fade_start_us) /
+                     (double)SHAULA_ERASER_TAIL_FADE_US;
+    fade = CLAMP(fade, 0.0, 1.0);
+  }
+
+  if (state->eraser_trail != NULL && state->eraser_trail->len > 1) {
+    cairo_save(cr);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+    for (guint i = 1; i < state->eraser_trail->len; i++) {
+      ShaulaEraserTrailPoint a =
+          g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, i - 1);
+      ShaulaEraserTrailPoint b =
+          g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, i);
+      double age =
+          (double)(now - b.time_us) / (double)SHAULA_ERASER_TAIL_RECENT_US;
+      double freshness = 1.0 - CLAMP(age, 0.0, 1.0);
+      double alpha = state->eraser_tail_fading ? freshness * fade : freshness;
+      double width = 3.0 + SHAULA_ERASER_RADIUS_SCREEN_PX * 0.58 * alpha;
+      cairo_set_line_width(cr, width);
+      cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.18 * alpha);
+      cairo_move_to(cr, a.x, a.y);
+      cairo_line_to(cr, b.x, b.y);
+      cairo_stroke(cr);
+    }
+    cairo_restore(cr);
+  }
+
+  if (state->active_tool == SHAULA_TOOL_ERASER && state->eraser_hover_valid) {
+    cairo_save(cr);
+    cairo_set_line_width(cr, 1.5);
+    cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.88);
+    cairo_arc(cr, state->eraser_hover_screen.x, state->eraser_hover_screen.y,
+              SHAULA_ERASER_RADIUS_SCREEN_PX, 0, 2.0 * G_PI);
+    cairo_stroke(cr);
+    cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.10);
+    cairo_arc(cr, state->eraser_hover_screen.x, state->eraser_hover_screen.y,
+              SHAULA_ERASER_RADIUS_SCREEN_PX, 0, 2.0 * G_PI);
+    cairo_fill(cr);
+    cairo_restore(cr);
+  }
 }
 
 static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
@@ -673,6 +821,7 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
     return;
   draw_image_frame(state, cr);
   draw_drafts(state, cr);
+  draw_eraser_overlay(state, cr);
 }
 
 static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
@@ -895,6 +1044,37 @@ static void move_selected_annotations(ShaulaPreviewState *state, double dx,
     if (annotation != NULL && annotation->selected)
       shaula_annotation_move(annotation, dx, dy);
   }
+}
+
+static gboolean eraser_mark_segment(ShaulaPreviewState *state,
+                                    ShaulaPoint start, ShaulaPoint end) {
+  if (state == NULL || state->document.annotations == NULL ||
+      state->eraser_pending_annotation_ids == NULL)
+    return FALSE;
+
+  guint previous_pending_count = state->eraser_pending_annotation_ids->len;
+  ShaulaPoint image_start =
+      shaula_preview_canvas_screen_to_image(state, start.x, start.y);
+  ShaulaPoint image_end =
+      shaula_preview_canvas_screen_to_image(state, end.x, end.y);
+  double radius = eraser_radius_image(state);
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, i);
+    if (annotation == NULL ||
+        shaula_preview_is_annotation_pending_erase(state, annotation))
+      continue;
+    if (shaula_annotation_intersects_eraser_segment(annotation, image_start,
+                                                   image_end, radius)) {
+      int id = annotation->id;
+      g_array_append_val(state->eraser_pending_annotation_ids, id);
+    }
+  }
+  if (state->eraser_pending_annotation_ids->len > previous_pending_count) {
+    state->operation_changed = TRUE;
+    return TRUE;
+  }
+  return FALSE;
 }
 
 static const char *
@@ -1150,6 +1330,30 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     }
     break;
   }
+  case SHAULA_TOOL_ERASER: {
+    shaula_preview_clear_selection(state);
+    shaula_preview_clear_region_selection(state);
+    shaula_preview_clear_eraser_pending(state);
+    if (state->eraser_tail_timeout_id != 0) {
+      g_source_remove(state->eraser_tail_timeout_id);
+      state->eraser_tail_timeout_id = 0;
+    }
+    if (state->eraser_trail != NULL)
+      g_array_set_size(state->eraser_trail, 0);
+    state->eraser_tail_fading = FALSE;
+    state->eraser_drag_active = TRUE;
+    state->eraser_hover_valid = TRUE;
+    state->eraser_hover_screen = (ShaulaPoint){x, y};
+    state->eraser_last_screen = state->eraser_hover_screen;
+    start_operation(state, SHAULA_OPERATION_ERASE_ANNOTATIONS,
+                    shaula_preview_canvas_screen_to_image(state, x, y));
+    gint64 now = g_get_monotonic_time();
+    eraser_add_trail_point(state, x, y, now);
+    eraser_mark_segment(state, state->eraser_last_screen,
+                        state->eraser_last_screen);
+    gtk_widget_set_cursor_from_name(state->area, "none");
+    break;
+  }
   case SHAULA_TOOL_CROP:
     start_operation(state, SHAULA_OPERATION_CROP, clamped);
     break;
@@ -1230,6 +1434,15 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
       state, shaula_preview_canvas_screen_to_image(state, x, y));
 
   switch (state->operation) {
+  case SHAULA_OPERATION_ERASE_ANNOTATIONS: {
+    ShaulaPoint screen_point = {x, y};
+    state->eraser_hover_valid = TRUE;
+    state->eraser_hover_screen = screen_point;
+    eraser_add_trail_point(state, x, y, g_get_monotonic_time());
+    eraser_mark_segment(state, state->eraser_last_screen, screen_point);
+    state->eraser_last_screen = screen_point;
+    break;
+  }
   case SHAULA_OPERATION_PAN:
     (void)gesture;
     state->fit_mode = FALSE;
@@ -1340,6 +1553,20 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
   if (state->operation == SHAULA_OPERATION_NONE)
     update_hover_color(state, x, y);
 
+  if (state->active_tool == SHAULA_TOOL_ERASER &&
+      state->operation == SHAULA_OPERATION_NONE && state->document.image != NULL) {
+    gboolean changed = !state->eraser_hover_valid ||
+                       fabs(state->eraser_hover_screen.x - x) > 0.25 ||
+                       fabs(state->eraser_hover_screen.y - y) > 0.25;
+    state->eraser_hover_valid = TRUE;
+    state->eraser_hover_screen = (ShaulaPoint){x, y};
+    if (state->area != NULL)
+      gtk_widget_set_cursor_from_name(state->area, "none");
+    if (changed)
+      shaula_preview_queue_draw(state);
+    return;
+  }
+
   if (state->active_tool == SHAULA_TOOL_SELECT &&
       state->operation == SHAULA_OPERATION_NONE && state->area != NULL &&
       state->document.image != NULL) {
@@ -1400,6 +1627,10 @@ static void on_motion_leave(GtkEventControllerMotion *controller,
     state->measure_outer_bounds = FALSE;
     shaula_preview_queue_draw(state);
   }
+  if (state->eraser_hover_valid) {
+    state->eraser_hover_valid = FALSE;
+    shaula_preview_queue_draw(state);
+  }
 }
 
 static void finish_shape_annotation(ShaulaPreviewState *state) {
@@ -1453,6 +1684,7 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     }
     break;
   case SHAULA_OPERATION_CROP:
+  case SHAULA_OPERATION_ERASE_ANNOTATIONS:
   case SHAULA_OPERATION_MOVE:
   case SHAULA_OPERATION_BEND_ARROW:
   case SHAULA_OPERATION_RESIZE_ANNOTATION:
@@ -1505,7 +1737,13 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
      */
     on_drag_update(gesture, dx, dy, data);
   }
-  if (state->operation == SHAULA_OPERATION_PAN ||
+  if (state->operation == SHAULA_OPERATION_ERASE_ANNOTATIONS) {
+    shaula_preview_commit_eraser_pending(state);
+    state->operation = SHAULA_OPERATION_NONE;
+    state->eraser_drag_active = FALSE;
+    eraser_start_tail_fade(state);
+    gtk_widget_set_cursor_from_name(state->area, "none");
+  } else if (state->operation == SHAULA_OPERATION_PAN ||
       state->operation == SHAULA_OPERATION_MOVE ||
       state->operation == SHAULA_OPERATION_BEND_ARROW ||
       state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION ||
@@ -1582,6 +1820,15 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   if (is_space_key(keyval))
     return begin_space_pan_tool(state, modifiers);
   if (keyval == GDK_KEY_Escape) {
+    if (state->active_tool == SHAULA_TOOL_ERASER) {
+      shaula_preview_cancel_eraser_gesture(state);
+      state->active_tool = SHAULA_TOOL_SELECT;
+      state->eraser_hover_valid = FALSE;
+      shaula_preview_toolbar_update_tool_state(state);
+      if (state->area != NULL)
+        gtk_widget_set_cursor_from_name(state->area, "default");
+      return TRUE;
+    }
     if (state->operation != SHAULA_OPERATION_NONE || state->has_crop_draft) {
       shaula_preview_cancel_operation(state);
       return TRUE;

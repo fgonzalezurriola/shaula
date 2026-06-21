@@ -192,6 +192,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->fit_mode = TRUE;
   state->active_tool = SHAULA_TOOL_SELECT;
   state->previous_tool_before_space_pan = SHAULA_TOOL_SELECT;
+  state->previous_tool_before_eraser = SHAULA_TOOL_SELECT;
   state->operation = SHAULA_OPERATION_NONE;
   state->last_action = "close";
   state->is_dark = TRUE;
@@ -201,6 +202,8 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   shaula_color_to_hex(state->hover_color, state->hover_hex);
   shaula_properties_hud_state_init(&state->properties_hud);
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
+  state->eraser_pending_annotation_ids = g_array_new(FALSE, FALSE, sizeof(int));
+  state->eraser_trail = g_array_new(FALSE, FALSE, sizeof(ShaulaEraserTrailPoint));
   state->selected_annotation_ids = g_array_new(FALSE, FALSE, sizeof(int));
   state->measure_tolerance = 32;
   state->toolbar_overflow_visible_count = -1;
@@ -209,8 +212,14 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
 void shaula_preview_state_free(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  if (state->eraser_tail_timeout_id != 0)
+    g_source_remove(state->eraser_tail_timeout_id);
   if (state->draft_pen_points != NULL)
     g_array_unref(state->draft_pen_points);
+  if (state->eraser_pending_annotation_ids != NULL)
+    g_array_unref(state->eraser_pending_annotation_ids);
+  if (state->eraser_trail != NULL)
+    g_array_unref(state->eraser_trail);
   if (state->selected_annotation_ids != NULL)
     g_array_unref(state->selected_annotation_ids);
   for (int i = 0; i < state->icon_root_count; i++)
@@ -822,6 +831,66 @@ void shaula_preview_delete_selected(ShaulaPreviewState *state) {
   shaula_preview_toolbar_update_selection_state(state);
 }
 
+static gboolean pending_erase_ids_contain(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->eraser_pending_annotation_ids == NULL || id <= 0)
+    return FALSE;
+  for (guint i = 0; i < state->eraser_pending_annotation_ids->len; i++) {
+    if (g_array_index(state->eraser_pending_annotation_ids, int, i) == id)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+gboolean shaula_preview_is_annotation_pending_erase(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation) {
+  return annotation != NULL && pending_erase_ids_contain(state, annotation->id);
+}
+
+void shaula_preview_clear_eraser_pending(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return;
+  if (state->eraser_pending_annotation_ids != NULL)
+    g_array_set_size(state->eraser_pending_annotation_ids, 0);
+}
+
+void shaula_preview_cancel_eraser_gesture(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return;
+  shaula_preview_clear_eraser_pending(state);
+  state->eraser_drag_active = FALSE;
+  state->eraser_tail_fading = FALSE;
+  if (state->eraser_tail_timeout_id != 0) {
+    g_source_remove(state->eraser_tail_timeout_id);
+    state->eraser_tail_timeout_id = 0;
+  }
+  state->operation = SHAULA_OPERATION_NONE;
+  if (state->eraser_trail != NULL)
+    g_array_set_size(state->eraser_trail, 0);
+  shaula_preview_queue_draw(state);
+}
+
+gboolean shaula_preview_commit_eraser_pending(ShaulaPreviewState *state) {
+  if (state == NULL || state->document.annotations == NULL ||
+      state->eraser_pending_annotation_ids == NULL ||
+      state->eraser_pending_annotation_ids->len == 0)
+    return FALSE;
+
+  shaula_preview_push_undo(state);
+  for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, (guint)i);
+    if (shaula_preview_is_annotation_pending_erase(state, annotation))
+      shaula_preview_document_remove_annotation_at(&state->document, (guint)i);
+  }
+  shaula_preview_clear_eraser_pending(state);
+  g_array_set_size(state->selected_annotation_ids, 0);
+  sync_selection_from_ids(state);
+  shaula_preview_toolbar_update_history_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+  return TRUE;
+}
+
 void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
   if (state == NULL || state->document.annotations == NULL ||
       state->document.annotations->len == 0)
@@ -836,6 +905,7 @@ void shaula_preview_reset_annotations(ShaulaPreviewState *state) {
   shaula_preview_push_undo(state);
   state->selected_annotation = NULL;
   g_array_set_size(state->selected_annotation_ids, 0);
+  shaula_preview_clear_eraser_pending(state);
   shaula_preview_document_clear_annotations(&state->document);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_history_state(state);
@@ -910,6 +980,7 @@ static void restore_snapshot(ShaulaPreviewState *state,
   state->has_crop_draft = FALSE;
   state->has_region_selection = FALSE;
   state->operation = SHAULA_OPERATION_NONE;
+  shaula_preview_cancel_eraser_gesture(state);
   shaula_properties_hud_set_panel(&state->properties_hud,
                                   SHAULA_PROPERTIES_PANEL_NONE);
   if (state->text_entry != NULL) {
@@ -964,6 +1035,8 @@ gboolean shaula_preview_redo(ShaulaPreviewState *state) {
 void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  if (state->operation == SHAULA_OPERATION_ERASE_ANNOTATIONS)
+    shaula_preview_cancel_eraser_gesture(state);
   state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
   state->drag_hit_annotation = NULL;
