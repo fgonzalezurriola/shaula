@@ -738,6 +738,10 @@ and the working diff.
   capture grabs, but Shaula screenshots/docs need the visual hover to remain
   capturable while the pointer is still over the button. Do not use this to
   pin GTK tooltips; tooltips remain transient GTK popups.
+- Toolbar overflow must not use a permanent frame tick. The initial post-layout
+  measure uses a one-shot tick, then resize updates come from `notify::width`.
+  Continuous toolbar ticks keep `shaula-preview` hot at idle and make CPU usage
+  look like an active animation even when the user is not interacting.
 - `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
   the contextual group and `Ctrl+D`; duplicates the selected annotation set
   through the same multi-object paste path without replacing the internal

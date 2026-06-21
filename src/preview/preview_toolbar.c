@@ -386,10 +386,8 @@ static void update_toolbar_overflow(ShaulaPreviewState *state, int width) {
   debug_preview_init("overflow_visible_count", visible_count);
 }
 
-static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
-                               gpointer data) {
-  (void)clock;
-  ShaulaPreviewState *state = data;
+static void update_toolbar_overflow_from_layout(GtkWidget *widget,
+                                                ShaulaPreviewState *state) {
   int available_width = PREVIEW_TOOLBAR_STABLE_ACTIONS_W;
   if (state->toolbar_actions != NULL && state->toolbar_metadata != NULL) {
     graphene_rect_t toolbar_bounds;
@@ -406,7 +404,20 @@ static gboolean on_topbar_tick(GtkWidget *widget, GdkFrameClock *clock,
   }
   if (available_width >= PREVIEW_TOOLBAR_BASE_VISIBLE_W)
     update_toolbar_overflow(state, available_width);
-  return G_SOURCE_CONTINUE;
+}
+
+static gboolean on_topbar_first_layout_tick(GtkWidget *widget,
+                                            GdkFrameClock *clock,
+                                            gpointer data) {
+  (void)clock;
+  update_toolbar_overflow_from_layout(widget, data);
+  return G_SOURCE_REMOVE;
+}
+
+static void on_topbar_width_changed(GtkWidget *widget, GParamSpec *pspec,
+                                    gpointer data) {
+  (void)pspec;
+  update_toolbar_overflow_from_layout(widget, data);
 }
 
 static GtkWidget *make_more_button(ShaulaPreviewState *state) {
@@ -672,7 +683,9 @@ GtkWidget *shaula_preview_toolbar_build(ShaulaPreviewState *state) {
   gtk_header_bar_pack_end(GTK_HEADER_BAR(bar), right_group);
   update_toolbar_overflow(state, PREVIEW_TOOLBAR_FULL_VISIBLE_W);
   debug_preview_init("toolbar_built", 1);
-  gtk_widget_add_tick_callback(bar, on_topbar_tick, state, NULL);
+  g_signal_connect(bar, "notify::width", G_CALLBACK(on_topbar_width_changed),
+                   state);
+  gtk_widget_add_tick_callback(bar, on_topbar_first_layout_tick, state, NULL);
 
   return bar;
 }
