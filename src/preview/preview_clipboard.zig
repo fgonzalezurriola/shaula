@@ -53,6 +53,7 @@ export fn shaula_clipboard_copy_png_file(path_z: ?[*:0]const u8, err: ?*?*anyopa
     return TRUE;
 }
 
+/// Uses `/bin/sh -c` because GLib argv parsing does not interpret the pipe to `wl-copy`.
 export fn shaula_clipboard_copy_text(text_z: ?[*:0]const u8, err: ?*?*anyopaque) CInt {
     const text = text_z orelse @constCast("");
     const quoted = g_shell_quote(text) orelse return FALSE;

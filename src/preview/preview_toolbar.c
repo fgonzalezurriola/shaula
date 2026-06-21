@@ -768,6 +768,8 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_TEXT;
   gboolean show_measure_properties =
       state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_MEASURE;
+  gboolean show_eraser_properties =
+      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_ERASER;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
@@ -792,6 +794,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->properties_hud.measure_properties_box != NULL)
     gtk_widget_set_visible(state->properties_hud.measure_properties_box,
                            show_measure_properties);
+  if (state->properties_hud.eraser_properties_box != NULL)
+    gtk_widget_set_visible(state->properties_hud.eraser_properties_box,
+                           show_eraser_properties);
   if (state->properties_hud.arrow_color_button != NULL) {
     GdkRGBA arrow_rgba = {state->properties_hud.arrow_color.r,
                           state->properties_hud.arrow_color.g,
@@ -975,6 +980,12 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
            state->properties_hud.measure_stroke_width) > 0.01)
     gtk_range_set_value(GTK_RANGE(state->properties_hud.measure_width_scale),
                         state->properties_hud.measure_stroke_width);
+  if (state->properties_hud.eraser_size_scale != NULL &&
+      fabs(gtk_range_get_value(
+               GTK_RANGE(state->properties_hud.eraser_size_scale)) -
+           state->properties_hud.eraser_size) > 0.01)
+    gtk_range_set_value(GTK_RANGE(state->properties_hud.eraser_size_scale),
+                        state->properties_hud.eraser_size);
   if (state->duplicate_button != NULL) {
     gtk_widget_set_visible(state->duplicate_button, has_single_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);

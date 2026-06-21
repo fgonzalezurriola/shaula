@@ -321,6 +321,10 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
   else if (tool == SHAULA_TOOL_TEXT)
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+  else if (tool == SHAULA_TOOL_ERASER)
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ERASER;
+  else if (state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_ERASER)
+    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
   shaula_preview_toolbar_update_tool_state(state);
   if (state->area != NULL) {
     const char *cursor = "crosshair";
@@ -1054,4 +1058,8 @@ void shaula_preview_on_measure_color_set(GtkColorButton *button,
 
 void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data) {
   shaula_preview_set_measure_stroke_width(data, gtk_range_get_value(range));
+}
+
+void shaula_preview_on_eraser_size_changed(GtkRange *range, gpointer data) {
+  shaula_preview_set_eraser_size(data, gtk_range_get_value(range));
 }

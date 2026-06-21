@@ -1515,6 +1515,18 @@ void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
   shaula_preview_queue_draw(state);
 }
 
+void shaula_preview_set_eraser_size(ShaulaPreviewState *state, double size) {
+  if (state == NULL)
+    return;
+  double next = CLAMP(size, SHAULA_ERASER_SIZE_MIN, SHAULA_ERASER_SIZE_MAX);
+  if (fabs(state->properties_hud.eraser_size - next) <= 0.01)
+    return;
+  state->properties_hud.eraser_size = next;
+  shaula_properties_hud_save_eraser_size(next);
+  shaula_preview_toolbar_update_selection_state(state);
+  shaula_preview_queue_draw(state);
+}
+
 static void begin_property_history_if_targeted(ShaulaPreviewState *state,
                                                gboolean has_target) {
   if (!has_target)

@@ -272,6 +272,7 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
                                        ShaulaRect rect);
 void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
                                          ShaulaPropertiesPanel panel);
+void shaula_preview_set_eraser_size(ShaulaPreviewState *state, double size);
 void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
                                                ShaulaColor color);
 void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,

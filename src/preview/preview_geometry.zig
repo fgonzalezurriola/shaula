@@ -27,6 +27,7 @@ export fn shaula_color_default() ShaulaColor {
     return .{ .r = 0.165, .g = 0.290, .b = 0.400, .a = 1.0 };
 }
 
+/// Writes a null-terminated `#RRGGBB`; callers must provide at least 8 bytes.
 export fn shaula_color_to_hex(color: ShaulaColor, out: [*]u8) void {
     const r = colorChannel(color.r);
     const g = colorChannel(color.g);

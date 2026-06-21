@@ -10,7 +10,6 @@
 #include "preview_spotlight.h"
 #include "preview_toolbar.h"
 
-#define SHAULA_ERASER_RADIUS_SCREEN_PX 14.0
 #define SHAULA_ERASER_PENDING_OPACITY 0.35
 #define SHAULA_ERASER_TAIL_RECENT_US 300000
 #define SHAULA_ERASER_TAIL_FADE_US 220000
@@ -128,9 +127,11 @@ static gboolean begin_space_pan_tool(ShaulaPreviewState *state,
 }
 
 static double eraser_radius_image(ShaulaPreviewState *state) {
+  double radius = state != NULL ? state->properties_hud.eraser_size
+                                : SHAULA_ERASER_SIZE_DEFAULT;
   return state != NULL && state->zoom > 0.0
-             ? SHAULA_ERASER_RADIUS_SCREEN_PX / state->zoom
-             : SHAULA_ERASER_RADIUS_SCREEN_PX;
+             ? radius / state->zoom
+             : radius;
 }
 
 static void eraser_prune_trail(ShaulaPreviewState *state, gint64 now_us) {
@@ -798,11 +799,12 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
   }
 
   if (state->eraser_trail != NULL && state->eraser_trail->len > 1) {
+    double radius = state->properties_hud.eraser_size;
     cairo_save(cr);
     cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
     cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.055 * fade);
-    cairo_set_line_width(cr, SHAULA_ERASER_RADIUS_SCREEN_PX * 0.95);
+    cairo_set_line_width(cr, radius * 0.95);
     ShaulaEraserTrailPoint first =
         g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, 0);
     cairo_move_to(cr, first.x, first.y);
@@ -825,7 +827,7 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
       double alpha = state->eraser_tail_fading ? freshness * fade : freshness;
       if (alpha <= 0.02)
         continue;
-      double width = 2.0 + SHAULA_ERASER_RADIUS_SCREEN_PX * 0.72 * alpha;
+      double width = 2.0 + radius * 0.72 * alpha;
       cairo_set_line_width(cr, width);
       cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.16 * alpha);
       cairo_move_to(cr, a.x, a.y);
@@ -836,15 +838,16 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
   }
 
   if (state->active_tool == SHAULA_TOOL_ERASER && state->eraser_hover_valid) {
+    double radius = state->properties_hud.eraser_size;
     cairo_save(cr);
     cairo_set_line_width(cr, 1.5);
     cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.88);
     cairo_arc(cr, state->eraser_hover_screen.x, state->eraser_hover_screen.y,
-              SHAULA_ERASER_RADIUS_SCREEN_PX, 0, 2.0 * G_PI);
+              radius, 0, 2.0 * G_PI);
     cairo_stroke(cr);
     cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.10);
     cairo_arc(cr, state->eraser_hover_screen.x, state->eraser_hover_screen.y,
-              SHAULA_ERASER_RADIUS_SCREEN_PX, 0, 2.0 * G_PI);
+              radius, 0, 2.0 * G_PI);
     cairo_fill(cr);
     cairo_restore(cr);
   }
@@ -2023,6 +2026,8 @@ GtkWidget *shaula_preview_canvas_build(ShaulaPreviewState *state) {
                           shaula_preview_text_properties_panel_build(state));
   gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
                           shaula_preview_measure_properties_panel_build(state));
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay),
+                          shaula_preview_eraser_properties_panel_build(state));
 
   GtkGesture *drag = gtk_gesture_drag_new();
   gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(drag), 0);

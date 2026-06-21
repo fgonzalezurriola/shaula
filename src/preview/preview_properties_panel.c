@@ -823,3 +823,38 @@ shaula_preview_measure_properties_panel_build(ShaulaPreviewState *state) {
   gtk_widget_set_visible(panel, FALSE);
   return panel;
 }
+
+GtkWidget *
+shaula_preview_eraser_properties_panel_build(ShaulaPreviewState *state) {
+  install_properties_panel_css();
+
+  GtkWidget *panel = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_widget_add_css_class(panel, "shaula-properties-panel");
+  gtk_widget_set_halign(panel, GTK_ALIGN_END);
+  gtk_widget_set_valign(panel, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(panel, 16);
+  gtk_widget_set_margin_end(panel, 16);
+
+  GtkWidget *back =
+      make_panel_button(state, draw_back_icon, "Back",
+                        G_CALLBACK(shaula_preview_on_properties_back_clicked));
+  gtk_box_append(GTK_BOX(panel), back);
+
+  GtkWidget *size = gtk_scale_new_with_range(
+      GTK_ORIENTATION_HORIZONTAL, SHAULA_ERASER_SIZE_MIN,
+      SHAULA_ERASER_SIZE_MAX, SHAULA_ERASER_SIZE_STEP);
+  state->properties_hud.eraser_size_scale = size;
+  gtk_range_set_value(GTK_RANGE(size), state->properties_hud.eraser_size);
+  gtk_widget_set_tooltip_text(size, "Eraser size");
+  gtk_widget_set_size_request(size, 140, -1);
+  gtk_scale_set_draw_value(GTK_SCALE(size), TRUE);
+  gtk_scale_set_digits(GTK_SCALE(size), 0);
+  gtk_widget_set_valign(size, GTK_ALIGN_CENTER);
+  g_signal_connect(size, "value-changed",
+                   G_CALLBACK(shaula_preview_on_eraser_size_changed), state);
+  gtk_box_append(GTK_BOX(panel), size);
+
+  state->properties_hud.eraser_properties_box = panel;
+  gtk_widget_set_visible(panel, FALSE);
+  return panel;
+}

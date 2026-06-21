@@ -8,6 +8,11 @@
 
 typedef struct _GtkWidget GtkWidget;
 
+#define SHAULA_ERASER_SIZE_MIN 8.0
+#define SHAULA_ERASER_SIZE_MAX 48.0
+#define SHAULA_ERASER_SIZE_DEFAULT 14.0
+#define SHAULA_ERASER_SIZE_STEP 2.0
+
 typedef enum {
   SHAULA_PROPERTIES_PANEL_NONE,
   SHAULA_PROPERTIES_PANEL_SPOTLIGHT,
@@ -15,7 +20,7 @@ typedef enum {
   SHAULA_PROPERTIES_PANEL_RECTANGLE,
   SHAULA_PROPERTIES_PANEL_HIGHLIGHT,
   SHAULA_PROPERTIES_PANEL_BLUR,
-  SHAULA_PROPERTIES_PANEL_ERASE,
+  SHAULA_PROPERTIES_PANEL_ERASER,
   SHAULA_PROPERTIES_PANEL_PEN,
   SHAULA_PROPERTIES_PANEL_TEXT,
   SHAULA_PROPERTIES_PANEL_MEASURE
@@ -57,6 +62,7 @@ typedef struct {
   ShaulaTextFontMode text_font_mode;
   ShaulaColor measure_color;
   double measure_stroke_width;
+  double eraser_size;
 
   GtkWidget *properties_box;
   GtkWidget *spotlight_color_button;
@@ -89,10 +95,13 @@ typedef struct {
   GtkWidget *measure_properties_box;
   GtkWidget *measure_color_button;
   GtkWidget *measure_width_scale;
+  GtkWidget *eraser_properties_box;
+  GtkWidget *eraser_size_scale;
 } ShaulaPropertiesHudState;
 
 void shaula_properties_hud_state_init(ShaulaPropertiesHudState *hud);
 gboolean shaula_properties_hud_set_panel(ShaulaPropertiesHudState *hud,
                                          ShaulaPropertiesPanel panel);
+void shaula_properties_hud_save_eraser_size(double size);
 
 #endif
