@@ -788,7 +788,11 @@ and the working diff.
   should erase against the swept capsule between the previous and current
   pointer positions, using the same 14 px screen radius. The visual tail shows
   only the recent path, roughly the last 300 ms, and uses the theme foreground
-  color with alpha rather than a tool-specific color.
+  color with alpha rather than a tool-specific color. The visual tail is
+  intentionally decoupled from hit-testing: input points are interpolated every
+  few screen pixels, then rendered as a soft continuous base path plus a thinner
+  tapered hot path so screenshots read as an eraser trail rather than mouse
+  event samples.
   Pending erase annotations render at 35% opacity until the eraser gesture commits.
   Pending erase annotations are not selectable and must not render selection
   outlines or resize/adjust handles. Once an annotation is pending erase, later

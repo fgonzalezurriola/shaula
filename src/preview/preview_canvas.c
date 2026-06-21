@@ -14,6 +14,7 @@
 #define SHAULA_ERASER_PENDING_OPACITY 0.35
 #define SHAULA_ERASER_TAIL_RECENT_US 300000
 #define SHAULA_ERASER_TAIL_FADE_US 220000
+#define SHAULA_ERASER_TAIL_SAMPLE_PX 5.0
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -144,13 +145,38 @@ static void eraser_prune_trail(ShaulaPreviewState *state, gint64 now_us) {
   }
 }
 
+static void eraser_append_trail_point(ShaulaPreviewState *state, double x,
+                                      double y, gint64 time_us) {
+  ShaulaEraserTrailPoint point = {x, y, time_us};
+  g_array_append_val(state->eraser_trail, point);
+}
+
 static void eraser_add_trail_point(ShaulaPreviewState *state, double x,
                                    double y, gint64 now_us) {
   if (state == NULL || state->eraser_trail == NULL)
     return;
   eraser_prune_trail(state, now_us);
-  ShaulaEraserTrailPoint point = {x, y, now_us};
-  g_array_append_val(state->eraser_trail, point);
+  if (state->eraser_trail->len == 0) {
+    eraser_append_trail_point(state, x, y, now_us);
+    return;
+  }
+
+  ShaulaEraserTrailPoint previous = g_array_index(
+      state->eraser_trail, ShaulaEraserTrailPoint, state->eraser_trail->len - 1);
+  double dx = x - previous.x;
+  double dy = y - previous.y;
+  double distance = hypot(dx, dy);
+  if (distance < 0.25)
+    return;
+
+  int steps = MAX(1, (int)ceil(distance / SHAULA_ERASER_TAIL_SAMPLE_PX));
+  for (int i = 1; i <= steps; i++) {
+    double t = (double)i / (double)steps;
+    gint64 time =
+        previous.time_us + (gint64)((double)(now_us - previous.time_us) * t);
+    eraser_append_trail_point(state, previous.x + dx * t, previous.y + dy * t,
+                              time);
+  }
 }
 
 static gboolean eraser_tail_fade_tick(gpointer data) {
@@ -773,8 +799,21 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
 
   if (state->eraser_trail != NULL && state->eraser_trail->len > 1) {
     cairo_save(cr);
-    cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+    cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.055 * fade);
+    cairo_set_line_width(cr, SHAULA_ERASER_RADIUS_SCREEN_PX * 0.95);
+    ShaulaEraserTrailPoint first =
+        g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, 0);
+    cairo_move_to(cr, first.x, first.y);
+    for (guint i = 1; i < state->eraser_trail->len; i++) {
+      ShaulaEraserTrailPoint point =
+          g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, i);
+      cairo_line_to(cr, point.x, point.y);
+    }
+    cairo_stroke(cr);
+
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
     for (guint i = 1; i < state->eraser_trail->len; i++) {
       ShaulaEraserTrailPoint a =
           g_array_index(state->eraser_trail, ShaulaEraserTrailPoint, i - 1);
@@ -784,9 +823,11 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
           (double)(now - b.time_us) / (double)SHAULA_ERASER_TAIL_RECENT_US;
       double freshness = 1.0 - CLAMP(age, 0.0, 1.0);
       double alpha = state->eraser_tail_fading ? freshness * fade : freshness;
-      double width = 3.0 + SHAULA_ERASER_RADIUS_SCREEN_PX * 0.58 * alpha;
+      if (alpha <= 0.02)
+        continue;
+      double width = 2.0 + SHAULA_ERASER_RADIUS_SCREEN_PX * 0.72 * alpha;
       cairo_set_line_width(cr, width);
-      cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.18 * alpha);
+      cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.16 * alpha);
       cairo_move_to(cr, a.x, a.y);
       cairo_line_to(cr, b.x, b.y);
       cairo_stroke(cr);
