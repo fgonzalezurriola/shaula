@@ -14,6 +14,7 @@
 #define SHAULA_ERASER_TAIL_RECENT_US 300000
 #define SHAULA_ERASER_TAIL_FADE_US 220000
 #define SHAULA_ERASER_TAIL_SAMPLE_PX 5.0
+#define SHAULA_SELECTION_EDGE_TARGET_PX 8.0
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -400,7 +401,7 @@ static void draw_checker_background(ShaulaPreviewState *state, cairo_t *cr,
 
 static void draw_annotation_preview(ShaulaPreviewState *state, cairo_t *cr,
                                     ShaulaAnnotation *annotation,
-                                    gboolean show_edit_handles) {
+                                    ShaulaAnnotationPreviewFlags flags) {
   if (annotation == NULL)
     return;
 
@@ -411,7 +412,7 @@ static void draw_annotation_preview(ShaulaPreviewState *state, cairo_t *cr,
     annotation->selected = FALSE;
     annotation->color.a *= SHAULA_ERASER_PENDING_OPACITY;
   }
-  shaula_annotation_draw_preview(cr, annotation, show_edit_handles);
+  shaula_annotation_draw_preview(cr, annotation, flags);
   annotation->selected = selected;
   annotation->color = color;
 }
@@ -439,13 +440,24 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_rectangle(cr, 0, 0, image_w, image_h);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  gboolean show_edit_handles = shaula_preview_selected_count(state) == 1;
+  guint selected_count = shaula_preview_selected_count(state);
+  ShaulaAnnotationPreviewFlags preview_flags =
+      selected_count == 1
+          ? SHAULA_ANNOTATION_PREVIEW_SELECTION |
+                SHAULA_ANNOTATION_PREVIEW_HANDLES
+          : SHAULA_ANNOTATION_PREVIEW_NONE;
   for (guint i = 0; state->document.annotations != NULL &&
                       i < state->document.annotations->len;
        i++) {
     draw_annotation_preview(
         state, cr, g_ptr_array_index(state->document.annotations, i),
-        show_edit_handles);
+        preview_flags);
+  }
+  if (selected_count > 1) {
+    ShaulaRect group_bounds;
+    if (shaula_annotations_selected_bounds(state->document.annotations,
+                                           &group_bounds))
+      shaula_annotation_draw_selection_box(cr, group_bounds);
   }
   cairo_restore(cr);
 
@@ -1097,6 +1109,52 @@ selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
   return SHAULA_RESIZE_HANDLE_NONE;
 }
 
+/* Selection chrome is a move target only near its four visible edges. Keep
+ * this shared between press and hover so cursor feedback matches drag routing.
+ */
+static gboolean
+selected_selection_box_edge_at(ShaulaPreviewState *state,
+                               ShaulaPoint image_point) {
+  if (state == NULL || state->zoom <= 0.0)
+    return FALSE;
+
+  guint selected_count = shaula_preview_selected_count(state);
+  ShaulaRect frame;
+  if (selected_count > 1) {
+    if (!shaula_annotations_selected_bounds(state->document.annotations,
+                                            &frame))
+      return FALSE;
+    frame = shaula_rect_expanded(frame, 2.0);
+  } else if (selected_count == 1 && state->selected_annotation != NULL) {
+    ShaulaAnnotation *annotation = state->selected_annotation;
+    if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+      double pad = MAX(3.0 / state->zoom, 1.0);
+      frame = shaula_rect_expanded(annotation->data.rectangle.rect, pad);
+    } else {
+      frame = shaula_rect_expanded(annotation->bounds, 2.0);
+    }
+  } else {
+    return FALSE;
+  }
+
+  frame = shaula_rect_normalized(frame);
+  ShaulaPoint top_left = {frame.x, frame.y};
+  ShaulaPoint top_right = {frame.x + frame.width, frame.y};
+  ShaulaPoint bottom_right = {frame.x + frame.width,
+                              frame.y + frame.height};
+  ShaulaPoint bottom_left = {frame.x, frame.y + frame.height};
+  double tolerance = SHAULA_SELECTION_EDGE_TARGET_PX / state->zoom;
+  double distance =
+      shaula_point_distance_to_segment(image_point, top_left, top_right);
+  distance = MIN(distance, shaula_point_distance_to_segment(
+                               image_point, top_right, bottom_right));
+  distance = MIN(distance, shaula_point_distance_to_segment(
+                               image_point, bottom_right, bottom_left));
+  distance = MIN(distance, shaula_point_distance_to_segment(
+                               image_point, bottom_left, top_left));
+  return distance <= tolerance;
+}
+
 static void move_selected_annotations(ShaulaPreviewState *state, double dx,
                                       double dy) {
   if (state == NULL || state->document.annotations == NULL)
@@ -1329,13 +1387,25 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
         inside ? selected_resize_handle_at(state, image_point,
                                            MAX(8.0, 16.0 / state->zoom))
                : SHAULA_RESIZE_HANDLE_NONE;
+    gboolean selection_edge_hit =
+        resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&
+        selected_selection_box_edge_at(state, image_point);
     if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
       hit_result = (ShaulaAnnotationHit){state->selected_annotation,
                                          SHAULA_ANNOTATION_HIT_HANDLE};
-    } else if (inside) {
+    } else if (inside && (!selection_edge_hit || shift)) {
       hit_result = shaula_annotations_hit_test_ranked(
           state->document.annotations, image_point, hit_tolerance);
     }
+    if (selection_edge_hit && !shift) {
+      shaula_preview_clear_region_selection(state);
+      shaula_preview_begin_history_gesture(state);
+      start_operation(state, SHAULA_OPERATION_MOVE, image_point);
+      gtk_widget_set_cursor_from_name(state->area, "grabbing");
+      break;
+    }
+    if (selection_edge_hit && hit_result.annotation == NULL)
+      break;
     ShaulaAnnotation *hit = hit_result.annotation;
     if (hit != NULL) {
       gboolean hit_was_selected =
@@ -1641,17 +1711,21 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
         inside ? selected_resize_handle_at(state, image_point,
                                            MAX(8.0, 16.0 / state->zoom))
                : SHAULA_RESIZE_HANDLE_NONE;
+    gboolean selection_edge_hit =
+        resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&
+        selected_selection_box_edge_at(state, image_point);
     if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
       hit = (ShaulaAnnotationHit){state->selected_annotation,
                                   SHAULA_ANNOTATION_HIT_HANDLE};
-    } else if (inside) {
-      hit = shaula_annotations_hit_test_ranked(state->document.annotations, image_point,
-                                               MAX(4.0, 8.0 / state->zoom));
+    } else if (!selection_edge_hit && inside) {
+      hit = shaula_annotations_hit_test_ranked(
+          state->document.annotations, image_point,
+          MAX(4.0, 8.0 / state->zoom));
     }
     gtk_widget_set_cursor_from_name(
         state->area, resize_handle != SHAULA_RESIZE_HANDLE_NONE
                          ? cursor_for_resize_handle(resize_handle)
-                     : hit.annotation != NULL
+                     : selection_edge_hit || hit.annotation != NULL
                          ? "grab"
                          : cursor_name_for_tool(state->active_tool));
   }

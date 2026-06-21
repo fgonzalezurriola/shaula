@@ -37,7 +37,7 @@ Save As is available from the responsive utility/More menu and through `Ctrl+Shi
 `shaula-select-symbolic` supports:
 
 - clicking an annotation to select it;
-- dragging a selected annotation to move it;
+- dragging visible selected annotation geometry or a selection-box edge to move it;
 - dragging empty image space to create a temporary rectangular region;
 - clearing selection by clicking or dragging outside the image;
 - middle-button canvas panning.
@@ -46,7 +46,9 @@ Selected annotation actions appear only while Select is active and an annotation
 
 Temporary region selections are not annotations, are not exported, and do not enter undo history by themselves. They expose contextual Crop, Blur, pixel Erase, and Spotlight actions.
 
-Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch deletion, and moving the selected set as one undoable gesture. A successful marquee clears its temporary region rectangle after selecting objects. A drag with no annotation matches remains a contextual region. Multi-selection keeps selection chrome but hides single-object resize and bend handles.
+Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch duplication, batch deletion, and moving the selected set as one undoable gesture. A successful marquee clears its temporary region rectangle after selecting objects. A drag with no annotation matches remains a contextual region. Multi-selection suppresses all per-object selection boxes and handles, then draws one group bounding box around the selected set.
+
+Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rectangle, and the multi-selection group box. Only the four border segments are move targets; empty box interiors remain transparent to hit testing so visible objects behind them can still be selected. Edge tolerance is 8 screen pixels converted through the current zoom. Input priority is resize/curvature handles, selection-box edges, visible annotation geometry, then empty-space marquee. Edge drags preserve the current single or grouped selection, use `grab`/`grabbing` cursors, and commit movement as one history gesture. A press and release without movement does not collapse or otherwise change the selection.
 
 ## Crop
 
@@ -95,7 +97,7 @@ The Spotlight icon is the filter-style glyph. Do not reuse it for Highlight.
 
 ## Annotation Duplicate and Clipboard
 
-`shaula-duplicate-symbolic` and `Ctrl+D` duplicate the selected annotation set through the multi-object paste path without replacing the preview-local clipboard. New IDs are assigned, only the duplicate set is selected, and the operation creates one undo entry.
+The selection HUD uses the copy glyph (`shaula-copy-symbolic`) for its Duplicate action. The button and `Ctrl+D` duplicate the selected annotation set through the multi-object paste path without replacing the preview-local clipboard. New IDs are assigned, only the duplicate set is selected, and the operation creates one undo entry.
 
 The annotation clipboard is scoped to the current preview window:
 
@@ -250,7 +252,7 @@ Selected Rectangles draw external selection chrome from actual Rectangle geometr
 
 `shaula-pen-symbolic` opens a floating HUD for color, stroke width, and opacity. Defaults use the shared strong orange.
 
-Pen hit testing uses path distance instead of bounds. Selected paths show one per-object bounding box in both single and multi-selection, with no endpoint handles or redraw pass. Bounds come from point min/max extents, so translating a path preserves box size.
+Pen hit testing uses path distance instead of bounds. A singly selected path shows one per-object bounding box with no endpoint handles or redraw pass. In multi-selection, the path contributes its bounds to the single group box instead. Bounds come from point min/max extents, so translating a path preserves box size.
 
 Future Pen styles belong in this HUD rather than the primary toolbar.
 
@@ -258,7 +260,7 @@ Future Pen styles belong in this HUD rather than the primary toolbar.
 
 `shaula-highlight-symbolic` is separate from Pen and uses the highlighter icon, not the Spotlight icon.
 
-Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. Selected Highlights show one per-object bounding box in both single and multi-selection, with no endpoint handles and no redraw pass that alters the visible color. Freehand bounds come from point min/max extents, so translating a path preserves box size. It keeps its own semantics rather than inheriting future Pen brush styles.
+Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. A singly selected Highlight shows one per-object bounding box with no endpoint handles and no redraw pass that alters the visible color. In multi-selection, it contributes its bounds to the single group box instead. Freehand bounds come from point min/max extents, so translating a path preserves box size. It keeps its own semantics rather than inheriting future Pen brush styles.
 
 ## Measure
 

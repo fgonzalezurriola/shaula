@@ -27,7 +27,10 @@ changed runtime behavior.
 - `scripts/qa/assert-exit-code-mapping.sh`
 
 This lane is intentionally small. It validates deterministic CLI contracts and
-negative preflight behavior without relying on a real compositor session.
+negative preflight behavior without relying on a real compositor session. Niri
+on CachyOS is the primary development environment. Negative compositor checks
+use the explicit `x11` token; Sway is supported wlroots coverage through `grim`
+and is not a valid unsupported-compositor fixture.
 
 ## Targeted Maintained Checks
 

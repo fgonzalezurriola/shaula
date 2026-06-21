@@ -97,6 +97,12 @@ typedef struct {
   ShaulaAnnotationHitKind kind;
 } ShaulaAnnotationHit;
 
+typedef enum {
+  SHAULA_ANNOTATION_PREVIEW_NONE = 0,
+  SHAULA_ANNOTATION_PREVIEW_SELECTION = 1 << 0,
+  SHAULA_ANNOTATION_PREVIEW_HANDLES = 1 << 1,
+} ShaulaAnnotationPreviewFlags;
+
 ShaulaAnnotation *shaula_annotation_new_arrow(ShaulaPoint start,
                                               ShaulaPoint end,
                                               ShaulaColor color,
@@ -126,10 +132,12 @@ GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
-/* Preview selection chrome hides resize/bend handles for multi-selection. */
 void shaula_annotation_draw_preview(cairo_t *cr,
                                     const ShaulaAnnotation *annotation,
-                                    gboolean show_edit_handles);
+                                    ShaulaAnnotationPreviewFlags flags);
+void shaula_annotation_draw_selection_box(cairo_t *cr, ShaulaRect bounds);
+gboolean shaula_annotations_selected_bounds(GPtrArray *annotations,
+                                             ShaulaRect *bounds_out);
 /* Central text font contract used by preview labels, bounds, draw, copy, and
  * export so font-mode output cannot diverge across render paths.
  */

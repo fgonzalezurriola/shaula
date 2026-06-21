@@ -242,6 +242,8 @@ static GtkWidget *make_selection_action_button(ShaulaPreviewState *state,
   gtk_button_set_child(GTK_BUTTON(button),
                        shaula_preview_make_toolbar_icon(state, icon_name));
   gtk_widget_set_tooltip_text(button, tooltip);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL, tooltip, -1);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(button, 28, 28);
@@ -307,8 +309,7 @@ shaula_preview_select_properties_panel_build(ShaulaPreviewState *state) {
   gtk_widget_set_margin_end(panel, 16);
 
   state->duplicate_button = make_selection_action_button(
-      state, "shaula-duplicate-symbolic",
-      "Duplicate selected annotation (Ctrl+D)",
+      state, "shaula-copy-symbolic", "Duplicate selected annotation (Ctrl+D)",
       G_CALLBACK(shaula_preview_on_duplicate_clicked));
   state->crop_selected_button = make_selection_action_button(
       state, "shaula-crop-symbolic", "Crop to selected annotation",

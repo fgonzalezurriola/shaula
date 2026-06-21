@@ -312,9 +312,9 @@ test "injected unknown failure maps deterministically" {
     }
 }
 
-test "non-niri compositor rejects capture without fallback success" {
+test "unsupported compositor rejects capture without fallback success" {
     var test_environ = try initTestEnviron(std.testing.allocator, &.{
-        .{ .key = "SHAULA_COMPOSITOR", .value = "sway" },
+        .{ .key = "SHAULA_COMPOSITOR", .value = "x11" },
     });
     defer test_environ.deinit(std.testing.allocator);
 

@@ -132,7 +132,7 @@ run_subcheck "e2e.capture.window" "WIN_PATH=/tmp/shaula/task17-e2e-window.png; r
 
 run_subcheck "e2e.clipboard.path" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; CLIP_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${CLIP_JSON}\" | jq -e '.ok==true and .saved.ok==true and (.clipboard.ok|type==\"boolean\")' >/dev/null"
 
-run_subcheck "e2e.failure.unsupported_compositor" "set +e; UNSUPPORTED_JSON=\$(SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json 2>&1); UNSUPPORTED_RC=\$?; set -e; [[ \${UNSUPPORTED_RC} -ne 0 ]] && printf '%s\\n' \"\${UNSUPPORTED_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_UNSUPPORTED_COMPOSITOR\"' >/dev/null"
+run_subcheck "e2e.failure.unsupported_compositor" "set +e; UNSUPPORTED_JSON=\$(SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json 2>&1); UNSUPPORTED_RC=\$?; set -e; [[ \${UNSUPPORTED_RC} -ne 0 ]] && printf '%s\\n' \"\${UNSUPPORTED_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_UNSUPPORTED_COMPOSITOR\"' >/dev/null"
 
 run_subcheck "e2e.failure.permission_clipboard" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; DEGRADED_JSON=\$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${DEGRADED_JSON}\" | jq -e '.ok==true and .saved.ok==true and .clipboard.ok==false and .clipboard.error.code==\"ERR_CLIPBOARD_UNAVAILABLE\" and .partial==true' >/dev/null"
 

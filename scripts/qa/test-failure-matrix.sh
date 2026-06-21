@@ -38,7 +38,7 @@ assert_failure_code() {
   }
 }
 
-assert_failure_code ERR_UNSUPPORTED_COMPOSITOR env SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json
+assert_failure_code ERR_UNSUPPORTED_COMPOSITOR env SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json
 assert_failure_code ERR_PREFLIGHT_ENV_NOT_READY env -u WAYLAND_DISPLAY SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./zig-out/bin/shaula preflight --json
 assert_failure_code ERR_CAPTURE_MODE_UNSUPPORTED env SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture window --json
 assert_failure_code ERR_CLIPBOARD_UNAVAILABLE env SHAULA_CLIPBOARD_AVAILABLE=0 ./zig-out/bin/shaula clipboard import-image --json

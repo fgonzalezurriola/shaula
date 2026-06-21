@@ -394,6 +394,27 @@ GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations) {
   return clone;
 }
 
+gboolean shaula_annotations_selected_bounds(GPtrArray *annotations,
+                                             ShaulaRect *bounds_out) {
+  if (annotations == NULL || bounds_out == NULL)
+    return FALSE;
+
+  gboolean found = FALSE;
+  ShaulaRect bounds = {0};
+  for (guint i = 0; i < annotations->len; i++) {
+    ShaulaAnnotation *annotation = g_ptr_array_index(annotations, i);
+    if (annotation == NULL || !annotation->selected)
+      continue;
+    bounds = found ? rect_union_c(bounds, annotation->bounds)
+                   : annotation->bounds;
+    found = TRUE;
+  }
+
+  if (found)
+    *bounds_out = bounds;
+  return found;
+}
+
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
   if (annotation == NULL)
     return;
@@ -490,7 +511,7 @@ static double screen_px_to_user(cairo_t *cr, double px) {
   return fabs(dx);
 }
 
-static void draw_selection(cairo_t *cr, ShaulaRect bounds) {
+void shaula_annotation_draw_selection_box(cairo_t *cr, ShaulaRect bounds) {
   bounds = shaula_rect_normalized(bounds);
   cairo_save(cr);
   cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.68);
@@ -1084,9 +1105,14 @@ static void draw_measure_label(cairo_t *cr,
 
 void shaula_annotation_draw_preview(cairo_t *cr,
                                     const ShaulaAnnotation *annotation,
-                                    gboolean show_edit_handles) {
+                                    ShaulaAnnotationPreviewFlags flags) {
   if (annotation == NULL)
     return;
+
+  gboolean show_selection =
+      (flags & SHAULA_ANNOTATION_PREVIEW_SELECTION) != 0;
+  gboolean show_edit_handles =
+      show_selection && (flags & SHAULA_ANNOTATION_PREVIEW_HANDLES) != 0;
 
   cairo_save(cr);
   cairo_set_line_width(cr, annotation->stroke_width);
@@ -1176,11 +1202,11 @@ void shaula_annotation_draw_preview(cairo_t *cr,
     break;
   }
 
-  if (annotation->selected) {
+  if (annotation->selected && show_selection) {
     if (annotation->type == SHAULA_ANNOTATION_PEN) {
-      draw_selection(cr, annotation->bounds);
+      shaula_annotation_draw_selection_box(cr, annotation->bounds);
     } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-      draw_selection(cr, annotation->bounds);
+      shaula_annotation_draw_selection_box(cr, annotation->bounds);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       draw_rectangle_selection(cr, annotation->data.rectangle.rect);
       set_annotation_color(cr, annotation->color, 1.0);
@@ -1193,10 +1219,10 @@ void shaula_annotation_draw_preview(cairo_t *cr,
       if (show_edit_handles)
         draw_rectangle_handles(cr, annotation->data.rectangle.rect);
     } else if (annotation->type != SHAULA_ANNOTATION_ARROW) {
-      draw_selection(cr, annotation->bounds);
+      shaula_annotation_draw_selection_box(cr, annotation->bounds);
     }
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-      draw_selection(cr, annotation->bounds);
+      shaula_annotation_draw_selection_box(cr, annotation->bounds);
       if (show_edit_handles) {
         ShaulaPoint p0 = annotation->data.arrow.start;
         ShaulaPoint p2 = annotation->data.arrow.end;
@@ -1226,7 +1252,9 @@ void shaula_annotation_draw_preview(cairo_t *cr,
 
 void shaula_annotation_draw(cairo_t *cr,
                             const ShaulaAnnotation *annotation) {
-  shaula_annotation_draw_preview(cr, annotation, TRUE);
+  shaula_annotation_draw_preview(
+      cr, annotation,
+      SHAULA_ANNOTATION_PREVIEW_SELECTION | SHAULA_ANNOTATION_PREVIEW_HANDLES);
 }
 
 gboolean shaula_annotation_text_cursor_rect(const ShaulaAnnotation *annotation,

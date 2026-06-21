@@ -10,6 +10,11 @@ static void require_close(double actual, double expected) {
     abort();
 }
 
+static void require_true(gboolean condition) {
+  if (!condition)
+    abort();
+}
+
 static void assert_bounds_translate(ShaulaAnnotation *annotation, double dx,
                                     double dy) {
   ShaulaRect before = annotation->bounds;
@@ -18,6 +23,56 @@ static void assert_bounds_translate(ShaulaAnnotation *annotation, double dx,
   require_close(annotation->bounds.y, before.y + dy);
   require_close(annotation->bounds.width, before.width);
   require_close(annotation->bounds.height, before.height);
+}
+
+static void assert_selected_group_bounds(void) {
+  GPtrArray *annotations =
+      g_ptr_array_new_with_free_func(shaula_annotation_free);
+  ShaulaAnnotation *left = shaula_annotation_new_rectangle(
+      (ShaulaRect){20, 30, 40, 25}, shaula_color_default(), 3.0);
+  ShaulaPoint path_points[] = {{120, 80}, {150, 115}, {175, 90}};
+  ShaulaAnnotation *right = shaula_annotation_new_pen(
+      path_points, 3, shaula_color_default(), 6.0);
+  ShaulaAnnotation *ignored = shaula_annotation_new_rectangle(
+      (ShaulaRect){500, 500, 40, 40}, shaula_color_default(), 3.0);
+  left->selected = TRUE;
+  right->selected = TRUE;
+  ignored->selected = FALSE;
+  g_ptr_array_add(annotations, left);
+  g_ptr_array_add(annotations, right);
+  g_ptr_array_add(annotations, ignored);
+
+  double expected_x = MIN(left->bounds.x, right->bounds.x);
+  double expected_y = MIN(left->bounds.y, right->bounds.y);
+  double expected_right =
+      MAX(left->bounds.x + left->bounds.width,
+          right->bounds.x + right->bounds.width);
+  double expected_bottom =
+      MAX(left->bounds.y + left->bounds.height,
+          right->bounds.y + right->bounds.height);
+  ShaulaRect group_bounds;
+  require_true(
+      shaula_annotations_selected_bounds(annotations, &group_bounds));
+  require_close(group_bounds.x, expected_x);
+  require_close(group_bounds.y, expected_y);
+  require_close(group_bounds.width, expected_right - expected_x);
+  require_close(group_bounds.height, expected_bottom - expected_y);
+
+  ShaulaRect before = group_bounds;
+  shaula_annotation_move(left, 70.0, 45.0);
+  shaula_annotation_move(right, 70.0, 45.0);
+  require_true(
+      shaula_annotations_selected_bounds(annotations, &group_bounds));
+  require_close(group_bounds.x, before.x + 70.0);
+  require_close(group_bounds.y, before.y + 45.0);
+  require_close(group_bounds.width, before.width);
+  require_close(group_bounds.height, before.height);
+
+  left->selected = FALSE;
+  right->selected = FALSE;
+  require_true(
+      !shaula_annotations_selected_bounds(annotations, &group_bounds));
+  g_ptr_array_unref(annotations);
 }
 
 int main(void) {
@@ -77,6 +132,8 @@ int main(void) {
   shaula_annotation_update_bounds(curved_arrow);
   assert_bounds_translate(curved_arrow, 140.0, 80.0);
   shaula_annotation_free(curved_arrow);
+
+  assert_selected_group_bounds();
 
   shaula_preview_document_free(&document);
   return 0;

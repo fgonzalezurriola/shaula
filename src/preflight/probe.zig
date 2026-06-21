@@ -73,7 +73,7 @@ test "detect compositor is niri when SHAULA_COMPOSITOR is niri" {
     try std.testing.expectEqualStrings("niri", detectCompositor(environ));
 }
 
-test "detect compositor unsupported on non-niri marker" {
+test "detect compositor preserves explicit runtime label" {
     var env = std.process.EnvMap.init(std.testing.allocator);
     defer env.deinit();
 

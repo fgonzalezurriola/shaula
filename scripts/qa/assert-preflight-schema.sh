@@ -39,7 +39,7 @@ printf '%s\n' "${capabilities_json}" | jq -e '
   exit 1
 }
 
-unsupported_json="$(SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json || true)"
+unsupported_json="$(SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json || true)"
 printf '%s\n' "${unsupported_json}" | jq -e '.ok == false and .error.code == "ERR_UNSUPPORTED_COMPOSITOR"' >/dev/null || {
   echo "ERR_PREFLIGHT_SCHEMA_INVALID reason=unsupported_token" >&2
   exit 1

@@ -29,7 +29,7 @@ assert_exit() {
 }
 
 assert_exit 2 ./zig-out/bin/shaula
-assert_exit 10 env SHAULA_COMPOSITOR=sway ./zig-out/bin/shaula preflight --json
+assert_exit 10 env SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json
 assert_exit 11 env -u WAYLAND_DISPLAY SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./zig-out/bin/shaula preflight --json
 assert_exit 34 env SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture window --json
 assert_exit 51 env SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --output /tmp/::invalid::/path.png

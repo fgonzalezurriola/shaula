@@ -95,27 +95,42 @@ and the working diff.
   annotations: successful object selection clears the temporary region instead
   of leaving the original drag rectangle visible. When no annotation matches,
   the rectangle remains available for crop/blur/erase/spotlight actions.
-  Multi-selection keeps object selection chrome but hides single-object resize
-  and bend handles. Interactive performance constraints: drag/move hot paths must not
-  sample hover color, must not redraw the toolbar color swatch on every canvas
-  frame, and should use the synced `annotation->selected` flag for per-frame
-  movement instead of repeated selected-ID scans. Multi-select intentionally hides single-object
-  property/duplicate/crop actions and exposes only batch delete. Rectangle
-  annotations can be selected by clicking inside their bounds, even when
-  unfilled, because edge-only hit testing made Select feel broken.
+  Multi-selection suppresses per-object selection boxes and handles, then draws
+  one group bounding box from the union of selected annotation bounds.
+  Interactive performance constraints: drag/move hot paths must not sample hover
+  color, must not redraw the toolbar color swatch on every canvas frame, and
+  should use the synced `annotation->selected` flag for per-frame movement
+  instead of repeated selected-ID scans. Multi-select hides single-object
+  property/crop actions but exposes Duplicate and batch Delete. Duplicate uses
+  the copy glyph, clones the full set through the existing paste path, keeps the
+  preview-local clipboard unchanged, and selects only the offset copies.
+  Selection-box movement is edge-only for single Pen, Highlight, Arrow/Line,
+  Text, Measure, Rectangle, and the multi-selection group box. A shared helper
+  tests the four border segments with an 8-screen-pixel zoom-adjusted tolerance
+  in both press and hover paths. Hit priority is resize/curvature handles, box
+  edges, visible annotation geometry, then empty-space marquee. Group-edge drags
+  preserve and move the full selection; an edge click without movement leaves
+  selection unchanged, and empty group-box interiors remain transparent so
+  objects behind them can still be selected. Rectangle annotations can be
+  selected by clicking inside their bounds, even when unfilled, because
+  edge-only geometry hit testing made Select feel broken.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
-  are non-goals. Niri is the only supported compositor target; selection and
-  helper geometry are logical output coordinates, while PNG dimensions,
-  preview sampling, ruler measurements, redaction, and export operate on
-  physical image pixels after output-scale normalization. Niri IPC/window
-  semantics, Wayland screencopy migration, fractional scaling, and overlay
-  teardown timing remain technical risks.
+  are non-goals. Niri on CachyOS is the primary development and interactive UX
+  target. Capture compatibility also covers wlroots compositors through `grim`
+  and generic Wayland sessions through the Screenshot portal when available;
+  X11 remains unsupported. Selection and helper geometry are logical output
+  coordinates, while PNG dimensions, preview sampling, ruler measurements,
+  redaction, and export operate on physical image pixels after output-scale
+  normalization. Niri IPC/window semantics, Wayland screencopy migration,
+  fractional scaling, and overlay teardown timing remain technical risks.
 - QA script curation: `scripts/qa/README.md` is now the source of truth for QA
   script status. The required baseline remains `./dev check` plus
   `git diff --check`; `./dev qa` is the curated non-intrusive contract lane
   (`run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
-  matrix, exit-code mapping). Integration, E2E Niri, performance, release
+  matrix, exit-code mapping). Unsupported-compositor assertions use an explicit
+  X11 token; Sway is valid wlroots coverage and must not be used as the negative
+  fixture. Integration, E2E Niri, performance, release
   readiness, remaining benchmark, Noctalia, and intrusive UI wrappers are
   manual/legacy investigation tools and print an explicit warning before
   running. Unreferenced QA scripts for old repo preflight, UI smoke/contract
@@ -392,9 +407,10 @@ and the working diff.
   merged per dirty tool section under a short file lock, and flushed on close.
   Properties HUDs use a flat bordered surface without a drop-shadow glow; the
   Annotation Eraser value is shown beside its slider to keep the track centered.
-  Pen, Highlight, Arrow, and Line selection use per-object bounding boxes in
-  both single and multi-selection. Highlight and Pen have no endpoint handles;
-  Arrow and Line keep start/end/control handles only for single selection.
+  Pen, Highlight, Arrow, and Line use per-object bounding boxes for single
+  selection. Highlight and Pen have no endpoint handles; Arrow and Line keep
+  start/end/control handles only for single selection. Multi-selection replaces
+  every per-object box with one group bounding box and no handles.
   Freehand bounds are computed in C from explicit point min/max extents, while
   Arrow bounds include exact quadratic extrema and the visible arrowhead. Moving
   any of these annotations cannot change its box size.

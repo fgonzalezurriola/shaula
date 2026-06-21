@@ -997,8 +997,15 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_range_set_value(GTK_RANGE(state->properties_hud.eraser_size_scale),
                         state->tool_defaults.eraser.size);
   if (state->duplicate_button != NULL) {
-    gtk_widget_set_visible(state->duplicate_button, has_single_object_selection);
+    const char *duplicate_label =
+        selected_count > 1 ? "Duplicate selected annotations (Ctrl+D)"
+                           : "Duplicate selected annotation (Ctrl+D)";
+    gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
+    gtk_widget_set_tooltip_text(state->duplicate_button, duplicate_label);
+    gtk_accessible_update_property(
+        GTK_ACCESSIBLE(state->duplicate_button),
+        GTK_ACCESSIBLE_PROPERTY_LABEL, duplicate_label, -1);
   }
   if (state->crop_selected_button != NULL) {
     gtk_widget_set_visible(state->crop_selected_button, can_crop);
