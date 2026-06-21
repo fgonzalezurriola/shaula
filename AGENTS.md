@@ -1,5 +1,7 @@
 # Shaula
 
+After each change of UI use ./dev dev-install --yes so I can test it
+
 This app doesn't have any users yet, don't make regression tests
 
 ## Documentation policy for contributors and agents
