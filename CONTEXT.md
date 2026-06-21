@@ -106,9 +106,11 @@ and the working diff.
   preview-local clipboard unchanged, and selects only the offset copies.
   Selection-box movement is edge-only for single Pen, Highlight, Arrow/Line,
   Text, Measure, Rectangle, and the multi-selection group box. A shared helper
-  tests the four border segments with an 8-screen-pixel zoom-adjusted tolerance
-  in both press and hover paths; resize/curvature handles use the same fixed
-  screen-space target instead of a zoom-growing minimum. Hit priority is
+  tests the four border segments in screen coordinates with a fixed 8 px
+  tolerance in both press and hover paths; this frame is derived directly in C
+  from the same selection bounds used for rendering rather than through
+  cross-language rectangle struct helpers. Resize/curvature handles use the same
+  fixed screen-space target instead of a zoom-growing minimum. Hit priority is
   resize/curvature handles, box edges, visible annotation geometry, then
   empty-space marquee. Handles can act only when already visible on the current
   single selection, so initially selecting an Arrow/Line near its midpoint must

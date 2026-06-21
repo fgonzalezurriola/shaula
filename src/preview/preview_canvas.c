@@ -1112,10 +1112,12 @@ selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
 
 /* Selection chrome is a move target only near its four visible edges. Keep
  * this shared between press and hover so cursor feedback matches drag routing.
+ * Compare in screen coordinates to make the target independent of zoom and to
+ * avoid cross-language struct geometry in the interactive input path.
  */
-static gboolean
-selected_selection_box_edge_at(ShaulaPreviewState *state,
-                               ShaulaPoint image_point) {
+static gboolean selected_selection_box_edge_at(ShaulaPreviewState *state,
+                                                double screen_x,
+                                                double screen_y) {
   if (state == NULL || state->zoom <= 0.0)
     return FALSE;
 
@@ -1125,36 +1127,50 @@ selected_selection_box_edge_at(ShaulaPreviewState *state,
     if (!shaula_annotations_selected_bounds(state->document.annotations,
                                             &frame))
       return FALSE;
-    frame = shaula_rect_expanded(frame, 2.0);
+    frame.x -= 2.0;
+    frame.y -= 2.0;
+    frame.width += 4.0;
+    frame.height += 4.0;
   } else if (selected_count == 1 && state->selected_annotation != NULL) {
     ShaulaAnnotation *annotation = state->selected_annotation;
-    ShaulaRect bounds = shaula_annotation_selection_bounds(annotation);
-    if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-      double pad = MAX(3.0 / state->zoom, 1.0);
-      frame = shaula_rect_expanded(bounds, pad);
-    } else {
-      frame = shaula_rect_expanded(bounds, 2.0);
-    }
+    frame = shaula_annotation_selection_bounds(annotation);
+    double pad = annotation->type == SHAULA_ANNOTATION_RECTANGLE
+                     ? MAX(3.0 / state->zoom, 1.0)
+                     : 2.0;
+    frame.x -= pad;
+    frame.y -= pad;
+    frame.width += 2.0 * pad;
+    frame.height += 2.0 * pad;
   } else {
     return FALSE;
   }
 
-  frame = shaula_rect_normalized(frame);
-  ShaulaPoint top_left = {frame.x, frame.y};
-  ShaulaPoint top_right = {frame.x + frame.width, frame.y};
-  ShaulaPoint bottom_right = {frame.x + frame.width,
-                              frame.y + frame.height};
-  ShaulaPoint bottom_left = {frame.x, frame.y + frame.height};
-  double tolerance = SHAULA_SELECTION_EDGE_TARGET_PX / state->zoom;
-  double distance =
-      shaula_point_distance_to_segment(image_point, top_left, top_right);
-  distance = MIN(distance, shaula_point_distance_to_segment(
-                               image_point, top_right, bottom_right));
-  distance = MIN(distance, shaula_point_distance_to_segment(
-                               image_point, bottom_right, bottom_left));
-  distance = MIN(distance, shaula_point_distance_to_segment(
-                               image_point, bottom_left, top_left));
-  return distance <= tolerance;
+  if (frame.width < 0.0) {
+    frame.x += frame.width;
+    frame.width = -frame.width;
+  }
+  if (frame.height < 0.0) {
+    frame.y += frame.height;
+    frame.height = -frame.height;
+  }
+
+  ShaulaPoint top_left = shaula_preview_canvas_image_to_screen(
+      state, (ShaulaPoint){frame.x, frame.y});
+  ShaulaPoint bottom_right = shaula_preview_canvas_image_to_screen(
+      state, (ShaulaPoint){frame.x + frame.width, frame.y + frame.height});
+  double left = MIN(top_left.x, bottom_right.x);
+  double right = MAX(top_left.x, bottom_right.x);
+  double top = MIN(top_left.y, bottom_right.y);
+  double bottom = MAX(top_left.y, bottom_right.y);
+  double tolerance = SHAULA_SELECTION_EDGE_TARGET_PX;
+  gboolean within_x =
+      screen_x >= left - tolerance && screen_x <= right + tolerance;
+  gboolean within_y =
+      screen_y >= top - tolerance && screen_y <= bottom + tolerance;
+  return (within_x && (fabs(screen_y - top) <= tolerance ||
+                       fabs(screen_y - bottom) <= tolerance)) ||
+         (within_y && (fabs(screen_x - left) <= tolerance ||
+                       fabs(screen_x - right) <= tolerance));
 }
 
 static void move_selected_annotations(ShaulaPreviewState *state, double dx,
@@ -1391,8 +1407,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                      SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
                : SHAULA_RESIZE_HANDLE_NONE;
     gboolean selection_edge_hit =
-        resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&
-        selected_selection_box_edge_at(state, image_point);
+        resize_handle == SHAULA_RESIZE_HANDLE_NONE &&
+        selected_selection_box_edge_at(state, x, y);
     if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
       hit_result = (ShaulaAnnotationHit){state->selected_annotation,
                                          SHAULA_ANNOTATION_HIT_HANDLE};
@@ -1698,8 +1714,8 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
                      SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
                : SHAULA_RESIZE_HANDLE_NONE;
     gboolean selection_edge_hit =
-        resize_handle == SHAULA_RESIZE_HANDLE_NONE && inside &&
-        selected_selection_box_edge_at(state, image_point);
+        resize_handle == SHAULA_RESIZE_HANDLE_NONE &&
+        selected_selection_box_edge_at(state, x, y);
     if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
       hit = (ShaulaAnnotationHit){state->selected_annotation,
                                   SHAULA_ANNOTATION_HIT_HANDLE};

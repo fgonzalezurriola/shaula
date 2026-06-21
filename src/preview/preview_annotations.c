@@ -16,7 +16,20 @@ static ShaulaRect rect_from_points_c(ShaulaPoint a, ShaulaPoint b) {
   return (ShaulaRect){x0, y0, x1 - x0, y1 - y0};
 }
 
+static ShaulaRect rect_normalized_c(ShaulaRect rect) {
+  if (rect.width < 0.0) {
+    rect.x += rect.width;
+    rect.width = -rect.width;
+  }
+  if (rect.height < 0.0) {
+    rect.y += rect.height;
+    rect.height = -rect.height;
+  }
+  return rect;
+}
+
 static ShaulaRect rect_expanded_c(ShaulaRect rect, double amount) {
+  rect = rect_normalized_c(rect);
   return (ShaulaRect){rect.x - amount, rect.y - amount,
                       rect.width + 2.0 * amount,
                       rect.height + 2.0 * amount};
@@ -426,8 +439,8 @@ shaula_annotation_selection_bounds(const ShaulaAnnotation *annotation) {
   if (annotation->type == SHAULA_ANNOTATION_ARROW)
     return arrow_visual_bounds_c(annotation);
   if (annotation->type == SHAULA_ANNOTATION_RECTANGLE)
-    return shaula_rect_normalized(annotation->data.rectangle.rect);
-  return shaula_rect_normalized(annotation->bounds);
+    return rect_normalized_c(annotation->data.rectangle.rect);
+  return rect_normalized_c(annotation->bounds);
 }
 
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
