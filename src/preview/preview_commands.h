@@ -64,5 +64,8 @@ gboolean shaula_preview_command_for_tool(ShaulaTool tool,
                                          ShaulaPreviewCommand *command);
 const char *shaula_preview_command_shortcut_label(
     ShaulaPreviewCommand command);
+/* Returns the shared toolbar and overflow shortcut hint for a tool. */
+const char *shaula_preview_tool_shortcut_hint(ShaulaTool tool);
+const char *shaula_preview_tool_shortcut_badge(ShaulaTool tool);
 
 #endif

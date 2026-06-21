@@ -32,6 +32,34 @@ Save As is available from the responsive utility/More menu and through `Ctrl+Shi
 - Share is not exposed; no upload backend exists.
 - Pin is not exposed. Unknown legacy helper action strings remain tolerated by the Zig preview-result parser but are not public actions.
 
+## Tool Shortcuts
+
+Shaula keeps its numeric toolbar slots while using Excalidraw-style mnemonic
+letters for the drawing tools that have direct equivalents:
+
+| Tool | Shortcut |
+| --- | --- |
+| Select | `V` or `1` |
+| Rectangle | `R` or `2` |
+| Arrow | `A` or `3` |
+| Line | `L` or `4` |
+| Text | `T` or `5` |
+| Pen | `P`, `X`, or `6` |
+| Highlight | `H` or `7` |
+| Measure | `8` |
+| Spotlight | `9` |
+| Annotation Eraser | `E` or `0` |
+
+Letter shortcuts activate tools only when pressed without modifiers. Modified
+forms such as `Shift+V` and `Shift+H` remain available for future actions.
+Holding `Space` temporarily enters Hand/Pan and restores the previous tool on
+release. Crop and contextual Blur have no letter shortcut. `F` remains the
+Fit-to-screen shortcut.
+
+Toolbar badges show the numeric slot. Tooltips and responsive More-menu rows
+show the mnemonic letter first, followed by the numeric alternative when one
+exists.
+
 ## Selection Model
 
 `shaula-select-symbolic` supports:

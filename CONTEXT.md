@@ -160,6 +160,14 @@ and the working diff.
   and property panels must not call runtime actions directly. This keeps
   availability and execution on the same path and prevents the former
   Commands-to-Actions-to-Commands dependency cycle from returning.
+- Tool keyboard routing keeps Shaula's numeric toolbar slots while using
+  unmodified mnemonic letters for equivalent Excalidraw tools: `V` Select, `R`
+  Rectangle, `A` Arrow, `L` Line, `T` Text, `P`/`X` Pen, `H` Highlight, and `E`
+  Annotation Eraser. Measure and Spotlight remain numeric only; Crop and
+  contextual Blur have no letter binding; `Space` remains temporary Hand/Pan;
+  and `F` remains Fit to screen. Shift-modified letters do not select tools.
+  Commands owns the shortcut hints and numeric badges used by Toolbar tooltips
+  and responsive More-menu rows.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
   are non-goals. Niri on CachyOS is the primary development and interactive UX
