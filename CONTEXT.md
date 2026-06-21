@@ -91,14 +91,12 @@ and the working diff.
   Shift+click toggle, drag marquee using the existing rectangular selection,
   Ctrl/Cmd+A select all annotations, Esc clear annotation selection before
   closing, batch Delete/Backspace, and moving multiple selected annotations as
-  one undoable history gesture. The Select drag rectangle is intentionally
-  coupled: it remains the rectangular region for crop/blur/erase/spotlight and
-  also selects intersecting annotations on release, so the existing secondary
-  menu stays available while annotation operations can act on the selected
-  objects. Starting an annotation interaction, such as grabbing a selected
-  annotation to move it or deleting selected annotations, clears the rectangular
-  region/menu and returns to annotation-only selection until the user draws a
-  new region. Interactive performance constraints: drag/move hot paths must not
+  one undoable history gesture. A Select drag is a marquee when it intersects
+  annotations: successful object selection clears the temporary region instead
+  of leaving the original drag rectangle visible. When no annotation matches,
+  the rectangle remains available for crop/blur/erase/spotlight actions.
+  Multi-selection keeps object selection chrome but hides single-object resize
+  and bend handles. Interactive performance constraints: drag/move hot paths must not
   sample hover color, must not redraw the toolbar color swatch on every canvas
   frame, and should use the synced `annotation->selected` flag for per-frame
   movement instead of repeated selected-ID scans. Multi-select intentionally hides single-object
@@ -394,9 +392,12 @@ and the working diff.
   merged per dirty tool section under a short file lock, and flushed on close.
   Properties HUDs use a flat bordered surface without a drop-shadow glow; the
   Annotation Eraser value is shown beside its slider to keep the track centered.
-  Pen selection keeps a stroke-following halo whose separation scales with pen
-  thickness, while Highlight selection uses a dashed geometric bounding box so
-  selecting it does not visually recolor or darken the highlight itself.
+  Pen, Highlight, Arrow, and Line selection use per-object bounding boxes in
+  both single and multi-selection. Highlight and Pen have no endpoint handles;
+  Arrow and Line keep start/end/control handles only for single selection.
+  Freehand bounds are computed in C from explicit point min/max extents, while
+  Arrow bounds include exact quadratic extrema and the visible arrowhead. Moving
+  any of these annotations cannot change its box size.
   Repeated annotation paste uses a small deterministic down-right cascade and no longer
   changes direction or clamps expanded hit-test bounds into the image.
 

@@ -8,6 +8,110 @@
 static void rectangle_path(cairo_t *cr, ShaulaRect rect,
                            PreviewRectangleCorners corners);
 
+static ShaulaRect rect_from_points_c(ShaulaPoint a, ShaulaPoint b) {
+  double x0 = MIN(a.x, b.x);
+  double y0 = MIN(a.y, b.y);
+  double x1 = MAX(a.x, b.x);
+  double y1 = MAX(a.y, b.y);
+  return (ShaulaRect){x0, y0, x1 - x0, y1 - y0};
+}
+
+static ShaulaRect rect_expanded_c(ShaulaRect rect, double amount) {
+  return (ShaulaRect){rect.x - amount, rect.y - amount,
+                      rect.width + 2.0 * amount,
+                      rect.height + 2.0 * amount};
+}
+
+static ShaulaRect path_bounds_c(ShaulaPenPath path) {
+  if (path.len <= 0)
+    return (ShaulaRect){0, 0, 0, 0};
+
+  double min_x = path.points[0].x;
+  double min_y = path.points[0].y;
+  double max_x = min_x;
+  double max_y = min_y;
+  for (int i = 1; i < path.len; i++) {
+    min_x = MIN(min_x, path.points[i].x);
+    min_y = MIN(min_y, path.points[i].y);
+    max_x = MAX(max_x, path.points[i].x);
+    max_y = MAX(max_y, path.points[i].y);
+  }
+  return (ShaulaRect){min_x, min_y, max_x - min_x, max_y - min_y};
+}
+
+static ShaulaRect rect_union_c(ShaulaRect a, ShaulaRect b) {
+  double x0 = MIN(a.x, b.x);
+  double y0 = MIN(a.y, b.y);
+  double x1 = MAX(a.x + a.width, b.x + b.width);
+  double y1 = MAX(a.y + a.height, b.y + b.height);
+  return (ShaulaRect){x0, y0, x1 - x0, y1 - y0};
+}
+
+static ShaulaPoint quadratic_point_c(ShaulaPoint start, ShaulaPoint control,
+                                     ShaulaPoint end, double t) {
+  double inv = 1.0 - t;
+  return (ShaulaPoint){
+      inv * inv * start.x + 2.0 * inv * t * control.x + t * t * end.x,
+      inv * inv * start.y + 2.0 * inv * t * control.y + t * t * end.y};
+}
+
+static ShaulaRect quadratic_bounds_c(ShaulaPoint start, ShaulaPoint control,
+                                     ShaulaPoint end) {
+  ShaulaRect bounds = rect_from_points_c(start, end);
+  double denominator_x = start.x - 2.0 * control.x + end.x;
+  double denominator_y = start.y - 2.0 * control.y + end.y;
+
+  if (fabs(denominator_x) > 0.000001) {
+    double t = (start.x - control.x) / denominator_x;
+    if (t > 0.0 && t < 1.0) {
+      ShaulaPoint point = quadratic_point_c(start, control, end, t);
+      bounds = rect_union_c(bounds, (ShaulaRect){point.x, point.y, 0, 0});
+    }
+  }
+  if (fabs(denominator_y) > 0.000001) {
+    double t = (start.y - control.y) / denominator_y;
+    if (t > 0.0 && t < 1.0) {
+      ShaulaPoint point = quadratic_point_c(start, control, end, t);
+      bounds = rect_union_c(bounds, (ShaulaRect){point.x, point.y, 0, 0});
+    }
+  }
+  return bounds;
+}
+
+static ShaulaRect arrow_head_bounds_c(ShaulaPoint direction, ShaulaPoint end,
+                                      double stroke_width) {
+  double head_length = MAX(12.0, stroke_width * 4.5);
+  double angle = atan2(end.y - direction.y, end.x - direction.x);
+  ShaulaPoint points[] = {
+      end,
+      {end.x + cos(angle + G_PI - 0.42) * head_length,
+       end.y + sin(angle + G_PI - 0.42) * head_length},
+      {end.x + cos(angle + G_PI) * head_length * 0.65,
+       end.y + sin(angle + G_PI) * head_length * 0.65},
+      {end.x + cos(angle + G_PI + 0.42) * head_length,
+       end.y + sin(angle + G_PI + 0.42) * head_length},
+  };
+  return path_bounds_c((ShaulaPenPath){points, 4, 4});
+}
+
+static ShaulaRect arrow_bounds_c(const ShaulaAnnotation *annotation) {
+  ShaulaPoint start = annotation->data.arrow.start;
+  ShaulaPoint end = annotation->data.arrow.end;
+  ShaulaRect bounds = annotation->data.arrow.is_curved
+                          ? quadratic_bounds_c(start,
+                                               annotation->data.arrow.control,
+                                               end)
+                          : rect_from_points_c(start, end);
+  if (annotation->data.arrow.has_head) {
+    ShaulaPoint direction = annotation->data.arrow.is_curved
+                                ? annotation->data.arrow.control
+                                : start;
+    bounds = rect_union_c(
+        bounds, arrow_head_bounds_c(direction, end, annotation->stroke_width));
+  }
+  return rect_expanded_c(bounds, annotation->stroke_width / 2.0 + 6.0);
+}
+
 static ShaulaAnnotation *annotation_alloc(ShaulaAnnotationType type,
                                           ShaulaColor color,
                                           double stroke_width) {
@@ -20,8 +124,7 @@ static ShaulaAnnotation *annotation_alloc(ShaulaAnnotationType type,
 
 static ShaulaRect line_bounds(ShaulaPoint start, ShaulaPoint end,
                               double padding) {
-  ShaulaRect rect = shaula_rect_from_points(start, end);
-  return shaula_rect_expanded(rect, padding);
+  return rect_expanded_c(rect_from_points_c(start, end), padding);
 }
 
 const char *shaula_text_font_family(ShaulaTextFontMode font_mode) {
@@ -296,19 +399,7 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
     return;
   switch (annotation->type) {
   case SHAULA_ANNOTATION_ARROW:
-    if (annotation->data.arrow.is_curved) {
-      ShaulaRect bounds = shaula_rect_union(
-          line_bounds(annotation->data.arrow.start, annotation->data.arrow.end,
-                      0.0),
-          shaula_rect_from_points(annotation->data.arrow.start,
-                                  annotation->data.arrow.control));
-      annotation->bounds =
-          shaula_rect_expanded(bounds, annotation->stroke_width + 8.0);
-    } else {
-      annotation->bounds =
-          line_bounds(annotation->data.arrow.start, annotation->data.arrow.end,
-                      annotation->stroke_width + 8.0);
-    }
+    annotation->bounds = arrow_bounds_c(annotation);
     break;
   case SHAULA_ANNOTATION_TEXT:
     annotation->bounds = text_bounds(
@@ -324,8 +415,8 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
                                      annotation->stroke_width + 18.0);
     break;
   case SHAULA_ANNOTATION_RECTANGLE:
-    annotation->bounds = shaula_rect_expanded(annotation->data.rectangle.rect,
-                                              annotation->stroke_width + 4.0);
+    annotation->bounds = rect_expanded_c(annotation->data.rectangle.rect,
+                                         annotation->stroke_width + 4.0);
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
   case SHAULA_ANNOTATION_PEN: {
@@ -336,13 +427,8 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
       annotation->bounds = (ShaulaRect){0, 0, 0, 0};
       break;
     }
-    ShaulaRect bounds = {path.points[0].x, path.points[0].y, 0, 0};
-    for (int i = 1; i < path.len; i++) {
-      ShaulaRect point_rect = {path.points[i].x, path.points[i].y, 0, 0};
-      bounds = shaula_rect_union(bounds, point_rect);
-    }
-    annotation->bounds =
-        shaula_rect_expanded(bounds, annotation->stroke_width + 6.0);
+    annotation->bounds = rect_expanded_c(
+        path_bounds_c(path), annotation->stroke_width / 2.0 + 6.0);
     break;
   }
   }
@@ -661,31 +747,6 @@ static double rectangle_edge_distance_to_segment(ShaulaRect rectangle,
   return best;
 }
 
-static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
-                                double stroke_width) {
-  if (path.len <= 0)
-    return;
-
-  cairo_save(cr);
-  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-  cairo_set_dash(cr, NULL, 0, 0);
-  cairo_set_line_width(cr, MAX(stroke_width * 1.5 + 6.0, 8.0));
-  cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.26);
-  cairo_move_to(cr, path.points[0].x, path.points[0].y);
-  for (int i = 1; i < path.len; i++)
-    cairo_line_to(cr, path.points[i].x, path.points[i].y);
-  cairo_stroke(cr);
-
-  cairo_set_line_width(cr, MAX(stroke_width * 1.2 + 2.5, 3.5));
-  cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.22);
-  cairo_move_to(cr, path.points[0].x, path.points[0].y);
-  for (int i = 1; i < path.len; i++)
-    cairo_line_to(cr, path.points[i].x, path.points[i].y);
-  cairo_stroke(cr);
-  cairo_restore(cr);
-}
-
 static void draw_pen_path(cairo_t *cr, ShaulaPenPath path) {
   if (path.len <= 0)
     return;
@@ -749,42 +810,6 @@ static double arrow_curve_distance_to_segment(ShaulaPoint start,
     previous = current;
   }
   return best;
-}
-
-static void draw_arrow_selection(cairo_t *cr,
-                                 const ShaulaAnnotation *annotation) {
-  ShaulaPoint start = annotation->data.arrow.start;
-  ShaulaPoint end = annotation->data.arrow.end;
-  ShaulaPoint control = annotation->data.arrow.control;
-  double stroke_width = annotation->stroke_width;
-
-  cairo_save(cr);
-  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-  cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-  cairo_set_dash(cr, NULL, 0, 0);
-
-  for (int pass = 0; pass < 2; pass++) {
-    if (pass == 0) {
-      cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.26);
-      cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
-    } else {
-      cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.22);
-      cairo_set_line_width(cr, MAX(stroke_width + 1.5, 2.5));
-    }
-
-    cairo_move_to(cr, start.x, start.y);
-    if (annotation->data.arrow.is_curved) {
-      for (int i = 1; i <= 24; i++) {
-        ShaulaPoint p =
-            arrow_curve_point(start, control, end, (double)i / 24.0);
-        cairo_line_to(cr, p.x, p.y);
-      }
-    } else {
-      cairo_line_to(cr, end.x, end.y);
-    }
-    cairo_stroke(cr);
-  }
-  cairo_restore(cr);
 }
 
 /* Draws a filled triangular arrowhead that scales with stroke width. The
@@ -1057,7 +1082,9 @@ static void draw_measure_label(cairo_t *cr,
   cairo_restore(cr);
 }
 
-void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
+void shaula_annotation_draw_preview(cairo_t *cr,
+                                    const ShaulaAnnotation *annotation,
+                                    gboolean show_edit_handles) {
   if (annotation == NULL)
     return;
 
@@ -1151,10 +1178,7 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
 
   if (annotation->selected) {
     if (annotation->type == SHAULA_ANNOTATION_PEN) {
-      draw_path_selection(cr, annotation->data.pen, annotation->stroke_width);
-      set_annotation_color(cr, annotation->color, 1.0);
-      cairo_set_line_width(cr, annotation->stroke_width);
-      draw_pen_path(cr, annotation->data.pen);
+      draw_selection(cr, annotation->bounds);
     } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
       draw_selection(cr, annotation->bounds);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
@@ -1166,37 +1190,43 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       rectangle_path(cr, annotation->data.rectangle.rect,
                      annotation->data.rectangle.corners);
       cairo_stroke(cr);
-      draw_rectangle_handles(cr, annotation->data.rectangle.rect);
+      if (show_edit_handles)
+        draw_rectangle_handles(cr, annotation->data.rectangle.rect);
     } else if (annotation->type != SHAULA_ANNOTATION_ARROW) {
       draw_selection(cr, annotation->bounds);
     }
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-      draw_arrow_selection(cr, annotation);
-      set_annotation_color(cr, annotation->color, 1.0);
-      cairo_set_line_width(cr, annotation->stroke_width);
-      draw_arrow_shape(cr, annotation);
-      ShaulaPoint p0 = annotation->data.arrow.start;
-      ShaulaPoint p2 = annotation->data.arrow.end;
-      ShaulaPoint p1 =
-          annotation->data.arrow.is_curved
-              ? annotation->data.arrow.control
-              : (ShaulaPoint){(p0.x + p2.x) / 2.0, (p0.y + p2.y) / 2.0};
-      ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
-                         0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
-      cairo_save(cr);
-      cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.88);
-      cairo_arc(cr, mid.x, mid.y, 4.0, 0, 2 * G_PI);
-      cairo_fill_preserve(cr);
-      cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.72);
-      cairo_set_line_width(cr, 1.25);
-      cairo_stroke(cr);
-      cairo_restore(cr);
-      draw_round_handle(cr, p0);
-      draw_round_handle(cr, p2);
+      draw_selection(cr, annotation->bounds);
+      if (show_edit_handles) {
+        ShaulaPoint p0 = annotation->data.arrow.start;
+        ShaulaPoint p2 = annotation->data.arrow.end;
+        ShaulaPoint p1 =
+            annotation->data.arrow.is_curved
+                ? annotation->data.arrow.control
+                : (ShaulaPoint){(p0.x + p2.x) / 2.0,
+                                (p0.y + p2.y) / 2.0};
+        ShaulaPoint mid = {0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
+                           0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
+        cairo_save(cr);
+        cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.88);
+        cairo_arc(cr, mid.x, mid.y, 4.0, 0, 2 * G_PI);
+        cairo_fill_preserve(cr);
+        cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.72);
+        cairo_set_line_width(cr, 1.25);
+        cairo_stroke(cr);
+        cairo_restore(cr);
+        draw_round_handle(cr, p0);
+        draw_round_handle(cr, p2);
+      }
     }
   }
 
   cairo_restore(cr);
+}
+
+void shaula_annotation_draw(cairo_t *cr,
+                            const ShaulaAnnotation *annotation) {
+  shaula_annotation_draw_preview(cr, annotation, TRUE);
 }
 
 gboolean shaula_annotation_text_cursor_rect(const ShaulaAnnotation *annotation,

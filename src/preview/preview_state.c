@@ -520,6 +520,7 @@ guint shaula_preview_select_annotations_intersecting_rect(
     selected_ids_add(state, id);
   }
   g_array_unref(matched_ids);
+  state->has_region_selection = FALSE;
   sync_selection_from_ids(state);
   shaula_preview_queue_draw(state);
   shaula_preview_toolbar_update_selection_state(state);

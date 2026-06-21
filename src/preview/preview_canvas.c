@@ -399,7 +399,8 @@ static void draw_checker_background(ShaulaPreviewState *state, cairo_t *cr,
 }
 
 static void draw_annotation_preview(ShaulaPreviewState *state, cairo_t *cr,
-                                    ShaulaAnnotation *annotation) {
+                                    ShaulaAnnotation *annotation,
+                                    gboolean show_edit_handles) {
   if (annotation == NULL)
     return;
 
@@ -410,7 +411,7 @@ static void draw_annotation_preview(ShaulaPreviewState *state, cairo_t *cr,
     annotation->selected = FALSE;
     annotation->color.a *= SHAULA_ERASER_PENDING_OPACITY;
   }
-  shaula_annotation_draw(cr, annotation);
+  shaula_annotation_draw_preview(cr, annotation, show_edit_handles);
   annotation->selected = selected;
   annotation->color = color;
 }
@@ -438,10 +439,13 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_rectangle(cr, 0, 0, image_w, image_h);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  for (guint i = 0; state->document.annotations != NULL && i < state->document.annotations->len;
+  gboolean show_edit_handles = shaula_preview_selected_count(state) == 1;
+  for (guint i = 0; state->document.annotations != NULL &&
+                      i < state->document.annotations->len;
        i++) {
     draw_annotation_preview(
-        state, cr, g_ptr_array_index(state->document.annotations, i));
+        state, cr, g_ptr_array_index(state->document.annotations, i),
+        show_edit_handles);
   }
   cairo_restore(cr);
 

@@ -126,6 +126,10 @@ GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
+/* Preview selection chrome hides resize/bend handles for multi-selection. */
+void shaula_annotation_draw_preview(cairo_t *cr,
+                                    const ShaulaAnnotation *annotation,
+                                    gboolean show_edit_handles);
 /* Central text font contract used by preview labels, bounds, draw, copy, and
  * export so font-mode output cannot diverge across render paths.
  */

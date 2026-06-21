@@ -46,7 +46,7 @@ Selected annotation actions appear only while Select is active and an annotation
 
 Temporary region selections are not annotations, are not exported, and do not enter undo history by themselves. They expose contextual Crop, Blur, pixel Erase, and Spotlight actions.
 
-Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch deletion, and moving the selected set as one undoable gesture.
+Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch deletion, and moving the selected set as one undoable gesture. A successful marquee clears its temporary region rectangle after selecting objects. A drag with no annotation matches remains a contextual region. Multi-selection keeps selection chrome but hides single-object resize and bend handles.
 
 ## Crop
 
@@ -167,7 +167,7 @@ Select-mode hit testing is geometry-based:
 - curved arrows sample the curve path;
 - the bend handle has explicit priority.
 
-Selected arrows draw path-following selection chrome and repaint the arrow above it. Start/end handles reshape the arrow, the control handle edits curvature, and dragging the shaft moves the object.
+Selected arrows show a per-object bounding box. Start/end handles reshape the arrow, the control handle edits curvature, and dragging the shaft moves the object. Handles appear only for single selection. Arrow bounds include exact quadratic extrema and the visible arrowhead.
 
 The Arrow HUD exposes stroke style: normal, dashed, or dotted. A real style change pushes undo before mutating the annotation and uses the same draw path for preview, copy, and export.
 
@@ -175,7 +175,7 @@ The Arrow HUD exposes stroke style: normal, dashed, or dotted. A real style chan
 
 `shaula-line-symbolic` shares Arrow geometry, styling, hit testing, history, duplication, and clipboard behavior.
 
-Line stores `data.arrow.has_head = FALSE` during draft and commit. `shaula_annotation_new_arrow` defaults to a headed arrow, so Line must explicitly clear the flag.
+Line stores `data.arrow.has_head = FALSE` during draft and commit. `shaula_annotation_new_arrow` defaults to a headed arrow, so Line must explicitly clear the flag. Selected Lines use the same per-object bounding box and single-selection handles as Arrow, without arrowhead expansion.
 
 ## Text
 
@@ -250,7 +250,7 @@ Selected Rectangles draw external selection chrome from actual Rectangle geometr
 
 `shaula-pen-symbolic` opens a floating HUD for color, stroke width, and opacity. Defaults use the shared strong orange.
 
-Pen hit testing uses path distance instead of bounds. Selected paths draw path-following, low-alpha, solid selection chrome and repaint the real path above it so selection never turns the stroke white.
+Pen hit testing uses path distance instead of bounds. Selected paths show one per-object bounding box in both single and multi-selection, with no endpoint handles or redraw pass. Bounds come from point min/max extents, so translating a path preserves box size.
 
 Future Pen styles belong in this HUD rather than the primary toolbar.
 
@@ -258,7 +258,7 @@ Future Pen styles belong in this HUD rather than the primary toolbar.
 
 `shaula-highlight-symbolic` is separate from Pen and uses the highlighter icon, not the Spotlight icon.
 
-Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. It keeps its own semantics rather than inheriting future Pen brush styles.
+Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. Selected Highlights show one per-object bounding box in both single and multi-selection, with no endpoint handles and no redraw pass that alters the visible color. Freehand bounds come from point min/max extents, so translating a path preserves box size. It keeps its own semantics rather than inheriting future Pen brush styles.
 
 ## Measure
 
