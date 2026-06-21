@@ -32,7 +32,7 @@ For interactive overlay UX changes, ask the user to run:
 
 ## Updates after changes
 
-After making changes, update CONTEXT.md, add relevant and compact context to upload to chatgpt.com (my prompter).
+After making changes, update CONTEXT.md.
 
 ## Agent skills
 
