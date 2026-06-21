@@ -105,7 +105,7 @@ QuickShell is a C++/QML desktop shell framework for Wayland and X11.
             │                         │
             ▼                         ▼
 ┌───────────────────────────────────────────────────────────┐
-│                    Shaula CLI / Daemon                      │
+│                    Shaula CLI Runtime                       │
 │                                                           │
 │  `shaula capture <mode> --json`    ← existing CLI path    │
 │  `shaula ipc call <target> ...`   ← new IPC path          │

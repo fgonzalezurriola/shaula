@@ -64,7 +64,7 @@ This wrapper remains useful for investigation but is not a default release gate.
 It aggregates older task evidence and may include stale runtime assumptions
 until individual subchecks are refreshed.
 
-- Daemon lifecycle and state machine checks
+- Direct CLI lifecycle and capture-session lock checks
 - Capture core modes (`area`, `fullscreen`) with decoded PNG integrity checks
 - Post-capture pipeline (`--save`, `--copy`, partial behavior)
 - Capabilities strict contract parity checks (`capabilities.capture.*` vs execution outcomes)
@@ -85,7 +85,7 @@ manual checks after overlay/capture/Wayland changes.
 - Clipboard path behavior checks
 - Compositor failure path (`ERR_UNSUPPORTED_COMPOSITOR`)
 - Permission/degraded path (`ERR_CLIPBOARD_UNAVAILABLE` under forced unavailable env)
-- Daemon/backend state path (`start/status/stop` + capabilities backend keys)
+- Runtime/backend state path through `preflight`, `doctor`, and capabilities backend keys
 - Strict capability parity and pre-capture guard behavior included in E2E layer report
 - Optional Noctalia path checks must not affect capture hot-path pass criteria
 

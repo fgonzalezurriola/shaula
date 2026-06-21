@@ -1,0 +1,289 @@
+# Preview Tools
+
+This document owns the implemented preview action and tool contracts.
+
+## Primary and Utility Actions
+
+### Copy
+
+`shaula-copy-symbolic` copies a rendered PNG when the preview has modifications. Otherwise it reuses the original PNG path.
+
+### Save
+
+`shaula-save-symbolic` and `Ctrl+S` save a new timestamped PNG under `~/Pictures/shaula/YYYYMMDD-HHMMSS.png`, adding a numeric suffix on collisions and falling back to `~/shaula` when the Pictures directory cannot be created or written.
+
+Quick Save updates preview save metadata but does not create undo history.
+
+### Save As
+
+Save As is available from the responsive utility/More menu and through `Ctrl+Shift+S`. It opens a file chooser, writes a PNG, and updates preview save metadata. A later `Ctrl+S` still creates a new timestamped version.
+
+### Undo and Redo
+
+- `shaula-undo-symbolic`: `Ctrl+Z`; disabled without an undo entry.
+- `shaula-redo-symbolic`: `Ctrl+Shift+Z` or `Ctrl+Y`; disabled without a redo entry.
+
+### Discard
+
+`shaula-discard-symbolic` closes the preview and reports the `discard` action.
+
+### Hidden/unsupported actions
+
+- Share is not exposed; no upload backend exists.
+- Pin is not exposed. Unknown legacy helper action strings remain tolerated by the Zig preview-result parser but are not public actions.
+
+## Selection Model
+
+`shaula-select-symbolic` supports:
+
+- clicking an annotation to select it;
+- dragging a selected annotation to move it;
+- dragging empty image space to create a temporary rectangular region;
+- clearing selection by clicking or dragging outside the image;
+- middle-button canvas panning.
+
+Selected annotation actions appear only while Select is active and an annotation selection exists.
+
+Temporary region selections are not annotations, are not exported, and do not enter undo history by themselves. They expose contextual Crop, Blur, pixel Erase, and Spotlight actions.
+
+Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch deletion, and moving the selected set as one undoable gesture.
+
+## Crop
+
+`shaula-crop-symbolic` is undoable through preview document history.
+
+- Direct Crop tool drags apply on mouse release and return to Select.
+- Contextual Crop can use a temporary region.
+- `SHAULA_PREVIEW_COMMAND_CROP_SELECTED` crops to a selected Rectangle annotation.
+
+## Hand/Pan
+
+`shaula-hand-symbolic` is view-only.
+
+- Routed through `SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND`.
+- Left-drag pans while active.
+- Cursor states are `grab` and `grabbing`.
+- It does not edit pixels, annotations, Spotlight regions, modified/save state, or undo history.
+- Holding Space temporarily switches to Hand/Pan unless an editable widget is focused.
+- Releasing Space restores the previous tool after any active pan finishes.
+
+## Spotlight
+
+`shaula-spotlight-symbolic` is an independent primary tool and a contextual region action.
+
+Direct Spotlight creation:
+
+1. Drag a region on the canvas.
+2. Commit the Spotlight on release.
+3. Open the floating properties HUD.
+
+Spotlight regions are vector document effects in image coordinates. They are not routed through raster crop/blur/erase helpers. Preview and export compose Spotlight effects before drawing annotations so later text and vector marks remain visible above the dimming.
+
+Direct Spotlight uses `drag_start_image` and `drag_current_image`, not `region_selection_rect`. This prevents multiple or nested Spotlights from inheriting stale Select-region geometry.
+
+The Spotlight HUD is attached to the preview `GtkOverlay` and state-owned by `ShaulaPropertiesHudState`. It exposes:
+
+- Back;
+- border color;
+- border width;
+- pointed corners;
+- rounded corners.
+
+The HUD targets the just-created Spotlight by `spotlight_index`. Changes update that entry reactively and become defaults for the next Spotlight. Closing/back clears the active target. HUD state is UI/config state and is excluded from undo snapshots.
+
+The Spotlight icon is the filter-style glyph. Do not reuse it for Highlight.
+
+## Annotation Duplicate and Clipboard
+
+`shaula-duplicate-symbolic` and `Ctrl+D` duplicate the selected annotation set through the multi-object paste path without replacing the preview-local clipboard. New IDs are assigned, only the duplicate set is selected, and the operation creates one undo entry.
+
+The annotation clipboard is scoped to the current preview window:
+
+- `Ctrl+C` with selected objects copies those objects without changing the system clipboard.
+- `Ctrl+C` without object selection copies the rendered image.
+- `Ctrl+X` copies and deletes the selected set as one edit.
+- `Ctrl+V` clones the internal set with new IDs and selects the clones.
+- Repeated paste offsets from the previous pasted set.
+- `Ctrl+D` uses the paste path without replacing clipboard contents.
+
+When the text editor has focus, GTK owns normal text-level `Ctrl+A/C/X/V`. External text/image paste as annotations is future work and should remain behind explicit system-paste behavior such as `Ctrl+Shift+V`.
+
+## Annotation Eraser
+
+Annotation Eraser targets committed annotations only. It never erases pixels from the captured base image. Pixel Erase remains a contextual raster redaction action.
+
+Core contract:
+
+- Hit testing uses visible annotation geometry, not coarse bounds.
+- Transparent interiors of unfilled shapes are not erase targets.
+- A drag accumulates every touched annotation as a pending target.
+- Pending targets render at 35% opacity.
+- All pending targets commit as one undoable edit on release or tool exit.
+- Empty gestures do not create history or mark the document modified.
+- A click without movement still evaluates the initial eraser circle.
+- Overlapping touched annotations are all marked, not only the topmost object.
+- Save, Copy, Done, close, and switching tools commit pending targets first.
+- `Esc` cancels an active gesture without mutation and exits to Select; with no gesture it exits to Select.
+
+The tool has previous-tool toggle semantics:
+
+- Pressing `E` from another tool enters Eraser and remembers that tool.
+- Pressing `E` again restores the remembered tool.
+- Confirming an erase gesture keeps Eraser active.
+- Holding Space temporarily enters Hand/Pan and restores Eraser on release.
+- Entering Pan during an active erase gesture commits pending targets first.
+
+The drawn cursor and hit-testing use the same screen-space Size value. The HUD exposes Size from 8 to 48 screen pixels, defaults to 14, and steps by 2. Size persists as a last-used preference across launches.
+
+During a drag, hit testing uses the swept capsule between pointer samples. The visual tail is separate from hit-testing, displays only the recent path, fades after release, and uses the theme foreground with alpha.
+
+Pending erase annotations are not selectable and do not draw selection outlines or handles. Once pending during a gesture, they remain pending until commit or cancellation.
+
+Naming and ownership:
+
+- UI name: `Eraser`
+- icon: `shaula-eraser-symbolic.svg`
+- tool: `SHAULA_TOOL_ERASER`
+- command: `SHAULA_PREVIEW_COMMAND_SET_TOOL_ERASER`
+- operation: `SHAULA_OPERATION_ERASE_ANNOTATIONS`
+- input/rendering: `src/preview/preview_canvas.c`
+- pending/commit state: `src/preview/preview_state.c`
+- geometry hit testing: `src/preview/preview_annotations.c`
+- toolbar/shortcut entry points: `preview_toolbar.c`, `preview_commands.c`
+
+Only primary-button click/drag erases. Right click has no Eraser-specific behavior.
+
+## Arrow
+
+`shaula-arrow-symbolic` is a one-shot creation tool.
+
+After a valid arrow is drawn, preview selects it, opens the Arrow HUD, and returns to Select. Selecting the Arrow tool again prepares a new arrow instead of editing the selected object.
+
+Select-mode hit testing is geometry-based:
+
+- straight arrows hit near the visible shaft/head;
+- curved arrows sample the curve path;
+- the bend handle has explicit priority.
+
+Selected arrows draw path-following selection chrome and repaint the arrow above it. Start/end handles reshape the arrow, the control handle edits curvature, and dragging the shaft moves the object.
+
+The Arrow HUD exposes stroke style: normal, dashed, or dotted. A real style change pushes undo before mutating the annotation and uses the same draw path for preview, copy, and export.
+
+## Line
+
+`shaula-line-symbolic` shares Arrow geometry, styling, hit testing, history, duplication, and clipboard behavior.
+
+Line stores `data.arrow.has_head = FALSE` during draft and commit. `shaula_annotation_new_arrow` defaults to a headed arrow, so Line must explicitly clear the flag.
+
+## Text
+
+`shaula-text-symbolic` uses the shared orange default and opens a floating HUD with:
+
+- color;
+- size;
+- Normal/Sketch font mode;
+- left/center/right alignment.
+
+The font-mode control is a linked two-button segment with live `Ab` previews rendered in the resolved font families. Do not replace it with SVG icons.
+
+A hidden `GtkTextView` owns keyboard input. The visible draft is rendered through the same Pango/Cairo annotation path as committed text, export, and copy.
+
+Text invariants:
+
+- `position` is the stable Pango layout origin.
+- `text_line_metrics` owns draw origin, ink/logical union bounds, and line advance.
+- Draw, selection bounds, draft bounds, and caret reuse those metrics.
+- Text hit testing uses the exact selected bounds without additional click slop.
+- Drafts show a canvas caret with a contrast halo.
+- Caret position comes from the text buffer's UTF-8 insert byte index and Pango cursor position.
+- `GtkTextBuffer::mark-set` redraws caret movement even when content is unchanged.
+- Active drafts show text and caret, not an editing bounds rectangle.
+- HUD changes during a draft update draft state without mutating a previously selected committed annotation.
+- Drag release must keep `SHAULA_OPERATION_TEXT` active while drafting.
+
+Keyboard behavior:
+
+- `Enter` inserts a newline.
+- `Esc` or `Ctrl+Enter` finishes the draft.
+- Clicking the canvas commits non-empty draft text without closing the preview.
+- A canvas-only commit returns to Select with the new annotation selected.
+- `Backspace` remains text-editor behavior while the hidden text view has focus.
+- Selected-object deletion uses `Delete`.
+
+## Rectangle
+
+`shaula-rectangle-symbolic` is a one-shot creation tool matching Arrow's post-create flow. A valid Rectangle becomes selected, opens its HUD, and returns to Select.
+
+Defaults:
+
+- color `#FD7603`;
+- stroke width 3.5 px;
+- dashed stroke;
+- rounded corners;
+- no fill.
+
+HUD controls:
+
+- color;
+- stroke width;
+- normal/dashed style;
+- fill;
+- rounded/square corners.
+
+Fill uses the stroke color at low alpha.
+
+Rectangle hit testing uses visible geometry:
+
+- bounds are broad-phase only;
+- unfilled interiors are not hit targets;
+- only visible fills return `SHAULA_ANNOTATION_HIT_FILL`;
+- handles and strokes rank above fills/text before z-order;
+- transparent interiors pass clicks through to objects behind them.
+
+Marquee selection follows the same visible-object contract. Arrows, Measure lines, Pen/Highlight paths, and unfilled Rectangles are selected only when the region intersects visible stroke geometry.
+
+Selected Rectangles draw external selection chrome from actual Rectangle geometry with eight resize handles, then repaint the real stroke above the chrome.
+
+## Pen
+
+`shaula-pen-symbolic` opens a floating HUD for color, stroke width, and opacity. Defaults use the shared strong orange.
+
+Pen hit testing uses path distance instead of bounds. Selected paths draw path-following, low-alpha, solid selection chrome and repaint the real path above it so selection never turns the stroke white.
+
+Future Pen styles belong in this HUD rather than the primary toolbar.
+
+## Highlight
+
+`shaula-highlight-symbolic` is separate from Pen and uses the highlighter icon, not the Spotlight icon.
+
+Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. It keeps its own semantics rather than inheriting future Pen brush styles.
+
+## Measure
+
+`shaula-measure-symbolic` is implemented as the preview ruler/distance tool.
+
+## Tool Property Persistence
+
+HUD-controlled tool options should persist as last-used preferences across launches rather than resetting every preview session. Eraser Size already follows this contract.
+
+## More Menu
+
+`shaula-more-symbolic` exposes:
+
+- Save As;
+- Fit to screen;
+- Actual size;
+- Reset annotations;
+- Open preview directory.
+
+Open preview directory resolves the directory containing the current preview path.
+
+## Theme and Hover Behavior
+
+Toolbar, overflow popover, and property HUD chrome follow GTK theme colors with explicit contrast reinforcement. Light themes such as Catppuccin Latte must use dark icon foregrounds even when the application prefers a dark theme.
+
+Custom HUD icons read the active GTK foreground from the style context.
+
+Toolbar and overflow icons use both GTK `:hover` and a `shaula-stable-hover` CSS class driven by pointer enter/leave. GTK may drop pseudo-hover state during keyboard input or capture grabs; the stable class keeps the visible hover capturable while the pointer remains over the button. Tooltips remain normal transient GTK popups.
+
+Toolbar overflow must not use a permanent frame tick. Initial measurement uses a one-shot tick, and later updates come from `notify::width`. A continuous tick keeps `shaula-preview` active at idle.

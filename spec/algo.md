@@ -14,7 +14,7 @@ Shaula is a machine-first, Niri-first screenshot tool written in Zig. The produc
 | D-002 | Agent-first CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
 | D-003 | Zig 0.16.0 pin | Locked | Stable toolchain with deterministic behavior and error handling. |
 | D-004 | Hot-path isolation | Locked | Keep capture separate from non-essential work such as preview, history, and exports. |
-| D-005 | Daemon-first architecture | Locked | Centralize state, capabilities, and cross-process orchestration. |
+| D-005 | Direct command orchestration | Locked | Keep capture startup simple and fast: the CLI owns orchestration and delegates only bounded work to short-lived helpers. |
 | D-006 | Deterministic error taxonomy | Locked | Map every failure to specific `ERR_*` tokens and recovery actions. |
 | D-007 | Performance gates | Locked | Keep the hot path inside the budgets in [spec/performance.md](performance.md). |
 
@@ -42,7 +42,6 @@ Command families:
 - `capture`
 - `preview`
 - `config`
-- `daemon`
 - `capabilities`
 - `history`
 - `clipboard`

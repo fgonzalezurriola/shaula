@@ -23,12 +23,11 @@ See [spec/requirements.md](requirements.md) for product direction and [spec/algo
 ```text
 shaula <command-family> <command> [flags]
 
-command-family := capture | preview | config | daemon | capabilities | history | clipboard | explore | settings
+command-family := capture | preview | config | capabilities | history | clipboard | explore | settings | doctor | preflight | directory | setup | errors
 
-capture command := area | fullscreen | all-screens | window | previous-area
+capture command := quick | area | fullscreen | all-screens | window | previous-area
 preview command := <file>
 config command := show | init | niri-window-rule | niri-install
-daemon command := start | status | stop
 capabilities command := list
 history command := list | show
 clipboard command := copy-image | import-image
@@ -70,12 +69,6 @@ Copy defaults:
 
 - `capture quick`, `capture area`, `capture fullscreen`, and `capture all-screens` copy to the clipboard by default.
 - `capture window` and `capture previous-area` copy only when `--copy` is supplied.
-
-#### Daemon family
-
-- `shaula daemon start --json [--socket <path>]`
-- `shaula daemon status --json [--socket <path>]`
-- `shaula daemon stop --json [--socket <path>]`
 
 #### Capabilities family
 
@@ -204,12 +197,10 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - `ERR_CAPTURE_TIMEOUT`
 - `ERR_PREVIOUS_AREA_UNAVAILABLE`
 
-#### Daemon `ERR_*`
+#### Runtime coordination `ERR_*`
 
-- `ERR_DAEMON_ALREADY_RUNNING`
-- `ERR_DAEMON_NOT_RUNNING`
-- `ERR_IPC_BIND_FAILED`
 - `ERR_IPC_TIMEOUT`
+- `ERR_CAPTURE_IN_PROGRESS`
 
 #### Capabilities `ERR_*`
 
@@ -240,23 +231,22 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 
 ## Process Topology
 
-Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isolation for Niri-first capture.
+Shaula v1 uses direct CLI orchestration with short-lived helper processes and strict hot-path isolation.
 
 ### Process Boundaries
 
-- **Daemon (source of truth)**: The daemon is the source of truth for runtime state, capability decisions, and command orchestration.
-- **Overlay process**: Handles selection UI/input only (pointer/keyboard, rectangle/aspect constraints) and exits after producing deterministic selection output.
-- **Capture backend process**: Performs compositor/protocol capture operations (`area`, `fullscreen`, `window`) and returns normalized capture metadata.
-- **Worker process(es)**: Execute asynchronous heavy tasks (long encoding, exports, uploads) outside the capture critical path.
-- **UI process**: Desktop UI shell that consumes only validated daemon/CLI contracts and never bypasses daemon control.
+- **CLI process**: Parses commands, resolves capabilities, enforces guards, owns capture lifecycle orchestration, and emits the final JSON envelope.
+- **Overlay helper**: Handles selection UI/input only and exits after producing deterministic selection output.
+- **Capture helper/backend process**: Performs compositor or portal capture work and returns normalized capture metadata.
+- **Preview/settings helpers**: Native GTK processes launched only when requested; they own their UI lifecycle and exit independently.
 - **Runtime selection state**: Stores the last confirmed area geometry independently from history so `previous-area` stays on the short capture path.
 
 ### Hot-Path Isolation Rule
 
-- Hot path is: `hotkey -> daemon dispatch -> overlay selection (if needed) -> capture backend -> artifact ready`.
+- Hot path is: `hotkey -> shaula CLI -> overlay selection (if needed) -> capture backend/helper -> artifact ready`.
 - The capture path must work without plugin presence.
 - Worker jobs and optional integrations must never block or delay hot-path completion.
-- If a non-critical subsystem fails, daemon returns deterministic `ERR_*` / degraded status while preserving capture completion when possible.
+- If a non-critical subsystem fails, the CLI returns deterministic `ERR_*` or degraded status while preserving capture completion when possible.
 
 ## Runtime Capture and Capability Enforcement
 
@@ -302,96 +292,142 @@ Shaula v1 uses a daemon-first, multi-process topology with strict hot-path isola
 - Guard timeout maps to deterministic `ERR_CAPTURE_PRECONDITION_TIMEOUT`.
 - Guard warning tokens are stable and machine-readable: `capture_precondition_panel_hidden_handshake`, `capture_precondition_settle_barrier`.
 
-## IPC Contract v1
+## Runtime Coordination Contract
 
-### Transport and Socket Path Rules
+Shaula has no resident daemon and no private Unix-socket command protocol. Each
+CLI invocation resolves runtime state directly and launches only the helpers
+needed for that command.
 
-- Transport: Unix domain stream socket (local-only IPC).
-- Default socket path: `${XDG_RUNTIME_DIR}/shaula/daemon-v1.sock`.
-- If `XDG_RUNTIME_DIR` is unavailable, fallback path is `/tmp/shaula-${UID}/daemon-v1.sock`.
-- Socket path is configurable via CLI `--socket <path>` for daemon commands.
-- Daemon start must fail with `ERR_IPC_BIND_FAILED` when bind path is invalid, unavailable, or already bound by a non-compatible endpoint.
+- `shaula doctor --json`, `shaula preflight --json`, and
+  `shaula capabilities list --json` are the read-only health and discovery
+  surfaces.
+- Capture commands use a capture-session lock to reject overlapping hotkey
+  invocations with `ERR_CAPTURE_IN_PROGRESS`.
+- Helper process boundaries use command-specific argv, environment, and
+  stdout/stderr contracts rather than a shared socket envelope.
+- Helper timeouts map to deterministic command errors such as
+  `ERR_IPC_TIMEOUT` where the external protocol itself timed out.
+- Capture commands are never retried automatically because retries could create
+  duplicate screenshots or unexpected portal prompts.
 
-### Versioning and Compatibility
+## Implementation Ownership Map
 
-- IPC protocol identifier: `shaula-ipc`.
-- `ipc_version` is mandatory in every request and response envelope.
-- Locked v1 value: `1.0.0`.
-- Backward-compatible additive changes are minor/patch; incompatible envelope/semantic changes require major bump and new socket suffix (`daemon-v2.sock`).
+The public contracts above are implemented through these ownership seams. Keep
+new work inside the existing owner instead of duplicating runtime decisions or
+string contracts across modules.
 
-### Request / Response Envelope
+### Capture command and lifecycle
 
-#### Request envelope (required fields)
+- `capture/command_grammar.zig` owns capture flag membership and deterministic
+  command-specific `ERR_CLI_USAGE` messages.
+- `capture/command_flags.zig` declares per-mode flag structs and delegates
+  parsing to the grammar.
+- `capture/invocation.zig` converts parsed flags and resolved geometry into the
+  lifecycle invocation contract: public token, backend operation, output/window
+  fields, post-capture flags, previous-area persistence, and live-overlay settle
+  behavior.
+- `capture/command.zig` is a strict dispatcher into `capture/lifecycle.zig`.
+- `capture/lifecycle.zig` owns capability enforcement, pre-capture guards,
+  optional live-overlay settling, backend execution, previous-area persistence,
+  and final success/error emission.
+- `capture/backends/capture_execution_plan.zig` owns typed backend operations:
+  `area`, `current_output`, `all_outputs`, and `window`.
+- `capture/backends/capture_backend_failure.zig` centralizes backend
+  `CaptureOutcome` failures while preserving deterministic `ERR_*` attributes.
+- `capture/backends/capture_backend_contract.zig` owns public backend labels,
+  degraded warning tokens, and helper exit-code mapping.
+- `capture/warnings.zig` owns capture-specific warning tokens.
 
-```json
-{
-  "ipc_version": "1.0.0",
-  "request_id": "req-01HZX...",
-  "command": "capture.area",
-  "deadline_ms": 1500,
-  "payload": {},
-  "client": {
-    "name": "shaula-cli",
-    "version": "1.0.0"
-  }
-}
-```
+### Runtime and compositor decisions
 
-#### Response envelope (required fields)
+- `capabilities/runtime.zig` owns backend/runtime selection and exposes the
+  decision methods callers should use rather than comparing backend strings.
+- `compositor/runtime.zig` owns compositor detection.
+- `compositor/focused_output.zig` owns focused-output resolution.
+- `runtime/env.zig` owns borrowed environment parsing.
+- `runtime/tool_lookup.zig` owns fixed `grim` candidates and PATH-aware tool
+  diagnostics.
+- `runtime/process_exec.zig` owns shared process execution, including stdin-pipe
+  execution. Callers still own output limits, cleanup, and deterministic error
+  mapping.
+- `runtime/helper_resolution.zig` owns helper lookup order: environment override,
+  sibling binary, then PATH.
 
-```json
-{
-  "ipc_version": "1.0.0",
-  "request_id": "req-01HZX...",
-  "ok": true,
-  "result": {},
-  "error": null,
-  "degraded": false,
-  "daemon_state": "ready",
-  "warnings": []
-}
-```
+Backend execution receives an already resolved runtime decision and optional
+focused output. It must not probe compositor/backend state again.
 
-### Timeout and Retry Policy
+### Overlay
 
-- Client default request timeout: `1500ms` for hot-path operations; non-hot-path operations may opt into higher deadlines.
-- Daemon returns `ERR_IPC_TIMEOUT` when request processing exceeds `deadline_ms`.
-- Retry policy for idempotent non-capture commands (`daemon.status`, `capabilities.list`): up to 2 retries with fixed 75ms backoff.
-- No automatic retry for capture commands to avoid duplicate captures and latency spikes.
+- `overlay/overlay.zig` is the public facade.
+- `overlay/selection_session.zig` owns helper environment preparation, optional
+  frozen backgrounds, dry-run/test payloads, helper protocol mapping, and
+  accepted-selection persistence.
+- `overlay/selection_draft_store.zig` owns persisted overlay draft state.
+- `overlay/runtime.zig` owns the helper stdio process boundary.
+- `overlay/helper_protocol.zig` owns parsing of the helper envelope.
 
-### Health Checks and Liveness
+### Post-capture and JSON
 
-- `daemon.status` is the canonical health command and must be served without overlay/backend startup side effects.
-- Health response includes daemon state (`initializing`, `ready`, `capturing`, `degraded`, `error`) and active IPC version.
-- A successful status call confirms IPC handshake, envelope version compatibility, and event-loop responsiveness.
+- `capture/post_capture.zig` owns post-capture side effects and typed outcomes
+  for history, clipboard, and preview.
+- `capture/post_capture_types.zig` owns post-capture state types.
+- `capture/post_capture_json.zig` owns the stable capture result envelope,
+  duplicated top-level/result fields, and partial/degraded rules.
+- `cli/json.zig` owns shared timestamps, escaping, and deterministic JSON
+  envelopes used by preview, history, errors, doctor, and notify commands.
+
+### Diagnostics and configuration
+
+- `doctor/diagnostics.zig` owns installed/runtime discovery.
+- `config/save_args.zig` owns the `shaula config save` setting-flag grammar and
+  applies flags to the config draft.
+- `config/command.zig` owns command-level config flags, orchestration, and JSON
+  envelopes.
+- `settings/settings_config.zig` owns the settings configuration contract.
+
+### Preview boundaries
+
+- `preview/preview_paths.{c,h}` owns the helper-side temporary capture-path
+  contract and must stay aligned with `runtime/paths.zig`.
+- `preview/preview_geometry.zig` owns cross-language preview geometry and color
+  conversion helpers.
+- `preview/preview_image_io.zig` and `preview/preview_clipboard.zig` own preview
+  image and clipboard runtime calls.
+- `runtime/c_compat.zig` owns C/GTK string and status compatibility glue;
+  returned GLib strings remain GLib-owned and must be released with `g_free`.
+- `ShaulaPreviewDocument` owns output-affecting preview model state. GTK widgets,
+  view state, tools, gestures, and rendering remain in the C preview surface.
 
 ## Plugin Optionality Rule
 
 - Noctalia integration is optional and non-blocking.
-- Noctalia plugin availability must never be required for daemon startup, preflight, or capture command execution.
-- Plugin communication must run through optional IPC adapters with bounded timeouts; adapter failures only produce warnings/degraded metadata.
+- Noctalia plugin availability must never be required for preflight or capture command execution.
+- The plugin invokes validated Shaula CLI commands. Optional future shell IPC must remain bounded and outside core capture correctness.
 - If Noctalia is absent or crashes, Shaula core capture flows remain fully operational and contract-compliant.
 
 ## Noctalia Optional Integration
 
 ### Scope (post-MVP, non-critical)
 
-- Integration lives under `integrations/noctalia/*` as a Proof of Concept (PoC).
-- The PoC is daemon-connected through the same versioned IPC envelope (`ipc_version: 1.0.0`) used by core daemon contracts.
+- Integration lives under `integrations/noctalia/shaula/` as an optional packaged bar widget.
+- The widget invokes public Shaula CLI commands and does not implement screenshot logic itself.
 - Integration is explicitly optional: capture core does not import, call, or wait for Noctalia plugin flows.
 
 ### Compatibility Contract
 
-- Plugin requests must include `ipc_version`, `request_id`, `command`, and bounded `deadline_ms`.
-- Plugin-side MVP action adapter maps exactly these actions to Shaula CLI contracts: `capture-area`, `capture-fullscreen`, `capture-window`, `open-last`, `history`.
-- Adapter owns action-to-command translation, while capture implementation remains exclusively in Shaula core.
-- Daemon responses are validated by plugin adapter before exposing plugin-triggered action results.
+- Plugin actions map to public CLI commands such as `capture quick`,
+  `capture area`, `capture fullscreen`, `capture all-screens`, `settings`, and
+  `directory screenshots --open`.
+- The widget owns only action-to-command translation; capture implementation
+  remains exclusively in Shaula core.
+- Capture commands keep their normal JSON and deterministic `ERR_*` contracts
+  regardless of whether they were launched from a shell widget or a terminal.
 
 ### Failure Isolation and Non-Blocking Guarantees
 
-- Plugin failures (`ERR_NOCTALIA_IPC_UNAVAILABLE`, invalid response, version mismatch) are isolated from capture path.
-- Capture hot path remains independent and must complete even when plugin is absent, disabled, or crashed.
-- Runtime policy: plugin adapter timeouts are bounded (`<=250ms` in PoC scripts) and never on capture hot path.
+- Plugin load or command-launch failures are isolated from the capture implementation.
+- Capture hot path remains independent and works when the plugin is absent, disabled, or crashed.
+- Noctalia-specific UI state must not add work to captures launched elsewhere.
 
 ### UI Backend Contract Rule
-UI must only invoke validated CLI/daemon contracts; no direct backend capture calls.
+UI must only invoke validated CLI contracts; no direct backend capture calls.

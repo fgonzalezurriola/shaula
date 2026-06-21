@@ -105,15 +105,6 @@ and the working diff.
   property/duplicate/crop actions and exposes only batch delete. Rectangle
   annotations can be selected by clicking inside their bounds, even when
   unfilled, because edge-only hit testing made Select feel broken.
-- v0.1.1 polish snapshot: preview Copy, Save, Save As, and Done/accept are the
-  real user-facing flows; Pin and Share are not exposed actions. Preview Save,
-  Save As defaults for runtime artifacts, and Done promotions now use
-  `YYYYMMDD-HHMMSS.png`; direct saved no-preview and runtime captures use the
-  same prefix-free filename template, with `-2`, `-3`, and so on for
-  collisions. Redo history is bounded like undo history.
-  The live color sampler remains passive on hover/Tab copy, and clicking the
-  swatch applies the sampled color to the selected annotation or active tool
-  defaults.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
   are non-goals. Niri is the only supported compositor target; selection and
@@ -132,142 +123,18 @@ and the working diff.
   running. Unreferenced QA scripts for old repo preflight, UI smoke/contract
   checks, selection interaction shell checks, overlay cancel, and plugin
   overhead benchmarking were removed.
-- Capture Area overlay resize smoothness: the GTK overlay now caches the scaled
-  screenshot background as a Cairo surface per drawing-area size. Pointer
-  move/resize redraws reuse that surface, including the clipped selected region,
-  instead of calling `gdk_pixbuf_scale_simple` on every frame. This keeps the
-  existing helper JSON/`ERR_*` contract unchanged and only affects interactive
-  overlay rendering latency.
-- The `./dev bench`, `./dev bench-ui`, `./dev strategies`, and
-  `./dev strategies-ui` shortcuts were removed from the developer wrapper
-  because they had become stale routine checks. The old overlay strategy
-  benchmark script and all-in-one strategy spec were also removed as stale
-  design noise. `./dev check` and `git diff --check` remain the after-change
-  verification baseline; targeted runtime checks should be invoked explicitly
-  through `./dev run ...` or the underlying QA scripts when a change needs them.
-- `./dev qa` is now a lightweight QA wrapper for deterministic local contracts:
-  negative Wayland/Niri preflight plus unit QA. It no longer runs integration,
-  E2E Niri, performance gates, or release-readiness evidence checks. The
-  deeper wrappers remain available under `scripts/qa/` as manual/legacy
-  investigation tools and now print an explicit warning before running. The
-  `qa-full`/`qa-ui` wrapper aliases were removed.
 - Agent skill configuration is documented in `AGENTS.md` and `docs/agents/`.
   Skills should use GitHub Issues for `fgonzalezurriola/shaula` via `gh`,
   default canonical triage labels, and Shaula's single-context domain layout:
   root `CONTEXT.md` plus `docs/adr/` for durable architectural decisions.
-- v0.1.2 release prep: README install examples now point at `v0.1.2`, and the
-  optional Noctalia widget manifest is aligned to `0.1.2`. Public protocol
-  `contract_version`/`ipc_version` remains `1.0.0` and is separate from app
-  release semver.
 - Scrolling capture is explicitly out of scope; keep the stale exploratory spec
   out of active roadmap decisions.
 
 - Prompt handoff snapshot is now `CONTEXT.md`; `./dev context` copies it with
   the capture-mode note, last 3 commits, and working diff.
-- GitHub Releases are published by `.github/workflows/release.yml` on `v*` tag
-  pushes. The release job builds from the tag with
-  `zig build -Doptimize=ReleaseSafe -Dstrip`, runs existing tests under
-  ReleaseSafe, packages `zig-out/bin` and `zig-out/share` as
-  `shaula-linux-x86_64.tar.gz`, writes and verifies `SHA256SUMS`, verifies the
-  archive contains all helper binaries, preview toolbar icons, and the Noctalia
-  widget payload, then installs from the local tarball into fake XDG paths to
-  validate desktop/icon/config/Niri/Noctalia UX before publishing/replacing
-  release assets with `gh`. The publish job uses `contents: write`, does not
-  run on PRs, does not use shared caches, and sets a tag-specific `run-name` for
-  release runs.
-- The public repository currently uses `master` as the default branch, so README
-  installer snippets use `raw.githubusercontent.com/.../master/scripts/install.sh`.
-- First installer foundation is now present in `scripts/install.sh` and
-  `scripts/uninstall.sh`. It is user-local only, verifies GitHub release
-  `SHA256SUMS`, supports latest stable, `--version`, positional `v*`, and
-  `SHAULA_VERSION`, warns about missing runtime tools, installs desktop/icon
-  paths, delegates user config/integration setup to `shaula setup`, preserves an
-  existing `~/.config/shaula/config.toml`, and only uses `sudo` after an explicit
-  Arch/CachyOS runtime-dependency confirmation. The Arch dependency prompt
-  installs `grim slurp wl-clipboard gtk4 gtk4-layer-shell` via
-  `sudo pacman -S --needed ...`, reads from `/dev/tty` so `curl | sh` still
-  works interactively, logs when packages are already installed, supports
-  colorized TTY status prefixes (`ok:` green, `warning:` yellow, `error:` red)
-  without tinting entire normal log lines, and `--yes` must never auto-escalate. The test-only
-  `SHAULA_INSTALL_ASSUME_ARCH=1` and
-  `SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=...` environment variables exist
-  so the dependency prompt can be exercised without uninstalling system
-  packages. Release installs otherwise stay non-interactive; `shaula setup`
-  owns optional Noctalia and Niri integration prompts when those environments are
-  detected.
-  The Noctalia plugin state hot-applies, so the release installer must not ask
-  to restart Noctalia after installing the widget.
-  Every installer prompt that changes integration state must first print the
-  visible user outcome, files, settings, or keybinds it will affect before
-  asking the user to confirm; do not expose internal CLI commands as the main
-  prompt copy. Installer output should be grouped by user-visible phases and
-  prefer concise status over raw implementation detail, while still naming
-  backup/config paths when they are useful for recovery. Local dev installs
-  still prompt unless `--yes` is passed.
-- `./dev dev-install [scripts/install.sh args...]` builds the current checkout,
-  packages `zig-out` into a temporary local release archive with `SHA256SUMS`,
-  and runs `scripts/install.sh` against `file://` URLs. Use
-  `./dev dev-install --yes` for a non-interactive install of the exact local
-  build. The old `./dev install` deprecated alias was removed during repo
-  cleanup; use `./dev dev-install` for local checkout installs.
-  The dev wrapper sets `SHAULA_INSTALL_CONTEXT=dev`, prints a local-dev banner,
-  and makes install/Noctalia prompts explicitly say they are installing or
-  reloading this local dev build rather than a GitHub release. When
-  `~/.config/noctalia` exists, `dev-install` restarts Noctalia after a real
-  install by trying `noctalia.service`, then `qs`, then `quickshell`; it skips
-  restart for `--help`, `--uninstall`, and `--no-integrations`.
-- `./dev dev-install --yes` does not opt into Niri keybind installation by
-  itself; the installer passes `--skip-niri-keybinds` to `shaula setup` in that path so
-  non-interactive installs do not silently edit Niri config. Use
-  `./dev dev-install --yes --niri-keybinds`, `shaula setup`, or the Settings
-  shortcut installer. Managed CTRL+Shift+1/2/3/4 Niri keybinds must spawn
-  `shaula capture <mode> --json`; capture commands reject non-JSON invocations
-  with `ERR_CLI_USAGE`, which makes compositor-spawned shortcuts appear to do
-  nothing.
-- `shaula setup` is the post-install user wizard for package-manager installs
-  such as AUR `shaula-bin`: packages install files, while setup creates the
-  user config, asks before mutating Niri, asks before installing the Noctalia Bar
-  Widget, writes backups before JSON/config edits, and can run non-interactively
-  with `--yes`, `--no-integrations`, `--no-niri`, `--no-noctalia`,
-  `--niri-keybinds`, `--skip-niri-keybinds`, and `--dry-run`.
-- AUR packaging scaffolds live under `aur/shaula` and `aur/shaula-bin`.
-  `shaula` is the source package for `x86_64`/`aarch64` and has `zig` only in
-  `makedepends`; `shaula-bin` installs the GitHub Release tarball without Zig
-  and currently declares only `x86_64` because published releases do not yet
-  include a checked `shaula-linux-aarch64.tar.gz` asset. Both packages install a
-  pacman post-install message that points users at settings and conditionally at
-  `shaula setup` when the installed binary supports it, instead of mutating user
-  configs from package hooks. AUR maintainer metadata should use the real
-  current maintainer identity `fgonzalezurriola <fgonzalezurriola@gmail.com>`;
-  keep `shaula` and `shaula-bin` aligned when publishing release updates. Both
-  AUR scaffolds have been advanced to v0.1.4 with current source/binary
-  checksums and regenerated `.SRCINFO`.
-- Installer icon handling copies the packaged `share/icons/hicolor` tree into
-  `~/.local/share/icons/hicolor`, not only the desktop app icon. The desktop
-  launcher uses `Icon=shaula` and ships the AI-generated transparent PNG app
-  icon as fixed hicolor sizes under `48x48`, `64x64`, `128x128`, `256x256`,
-  and `512x512` rather than tracing it to SVG. The source raster lives at
-  `src/preview/icons/source/shaula-source.png`; avoid unused root-level icon
-  copies. Installer uninstall must remove those app PNG sizes plus the
-  legacy fallback SVG app icon. Preview helper
-  toolbar icons are runtime-loaded from `../share/icons` relative to the
-  installed helper, so missing `scalable/actions/shaula-*-symbolic.svg` files
-  show as GTK missing-icon glyphs in installed previews.
-- Integration behavior is intentionally user-scoped: packages and the installer
-  install files, then `shaula setup` detects Niri config candidates and asks
-  before editing the user's Niri config. The managed blocks include the preview
-  floating window-rule and recommended quick, area, fullscreen, and all-screens
-  capture binds using the installed absolute `shaula` path. It detects Noctalia
-  and can optionally install the minimal `integrations/noctalia/shaula/` Bar
-  Widget into `~/.config/noctalia/plugins/shaula/`, enabling
-  `states.shaula.enabled` and adding `plugin:shaula` to the bar only after
-  backing up and validating Noctalia JSON config. The user-facing Noctalia menu
-  should expose capture,
-  Settings, screenshots-folder, and bug-report actions; keep `shaula doctor`
-  out of that menu because it is a diagnostic/development command.
-- Installer Niri and Noctalia detection must honor `XDG_CONFIG_HOME` first and
-  keep the old `~/.config/...` fallbacks, so release installs work correctly for
-  users with custom XDG layouts and for CI install-smoke verification.
+- Release, installer, AUR, icon packaging, and user integration contracts live
+  in `docs/releasing.md`. Read that file before changing release workflows,
+  install/setup behavior, package metadata, or managed Niri/Noctalia state.
 - `shaula doctor` and `shaula doctor --json` now provide read-only diagnostics
   for installed paths, config/generated files, Wayland env, Niri candidates,
   Noctalia detection paths, Shaula Noctalia plugin install/enabled state,
@@ -292,12 +159,8 @@ and the working diff.
   integration, Advanced) with a compact capture-mode matrix for skip/copy/save
   combinations, a dedicated saving section, a readable Niri status card, and a
   fixed sticky footer for the primary Save and Cancel actions.
-- Public docs live primarily in `README.md`, the shorter product-facing
-  install/usage/dev-basics page with `docs/assets/shaula-preview.png` as the
-  product preview image; `docs/roadmap.md` tracks future features. The old
-  internal `DEV.md`, completed `PLAN_WAYLAND.md`, stale `STATE.md`, unreferenced
-  UI wrapper PoC, unused demo video variants, and orphaned spec-validation
-  scripts were removed during repo cleanup.
+- Public docs live primarily in `README.md`; `docs/roadmap.md` tracks future
+  features.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - Undo/Redo now has a reusable preview history foundation for document edits.
@@ -405,70 +268,15 @@ and the working diff.
   post-capture preview so existing previews do not block newer screenshots.
 - The GTK preview helper runs as a non-unique `GtkApplication`, so multiple
   post-capture previews can stay open at the same time.
-- Architecture deepening pass: capture grammar now lives in
-  `capture/command_grammar.zig`; capture invocation assembly lives in
-  `capture/invocation.zig`; backend execution planning is typed in
-  `capture/backends/capture_execution_plan.zig`; backend failure construction lives in
-  `capture/backends/capture_backend_failure.zig`; overlay orchestration lives behind
-  `overlay/selection_session.zig`; doctor discovery lives in
-  `doctor/diagnostics.zig`; and post-capture work separates side effects,
-  typed outcomes, and JSON rendering across `capture/post_capture.zig`,
-  `capture/post_capture_types.zig`, and `capture/post_capture_json.zig`.
-- Compositor seam foundation now exists in `compositor/runtime.zig` plus
-  `compositor/focused_output.zig`. Runtime detection now distinguishes
-  `niri`, generic Wayland compositors, and unsupported environments; current
-  runtime scope still supports only `niri`, but unsupported Wayland sessions
-  now report deterministic detected compositor labels for future expansion.
-- Preflight/capabilities/output-resolution wiring now consumes the shared
-  compositor seam. `preflight` and `capabilities list` error details include
-  detected compositor labels, and focused-output resolution is adapter-backed
-  (`niri msg -j focused-output` for Niri, no fabricated output for others).
-- Capture runtime resolution is upstream-owned: `capabilities/runtime.zig`
-  selects the backend/runtime decision, `compositor/focused_output.zig`
-  resolves focused-output names, and `capture/lifecycle.zig` passes those
-  resolved values into `capture_backend.execute`. Backend execution and
-  `capture_execution_plan.zig` no longer probe compositor/backend state.
-- Runtime process seam was deepened: `runtime/process_exec.zig` now also owns
-  stdin-pipe execution (`runWithPipeInput`), and preview/notify/clipboard
-  command execution now routes through runtime process adapters.
-- Architecture cleanup pass: deleted the unused daemon command/modules and the
-  daemon-specific QA scripts. Installed Niri shortcuts already invoke
-  `shaula capture ... --json` directly, so `preflight` no longer reports
-  daemon IPC/socket readiness and the public error taxonomy no longer advertises
-  daemon-only errors. Capture lifecycle imports `overlay/selection_session.zig`
-  plus `overlay/selection_draft_store.zig` directly. Helper binary resolution is
-  centralized in `runtime/helper_resolution.zig` for overlay, preview, and
-  settings helpers, preserving env-var override -> sibling binary -> PATH
-  fallback ordering. C/GTK helper string/status glue is centralized in
-  `runtime/c_compat.zig` for preview clipboard/image/notify and settings config
-  FFI modules; returned strings remain GLib-owned and must be freed with
-  `g_free`.
-- C-to-Zig migration pass: settings config contract logic now lives in
-  `src/settings/settings_config.zig`; preview geometry lives in
-  `src/preview/preview_geometry.zig`; preview image IO and preview clipboard
-  runtime calls live in `src/preview/preview_image_io.zig` and
-  `src/preview/preview_clipboard.zig`. The GTK helpers still call the existing
-  C headers, but `build.zig` builds Zig objects and links them into the native
-  helpers. The old C implementations and scratch GTK test file were removed.
-  Remaining C should be treated as GTK UI/rendering surface. Preview now has a
-  `ShaulaPreviewDocument` seam for output-affecting model state while GTK
-  widgets, view state, tools, gestures, and rendering stay in the C preview
-  surface.
-- Overlay runtime cleanup: legacy unused `OverlayRuntime` lifecycle scaffolding
-  was removed from `overlay/runtime.zig`; production overlay execution keeps a
-  single helper stdio seam via `runSelectionHelper`.
-- CLI contract drift reduction: preview/history/errors/doctor/notify command
-  families now reuse shared `cli/json.zig` envelope helpers for timestamps,
-  escaping, and deterministic `ERR_*` error JSON.
+- Runtime and module ownership is documented in the Implementation Ownership
+  Map in `spec/architecture.md`. Read it before adding capture, compositor,
+  helper-process, overlay, post-capture, diagnostic, config, or preview seams.
 - Implicit captures no longer save user-visible screenshots by default. Without
   `--save` or `--output`, the backend writes a temporary artifact under
   `$XDG_RUNTIME_DIR/shaula/captures` or `/tmp/shaula/captures` for preview/copy.
   `--save` still prefers `~/Pictures/shaula` (lowercase) and falls back to
   `~/shaula`; explicit `--output` still bypasses default resolution as a user
   save decision.
-- v1.0.1 hardening: preview records the original implicit capture temp path and
-  unlinks it on close when safe; copy notification thumbnail paths are preserved
-  for notification daemons and cleaned by a conservative stale-temp sweep.
 - `shaula directory screenshots [--open] [--json]` is the shared resolver for
   the durable screenshot folder. Noctalia's Open Screenshots Folder action
   calls this command instead of duplicating fallback path rules.
@@ -479,46 +287,8 @@ and the working diff.
 - Noctalia and generated Niri capture actions use plain `shaula capture ...
   --json` commands by default so `[capture.after.*]` settings decide whether
   preview opens, clipboard copy runs, or the Shaula directory receives a file.
-- Preview metadata readouts that update while interacting must reserve stable
-  width. The color hex and zoom percentage labels both use fixed code-style
-  widths so hover color sampling and zoom changes do not shift the toolbar.
-- Preview toolbar actions are packed at the headerbar start, not as a centered
-  title widget, so extra tools can use left-side space before overflowing into
-  `...`. Overflow uses the measured gap between the toolbar start and the right
-  metadata readout; using the full headerbar width can reveal secondary buttons
-  too early and transiently overlap the color, dimensions, and zoom labels.
-- Toolbar tool changes must not alter the preview window's natural titlebar
-  width. Contextual Select actions live in a floating canvas HUD, like the
-  Pen/Highlight property HUDs, so selecting tools or regions cannot ask GTK/Niri
-  to resize the floating window.
-- Preview toolbar overflow keeps the action group at a stable requested width.
-  Hidden/revealed toolbar buttons must not change the headerbar natural width or
-  trigger a floating-window resize after the preview appears. The pre-present
-  overflow pass uses the intended default window width; post-present resize
-  handling may use measured headerbar-to-metadata bounds only after a sane
-  allocation exists. The three supported preview size presets are 900x600,
-  1100x720, and 1400x900; the smallest preset is expected to fit the complete
-  primary toolbar, so overflow thresholds must be based on the real compact
-  button width, not conservative titlebar estimates.
-- Preview startup is gated by visual readiness: load/register the custom icon
-  theme, build the complete primary toolbar, reserve metadata widths, compute
-  the configured preset/default window size and initial fit zoom, then apply the
-  initial overflow layout before `gtk_window_present()`. Post-present toolbar
-  updates may change sensitivity/active/menu state, but must not add primary
-  toolbar buttons or expand the titlebar natural width.
-- Selected Rectangle annotations now draw an external selection outline before
-  repainting the real rectangle stroke above it. The outline must be derived
-  from `data.rectangle.rect`, not the broad-phase `bounds`, and use
-  screen-pixel-stable padding so selection chrome stays aligned at every
-  location/zoom. Multi-select made the old stroke-plus-handles-only affordance
-  too subtle for dashed rectangles.
-- Pan, Crop, and Annotation Eraser are fixed navigation/utility tools after
-  Copy, Save, Undo, and Redo. Numbered canvas tools are ordered Annotation
-  Eraser `0`, Select `1`, Rectangle `2`, Arrow `3`, reserved Line `4`, Text
-  `5`, Pen `6`, Highlight `7`, Measure `8`, and Spotlight `9`; only
-  implemented numbered tools show subtle GTK keycap badges.
-- Fit to screen, Actual size, and Reset annotations are overflow utility
-  actions. Save As remains a More-menu action.
+- Preview toolbar layout, overflow, startup-readiness, selection-chrome, and
+  tool-placement contracts live in `docs/preview-ui-contract.md`.
 - Spotlight regions are vector effect rectangles stored in image coordinates,
   matching the drag draft exactly. Do not route Spotlight creation through the
   crop/blur/erase pixel helper; that helper may round to integer pixels and is
@@ -537,41 +307,6 @@ and the working diff.
   `gtk_gesture_drag_get_start_point()` plus `dx/dy` offsets, instead of
   reconstructing via image-space start and zoom/pan. This removes subtle
   coordinate drift across tools (including Spotlight) in edge cases.
-- Preview C code uses `shaula_rect_clamped_c()` for interactive rectangle
-  clamping. The `/diagnose` Spotlight logs showed `end-commit` geometry was
-  correct while `persist` clipped against wrong bounds, so hot GTK C paths must
-  not depend on the exported Zig `shaula_rect_clamped()` ABI for four-double
-  structs plus scalar bounds.
-
-## Capture Runtime Foundation
-
-- `runtime/process_exec.zig` is the shared process execution adapter for
-  capture/overlay runtime boundaries. Callers still own stdout/stderr limits,
-  output cleanup, and deterministic failure mapping.
-- `capture/backends/capture_backend_failure.zig` centralizes backend `CaptureOutcome`
-  failure construction so `capture_backend.execute` keeps one external seam
-  while preserving deterministic `ERR_*` attributes at each failure site.
-- `capture_backend.execute` receives a resolved runtime decision and optional
-  focused output name. Tests should pass explicit decisions; do not reintroduce
-  backend-local compositor/backend probes for test injection.
-- `capture/lifecycle.zig` owns the common capture lifecycle after mode-specific
-  inputs are resolved: enforce capability support, enforce pre-capture guard,
-  optionally settle after live overlay, execute the backend, persist previous
-  area only on success, and emit the existing success/error JSON contract.
-- `capture/command.zig` is now a strict dispatcher into the lifecycle module.
-- `capture/invocation.zig` converts parsed capture flags and resolved geometry
-  into the lifecycle invocation contract: public command token, backend mode,
-  request mode, output/window/area fields, post-capture flags, previous-area
-  persistence, and optional live-overlay settle mode.
-- `capture/command_grammar.zig` owns capture flag membership and deterministic
-  command-specific `ERR_CLI_USAGE` messages. `capture/command_flags.zig` now
-  declares per-mode flag structs and delegates parsing to that grammar.
-- `capture/backends/capture_execution_plan.zig` now receives a typed operation
-  (`area`, `current_output`, `all_outputs`, or `window`) instead of mode booleans
-  so current-output fullscreen and all-screens capture cannot drift.
-- `capture/post_capture.zig` gathers `PostCaptureOutcome` state for history,
-  clipboard, and preview. `capture/post_capture_json.zig` owns the stable JSON
-  envelope, duplicated top-level/result fields, and partial/degraded rules.
 
 ## Overlay Capture
 
@@ -606,15 +341,6 @@ and the working diff.
   limits, and process failure mapping before `overlay/helper_protocol.zig`
   parses the helper envelope. `HelperRunResult` exposes both `stdout` and `stderr` from the helper process.
 - Debug overlay latency: `SHAULA_DEBUG_OVERLAY_LATENCY=1` measures CLI-to-overlay-UI-visible time. The parent records a launch timestamp before spawning the helper, passes the env var through, and the GTK overlay helper writes `SHAULA_OVERLAY_READY_TS=<epoch_ms>` to stderr after `gtk_window_present`. After the helper exits, the parent parses the ready timestamp and reports `[DEBUG-overlay-latency] launch_to_ui_visible=<ms>` to stderr. This is purely a debug/diagnostic feature gated behind an env var; it never ships active in production.
-- Overlay launch latency fix: the native GTK helper now creates a direct
-  `GtkWindow` and owns a `GMainLoop` instead of registering a
-  `GtkApplication` for the short-lived selection surface. It also defaults
-  `GSK_RENDERER=cairo` before `gtk_init` unless the caller already set
-  `GSK_RENDERER`; the overlay's first frame is Cairo-drawn, so this avoids
-  GL/Vulkan renderer startup on the layer-shell hot path. The helper stdout
-  envelope remains unchanged, close requests still emit deterministic cancel
-  JSON, and measured standalone `launch_to_ready` on the local Niri output
-  dropped from roughly 690-1066ms to mostly 78-90ms with one 147ms outlier.
 - `overlay/overlay.zig` is now a facade. `overlay/selection_session.zig` owns
   helper environment preparation, optional frozen background, deterministic
   dry-run/test payload handling, helper protocol mapping, and accepted-selection
@@ -656,294 +382,10 @@ and the working diff.
   `SHAULA_OVERLAY_ASPECT`; the removed button strip is no longer the interactive
   path for changing it during capture.
 
-## Toolbar Actions
+## Preview Tools
 
-- `shaula-copy-symbolic` Copy: implemented. Copies a rendered PNG when the
-  preview has modifications, otherwise reuses the original PNG path.
-- `shaula-save-symbolic` Save: implemented. `Ctrl+S` quick-saves a new
-  timestamped PNG under `~/Pictures/shaula/YYYYMMDD-HHMMSS.png`,
-  adding a numeric suffix when needed and falling back to `~/shaula` when the
-  Pictures directory cannot be created or written. Quick Save updates preview
-  save metadata but does not create undo history.
-- Save As: implemented as a responsive utility/menu action and
-  `Ctrl+Shift+S`. It opens a file chooser, writes a PNG to disk, and updates
-  preview save metadata; later `Ctrl+S` still creates a new timestamped
-  version.
-- `shaula-undo-symbolic` Undo: implemented. Disabled when the history stack has
-  no undo entry. Also available with `Ctrl+Z`.
-- `shaula-redo-symbolic` Redo: implemented. Disabled when the history stack has
-  no redo entry. Also available with `Ctrl+Shift+Z` and `Ctrl+Y`.
-- `shaula-share-symbolic` Share: not exposed; Share/upload backend is out of
-  scope.
-- Pin: not exposed; unknown legacy helper action strings are tolerated by the
-  Zig preview-result parser for compatibility but do not map to a public action.
-- `shaula-crop-symbolic` Crop: implemented. It still mutates the current
-  preview image internally, but it is now undoable through the preview document
-  snapshot history. Direct Crop tool drags apply immediately on mouse release
-  and then return to Select mode.
-- `shaula-select-symbolic` Select: implemented. Left-click selects
-  annotations, left-drag on a selected annotation moves it, and left-click/drag
-  from empty image space creates a temporary region selection. Clicking/dragging
-  empty space outside the image clears selection without panning. Canvas panning
-  is now an explicit middle-button drag gesture.
-- `shaula-fit-to-screen-symbolic` Fit to screen uses the root-provided
-  arrows-maximize SVG moved into the preview icon theme.
-- `shaula-actual-size-symbolic` Actual size uses a simple currentColor `1:1`
-  symbolic SVG and keeps `0` as the shortcut without showing a toolbar badge.
-- `shaula-hand-symbolic` Hand/Pan: implemented as a view-only navigation tool.
-  It is routed through `SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND`, uses the existing
-  pan operation, left-drag pans while active, and the cursor is `grab`/`grabbing`.
-  Hand/Pan does not edit pixels, annotations, Spotlight regions, modified state,
-  save state, or undo history. Holding Space temporarily switches to Hand/Pan
-  unless an editable widget is focused; releasing Space restores the previous
-  tool, and release during an active pan waits until the drag ends before
-  restoring.
-- `shaula-spotlight-symbolic` Spotlight: implemented as an independent primary
-  toolbar tool outside Select-mode-only contextual actions. Activating it does
-  not reuse the Select contextual toolbar; it lets the user drag a new area
-  directly on the canvas, applies Spotlight on mouse release, and then opens
-  the floating properties HUD. The existing Select-mode contextual Spotlight
-  action still works for an already selected temporary region. Its icon is the
-  Tabler filter-style glyph; do not apply this glyph to Highlight.
-- Selected annotation actions: implemented as a small contextual toolbar group
-  that appears only while Select is active and an annotation is selected.
-- Region selection actions: implemented as temporary Select-mode UI state.
-  Region selections are not annotations, are not saved/exported, do not enter
-  undo history by themselves, and expose contextual Crop, Blur, Erase, and
-  Spotlight actions.
-- Spotlight contextual properties: implemented as a floating top-right
-  properties HUD built by `preview_properties_panel.*`, attached to the preview
-  `GtkOverlay`, and state-owned by `ShaulaPropertiesHudState` in
-  `preview_properties_hud.*`. Applying Spotlight shows Back, color, border
-  width, pointed-corner rectangle, and rounded-corner rectangle controls over
-  the canvas without resizing the main toolbar. The HUD targets the
-  just-created Spotlight entry through its `spotlight_index`, so color, width,
-  and corner style update that last applied Spotlight reactively while also
-  becoming the defaults for the next Spotlight. Back uses a dedicated drawn
-  chevron, hides the floating panel, clears the active Spotlight target, and
-  returns to the normal toolbar state. While the HUD is open, the transient
-  region-selection overlay is hidden so the stored Spotlight border remains
-  visible. This panel/target/widget/default state is UI/config state only and
-  is excluded from undo/redo snapshots.
-- The Spotlight properties HUD uses GTK symbolic theme colors for widget
-  chrome: `@theme_bg_color`, `@theme_fg_color`, and `@borders`. Its custom
-  Cairo-drawn back/shape icons read the widget foreground from the active GTK
-  style context, so the HUD follows light/dark GTK themes instead of fixed
-  dark-panel colors.
-- Theme contrast policy: toolbar, overflow popover, properties HUDs, and
-  custom SVG icon recoloring should follow GTK theme colors with explicit
-  contrast reinforcement. Catppuccin Latte/light themes must prefer dark icon
-  foregrounds even if `gtk-application-prefer-dark-theme` is set.
-- Toolbar and overflow-menu icon hover states use both GTK `:hover` and a
-  `shaula-stable-hover` CSS class driven by pointer enter/leave events. This is
-  intentional: GTK can drop the pseudo hover state during keyboard input or
-  capture grabs, but Shaula screenshots/docs need the visual hover to remain
-  capturable while the pointer is still over the button. Do not use this to
-  pin GTK tooltips; tooltips remain transient GTK popups.
-- Toolbar overflow must not use a permanent frame tick. The initial post-layout
-  measure uses a one-shot tick, then resize updates come from `notify::width`.
-  Continuous toolbar ticks keep `shaula-preview` hot at idle and make CPU usage
-  look like an active animation even when the user is not interacting.
-- `shaula-duplicate-symbolic` Duplicate selected: implemented. Available from
-  the contextual group and `Ctrl+D`; duplicates the selected annotation set
-  through the same multi-object paste path without replacing the internal
-  clipboard, assigns new ids, selects the duplicate set, and commits one undo
-  entry.
-- Annotation copy/paste uses an in-memory clipboard scoped to the current
-  preview window. With canvas focus, `Ctrl+C` copies the selected annotation
-  set without touching the system clipboard; with no object selection it still
-  copies the rendered image. `Ctrl+X` copies the selected set and deletes it as
-  one undoable edit. `Ctrl+V` clones the internal set with new ids, selects only
-  the newly pasted objects, and repeated paste offsets from the previous pasted
-  set. `Ctrl+D` uses the same multi-object paste path without replacing the
-  internal clipboard. While the text editor has focus, GTK owns normal
-  text-level `Ctrl+A/C/X/V`. Pasting external `text/plain` or image data as
-  annotations is future work and should stay behind explicit system-paste
-  behavior such as `Ctrl+Shift+V`.
-- Text entry contract: while drafting text, `Enter` inserts a newline and
-  `Esc`/`Ctrl+Enter` finish the text edit instead of cancelling/deleting the draft.
-  Selected annotation deletion is only bound to `Delete`; `Backspace` remains
-  text-editor behavior when the hidden `GtkTextView` has focus.
-- Annotation Eraser is distinct from pixel Erase: it targets committed
-  annotations/objects only, never pixels from the captured base image. Pixel
-  Erase remains the region redaction action alongside Blur/Crop/Spotlight.
-  Its hit target is visible annotation geometry with tolerance, not coarse
-  bounding boxes; transparent interiors should not erase unfilled shapes.
-  Eraser drags are cumulative: annotations touched during the drag become
-  pending erase targets, render translucent until release, and are deleted
-  together as one undoable edit on mouse release or tool exit. `Esc` is the
-  explicit cancellation path and clears pending targets without mutating the
-  document; accidental commits are recovered with Undo. Save, Copy, Done, close,
-  and switching toolbar tools all commit pending erase targets before continuing.
-  Undo/redo treats each confirmed erase gesture as one document edit regardless
-  of how many annotations were removed.
-  Annotation Eraser is a modal tool with previous-tool toggle semantics: using
-  `E` from another creation/select tool switches to Eraser and remembers that
-  tool; pressing `E` again while Eraser is active restores the remembered tool,
-  including utility tools such as Hand/Pan and Crop.
-  Selection and Annotation Eraser are independent modes: entering Eraser clears
-  existing annotation/region selection, and erasing is based only on geometric
-  contact with annotations in the document. Recently created or previously
-  selected annotations are not erased merely by switching into Eraser; they are
-  erased only if the eraser circle or swept capsule touches their visible geometry.
-  The Eraser cursor is a fixed 14 screen-pixel circle; hit tolerance should be
-  derived from that screen radius and current zoom so the tool feels stable at
-  every zoom level. The circle is visible while hovering in Eraser mode; a tail
-  animation appears during active click-drag erasing and fades out over roughly
-  220 ms after release. The tail is part of hit-testing: each drag segment
-  should erase against the swept capsule between the previous and current
-  pointer positions, using the same 14 px screen radius. The visual tail shows
-  only the recent path, roughly the last 300 ms, and uses the theme foreground
-  color with alpha rather than a tool-specific color. The visual tail is
-  intentionally decoupled from hit-testing: input points are interpolated every
-  few screen pixels, then rendered as a soft continuous base path plus a thinner
-  tapered hot path so screenshots read as an eraser trail rather than mouse
-  event samples.
-  Pending erase annotations render at 35% opacity until the eraser gesture commits.
-  Pending erase annotations are not selectable and must not render selection
-  outlines or resize/adjust handles. Once an annotation is pending erase, later
-  hits during the same gesture do not change its state; it remains pending until
-  commit or cancellation. Empty eraser gestures that hit no annotations do not
-  create undo entries or mark the document modified. A simple click without
-  pointer movement still evaluates the initial eraser circle and can erase the
-  annotation geometry under it. When multiple annotations overlap the eraser
-  circle or swept capsule, all geometrically touched annotations are marked
-  pending erase, not only the topmost annotation. Confirming an erase gesture
-  keeps Eraser active; only the explicit `E` toggle restores the remembered
-  previous tool. `Esc` in Eraser cancels any pending erase gesture and exits to
-  Select; with no active gesture, `Esc` exits Eraser to Select. Holding Space
-  for temporary Hand/Pan still works from Eraser and restores Eraser on release;
-  entering Pan during an active erase gesture commits pending erase targets first.
-  Eraser v1 has no properties HUD or size controls; the 14 px screen radius is fixed.
-  UI naming uses `Eraser` with `shaula-eraser-symbolic.svg`,
-  `SHAULA_TOOL_ERASER`, `SHAULA_PREVIEW_COMMAND_SET_TOOL_ERASER`, and
-  `SHAULA_OPERATION_ERASE_ANNOTATIONS` to avoid collision with pixel
-  `ERASE_REGION`. The toolbar button is active/checked while Eraser is the
-  current tool. While hovering the canvas in Eraser mode, the native pointer is
-  hidden and the drawn 14 px eraser circle is the visible cursor. Only primary
-  button click-drag erases; right click has no Eraser-specific behavior.
-  Implementation note: eraser input/rendering lives in
-  `src/preview/preview_canvas.c`, pending/commit state lives in
-  `src/preview/preview_state.c`, geometry hit-testing lives in
-  `src/preview/preview_annotations.c`, and the toolbar/shortcut entry points
-  are `preview_toolbar.c` plus `preview_commands.c`. The icon is
-  `src/preview/icons/hicolor/scalable/actions/shaula-eraser-symbolic.svg`.
-- `shaula-crop-symbolic` Crop selected: implemented in the contextual group
-  for selected rectangle annotations only. It dispatches through
-  `SHAULA_PREVIEW_COMMAND_CROP_SELECTED`.
-- `shaula-trash-symbolic` Delete selected: implemented. Available from the
-  contextual group and Delete when text entry is not active.
-- `shaula-arrow-symbolic` Arrow: implemented as a one-shot creation tool.
-  After a valid arrow is drawn, preview selects the new arrow, opens the Arrow
-  properties HUD, and returns to Select mode. Moving and bend editing for
-  existing arrows belong to Select mode; clicking Arrow again always prepares a
-  new arrow instead of editing the selected one. Select-mode hit testing for
-  Arrow is geometry-based: straight arrows hit near the visible shaft/head,
-  curved arrows sample the curve path instead of accepting the whole bounds,
-  and the selected bend handle keeps explicit priority. Selected arrows draw
-  path-following selection chrome and repaint the arrow above it. Selected
-  arrows expose resize handles at start/end plus the curve control handle;
-  dragging the shaft moves the arrow, dragging handles reshapes it.
-- `shaula-line-symbolic` Line uses the Arrow annotation geometry and Arrow HUD
-  styling controls, but stores `data.arrow.has_head = FALSE` at draft and commit
-  time. `shaula_annotation_new_arrow` defaults to `has_head = TRUE`; Line must
-  explicitly clear it so draw/export/copy render a plain shaft without an
-  arrowhead while still sharing stroke color, width, style, hit testing, history,
-  duplicate, and clipboard behavior.
-- Arrow stroke style: implemented in the Arrow properties HUD. Selecting an
-  arrow exposes normal, dashed, and dotted toggles. Changing style mutates the
-  selected arrow annotation, pushes undo before the document change, and keeps
-  copy/export rendering on the annotation draw path.
-- `shaula-text-symbolic` Text: implemented. Text uses the same orange default
-  as arrows, opens a floating Text HUD for color, size, Normal/Sketch font
-  mode, and left/center/right alignment, and stores font mode plus alignment on
-  the annotation. The font-mode HUD is a compact linked two-button segmented
-  control whose buttons render live `Ab` previews in the resolved Normal or
-  Sketch families; do not replace it with SVG icons or repo-root icon files.
-  Active text input keeps a
-  hidden `GtkTextView` only as the keyboard buffer; the visible draft is drawn
-  as a temporary text annotation through the same Pango/Cairo
-  `shaula_annotation_draw` path used by committed annotations, export, and
-  copy. Draft and commit therefore share image-coordinate anchoring, zoom/pan
-  transform, font family/weight, size, color, opacity, multiline layout,
-  alignment, and text bounds. Text `position` is the stable Pango layout origin;
-  do not reinterpret it as changing ink top-left. `text_line_metrics` computes
-  the layout draw origin, ink/logical union bounds, and line advance once, then
-  committed rendering, selected bounds, draft editing bounds, and draft caret
-  reuse those metrics. Select-mode text hit testing must use the exact
-  annotation bounds that draw the selected dashed box; do not add click slop
-  around text because adjacent labels then steal invisible clicks. Active drafts
-  always draw a canvas caret with a contrast
-  halo, including non-empty text. The caret rect comes from the committed text
-  layout path via `shaula_annotation_text_cursor_rect`, using the hidden
-  buffer's UTF-8 insert byte index and `pango_layout_get_cursor_pos`;
-  `GtkTextBuffer::mark-set` redraws cursor moves even when text content does
-  not change. Active drafts do not draw an editing bounds box; the visible
-  draft text and canvas caret are the only active text markers. Text HUD
-  changes during an active draft update the draft state and do not mutate a
-  previously selected committed text annotation. Drag release must keep
-  `SHAULA_OPERATION_TEXT` active; clearing it on `on_drag_end` breaks draft
-  rendering and click-to-commit flow because the draft path is operation-gated.
-  `Enter` inserts a newline. `Esc` and `Ctrl+Enter` finish the draft and commit
-  non-empty text; clicking back on the canvas also commits non-empty text
-  without closing. After a canvas-only text commit, Text returns to Select mode
-  with the new annotation selected so it can be moved immediately.
-- `shaula-measure-symbolic` Measure: implemented.
-- `shaula-rectangle-symbolic` Rectangle: implemented as a one-shot creation
-  tool matching Arrow's post-create flow. After a valid rectangle is drawn,
-  preview selects the new rectangle, opens the Rectangle properties HUD, returns
-  to Select mode, and leaves the annotation movable/duplicable through the
-  normal selected-annotation path. Rectangle defaults are orange stroke
-  (`#FD7603`), 3.5 px, dashed, rounded corners, and no fill. Its floating HUD
-  exposes color, stroke width, grouped normal/dashed stroke toggles, a fill toggle,
-  and grouped rounded/square corner toggles, separated by vertical dividers.
-  This grouped 'linked' UI pattern is also used in Arrow, Text, and Spotlight HUDs
-  for related option toggles. Fill uses the selected stroke color at low alpha in
-  the draw/export path so filled rectangles mark an area without fully hiding
-  screenshot content. Select-mode hit testing for Rectangle is geometry-based:
-  bounding boxes are broad-phase only, unfilled rectangle interiors are not hit
-  targets, and only visible fills return `SHAULA_ANNOTATION_HIT_FILL`.
-  Drag-select/multi-select uses the same visible-object contract for
-  annotations: arrows, measure lines, pen/highlight paths, and unfilled
-  rectangles are selected only when the selection region intersects their
-  visible stroke geometry; empty bounding-box space, transparent rectangle
-  interiors, and external selection outlines do not count.
-  The selection resolver ranks handles/strokes above visible fills and text
-  bounds before applying z-order, so transparent rectangle interiors pass
-  through to objects behind them. Selected rectangles draw an external selection
-  outline from the actual rectangle geometry plus eight resize handles in Select
-  mode, then repaint the real annotation stroke above the selection chrome so
-  dashed orange content remains visible.
-- `shaula-highlight-symbolic` Highlight: implemented. Its icon is the
-  highlighter glyph, not the Spotlight/filter glyph.
-- `shaula-pen-symbolic` Pen: implemented.
-- Pen secondary HUD: implemented as its own floating contextual HUD. Pen exposes
-  color, stroke width, and opacity for defaults and selected Pen annotations.
-  Pen defaults to the shared strong orange used by Arrow/Text/Rectangle/Measure.
-  Select-mode hit testing for Pen and Highlight is path-distance based rather
-  than bounding-box based, and selected freehand paths draw path-following
-  selection chrome instead of a large rectangular box. Keep Arrow/Line and
-  Pen/Highlight selection chrome low-alpha and solid; do not change their hit
-  geometry while tuning the white outline. The real path is repainted above
-  selection chrome so selecting a Pen/Highlight path must not visually turn its
-  stroke white. Additional Pen styles are desired future work and should fit into
-  this HUD rather than expanding the primary toolbar.
-- Highlight highlighter: implemented as a separate Highlight button/HUD from
-  Pen. Highlight is now a wide low-opacity freehand path with round caps, not a
-  rectangle tool. Its HUD exposes only color, width, and opacity, and it avoids
-  inheriting future Pen brush styles.
-- `shaula-more-symbolic` More: implemented overflow menu.
-- `shaula-discard-symbolic` Discard: implemented. Closes the preview and
-  reports `discard`.
-
-## Overflow Menu
-
-- Save As: implemented.
-- Fit to screen: implemented.
-- Actual size: implemented.
-- Reset annotations: implemented.
-- Open preview directory: implemented. Opens the directory for the current
-  preview file path.
+- Detailed action, selection, tool, HUD, clipboard, theme, and overflow
+  contracts live in `docs/preview-tools.md`.
 
 ## Visible Metadata
 
@@ -954,10 +396,7 @@ and the working diff.
   image pixels, keeps the last valid sample when the pointer leaves the image,
   and samples the composited document pixel for the base image, stored
   annotations, and Spotlight effects while excluding GTK chrome, selection
-  handles, temporary drafts, and floating HUDs. `shaula_color_to_hex` writes a
-  null-terminated `#RRGGBB` into the fixed eight-byte C buffer; missing
-  termination corrupts the GTK metadata label and can make the headerbar width
-  jump while the invalid bytes disappear.
+  handles, temporary drafts, and floating HUDs.
 - `Tab copy` is exposed beside the hex readout. `Tab` is routed through the
   shared preview shortcut map as
   `SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR`; it copies `#RRGGBB` only when a
@@ -967,9 +406,6 @@ and the working diff.
   before normal focus traversal outside editable widgets. `Tab` also refreshes
   the hover sample from the current GDK pointer position before dispatch, so
   copying does not depend on a prior motion event.
-- `shaula_clipboard_copy_text` delegates to `/bin/sh -c` so the
-  `printf … | wl-copy` pipeline is properly interpreted as a shell pipe.
-  `g_spawn_command_line_sync` / `g_shell_parse_argv` do not interpret `|`.
 - The live hex label has a fixed pixel width and monospace glyphs so changing
   sampled colors does not shift the metadata group.
 - Image dimensions and zoom are stacked in a single compact column using

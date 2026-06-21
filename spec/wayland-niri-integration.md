@@ -99,6 +99,6 @@ Contract guardrail: this parser contract does **not** change public `capture are
 
 - Noctalia integration is **non-blocking** and optional. It is not part of the primary Wayland/Niri capture path.
 - The plugin uses an adapter model to map these MVP actions to Shaula CLI operations: `capture-area`, `capture-fullscreen`, `capture-window`, `open-last`, `history`.
-- The plugin communicates with daemon over versioned Unix-socket IPC (`ipc_version: 1.0.0`) only for non-critical optional flows.
-- If plugin IPC fails, times out, is absent, or version-mismatched, capture flow behavior for `area`/`fullscreen` remains unchanged and fully functional.
-- Failure domain separation is mandatory: plugin adapter failures emit deterministic plugin-specific error tokens and do not mutate core capture contract semantics.
+- The plugin invokes public Shaula CLI commands for optional shell actions; it does not depend on a resident daemon or private socket protocol.
+- If the plugin is absent, disabled, or fails to launch a command, terminal and keybinding capture flows remain unchanged and fully functional.
+- Failure domain separation is mandatory: plugin UI failures do not mutate core capture contract semantics.

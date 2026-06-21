@@ -13,8 +13,8 @@ All measurements are targetted at p95 latency under normal system load.
 | Overlay Selection to First Paint | <= 75ms | <= 110ms | "Instant" feel for user interaction. |
 | Area/Fullscreen Capture Completion | <= 150ms | <= 200ms | Fast feedback loop for quick captures. |
 | Window Capture Completion | <= 220ms | <= 300ms | Account for window/tile identity resolution. |
-| Daemon Idle CPU Usage | <= 0.5% | <= 1.0% | Zero impact when not active. |
-| Daemon Idle Memory (RSS) | <= 40MB | <= 60MB | Minimal footprint for a background service. |
+| Idle Background CPU Usage | 0% | 0% | Shaula has no resident daemon; capture helpers are short-lived. |
+| Idle Background Memory (RSS) | 0MB | 0MB | No Shaula process remains resident after commands and preview windows exit. |
 
 ## Resource Constraints
 
@@ -27,7 +27,6 @@ All measurements are targetted at p95 latency under normal system load.
 Performance budgets are enforced via the following QA scripts:
 - `scripts/qa/benchmark-overlay-first-paint.sh`
 - `scripts/qa/benchmark-capture-completion.sh`
-- `scripts/qa/benchmark-daemon-idle.sh`
 
 Failure to meet these budgets results in a build/deployment block under the `ERR_PERFORMANCE_GATE_FAILURE` token.
 
