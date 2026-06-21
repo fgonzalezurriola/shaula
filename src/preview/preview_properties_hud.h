@@ -25,9 +25,6 @@ typedef struct {
   ShaulaPropertiesPanel active_panel;
   gboolean syncing_widgets;
   int spotlight_index;
-  int arrow_index;
-  int rectangle_index;
-  int measure_index;
 
   GtkWidget *properties_box;
   GtkWidget *spotlight_color_button;

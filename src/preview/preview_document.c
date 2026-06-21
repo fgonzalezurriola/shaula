@@ -224,8 +224,7 @@ shaula_preview_document_clear_annotations(ShaulaPreviewDocument *document) {
 }
 
 void shaula_preview_document_restore_snapshot(
-    ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot,
-    ShaulaAnnotation **selected_annotation) {
+    ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot) {
   if (document == NULL || snapshot == NULL)
     return;
 
@@ -233,18 +232,6 @@ void shaula_preview_document_restore_snapshot(
   if (document->annotations != NULL)
     g_ptr_array_unref(document->annotations);
   document->annotations = annotations;
-
-  if (selected_annotation != NULL)
-    *selected_annotation = NULL;
-  if (document->annotations != NULL && selected_annotation != NULL) {
-    for (guint i = 0; i < document->annotations->len; i++) {
-      ShaulaAnnotation *annotation = g_ptr_array_index(document->annotations, i);
-      if (annotation->selected) {
-        *selected_annotation = annotation;
-        break;
-      }
-    }
-  }
 
   if (document->image != NULL)
     g_object_unref(document->image);

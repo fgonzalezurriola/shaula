@@ -196,15 +196,13 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_REDO:
     return shaula_preview_can_redo(state);
   case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
-    return shaula_preview_can_duplicate_selected(state);
   case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
-    return shaula_preview_can_copy_selected_annotation(state);
   case SHAULA_PREVIEW_COMMAND_CUT_SELECTED_ANNOTATION:
-    return shaula_preview_can_copy_selected_annotation(state);
+    return shaula_annotation_editor_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
-    return shaula_preview_can_paste_annotation(state);
+    return shaula_annotation_editor_can_paste(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
-    return shaula_preview_can_delete_selected(state);
+    return shaula_annotation_editor_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
     return state->operation == SHAULA_OPERATION_NONE &&
            state->document.annotations != NULL &&
@@ -213,11 +211,11 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     if (state->active_tool == SHAULA_TOOL_SELECT &&
         state->has_region_selection)
       return TRUE;
-    if (state->active_tool == SHAULA_TOOL_SELECT &&
-        shaula_preview_selected_count(state) == 1 &&
-        state->selected_annotation != NULL) {
-      ShaulaAnnotation *annotation = state->selected_annotation;
-      return annotation->type == SHAULA_ANNOTATION_RECTANGLE;
+    if (state->active_tool == SHAULA_TOOL_SELECT) {
+      ShaulaAnnotation *annotation =
+          shaula_annotation_editor_single_selection(state);
+      return annotation != NULL &&
+             annotation->type == SHAULA_ANNOTATION_RECTANGLE;
     }
     return FALSE;
   case SHAULA_PREVIEW_COMMAND_BLUR_REGION:
@@ -229,7 +227,8 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_ERASER:
     return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY:
-    return state->document.image != NULL || shaula_preview_has_selection(state);
+    return state->document.image != NULL ||
+           shaula_annotation_editor_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_SAVE:
   case SHAULA_PREVIEW_COMMAND_SAVE_AS:
   case SHAULA_PREVIEW_COMMAND_DONE:
@@ -273,16 +272,16 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
 
   switch (command) {
   case SHAULA_PREVIEW_COMMAND_COPY:
-    if (shaula_preview_has_selection(state))
-      return shaula_preview_copy_selected_annotation(state);
+    if (shaula_annotation_editor_has_selection(state))
+      return shaula_annotation_editor_copy_selected(state);
     shaula_preview_action_copy(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:
-    return shaula_preview_copy_selected_annotation(state);
+    return shaula_annotation_editor_copy_selected(state);
   case SHAULA_PREVIEW_COMMAND_CUT_SELECTED_ANNOTATION:
-    return shaula_preview_cut_selected_annotation(state);
+    return shaula_annotation_editor_cut_selected(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
-    return shaula_preview_paste_annotation(state);
+    return shaula_annotation_editor_paste(state);
   case SHAULA_PREVIEW_COMMAND_SAVE:
     shaula_preview_action_save(state);
     return TRUE;
@@ -297,12 +296,12 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_REDO:
     return shaula_preview_redo(state);
   case SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED:
-    return shaula_preview_duplicate_selected(state);
+    return shaula_annotation_editor_duplicate_selected(state);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
-    shaula_preview_delete_selected(state);
+    shaula_annotation_editor_delete_selected(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
-    shaula_preview_select_all_annotations(state);
+    shaula_annotation_editor_select_all(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_CROP_SELECTED:
     if (state->has_region_selection)
@@ -315,7 +314,7 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION:
     return shaula_preview_spotlight_region_selection(state);
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
-    shaula_preview_reset_annotations(state);
+    shaula_annotation_editor_reset_annotations(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_COPY_PATH:
     shaula_preview_action_copy_path(state);

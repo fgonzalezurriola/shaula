@@ -8,9 +8,6 @@ void shaula_properties_hud_state_init(ShaulaPropertiesHudState *hud) {
   memset(hud, 0, sizeof(*hud));
   hud->active_panel = SHAULA_PROPERTIES_PANEL_NONE;
   hud->spotlight_index = -1;
-  hud->arrow_index = -1;
-  hud->rectangle_index = -1;
-  hud->measure_index = -1;
 }
 
 gboolean shaula_properties_hud_set_panel(ShaulaPropertiesHudState *hud,
@@ -20,11 +17,5 @@ gboolean shaula_properties_hud_set_panel(ShaulaPropertiesHudState *hud,
   hud->active_panel = panel;
   if (panel != SHAULA_PROPERTIES_PANEL_SPOTLIGHT)
     hud->spotlight_index = -1;
-  if (panel != SHAULA_PROPERTIES_PANEL_ARROW)
-    hud->arrow_index = -1;
-  if (panel != SHAULA_PROPERTIES_PANEL_RECTANGLE)
-    hud->rectangle_index = -1;
-  if (panel != SHAULA_PROPERTIES_PANEL_MEASURE)
-    hud->measure_index = -1;
   return TRUE;
 }

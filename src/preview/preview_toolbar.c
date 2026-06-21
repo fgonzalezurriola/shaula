@@ -748,7 +748,7 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state, SHAULA_PREVIEW_COMMAND_SPOTLIGHT_REGION);
   gboolean can_delete = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
-  guint selected_count = shaula_preview_selected_count(state);
+  guint selected_count = shaula_annotation_editor_selected_count(state);
   gboolean has_object_selection = selected_count > 0;
   gboolean has_single_object_selection = selected_count == 1;
   gboolean has_region_selection = state->has_region_selection;
@@ -801,7 +801,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_widget_set_visible(state->properties_hud.eraser_properties_box,
                            show_eraser_properties);
   ShaulaAnnotation *selected =
-      has_single_object_selection ? state->selected_annotation : NULL;
+      has_single_object_selection
+          ? shaula_annotation_editor_single_selection(state)
+          : NULL;
 
   ShaulaColor arrow_color = state->tool_defaults.arrow_line.color;
   double arrow_width = state->tool_defaults.arrow_line.stroke_width;

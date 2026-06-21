@@ -67,8 +67,7 @@ ShaulaPreviewSnapshot *
 shaula_preview_document_snapshot_new(ShaulaPreviewDocument *document);
 void shaula_preview_snapshot_free(gpointer data);
 void shaula_preview_document_restore_snapshot(
-    ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot,
-    ShaulaAnnotation **selected_annotation);
+    ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot);
 
 void shaula_preview_history_push_undo(ShaulaHistoryStack *history,
                                       ShaulaPreviewSnapshot *snapshot,

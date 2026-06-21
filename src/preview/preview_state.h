@@ -4,9 +4,11 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gtk/gtk.h>
 
+#include "preview_annotation_editor.h"
 #include "preview_annotations.h"
 #include "preview_document.h"
 #include "preview_geometry.h"
+#include "preview_gesture.h"
 #include "preview_measure.h"
 #include "preview_properties_hud.h"
 #include "preview_tool_defaults.h"
@@ -41,47 +43,13 @@ typedef enum {
   SHAULA_TOOL_COUNT
 } ShaulaTool;
 
-typedef enum {
-  SHAULA_OPERATION_NONE,
-  SHAULA_OPERATION_PAN,
-  SHAULA_OPERATION_MOVE,
-  SHAULA_OPERATION_BEND_ARROW,
-  SHAULA_OPERATION_RESIZE_ANNOTATION,
-  SHAULA_OPERATION_SELECT_REGION,
-  SHAULA_OPERATION_CROP,
-  SHAULA_OPERATION_ERASE_ANNOTATIONS,
-  SHAULA_OPERATION_ARROW,
-  SHAULA_OPERATION_LINE,
-  SHAULA_OPERATION_RECTANGLE,
-  SHAULA_OPERATION_HIGHLIGHT,
-  SHAULA_OPERATION_PEN,
-  SHAULA_OPERATION_SPOTLIGHT,
-  SHAULA_OPERATION_MEASURE,
-  SHAULA_OPERATION_TEXT
-} ShaulaPreviewOperation;
-
-typedef enum {
-  SHAULA_RESIZE_HANDLE_NONE,
-  SHAULA_RESIZE_HANDLE_RECT_NW,
-  SHAULA_RESIZE_HANDLE_RECT_N,
-  SHAULA_RESIZE_HANDLE_RECT_NE,
-  SHAULA_RESIZE_HANDLE_RECT_E,
-  SHAULA_RESIZE_HANDLE_RECT_SE,
-  SHAULA_RESIZE_HANDLE_RECT_S,
-  SHAULA_RESIZE_HANDLE_RECT_SW,
-  SHAULA_RESIZE_HANDLE_RECT_W,
-  SHAULA_RESIZE_HANDLE_ARROW_START,
-  SHAULA_RESIZE_HANDLE_ARROW_END,
-  SHAULA_RESIZE_HANDLE_ARROW_CONTROL
-} ShaulaAnnotationResizeHandle;
-
 typedef struct {
   double x;
   double y;
   gint64 time_us;
 } ShaulaEraserTrailPoint;
 
-typedef struct {
+typedef struct ShaulaPreviewState {
   GtkApplication *app;
   GtkWidget *window;
   GtkWidget *canvas_overlay;
@@ -131,18 +99,11 @@ typedef struct {
   ShaulaPoint drag_start_image;
   ShaulaPoint drag_current_image;
   ShaulaPoint drag_last_image;
-  ShaulaAnnotation *drag_hit_annotation;
   double drag_start_x;
   double drag_start_y;
   double pan_origin_x;
   double pan_origin_y;
-  ShaulaAnnotationResizeHandle active_resize_handle;
-  ShaulaRect resize_origin_rect;
-  ShaulaPoint resize_origin_arrow_start;
-  ShaulaPoint resize_origin_arrow_end;
-  ShaulaPoint resize_origin_arrow_control;
-  gboolean resize_origin_arrow_curved;
-  gboolean drag_preserved_multi_selection;
+  ShaulaPreviewGestureState gesture;
 
   gboolean has_crop_draft;
   ShaulaRect crop_draft;
@@ -160,8 +121,7 @@ typedef struct {
   ShaulaPoint eraser_last_screen;
   ShaulaPoint text_anchor_image;
 
-  GArray *selected_annotation_ids;
-  ShaulaAnnotation *selected_annotation;
+  ShaulaAnnotationEditor annotation_editor;
 
   ShaulaColor current_color;
   /* Hover sampling is view state for the metadata readout and Tab copy. It is
@@ -213,37 +173,7 @@ void shaula_preview_set_fit_mode(ShaulaPreviewState *state, gboolean fit);
 void shaula_preview_set_actual_size(ShaulaPreviewState *state);
 void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor);
 
-void shaula_preview_select_annotation(ShaulaPreviewState *state,
-                                      ShaulaAnnotation *annotation);
-void shaula_preview_select_only_annotation(ShaulaPreviewState *state,
-                                           ShaulaAnnotation *annotation);
-void shaula_preview_toggle_annotation_selection(ShaulaPreviewState *state,
-                                                ShaulaAnnotation *annotation);
-void shaula_preview_add_annotation_to_selection(
-    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
-void shaula_preview_remove_annotation_from_selection(
-    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
-void shaula_preview_clear_selection(ShaulaPreviewState *state);
-gboolean shaula_preview_has_selection(ShaulaPreviewState *state);
-gboolean shaula_preview_is_annotation_selected(
-    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
-guint shaula_preview_selected_count(ShaulaPreviewState *state);
-void shaula_preview_select_all_annotations(ShaulaPreviewState *state);
-guint shaula_preview_select_annotations_intersecting_rect(
-    ShaulaPreviewState *state, ShaulaRect rect);
 void shaula_preview_clear_region_selection(ShaulaPreviewState *state);
-void shaula_preview_add_annotation(ShaulaPreviewState *state,
-                                   ShaulaAnnotation *annotation);
-gboolean shaula_preview_can_duplicate_selected(ShaulaPreviewState *state);
-gboolean shaula_preview_can_delete_selected(ShaulaPreviewState *state);
-gboolean shaula_preview_duplicate_selected(ShaulaPreviewState *state);
-gboolean shaula_preview_can_copy_selected_annotation(ShaulaPreviewState *state);
-gboolean shaula_preview_copy_selected_annotation(ShaulaPreviewState *state);
-gboolean shaula_preview_cut_selected_annotation(ShaulaPreviewState *state);
-gboolean shaula_preview_can_paste_annotation(ShaulaPreviewState *state);
-gboolean shaula_preview_paste_annotation(ShaulaPreviewState *state);
-void shaula_preview_delete_selected(ShaulaPreviewState *state);
-void shaula_preview_reset_annotations(ShaulaPreviewState *state);
 gboolean shaula_preview_is_annotation_pending_erase(
     ShaulaPreviewState *state, ShaulaAnnotation *annotation);
 void shaula_preview_clear_eraser_pending(ShaulaPreviewState *state);
@@ -319,7 +249,5 @@ void shaula_preview_set_measure_color(ShaulaPreviewState *state,
                                       ShaulaColor color);
 void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
                                              double width);
-void shaula_preview_replace_annotations(ShaulaPreviewState *state,
-                                        GPtrArray *annotations);
 
 #endif

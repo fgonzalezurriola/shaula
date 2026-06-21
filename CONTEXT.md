@@ -120,6 +120,27 @@ and the working diff.
   Rectangle annotations can be
   selected by clicking inside their bounds, even when unfilled, because
   edge-only geometry hit testing made Select feel broken.
+- Preview annotation editing now has one deep Module at
+  `preview/preview_annotation_editor.{c,h}`. It owns selection IDs, synchronization
+  of persisted `annotation->selected` flags, single-selection derivation, HUD
+  target derivation, selected bounds, annotation add/move/reset, clipboard
+  copy/cut/paste/duplicate, batch delete, and the history/UI updates required by
+  those mutations. `ShaulaPreviewState` stores the editor state but no longer
+  exposes a legacy `selected_annotation` pointer or per-type annotation indexes
+  in the properties HUD. Canvas, Commands, Actions, Toolbar, crop, and undo/redo
+  restoration must cross the annotation editor interface instead of maintaining
+  selection invariants in place. Rendering/export may continue to consume the
+  synchronized `annotation->selected` flag as an internal hot-path contract.
+- Preview pointer interpretation now crosses the deep
+  `preview/preview_gesture.{c,h}` Module. It owns the `SHAULA_OPERATION_*`
+  taxonomy, transient Select gesture state, screen/image normalization for hit
+  routing, handle-versus-selection-edge-versus-geometry priority, hover cursor
+  policy, multi-selection preservation, Move/Resize/Marquee transitions, drag
+  updates, and selection history commit rules. GTK callbacks in Canvas only
+  normalize button/modifier/coordinates, perform runtime-specific text, eraser,
+  and live-measure work, apply returned cursor names, and request redraws.
+  Selection gesture internals such as resize origins and pressed annotations
+  must not be added back to `ShaulaPreviewState` as independent fields.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
   are non-goals. Niri on CachyOS is the primary development and interactive UX

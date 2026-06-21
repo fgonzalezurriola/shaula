@@ -14,8 +14,6 @@
 #define SHAULA_ERASER_TAIL_RECENT_US 300000
 #define SHAULA_ERASER_TAIL_FADE_US 220000
 #define SHAULA_ERASER_TAIL_SAMPLE_PX 5.0
-#define SHAULA_SELECTION_EDGE_TARGET_PX 8.0
-#define SHAULA_SELECTION_HANDLE_TARGET_PX 8.0
 
 ShaulaPoint shaula_preview_canvas_screen_to_image(ShaulaPreviewState *state,
                                                   double x, double y) {
@@ -441,7 +439,7 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   cairo_rectangle(cr, 0, 0, image_w, image_h);
   cairo_clip(cr);
   shaula_preview_draw_spotlight_effect(state, cr);
-  guint selected_count = shaula_preview_selected_count(state);
+  guint selected_count = shaula_annotation_editor_selected_count(state);
   ShaulaAnnotationPreviewFlags preview_flags =
       selected_count == 1
           ? SHAULA_ANNOTATION_PREVIEW_SELECTION |
@@ -456,8 +454,7 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   }
   if (selected_count > 1) {
     ShaulaRect group_bounds;
-    if (shaula_annotations_selected_bounds(state->document.annotations,
-                                           &group_bounds))
+    if (shaula_annotation_editor_selected_bounds(state, &group_bounds))
       shaula_annotation_draw_selection_box(cr, group_bounds);
   }
   cairo_restore(cr);
@@ -929,8 +926,7 @@ static void finish_text_entry(ShaulaPreviewState *state) {
         state->text_anchor_image, text, state->tool_defaults.text.color,
         state->tool_defaults.text.font_size, state->tool_defaults.text.align,
         state->tool_defaults.text.font_mode);
-    shaula_preview_add_annotation(state, annotation);
-    shaula_preview_select_annotation(state, annotation);
+    shaula_annotation_editor_add_annotation(state, annotation);
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
     created = TRUE;
   }
@@ -1020,170 +1016,6 @@ static void begin_text_entry(ShaulaPreviewState *state,
   shaula_preview_queue_draw(state);
 }
 
-static void start_pan(ShaulaPreviewState *state, double x, double y) {
-  state->operation = SHAULA_OPERATION_PAN;
-  state->drag_start_x = x;
-  state->drag_start_y = y;
-  state->pan_origin_x = state->pan_x;
-  state->pan_origin_y = state->pan_y;
-  gtk_widget_set_cursor_from_name(state->area, "grabbing");
-}
-
-static void start_operation(ShaulaPreviewState *state,
-                            ShaulaPreviewOperation operation,
-                            ShaulaPoint point) {
-  state->operation = operation;
-  state->operation_changed = FALSE;
-  state->drag_start_image = point;
-  state->drag_current_image = point;
-  state->drag_last_image = point;
-  if (operation == SHAULA_OPERATION_CROP) {
-    state->has_crop_draft = TRUE;
-    state->crop_draft = (ShaulaRect){point.x, point.y, 0, 0};
-  }
-  if (operation == SHAULA_OPERATION_SELECT_REGION) {
-    state->has_region_selection = FALSE;
-    state->region_selection_rect = (ShaulaRect){point.x, point.y, 0, 0};
-  }
-  if ((operation == SHAULA_OPERATION_PEN ||
-       operation == SHAULA_OPERATION_HIGHLIGHT) &&
-      state->draft_pen_points != NULL) {
-    g_array_set_size(state->draft_pen_points, 0);
-    g_array_append_val(state->draft_pen_points, point);
-  }
-}
-
-static ShaulaPoint arrow_bend_handle_point(const ShaulaAnnotation *arrow) {
-  ShaulaPoint p0 = arrow->data.arrow.start;
-  ShaulaPoint p2 = arrow->data.arrow.end;
-  ShaulaPoint p1 =
-      arrow->data.arrow.is_curved
-          ? arrow->data.arrow.control
-          : (ShaulaPoint){(p0.x + p2.x) / 2.0, (p0.y + p2.y) / 2.0};
-  return (ShaulaPoint){0.25 * p0.x + 0.5 * p1.x + 0.25 * p2.x,
-                       0.25 * p0.y + 0.5 * p1.y + 0.25 * p2.y};
-}
-
-static ShaulaAnnotationResizeHandle
-selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
-                          double tolerance) {
-  ShaulaAnnotation *annotation =
-      state != NULL && shaula_preview_selected_count(state) == 1
-          ? state->selected_annotation
-          : NULL;
-  if (annotation == NULL)
-    return SHAULA_RESIZE_HANDLE_NONE;
-
-  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-    ShaulaRect r = shaula_rect_normalized(annotation->data.rectangle.rect);
-    ShaulaPoint handles[] = {
-        {r.x, r.y},
-        {r.x + r.width / 2.0, r.y},
-        {r.x + r.width, r.y},
-        {r.x + r.width, r.y + r.height / 2.0},
-        {r.x + r.width, r.y + r.height},
-        {r.x + r.width / 2.0, r.y + r.height},
-        {r.x, r.y + r.height},
-        {r.x, r.y + r.height / 2.0},
-    };
-    ShaulaAnnotationResizeHandle kinds[] = {
-        SHAULA_RESIZE_HANDLE_RECT_NW, SHAULA_RESIZE_HANDLE_RECT_N,
-        SHAULA_RESIZE_HANDLE_RECT_NE, SHAULA_RESIZE_HANDLE_RECT_E,
-        SHAULA_RESIZE_HANDLE_RECT_SE, SHAULA_RESIZE_HANDLE_RECT_S,
-        SHAULA_RESIZE_HANDLE_RECT_SW, SHAULA_RESIZE_HANDLE_RECT_W,
-    };
-    for (int i = 0; i < 8; i++) {
-      if (shaula_point_distance(image_point, handles[i]) <= tolerance)
-        return kinds[i];
-    }
-  } else if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-    if (shaula_point_distance(image_point, annotation->data.arrow.start) <=
-        tolerance)
-      return SHAULA_RESIZE_HANDLE_ARROW_START;
-    if (shaula_point_distance(image_point, annotation->data.arrow.end) <=
-        tolerance)
-      return SHAULA_RESIZE_HANDLE_ARROW_END;
-    if (shaula_point_distance(image_point,
-                              arrow_bend_handle_point(annotation)) <= tolerance)
-      return SHAULA_RESIZE_HANDLE_ARROW_CONTROL;
-  }
-  return SHAULA_RESIZE_HANDLE_NONE;
-}
-
-/* Selection chrome is a move target only near its four visible edges. Keep
- * this shared between press and hover so cursor feedback matches drag routing.
- * Compare in screen coordinates to make the target independent of zoom and to
- * avoid cross-language struct geometry in the interactive input path.
- */
-static gboolean selected_selection_box_edge_at(ShaulaPreviewState *state,
-                                                double screen_x,
-                                                double screen_y) {
-  if (state == NULL || state->zoom <= 0.0)
-    return FALSE;
-
-  guint selected_count = shaula_preview_selected_count(state);
-  ShaulaRect frame;
-  if (selected_count > 1) {
-    if (!shaula_annotations_selected_bounds(state->document.annotations,
-                                            &frame))
-      return FALSE;
-    frame.x -= 2.0;
-    frame.y -= 2.0;
-    frame.width += 4.0;
-    frame.height += 4.0;
-  } else if (selected_count == 1 && state->selected_annotation != NULL) {
-    ShaulaAnnotation *annotation = state->selected_annotation;
-    frame = shaula_annotation_selection_bounds(annotation);
-    double pad = annotation->type == SHAULA_ANNOTATION_RECTANGLE
-                     ? MAX(3.0 / state->zoom, 1.0)
-                     : 2.0;
-    frame.x -= pad;
-    frame.y -= pad;
-    frame.width += 2.0 * pad;
-    frame.height += 2.0 * pad;
-  } else {
-    return FALSE;
-  }
-
-  if (frame.width < 0.0) {
-    frame.x += frame.width;
-    frame.width = -frame.width;
-  }
-  if (frame.height < 0.0) {
-    frame.y += frame.height;
-    frame.height = -frame.height;
-  }
-
-  ShaulaPoint top_left = shaula_preview_canvas_image_to_screen(
-      state, (ShaulaPoint){frame.x, frame.y});
-  ShaulaPoint bottom_right = shaula_preview_canvas_image_to_screen(
-      state, (ShaulaPoint){frame.x + frame.width, frame.y + frame.height});
-  double left = MIN(top_left.x, bottom_right.x);
-  double right = MAX(top_left.x, bottom_right.x);
-  double top = MIN(top_left.y, bottom_right.y);
-  double bottom = MAX(top_left.y, bottom_right.y);
-  double tolerance = SHAULA_SELECTION_EDGE_TARGET_PX;
-  gboolean within_x =
-      screen_x >= left - tolerance && screen_x <= right + tolerance;
-  gboolean within_y =
-      screen_y >= top - tolerance && screen_y <= bottom + tolerance;
-  return (within_x && (fabs(screen_y - top) <= tolerance ||
-                       fabs(screen_y - bottom) <= tolerance)) ||
-         (within_y && (fabs(screen_x - left) <= tolerance ||
-                       fabs(screen_x - right) <= tolerance));
-}
-
-static void move_selected_annotations(ShaulaPreviewState *state, double dx,
-                                      double dy) {
-  if (state == NULL || state->document.annotations == NULL)
-    return;
-  for (guint i = 0; i < state->document.annotations->len; i++) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(state->document.annotations, i);
-    if (annotation != NULL && annotation->selected)
-      shaula_annotation_move(annotation, dx, dy);
-  }
-}
-
 static gboolean eraser_mark_segment(ShaulaPreviewState *state,
                                     ShaulaPoint start, ShaulaPoint end) {
   if (state == NULL || state->document.annotations == NULL ||
@@ -1215,152 +1047,6 @@ static gboolean eraser_mark_segment(ShaulaPreviewState *state,
   return FALSE;
 }
 
-static const char *
-cursor_for_resize_handle(ShaulaAnnotationResizeHandle handle) {
-  switch (handle) {
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
-    return "nwse-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
-    return "nesw-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_E:
-  case SHAULA_RESIZE_HANDLE_RECT_W:
-    return "ew-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_N:
-  case SHAULA_RESIZE_HANDLE_RECT_S:
-    return "ns-resize";
-  case SHAULA_RESIZE_HANDLE_ARROW_START:
-  case SHAULA_RESIZE_HANDLE_ARROW_END:
-  case SHAULA_RESIZE_HANDLE_ARROW_CONTROL:
-    return "grab";
-  case SHAULA_RESIZE_HANDLE_NONE:
-    return "default";
-  }
-  return "default";
-}
-
-static void capture_resize_origin(ShaulaPreviewState *state,
-                                  ShaulaAnnotationResizeHandle handle) {
-  state->active_resize_handle = handle;
-  ShaulaAnnotation *annotation = state->selected_annotation;
-  if (annotation == NULL)
-    return;
-  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-    state->resize_origin_rect =
-        shaula_rect_normalized(annotation->data.rectangle.rect);
-  } else if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-    state->resize_origin_arrow_start = annotation->data.arrow.start;
-    state->resize_origin_arrow_end = annotation->data.arrow.end;
-    state->resize_origin_arrow_control = annotation->data.arrow.control;
-    state->resize_origin_arrow_curved = annotation->data.arrow.is_curved;
-  }
-}
-
-static void resize_selected_rectangle(ShaulaPreviewState *state,
-                                      ShaulaPoint point) {
-  ShaulaAnnotation *annotation = state->selected_annotation;
-  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_RECTANGLE)
-    return;
-
-  ShaulaRect origin = state->resize_origin_rect;
-  double left = origin.x;
-  double top = origin.y;
-  double right = origin.x + origin.width;
-  double bottom = origin.y + origin.height;
-
-  switch (state->active_resize_handle) {
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
-    left = point.x;
-    top = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_N:
-    top = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
-    right = point.x;
-    top = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_E:
-    right = point.x;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
-    right = point.x;
-    bottom = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_S:
-    bottom = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
-    left = point.x;
-    bottom = point.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_RECT_W:
-    left = point.x;
-    break;
-  case SHAULA_RESIZE_HANDLE_NONE:
-  case SHAULA_RESIZE_HANDLE_ARROW_START:
-  case SHAULA_RESIZE_HANDLE_ARROW_END:
-  case SHAULA_RESIZE_HANDLE_ARROW_CONTROL:
-    return;
-  }
-
-  ShaulaRect next = shaula_rect_from_points((ShaulaPoint){left, top},
-                                            (ShaulaPoint){right, bottom});
-  next = shaula_rect_clamped_c(next, shaula_preview_image_width(state),
-                               shaula_preview_image_height(state));
-  if (next.width < 3.0 || next.height < 3.0)
-    return;
-  annotation->data.rectangle.rect = next;
-  shaula_annotation_update_bounds(annotation);
-  state->document.modified = TRUE;
-}
-
-static void resize_selected_arrow(ShaulaPreviewState *state,
-                                  ShaulaPoint point) {
-  ShaulaAnnotation *annotation = state->selected_annotation;
-  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_ARROW)
-    return;
-
-  ShaulaPoint start = state->resize_origin_arrow_start;
-  ShaulaPoint end = state->resize_origin_arrow_end;
-  ShaulaPoint control = state->resize_origin_arrow_control;
-  gboolean is_curved = state->resize_origin_arrow_curved;
-
-  switch (state->active_resize_handle) {
-  case SHAULA_RESIZE_HANDLE_ARROW_START:
-    start = point;
-    break;
-  case SHAULA_RESIZE_HANDLE_ARROW_END:
-    end = point;
-    break;
-  case SHAULA_RESIZE_HANDLE_ARROW_CONTROL:
-    is_curved = TRUE;
-    control.x = 2.0 * point.x - 0.5 * start.x - 0.5 * end.x;
-    control.y = 2.0 * point.y - 0.5 * start.y - 0.5 * end.y;
-    break;
-  case SHAULA_RESIZE_HANDLE_NONE:
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
-  case SHAULA_RESIZE_HANDLE_RECT_N:
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
-  case SHAULA_RESIZE_HANDLE_RECT_E:
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
-  case SHAULA_RESIZE_HANDLE_RECT_S:
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
-  case SHAULA_RESIZE_HANDLE_RECT_W:
-    return;
-  }
-
-  if (shaula_point_distance(start, end) < 3.0)
-    return;
-  annotation->data.arrow.start = start;
-  annotation->data.arrow.end = end;
-  annotation->data.arrow.control = control;
-  annotation->data.arrow.is_curved = is_curved;
-  shaula_annotation_update_bounds(annotation);
-  state->document.modified = TRUE;
-}
-
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                           gpointer data) {
   ShaulaPreviewState *state = data;
@@ -1368,8 +1054,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     return;
   state->drag_start_x = x;
   state->drag_start_y = y;
-  state->drag_hit_annotation = NULL;
-  state->drag_preserved_multi_selection = FALSE;
+  shaula_preview_gesture_reset(&state->gesture);
   update_hover_color(state, x, y);
 
   if (state->operation == SHAULA_OPERATION_TEXT && state->text_entry != NULL) {
@@ -1384,7 +1069,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   ShaulaPoint clamped = clamped_image_point(state, image_point);
 
   if (button == 2) {
-    start_pan(state, x, y);
+    shaula_preview_gesture_begin_pan(state, x, y);
+    gtk_widget_set_cursor_from_name(state->area, "grabbing");
     return;
   }
 
@@ -1396,75 +1082,24 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
 
   switch (state->active_tool) {
   case SHAULA_TOOL_HAND:
-    start_pan(state, x, y);
+    shaula_preview_gesture_begin_pan(state, x, y);
+    gtk_widget_set_cursor_from_name(state->area, "grabbing");
     break;
   case SHAULA_TOOL_SELECT: {
-    double hit_tolerance = MAX(4.0, 8.0 / state->zoom);
-    ShaulaAnnotationHit hit_result = {NULL, SHAULA_ANNOTATION_HIT_NONE};
-    ShaulaAnnotationResizeHandle resize_handle =
-        inside ? selected_resize_handle_at(
-                     state, image_point,
-                     SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
-               : SHAULA_RESIZE_HANDLE_NONE;
-    gboolean selection_edge_hit =
-        resize_handle == SHAULA_RESIZE_HANDLE_NONE &&
-        selected_selection_box_edge_at(state, x, y);
-    if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
-      hit_result = (ShaulaAnnotationHit){state->selected_annotation,
-                                         SHAULA_ANNOTATION_HIT_HANDLE};
-    } else if (inside && (!selection_edge_hit || shift)) {
-      hit_result = shaula_annotations_hit_test_ranked(
-          state->document.annotations, image_point, hit_tolerance);
-    }
-    if (selection_edge_hit && !shift) {
-      shaula_preview_clear_region_selection(state);
-      shaula_preview_begin_history_gesture(state);
-      start_operation(state, SHAULA_OPERATION_MOVE, image_point);
-      gtk_widget_set_cursor_from_name(state->area, "grabbing");
-      break;
-    }
-    if (selection_edge_hit && hit_result.annotation == NULL)
-      break;
-    ShaulaAnnotation *hit = hit_result.annotation;
-    if (hit != NULL) {
-      gboolean hit_was_selected =
-          shaula_preview_is_annotation_selected(state, hit);
-      shaula_preview_clear_region_selection(state);
-      if (shift) {
-        shaula_preview_toggle_annotation_selection(state, hit);
-        break;
-      }
-      if (!hit_was_selected || shaula_preview_selected_count(state) <= 1) {
-        shaula_preview_select_only_annotation(state, hit);
-      } else {
-        state->drag_hit_annotation = hit;
-        state->drag_preserved_multi_selection = TRUE;
-      }
-      shaula_preview_begin_history_gesture(state);
-
-      if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
-        capture_resize_origin(state, resize_handle);
-        start_operation(state, SHAULA_OPERATION_RESIZE_ANNOTATION, image_point);
-        gtk_widget_set_cursor_from_name(
-            state->area, cursor_for_resize_handle(resize_handle));
-        break;
-      }
-
-      start_operation(state, SHAULA_OPERATION_MOVE, image_point);
-      gtk_widget_set_cursor_from_name(state->area, "grabbing");
-    } else if (inside) {
-      shaula_preview_clear_selection(state);
-      shaula_preview_clear_region_selection(state);
-      start_operation(state, SHAULA_OPERATION_SELECT_REGION, clamped);
-    } else {
-      shaula_preview_clear_selection(state);
-      shaula_preview_clear_region_selection(state);
-      state->operation = SHAULA_OPERATION_NONE;
-    }
+    const char *cursor_name = NULL;
+    ShaulaPreviewPointerEvent event = {
+        .screen_x = x,
+        .screen_y = y,
+        .button = button,
+        .shift = shift,
+    };
+    (void)shaula_preview_gesture_begin_selection(state, event, &cursor_name);
+    if (cursor_name != NULL)
+      gtk_widget_set_cursor_from_name(state->area, cursor_name);
     break;
   }
   case SHAULA_TOOL_ERASER: {
-    shaula_preview_clear_selection(state);
+    shaula_annotation_editor_clear_selection(state);
     shaula_preview_clear_region_selection(state);
     shaula_preview_clear_eraser_pending(state);
     if (state->eraser_tail_timeout_id != 0) {
@@ -1478,8 +1113,9 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     state->eraser_hover_valid = TRUE;
     state->eraser_hover_screen = (ShaulaPoint){x, y};
     state->eraser_last_screen = state->eraser_hover_screen;
-    start_operation(state, SHAULA_OPERATION_ERASE_ANNOTATIONS,
-                    shaula_preview_canvas_screen_to_image(state, x, y));
+    shaula_preview_gesture_begin_operation(
+        state, SHAULA_OPERATION_ERASE_ANNOTATIONS,
+        shaula_preview_canvas_screen_to_image(state, x, y));
     gint64 now = g_get_monotonic_time();
     eraser_add_trail_point(state, x, y, now);
     eraser_mark_segment(state, state->eraser_last_screen,
@@ -1488,17 +1124,18 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     break;
   }
   case SHAULA_TOOL_CROP:
-    start_operation(state, SHAULA_OPERATION_CROP, clamped);
+    shaula_preview_gesture_begin_operation(state, SHAULA_OPERATION_CROP,
+                                           clamped);
     break;
   case SHAULA_TOOL_ARROW:
   case SHAULA_TOOL_LINE:
     if (inside) {
-      shaula_preview_clear_selection(state);
-      start_operation(state,
-                      state->active_tool == SHAULA_TOOL_ARROW
-                          ? SHAULA_OPERATION_ARROW
-                          : SHAULA_OPERATION_LINE,
-                      clamped);
+      shaula_annotation_editor_clear_selection(state);
+      shaula_preview_gesture_begin_operation(
+          state,
+          state->active_tool == SHAULA_TOOL_ARROW ? SHAULA_OPERATION_ARROW
+                                                  : SHAULA_OPERATION_LINE,
+          clamped);
     }
     break;
   case SHAULA_TOOL_TEXT:
@@ -1517,30 +1154,35 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
               state->tool_defaults.measure.stroke_width);
           annotation->data.measure.rect_width = mr->width;
           annotation->data.measure.rect_height = mr->height;
-          shaula_preview_add_annotation(state, annotation);
+          shaula_annotation_editor_add_annotation(state, annotation);
         }
       } else {
-        start_operation(state, SHAULA_OPERATION_MEASURE, clamped);
+        shaula_preview_gesture_begin_operation(
+            state, SHAULA_OPERATION_MEASURE, clamped);
       }
     }
     break;
   case SHAULA_TOOL_RECTANGLE:
     if (inside)
-      start_operation(state, SHAULA_OPERATION_RECTANGLE, clamped);
+      shaula_preview_gesture_begin_operation(
+          state, SHAULA_OPERATION_RECTANGLE, clamped);
     break;
   case SHAULA_TOOL_HIGHLIGHT:
     if (inside)
-      start_operation(state, SHAULA_OPERATION_HIGHLIGHT, clamped);
+      shaula_preview_gesture_begin_operation(
+          state, SHAULA_OPERATION_HIGHLIGHT, clamped);
     break;
   case SHAULA_TOOL_PEN:
     if (inside)
-      start_operation(state, SHAULA_OPERATION_PEN, clamped);
+      shaula_preview_gesture_begin_operation(state, SHAULA_OPERATION_PEN,
+                                             clamped);
     break;
   case SHAULA_TOOL_SPOTLIGHT:
     if (inside) {
-      shaula_preview_clear_selection(state);
+      shaula_annotation_editor_clear_selection(state);
       shaula_preview_clear_region_selection(state);
-      start_operation(state, SHAULA_OPERATION_SPOTLIGHT, clamped);
+      shaula_preview_gesture_begin_operation(
+          state, SHAULA_OPERATION_SPOTLIGHT, clamped);
       debug_spotlight_rect("begin", state,
                            (ShaulaRect){clamped.x, clamped.y, 0.0, 0.0});
     }
@@ -1564,118 +1206,19 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
     (void)gtk_gesture_drag_get_start_point(gesture, &start_x, &start_y);
   double x = start_x + dx;
   double y = start_y + dy;
-  ShaulaPoint image_point = clamped_image_point(
-      state, shaula_preview_canvas_screen_to_image(state, x, y));
-
-  switch (state->operation) {
-  case SHAULA_OPERATION_ERASE_ANNOTATIONS: {
+  ShaulaPreviewOperation operation = state->operation;
+  if (operation == SHAULA_OPERATION_ERASE_ANNOTATIONS) {
     ShaulaPoint screen_point = {x, y};
     state->eraser_hover_valid = TRUE;
     state->eraser_hover_screen = screen_point;
     eraser_add_trail_point(state, x, y, g_get_monotonic_time());
     eraser_mark_segment(state, state->eraser_last_screen, screen_point);
     state->eraser_last_screen = screen_point;
-    break;
-  }
-  case SHAULA_OPERATION_PAN:
-    (void)gesture;
-    state->fit_mode = FALSE;
-    state->pan_x = state->pan_origin_x + dx;
-    state->pan_y = state->pan_origin_y + dy;
-    break;
-  case SHAULA_OPERATION_MOVE: {
-    ShaulaPoint raw = shaula_preview_canvas_screen_to_image(state, x, y);
-    double mx = raw.x - state->drag_last_image.x;
-    double my = raw.y - state->drag_last_image.y;
-    if (!state->operation_changed &&
-        (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
-         fabs(raw.y - state->drag_start_image.y) > 0.5))
-      state->operation_changed = TRUE;
-    if (shaula_preview_has_selection(state) && state->operation_changed) {
-      move_selected_annotations(state, mx, my);
-      state->document.modified = TRUE;
-    }
-    state->drag_last_image = raw;
-    break;
-  }
-  case SHAULA_OPERATION_BEND_ARROW: {
-    ShaulaPoint raw = shaula_preview_canvas_screen_to_image(state, x, y);
-    if (!state->operation_changed &&
-        (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
-         fabs(raw.y - state->drag_start_image.y) > 0.5))
-      state->operation_changed = TRUE;
-    if (state->selected_annotation != NULL && state->operation_changed &&
-        state->selected_annotation->type == SHAULA_ANNOTATION_ARROW) {
-      ShaulaPoint p0 = state->selected_annotation->data.arrow.start;
-      ShaulaPoint p2 = state->selected_annotation->data.arrow.end;
-      state->selected_annotation->data.arrow.is_curved = TRUE;
-      state->selected_annotation->data.arrow.control.x =
-          2.0 * raw.x - 0.5 * p0.x - 0.5 * p2.x;
-      state->selected_annotation->data.arrow.control.y =
-          2.0 * raw.y - 0.5 * p0.y - 0.5 * p2.y;
-      shaula_annotation_update_bounds(state->selected_annotation);
-      state->document.modified = TRUE;
-    }
-    state->drag_last_image = raw;
-    break;
-  }
-  case SHAULA_OPERATION_RESIZE_ANNOTATION: {
-    ShaulaPoint raw = clamped_image_point(
-        state, shaula_preview_canvas_screen_to_image(state, x, y));
-    if (!state->operation_changed &&
-        (fabs(raw.x - state->drag_start_image.x) > 0.5 ||
-         fabs(raw.y - state->drag_start_image.y) > 0.5))
-      state->operation_changed = TRUE;
-    if (state->operation_changed) {
-      if (state->selected_annotation != NULL &&
-          state->selected_annotation->type == SHAULA_ANNOTATION_RECTANGLE)
-        resize_selected_rectangle(state, raw);
-      else if (state->selected_annotation != NULL &&
-               state->selected_annotation->type == SHAULA_ANNOTATION_ARROW)
-        resize_selected_arrow(state, raw);
-    }
-    state->drag_last_image = raw;
-    break;
-  }
-  case SHAULA_OPERATION_SELECT_REGION: {
-    state->drag_current_image = image_point;
-    ShaulaRect rect =
-        shaula_rect_from_points(state->drag_start_image, image_point);
-    state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
-    state->region_selection_rect = rect;
-    state->has_region_selection = state->operation_changed;
-    break;
-  }
-  case SHAULA_OPERATION_SPOTLIGHT: {
-    state->drag_current_image = image_point;
-    ShaulaRect rect =
-        shaula_rect_from_points(state->drag_start_image, image_point);
-    state->operation_changed = rect.width >= 3.0 && rect.height >= 3.0;
+  } else if (shaula_preview_gesture_update(state, x, y, dx, dy) &&
+             operation == SHAULA_OPERATION_SPOTLIGHT) {
+    ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
+                                              state->drag_current_image);
     debug_spotlight_rect("update", state, rect);
-    break;
-  }
-  case SHAULA_OPERATION_CROP:
-    state->drag_current_image = image_point;
-    state->crop_draft =
-        shaula_rect_from_points(state->drag_start_image, image_point);
-    break;
-  case SHAULA_OPERATION_ARROW:
-  case SHAULA_OPERATION_LINE:
-  case SHAULA_OPERATION_RECTANGLE:
-  case SHAULA_OPERATION_MEASURE:
-    state->drag_current_image = image_point;
-    break;
-  case SHAULA_OPERATION_HIGHLIGHT:
-  case SHAULA_OPERATION_PEN:
-    if (state->draft_pen_points != NULL &&
-        shaula_point_distance(state->drag_current_image, image_point) > 0.75) {
-      g_array_append_val(state->draft_pen_points, image_point);
-      state->drag_current_image = image_point;
-    }
-    break;
-  case SHAULA_OPERATION_NONE:
-  case SHAULA_OPERATION_TEXT:
-    break;
   }
   shaula_preview_queue_draw(state);
 }
@@ -1704,32 +1247,9 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
   if (state->active_tool == SHAULA_TOOL_SELECT &&
       state->operation == SHAULA_OPERATION_NONE && state->area != NULL &&
       state->document.image != NULL) {
-    ShaulaPoint image_point =
-        shaula_preview_canvas_screen_to_image(state, x, y);
-    gboolean inside = image_point_is_inside(state, image_point);
-    ShaulaAnnotationHit hit = {NULL, SHAULA_ANNOTATION_HIT_NONE};
-    ShaulaAnnotationResizeHandle resize_handle =
-        inside ? selected_resize_handle_at(
-                     state, image_point,
-                     SHAULA_SELECTION_HANDLE_TARGET_PX / state->zoom)
-               : SHAULA_RESIZE_HANDLE_NONE;
-    gboolean selection_edge_hit =
-        resize_handle == SHAULA_RESIZE_HANDLE_NONE &&
-        selected_selection_box_edge_at(state, x, y);
-    if (resize_handle != SHAULA_RESIZE_HANDLE_NONE) {
-      hit = (ShaulaAnnotationHit){state->selected_annotation,
-                                  SHAULA_ANNOTATION_HIT_HANDLE};
-    } else if (!selection_edge_hit && inside) {
-      hit = shaula_annotations_hit_test_ranked(
-          state->document.annotations, image_point,
-          MAX(4.0, 8.0 / state->zoom));
-    }
     gtk_widget_set_cursor_from_name(
-        state->area, resize_handle != SHAULA_RESIZE_HANDLE_NONE
-                         ? cursor_for_resize_handle(resize_handle)
-                     : selection_edge_hit || hit.annotation != NULL
-                         ? "grab"
-                         : cursor_name_for_tool(state->active_tool));
+        state->area,
+        shaula_preview_gesture_hover_cursor(state, x, y));
   }
 
   if (state->active_tool == SHAULA_TOOL_MEASURE &&
@@ -1845,32 +1365,13 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
   }
 
   if (annotation != NULL) {
-    shaula_preview_add_annotation(state, annotation);
-    /* Open arrow HUD targeting the just-created arrow. */
-    if (annotation->type == SHAULA_ANNOTATION_ARROW) {
-      shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.arrow_index = (int)state->document.annotations->len - 1;
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ARROW;
+    shaula_annotation_editor_add_annotation(state, annotation);
+    if (annotation->type == SHAULA_ANNOTATION_ARROW ||
+        annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       state->active_tool = SHAULA_TOOL_SELECT;
       shaula_preview_toolbar_update_tool_state(state);
       if (state->area != NULL)
         gtk_widget_set_cursor_from_name(state->area, "default");
-      shaula_preview_toolbar_update_selection_state(state);
-    } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-      shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.rectangle_index = (int)state->document.annotations->len - 1;
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
-      state->active_tool = SHAULA_TOOL_SELECT;
-      shaula_preview_toolbar_update_tool_state(state);
-      if (state->area != NULL)
-        gtk_widget_set_cursor_from_name(state->area, "default");
-      shaula_preview_toolbar_update_selection_state(state);
-    } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
-      shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
-    } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-      shaula_preview_select_annotation(state, annotation);
-      state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
     }
   }
 }
@@ -1885,48 +1386,34 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
      */
     on_drag_update(gesture, dx, dy, data);
   }
-  if (state->operation == SHAULA_OPERATION_ERASE_ANNOTATIONS) {
+  ShaulaPreviewOperation completed_operation = state->operation;
+  if (completed_operation == SHAULA_OPERATION_ERASE_ANNOTATIONS) {
     shaula_preview_commit_eraser_pending(state);
     state->operation = SHAULA_OPERATION_NONE;
     state->eraser_drag_active = FALSE;
     eraser_start_tail_fade(state);
     gtk_widget_set_cursor_from_name(state->area, "none");
-  } else if (state->operation == SHAULA_OPERATION_PAN ||
-      state->operation == SHAULA_OPERATION_MOVE ||
-      state->operation == SHAULA_OPERATION_BEND_ARROW ||
-      state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION ||
-      state->operation == SHAULA_OPERATION_SELECT_REGION ||
-      state->operation == SHAULA_OPERATION_SPOTLIGHT) {
-    if (state->operation == SHAULA_OPERATION_MOVE ||
-        state->operation == SHAULA_OPERATION_BEND_ARROW ||
-        state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION)
-      shaula_preview_commit_history_gesture(state, state->operation_changed);
-    if (state->operation == SHAULA_OPERATION_MOVE &&
-        !state->operation_changed && state->drag_preserved_multi_selection &&
-        state->drag_hit_annotation != NULL)
-      shaula_preview_select_only_annotation(state, state->drag_hit_annotation);
-    if (state->operation == SHAULA_OPERATION_SELECT_REGION) {
-      if (state->operation_changed) {
-        ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
-                                                  state->drag_current_image);
-        shaula_preview_select_annotations_intersecting_rect(state, rect);
-        shaula_preview_toolbar_update_selection_state(state);
-      } else if (!state->operation_changed) {
-        shaula_preview_clear_region_selection(state);
-      }
-    }
-    if (state->operation == SHAULA_OPERATION_SPOTLIGHT) {
-      if (state->operation_changed) {
-        ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
-                                                  state->drag_current_image);
-        debug_spotlight_rect("end-commit", state, rect);
-        shaula_preview_spotlight_rect(state, rect);
-      }
-      state->has_region_selection = FALSE;
-    }
+  } else if (shaula_preview_gesture_is_selection_operation(
+                 completed_operation)) {
+    (void)shaula_preview_gesture_end_selection(state);
     gtk_widget_set_cursor_from_name(state->area,
                                     cursor_name_for_tool(state->active_tool));
-  } else if (state->operation == SHAULA_OPERATION_CROP) {
+  } else if (completed_operation == SHAULA_OPERATION_PAN) {
+    state->operation = SHAULA_OPERATION_NONE;
+    gtk_widget_set_cursor_from_name(state->area,
+                                    cursor_name_for_tool(state->active_tool));
+  } else if (completed_operation == SHAULA_OPERATION_SPOTLIGHT) {
+    if (state->operation_changed) {
+      ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
+                                                state->drag_current_image);
+      debug_spotlight_rect("end-commit", state, rect);
+      shaula_preview_spotlight_rect(state, rect);
+    }
+    state->has_region_selection = FALSE;
+    state->operation = SHAULA_OPERATION_NONE;
+    gtk_widget_set_cursor_from_name(state->area,
+                                    cursor_name_for_tool(state->active_tool));
+  } else if (completed_operation == SHAULA_OPERATION_CROP) {
     if (!shaula_preview_apply_crop(state))
       shaula_preview_cancel_operation(state);
   } else {
@@ -1936,9 +1423,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
       state->operation != SHAULA_OPERATION_TEXT)
     state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
-  state->drag_hit_annotation = NULL;
-  state->drag_preserved_multi_selection = FALSE;
-  state->active_resize_handle = SHAULA_RESIZE_HANDLE_NONE;
+  shaula_preview_gesture_reset(&state->gesture);
   if (state->space_pan_restore_pending)
     restore_space_pan_tool(state);
   if (state->draft_pen_points != NULL &&
@@ -1988,8 +1473,8 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
       shaula_preview_queue_draw(state);
       return TRUE;
     }
-    if (shaula_preview_has_selection(state)) {
-      shaula_preview_clear_selection(state);
+    if (shaula_annotation_editor_has_selection(state)) {
+      shaula_annotation_editor_clear_selection(state);
       return TRUE;
     }
     if (state->last_action == NULL)

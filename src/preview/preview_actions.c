@@ -311,7 +311,7 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
     shaula_preview_cancel_operation(state);
   }
   if (tool != SHAULA_TOOL_SELECT && tool != SHAULA_TOOL_HAND) {
-    shaula_preview_clear_selection(state);
+    shaula_annotation_editor_clear_selection(state);
     shaula_preview_clear_region_selection(state);
   }
   state->active_tool = tool;
@@ -630,15 +630,15 @@ void shaula_preview_action_redo(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_action_reset_annotations(ShaulaPreviewState *state) {
-  shaula_preview_reset_annotations(state);
+  shaula_annotation_editor_reset_annotations(state);
 }
 
 void shaula_preview_action_duplicate_selected(ShaulaPreviewState *state) {
-  shaula_preview_duplicate_selected(state);
+  shaula_annotation_editor_duplicate_selected(state);
 }
 
 void shaula_preview_action_delete_selected(ShaulaPreviewState *state) {
-  shaula_preview_delete_selected(state);
+  shaula_annotation_editor_delete_selected(state);
 }
 
 void shaula_preview_action_crop_selected(ShaulaPreviewState *state) {
@@ -663,7 +663,8 @@ void shaula_preview_action_copy_hover_color(ShaulaPreviewState *state) {
 
 static void apply_color_to_selected_annotation(ShaulaPreviewState *state,
                                                ShaulaColor color) {
-  ShaulaAnnotation *annotation = state->selected_annotation;
+  ShaulaAnnotation *annotation =
+      shaula_annotation_editor_single_selection(state);
   if (annotation == NULL)
     return;
 
@@ -696,7 +697,7 @@ void shaula_preview_action_use_hover_color(ShaulaPreviewState *state) {
   ShaulaColor color = state->hover_color;
   state->current_color = color;
 
-  if (state->selected_annotation != NULL) {
+  if (shaula_annotation_editor_single_selection(state) != NULL) {
     apply_color_to_selected_annotation(state, color);
   } else {
     switch (state->active_tool) {
