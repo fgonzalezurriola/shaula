@@ -9,19 +9,12 @@
 #include "preview_toolbar.h"
 
 #define SHAULA_CROP_MIN_SIZE_PX 4
-#define SHAULA_PASTE_OFFSET_PX 12.0
+#define SHAULA_PASTE_OFFSET_PX 8.0
 #define SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL 16
 #define SHAULA_ERASE_COLOR_BUCKET_COUNT                                        \
   (SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                    \
    SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL *                                    \
    SHAULA_ERASE_COLOR_BUCKETS_PER_CHANNEL)
-
-static gboolean rect_fits_image(ShaulaRect rect, double image_width,
-                                double image_height) {
-  rect = shaula_rect_normalized(rect);
-  return rect.x >= 0.0 && rect.y >= 0.0 && rect.x + rect.width <= image_width &&
-         rect.y + rect.height <= image_height;
-}
 
 static ShaulaAnnotation *
 annotation_clone_with_offset(const ShaulaAnnotation *base, double dx,
@@ -33,69 +26,6 @@ annotation_clone_with_offset(const ShaulaAnnotation *base, double dx,
   clone->selected = FALSE;
   shaula_annotation_move(clone, dx, dy);
   return clone;
-}
-
-static ShaulaRect annotation_array_bounds(GPtrArray *annotations) {
-  ShaulaRect bounds = {0};
-  gboolean initialized = FALSE;
-  if (annotations == NULL)
-    return bounds;
-  for (guint i = 0; i < annotations->len; i++) {
-    ShaulaAnnotation *annotation = g_ptr_array_index(annotations, i);
-    if (annotation == NULL)
-      continue;
-    ShaulaRect next = shaula_rect_normalized(annotation->bounds);
-    bounds = initialized ? shaula_rect_union(bounds, next) : next;
-    initialized = TRUE;
-  }
-  return bounds;
-}
-
-static void move_annotation_array(GPtrArray *annotations, double dx,
-                                  double dy) {
-  if (annotations == NULL || (dx == 0.0 && dy == 0.0))
-    return;
-  for (guint i = 0; i < annotations->len; i++)
-    shaula_annotation_move(g_ptr_array_index(annotations, i), dx, dy);
-}
-
-static void move_annotation_array_inside_image(GPtrArray *annotations,
-                                               double image_width,
-                                               double image_height) {
-  if (annotations == NULL || annotations->len == 0)
-    return;
-  ShaulaRect bounds = annotation_array_bounds(annotations);
-  double dx = 0.0;
-  double dy = 0.0;
-
-  if (bounds.width <= image_width) {
-    if (bounds.x < 0.0)
-      dx = -bounds.x;
-    else if (bounds.x + bounds.width > image_width)
-      dx = image_width - (bounds.x + bounds.width);
-  } else {
-    dx = -bounds.x;
-  }
-
-  if (bounds.height <= image_height) {
-    if (bounds.y < 0.0)
-      dy = -bounds.y;
-    else if (bounds.y + bounds.height > image_height)
-      dy = image_height - (bounds.y + bounds.height);
-  } else {
-    dy = -bounds.y;
-  }
-
-  move_annotation_array(annotations, dx, dy);
-}
-
-static gboolean annotation_array_fits_image(GPtrArray *annotations,
-                                            double image_width,
-                                            double image_height) {
-  if (annotations == NULL || annotations->len == 0)
-    return FALSE;
-  return rect_fits_image(annotation_array_bounds(annotations), image_width,
-                         image_height);
 }
 
 static GPtrArray *annotation_array_clone_with_offset(GPtrArray *base,
@@ -116,34 +46,19 @@ static GPtrArray *annotation_array_clone_with_offset(GPtrArray *base,
   return clone;
 }
 
-static GPtrArray *annotation_array_clone_for_paste(GPtrArray *base,
-                                                   double image_width,
-                                                   double image_height) {
-  static const ShaulaPoint offsets[] = {
-      {SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
-      {-SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX},
-      {SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX},
-      {-SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX},
-  };
-
+/* Keep repeated paste direction deterministic. The old fit-based search could
+ * jump below an annotation near the top edge and then back above it on the next
+ * paste. It also clamped expanded hit-test bounds, turning invisible selection
+ * padding into an unexpectedly large visual offset. Paste now uses one small
+ * down-right step, matching the unconstrained behavior of manual annotation
+ * movement.
+ */
+static GPtrArray *annotation_array_clone_for_paste(GPtrArray *base) {
   if (base == NULL || base->len == 0)
     return NULL;
 
-  for (guint i = 0; i < G_N_ELEMENTS(offsets); i++) {
-    GPtrArray *candidate =
-        annotation_array_clone_with_offset(base, offsets[i].x, offsets[i].y);
-    if (candidate == NULL)
-      return NULL;
-    if (annotation_array_fits_image(candidate, image_width, image_height))
-      return candidate;
-    g_ptr_array_unref(candidate);
-  }
-
-  GPtrArray *candidate = annotation_array_clone_with_offset(
-      base, SHAULA_PASTE_OFFSET_PX, -SHAULA_PASTE_OFFSET_PX);
-  if (candidate != NULL)
-    move_annotation_array_inside_image(candidate, image_width, image_height);
-  return candidate;
+  return annotation_array_clone_with_offset(
+      base, SHAULA_PASTE_OFFSET_PX, SHAULA_PASTE_OFFSET_PX);
 }
 
 static gboolean detect_dark_theme(void) {
@@ -720,8 +635,7 @@ static gboolean paste_annotation_payload(ShaulaPreviewState *state,
   if (state == NULL || payload == NULL || payload->len == 0)
     return FALSE;
 
-  GPtrArray *pasted = annotation_array_clone_for_paste(
-      payload, shaula_preview_image_width(state), shaula_preview_image_height(state));
+  GPtrArray *pasted = annotation_array_clone_for_paste(payload);
   if (pasted == NULL)
     return FALSE;
 

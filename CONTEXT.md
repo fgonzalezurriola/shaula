@@ -387,7 +387,9 @@ and the working diff.
 ## Preview Tools
 
 - Detailed action, selection, tool, HUD, clipboard, theme, and overflow
-  contracts live in `docs/preview-tools.md`.
+  contracts live in `docs/preview-tools.md`. Repeated annotation paste now uses
+  a small deterministic down-right cascade. It no longer changes direction or
+  clamps expanded hit-test bounds into the image between consecutive pastes.
 
 ## Visible Metadata
 

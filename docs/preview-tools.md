@@ -103,7 +103,9 @@ The annotation clipboard is scoped to the current preview window:
 - `Ctrl+C` without object selection copies the rendered image.
 - `Ctrl+X` copies and deletes the selected set as one edit.
 - `Ctrl+V` clones the internal set with new IDs and selects the clones.
-- Repeated paste offsets from the previous pasted set.
+- Repeated paste cascades from the previous pasted set by a small deterministic
+  down-right offset. It does not change direction or clamp expanded hit-test
+  bounds into the image.
 - `Ctrl+D` uses the paste path without replacing clipboard contents.
 
 When the text editor has focus, GTK owns normal text-level `Ctrl+A/C/X/V`. External text/image paste as annotations is future work and should remain behind explicit system-paste behavior such as `Ctrl+Shift+V`.
