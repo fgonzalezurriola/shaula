@@ -159,8 +159,10 @@ and the working diff.
   integration, Advanced) with a compact capture-mode matrix for skip/copy/save
   combinations, a dedicated saving section, a readable Niri status card, and a
   fixed sticky footer for the primary Save and Cancel actions.
-- Public docs live primarily in `README.md`; `docs/roadmap.md` tracks future
-  features.
+- Public docs live primarily in `README.md`. `docs/roadmap.md` defines v0.1.6
+  as the UX rough-corners release: stabilize existing capture, preview/editor,
+  feedback, setup, integration, and documentation flows before adding another
+  large headline feature.
 - The preview toolbar is the active UI surface.
 - The goal is to keep the bar compact, useful, and honest about what is real.
 - Undo/Redo now has a reusable preview history foundation for document edits.
@@ -510,8 +512,11 @@ and the working diff.
 
 A general QuickShell integration layer is planned to expand beyond the Noctalia-specific plugin. The design introduces `ShaulaService.qml` (a QuickShell Singleton + IpcHandler) that any QS-based shell can use, an IPC-based panel-hide handshake replacing file-token polling, and a standalone bar widget for non-Noctalia QS configs. Full plan: `docs/plan-quickshell-integration.md`. Phases: (0) extract shaula-core QML module, (1) refactor Noctalia plugin to use ShaulaService, (2) IPC-based panel-hide handshake + `shaula ipc` CLI subcommand, (3) bidirectional capture state feedback, (4) standalone widget distribution and setup.
 
-## Landing page (`web/`)
+## Post-v0.1.6: Landing page (`web/`)
 
+- Web work is not part of the v0.1.6 UX-polish scope. The existing landing is
+  preserved as-is; deployment and further content/visual polish resume after
+  v0.1.6.
 - `web/` is a static one-page landing built with `Astro 5 + Tailwind CSS 4`.
 - Purpose: product page showing what Shaula is and how to install it.
 - Structure: Hero (title + curl/AUR tabs with copy button + demo gif) -> Features
