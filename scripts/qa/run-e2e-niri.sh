@@ -136,8 +136,6 @@ run_subcheck "e2e.failure.unsupported_compositor" "set +e; UNSUPPORTED_JSON=\$(S
 
 run_subcheck "e2e.failure.permission_clipboard" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; DEGRADED_JSON=\$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${DEGRADED_JSON}\" | jq -e '.ok==true and .saved.ok==true and .clipboard.ok==false and .clipboard.error.code==\"ERR_CLIPBOARD_UNAVAILABLE\" and .partial==true' >/dev/null"
 
-run_subcheck "e2e.backend.daemon_states" "SOCKET=/tmp/shaula-task17-e2e.sock; START_JSON=\$(SHAULA_SOCKET=\"\${SOCKET}\" ./zig-out/bin/shaula daemon start --json); printf '%s\\n' \"\${START_JSON}\" | jq -e '.status==\"ready\" and .result.state==\"ready\"' >/dev/null && STATUS_JSON=\$(SHAULA_SOCKET=\"\${SOCKET}\" ./zig-out/bin/shaula daemon status --json); printf '%s\\n' \"\${STATUS_JSON}\" | jq -e '.state|IN(\"ready\",\"degraded\")' >/dev/null && STOP_JSON=\$(SHAULA_SOCKET=\"\${SOCKET}\" ./zig-out/bin/shaula daemon stop --json); printf '%s\\n' \"\${STOP_JSON}\" | jq -e '.stopped==true' >/dev/null"
-
 run_subcheck "e2e.capture.capabilities.strict_contract" "CAPS_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" ./zig-out/bin/shaula capabilities list --json); printf '%s\\n' \"\${CAPS_JSON}\" | jq -e '.ok==true and has(\"backend\") and has(\"fallbacks\") and (.capture|has(\"window\"))' >/dev/null && bash ./scripts/qa/assert-capabilities-consistency.sh"
 if [[ "${QA_PROFILE}" == "full" || "${QA_PROFILE}" == "debug" ]]; then
   if [[ "${ALLOW_INTRUSIVE_UI}" == "1" ]]; then

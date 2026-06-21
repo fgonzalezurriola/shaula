@@ -37,8 +37,6 @@ the default gate unless explicitly invoked:
 - `scripts/qa/check-zig-version.sh`
 - `scripts/qa/assert-default-output-path.sh`
 - `scripts/qa/assert-overlay-geometry-fixtures.sh`
-- `scripts/qa/assert-daemon-state-machine.sh`
-- `scripts/qa/assert-daemon-status-ipc-truth.sh`
 - `scripts/qa/assert-no-runtime-stub.sh`
 - `scripts/qa/assert-capture-content-validity.sh`
 - `scripts/qa/assert-history-topn.sh`
@@ -56,7 +54,6 @@ not be cited as release readiness without refreshing the failing subchecks:
 - `scripts/qa/run-performance-gates.sh`
 - `scripts/qa/release-readiness-capture-fix.sh`
 - `scripts/qa/benchmark-capture-completion.sh`
-- `scripts/qa/benchmark-daemon-idle.sh`
 - `scripts/qa/benchmark-overlay-first-paint.sh`
 - `scripts/qa/assert-noctalia-*.sh`
 - `scripts/qa/test-noctalia-plugin-optional.sh`

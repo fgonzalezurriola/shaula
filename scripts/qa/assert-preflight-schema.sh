@@ -16,8 +16,8 @@ printf '%s\n' "${preflight_json}" | jq -e '
   .ok == true and
   .command == "preflight" and
   .compositor == "niri" and
-  (.ipc | has("socket") and has("ready")) and
-  (.result | has("wayland") and has("ipc_ready"))
+  (.result.wayland == true) and
+  (.result | has("backend") and has("portal_available"))
 ' >/dev/null || {
   echo "ERR_PREFLIGHT_SCHEMA_INVALID reason=preflight_shape" >&2
   exit 1

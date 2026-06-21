@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 MODE="both"
-SOCKET="${SHAULA_SOCKET:-/tmp/shaula-task9-noctalia.sock}"
 WITH_PLUGIN=0
 WITHOUT_PLUGIN=0
 
@@ -13,7 +12,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-plugin) MODE="with-plugin"; WITH_PLUGIN=1; shift ;;
     --without-plugin) MODE="without-plugin"; WITHOUT_PLUGIN=1; shift ;;
-    --socket) SOCKET="$2"; shift 2 ;;
     *)
       echo "ERR_NOCTALIA_OPTIONAL_TEST_USAGE reason=unknown_flag flag=$1" >&2
       exit 1
@@ -51,13 +49,6 @@ helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
-
-cleanup() {
-  set +e
-  SHAULA_SOCKET="${SOCKET}" ./zig-out/bin/shaula daemon stop --json >/dev/null 2>&1 || true
-  set -e
-}
-trap cleanup EXIT
 
 mkdir -p /tmp/shaula
 

@@ -7,9 +7,6 @@ pub const protocol_module = @import("ipc/protocol.zig");
 pub const recovery_policy_module = @import("recovery/policy.zig");
 pub const compositor_runtime_module = @import("compositor/runtime.zig");
 
-const protocol = @import("ipc/protocol.zig");
-const daemon_server = @import("daemon/server.zig");
-const daemon_cli = @import("daemon/cli_control.zig");
 const cli_json = @import("cli/json.zig");
 const preflight_probe = @import("preflight/probe.zig");
 const capabilities_probe = @import("capabilities/probe.zig");
@@ -33,19 +30,19 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = init.minimal.args.vector;
 
     if (argv.len < 2) {
-        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|setup|directory|doctor|explore|daemon|preflight|capabilities|history|clipboard|errors> ...", false);
+        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|setup|directory|doctor|explore|preflight|capabilities|history|clipboard|errors> ...", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
     const family = argToSlice(argv[1]);
 
     if (std.mem.eql(u8, family, "preflight")) {
-        const flags = parseFlags(io, argv, 2, true, "preflight") catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+        const flags = parseFlags(io, argv, 2, "preflight") catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
             try cli_json.writeBasicError(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
-        return preflight_probe.run(allocator, io, init.minimal.environ, flags.socket_arg);
+        return preflight_probe.run(allocator, io, init.minimal.environ);
     }
 
     if (std.mem.eql(u8, family, "capabilities")) {
@@ -63,7 +60,7 @@ pub fn main(init: std.process.Init) !u8 {
             }
         }
 
-        const flags = parseFlags(io, argv, flags_start, false, flags_command) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
+        const flags = parseFlags(io, argv, flags_start, flags_command) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
             try cli_json.writeBasicError(io, flags_command, "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
@@ -119,94 +116,22 @@ pub fn main(init: std.process.Init) !u8 {
         return errors_command.run(allocator, io, argv);
     }
 
-    if (!std.mem.eql(u8, family, "daemon")) {
-        try cli_json.writeBasicError(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    if (argv.len < 3) {
-        try cli_json.writeBasicError(io, "daemon", "ERR_CLI_USAGE", "usage: shaula daemon <start|status|stop> --json", false);
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const flags = parseFlags(io, argv, 3, true, daemon_cli.daemonCommand(argToSlice(argv[2]))) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-
-    if (!flags.json_mode) {
-        try cli_json.writeBasicError(io, daemon_cli.daemonCommand(argToSlice(argv[2])), "ERR_CLI_USAGE", "--json is required", false);
-        return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    }
-
-    const socket_path = try protocol.resolveSocketPath(allocator, init.minimal.environ, flags.socket_arg);
-    defer allocator.free(socket_path);
-
-    if (std.mem.eql(u8, argToSlice(argv[2]), "_serve")) {
-        var server = daemon_server.DaemonServer.init(allocator, io, socket_path);
-        server.run() catch |err| {
-            if (err == error.IpcBindFailed or err == error.InvalidSocketPath or err == error.SocketParentCreateFailed) {
-                try cli_json.writeBasicError(io, "daemon _serve", "ERR_IPC_BIND_FAILED", "failed to bind daemon IPC socket", false);
-                return recovery_policy.exitCodeFor("ERR_IPC_BIND_FAILED");
-            }
-            try cli_json.writeBasicError(io, "daemon _serve", "ERR_UNKNOWN_UNMAPPED", "daemon server failed with unmapped error", false);
-            return recovery_policy.exitCodeFor("ERR_UNKNOWN_UNMAPPED");
-        };
-        return 0;
-    }
-
-    if (std.mem.eql(u8, argToSlice(argv[2]), "start")) {
-        return daemon_cli.runDaemonStart(allocator, io, socket_path) catch |err| switch (err) {
-            error.DaemonAlreadyRunning => recovery_policy.exitCodeFor("ERR_DAEMON_ALREADY_RUNNING"),
-            error.IpcBindFailed => recovery_policy.exitCodeFor("ERR_IPC_BIND_FAILED"),
-            error.IpcTimeout => recovery_policy.exitCodeFor("ERR_IPC_TIMEOUT"),
-            else => return err,
-        };
-    }
-
-    if (std.mem.eql(u8, argToSlice(argv[2]), "status")) {
-        return daemon_cli.runDaemonStatus(allocator, io, socket_path) catch |err| switch (err) {
-            error.DaemonNotRunning => recovery_policy.exitCodeFor("ERR_DAEMON_NOT_RUNNING"),
-            error.IpcTimeout => recovery_policy.exitCodeFor("ERR_IPC_TIMEOUT"),
-            else => return err,
-        };
-    }
-
-    if (std.mem.eql(u8, argToSlice(argv[2]), "stop")) {
-        return daemon_cli.runDaemonStop(allocator, io, socket_path) catch |err| switch (err) {
-            error.DaemonNotRunning => recovery_policy.exitCodeFor("ERR_DAEMON_NOT_RUNNING"),
-            error.IpcTimeout => recovery_policy.exitCodeFor("ERR_IPC_TIMEOUT"),
-            else => return err,
-        };
-    }
-
-    try cli_json.writeBasicError(io, "daemon", "ERR_CLI_USAGE", "unsupported daemon subcommand", false);
+    try cli_json.writeBasicError(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
     return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
 }
 
 const ParsedFlags = struct {
     json_mode: bool,
-    socket_arg: ?[]const u8,
 };
 
-fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, allow_socket: bool, command: []const u8) !ParsedFlags {
-    var parsed: ParsedFlags = .{ .json_mode = false, .socket_arg = null };
+fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, command: []const u8) !ParsedFlags {
+    var parsed: ParsedFlags = .{ .json_mode = false };
 
     var i: usize = start;
     while (i < argv.len) : (i += 1) {
         const current = argToSlice(argv[i]);
         if (std.mem.eql(u8, current, "--json")) {
             parsed.json_mode = true;
-            continue;
-        }
-        if (std.mem.eql(u8, current, "--socket")) {
-            if (!allow_socket) {
-                try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "--socket is not supported for this command", false);
-                return error.InvalidArgument;
-            }
-            if (i + 1 >= argv.len) {
-                try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "--socket requires a path", false);
-                return error.InvalidArgument;
-            }
-            i += 1;
-            parsed.socket_arg = argToSlice(argv[i]);
             continue;
         }
 

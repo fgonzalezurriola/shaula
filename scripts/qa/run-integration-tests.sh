@@ -119,8 +119,6 @@ record_degraded_subcheck() {
   )"
 }
 
-run_subcheck "integration.daemon.lifecycle" "bash ./scripts/qa/test-daemon-lifecycle.sh"
-run_subcheck "integration.daemon.state_machine" "bash ./scripts/qa/assert-daemon-state-machine.sh"
 run_subcheck "integration.capture.core_modes" "bash ./scripts/qa/test-capture-core-modes.sh"
 run_subcheck "integration.capture.integrity.runtime_non_stub" "bash ./scripts/qa/assert-no-runtime-stub.sh"
 run_subcheck "integration.capture.integrity.content_validity" "bash ./scripts/qa/assert-capture-content-validity.sh"

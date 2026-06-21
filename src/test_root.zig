@@ -16,8 +16,6 @@ const _config_niri_rule = @import("config/niri_rule.zig");
 const _config_manager = @import("config/manager.zig");
 const _doctor_diagnostics = @import("doctor/diagnostics.zig");
 const _explore_command = @import("explore/command.zig");
-const _daemon_cli_control_test = @import("daemon/cli_control_test.zig");
-const _daemon_state_machine_test = @import("daemon/state_machine_test.zig");
 const _overlay_runtime = @import("overlay/runtime.zig");
 const _overlay_selection_session = @import("overlay/selection_session.zig");
 const _overlay_toolbar_layout_test = @import("overlay/toolbar_layout_test.zig");
@@ -48,8 +46,6 @@ test {
     _ = _config_manager;
     _ = _doctor_diagnostics;
     _ = _explore_command;
-    _ = _daemon_cli_control_test;
-    _ = _daemon_state_machine_test;
     _ = _overlay_runtime;
     _ = _overlay_selection_session;
     _ = _overlay_toolbar_layout_test;

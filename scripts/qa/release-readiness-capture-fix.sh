@@ -142,7 +142,7 @@ check_json_file \
 check_json_file \
   "evidence.performance.layer_report" \
   "${perf_layer_report}" \
-  '.pass == true and .benchmarks.overlay_first_paint.pass == true and .benchmarks.daemon_idle_footprint.pass == true'
+  '.pass == true and .benchmarks.overlay_first_paint.pass == true and .benchmarks.capture_completion.pass == true'
 
 check_json_file \
   "evidence.overlay.interactive_helper_report" \
@@ -242,24 +242,6 @@ if printf '%s\n' "${capture_json}" | jq -e '.ok == true and .command == "capture
   append_check "command_family.capture" true "pass"
 else
   append_check "command_family.capture" false "invalid_contract output=$(printf '%s' "${capture_json}" | tr '\n' ' ')"
-fi
-
-set +e
-daemon_status_json="$(./zig-out/bin/shaula daemon status --json 2>&1)"
-daemon_status_rc=$?
-set -e
-if [[ ${daemon_status_rc} -eq 0 ]]; then
-  if printf '%s\n' "${daemon_status_json}" | jq -e '(.state|type=="string") and (.result.state|type=="string")' >/dev/null 2>&1; then
-    append_check "command_family.daemon" true "pass"
-  else
-    append_check "command_family.daemon" false "invalid_success_contract output=$(printf '%s' "${daemon_status_json}" | tr '\n' ' ')"
-  fi
-else
-  if printf '%s\n' "${daemon_status_json}" | jq -e '.ok == false and (.error.code == "ERR_DAEMON_NOT_RUNNING" or .error.code == "ERR_IPC_TIMEOUT")' >/dev/null 2>&1; then
-    append_check "command_family.daemon" true "pass_expected_failure"
-  else
-    append_check "command_family.daemon" false "invalid_failure_contract output=$(printf '%s' "${daemon_status_json}" | tr '\n' ' ')"
-  fi
 fi
 
 blocking_issues="$(jq -r 'length' <<<"${blockers_json}")"

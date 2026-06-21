@@ -8,26 +8,18 @@ const recovery_policy = @import("../recovery/policy.zig");
 
 pub const PreflightError = error{UnsupportedCompositor};
 
-pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, socket_arg: ?[]const u8) !u8 {
+pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !u8 {
     const runtime = runtime_capabilities.resolve(allocator, io, environ);
     if (!runtime.compositor_supported) {
         try writeErrorJson(io, "preflight", "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, runtime.compositor.label);
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
 
-    const socket_path = try protocol.resolveSocketPath(allocator, environ, socket_arg);
-    defer allocator.free(socket_path);
-
     const wayland_ready = environ.getPosix("WAYLAND_DISPLAY") != null;
     if (!wayland_ready) {
         try writeErrorJson(io, "preflight", "ERR_PREFLIGHT_ENV_NOT_READY", "wayland environment is not ready", true, runtime.compositor.label);
         return recovery_policy.exitCodeFor("ERR_PREFLIGHT_ENV_NOT_READY");
     }
-
-    const ipc_ready = blk: {
-        std.Io.Dir.accessAbsolute(io, socket_path, .{}) catch break :blk false;
-        break :blk true;
-    };
 
     const ts = try nowIso8601(allocator, io);
     defer allocator.free(ts);
@@ -36,15 +28,12 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
-        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preflight\",\"timestamp\":\"{s}\",\"compositor\":\"{s}\",\"ready\":true,\"ipc\":{{\"socket\":\"{s}\",\"ready\":{s}}},\"result\":{{\"compositor\":\"{s}\",\"wayland\":true,\"ipc_ready\":{s},\"backend\":\"{s}\",\"portal_available\":{s}}},\"warnings\":{s}}}\n",
+        "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preflight\",\"timestamp\":\"{s}\",\"compositor\":\"{s}\",\"ready\":true,\"result\":{{\"compositor\":\"{s}\",\"wayland\":true,\"backend\":\"{s}\",\"portal_available\":{s}}},\"warnings\":{s}}}\n",
         .{
             protocol.contract_version,
             ts,
             runtime.compositor.label,
-            socket_path,
-            if (ipc_ready) "true" else "false",
             runtime.compositor.label,
-            if (ipc_ready) "true" else "false",
             runtime.backendUsedLabel(),
             if (runtime.portal_available) "true" else "false",
             if (warning) "[\"" ++ backend_contract.warning_portal_fallback ++ "\"]" else "[]",
