@@ -115,6 +115,7 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
   state->hover_color_valid = FALSE;
   state->hover_color = state->current_color;
   shaula_color_to_hex(state->hover_color, state->hover_hex);
+  shaula_tool_defaults_init(&state->tool_defaults);
   shaula_properties_hud_state_init(&state->properties_hud);
   state->draft_pen_points = g_array_new(FALSE, FALSE, sizeof(ShaulaPoint));
   state->eraser_pending_annotation_ids = g_array_new(FALSE, FALSE, sizeof(int));
@@ -127,6 +128,8 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
 void shaula_preview_state_free(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_tool_defaults_flush(&state->tool_defaults);
+  shaula_tool_defaults_dispose(&state->tool_defaults);
   if (state->eraser_tail_timeout_id != 0)
     g_source_remove(state->eraser_tail_timeout_id);
   if (state->draft_pen_points != NULL)
@@ -318,38 +321,18 @@ static void set_single_selection_properties(ShaulaPreviewState *state,
   if (annotation->type == SHAULA_ANNOTATION_ARROW) {
     state->properties_hud.arrow_index = annotation_index;
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ARROW;
-    state->properties_hud.arrow_color = annotation->color;
-    state->properties_hud.arrow_stroke_width = annotation->stroke_width;
   } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
     state->properties_hud.rectangle_index = annotation_index;
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_RECTANGLE;
-    state->properties_hud.rectangle_color = annotation->color;
-    state->properties_hud.rectangle_stroke_width = annotation->stroke_width;
-    state->properties_hud.rectangle_stroke_style =
-        annotation->data.rectangle.stroke_style;
-    state->properties_hud.rectangle_filled = annotation->data.rectangle.filled;
-    state->properties_hud.rectangle_corners = annotation->data.rectangle.corners;
   } else if (annotation->type == SHAULA_ANNOTATION_PEN) {
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
-    state->properties_hud.pen_color = annotation->color;
-    state->properties_hud.pen_opacity = annotation->color.a;
-    state->properties_hud.pen_stroke_width = annotation->stroke_width;
   } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
-    state->properties_hud.highlight_color = annotation->color;
-    state->properties_hud.highlight_opacity = annotation->color.a;
-    state->properties_hud.highlight_stroke_width = annotation->stroke_width;
   } else if (annotation->type == SHAULA_ANNOTATION_TEXT) {
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
-    state->properties_hud.text_color = annotation->color;
-    state->properties_hud.text_font_size = annotation->data.text.font_size;
-    state->properties_hud.text_align = annotation->data.text.align;
-    state->properties_hud.text_font_mode = annotation->data.text.font_mode;
   } else if (annotation->type == SHAULA_ANNOTATION_MEASURE) {
     state->properties_hud.measure_index = annotation_index;
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_MEASURE;
-    state->properties_hud.measure_color = annotation->color;
-    state->properties_hud.measure_stroke_width = annotation->stroke_width;
   } else {
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
   }
@@ -1396,9 +1379,9 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
 
   ShaulaSpotlightRegion region = {
       .rect = spotlight,
-      .shape = state->properties_hud.spotlight_shape,
-      .border_color = state->properties_hud.spotlight_border_color,
-      .border_width = MAX(0.0, state->properties_hud.spotlight_border_width),
+      .shape = state->tool_defaults.spotlight.shape,
+      .border_color = state->tool_defaults.spotlight.border_color,
+      .border_width = MAX(0.0, state->tool_defaults.spotlight.border_width),
   };
   shaula_preview_document_begin_edit(state);
   g_array_append_val(state->document.spotlight_regions, region);
@@ -1429,14 +1412,35 @@ void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
   shaula_preview_queue_draw(state);
 }
 
+static gboolean colors_equal(ShaulaColor a, ShaulaColor b) {
+  return fabs(a.r - b.r) <= 0.0001 && fabs(a.g - b.g) <= 0.0001 &&
+         fabs(a.b - b.b) <= 0.0001 && fabs(a.a - b.a) <= 0.0001;
+}
+
+static void persist_color_default(ShaulaPreviewState *state,
+                                  ShaulaColor *target, ShaulaColor value,
+                                  ShaulaToolDefaultsDirtyGroup dirty_group) {
+  if (state->properties_hud.syncing_widgets || colors_equal(*target, value))
+    return;
+  *target = value;
+  shaula_tool_defaults_mark_dirty(&state->tool_defaults, dirty_group);
+}
+
+static void persist_double_default(ShaulaPreviewState *state, double *target,
+                                   double value,
+                                   ShaulaToolDefaultsDirtyGroup dirty_group) {
+  if (state->properties_hud.syncing_widgets || fabs(*target - value) <= 0.0001)
+    return;
+  *target = value;
+  shaula_tool_defaults_mark_dirty(&state->tool_defaults, dirty_group);
+}
+
 void shaula_preview_set_eraser_size(ShaulaPreviewState *state, double size) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
   double next = CLAMP(size, SHAULA_ERASER_SIZE_MIN, SHAULA_ERASER_SIZE_MAX);
-  if (fabs(state->properties_hud.eraser_size - next) <= 0.01)
-    return;
-  state->properties_hud.eraser_size = next;
-  shaula_properties_hud_save_eraser_size(next);
+  persist_double_default(state, &state->tool_defaults.eraser.size, next,
+                         SHAULA_TOOL_DEFAULTS_DIRTY_ERASER);
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }
@@ -1452,11 +1456,6 @@ static void begin_property_history_if_targeted(ShaulaPreviewState *state,
   shaula_preview_toolbar_update_history_state(state);
 }
 
-static gboolean colors_equal(ShaulaColor a, ShaulaColor b) {
-  return fabs(a.r - b.r) <= 0.0001 && fabs(a.g - b.g) <= 0.0001 &&
-         fabs(a.b - b.b) <= 0.0001 && fabs(a.a - b.a) <= 0.0001;
-}
-
 static ShaulaSpotlightRegion *
 active_spotlight_region(ShaulaPreviewState *state) {
   if (state == NULL || state->document.spotlight_regions == NULL ||
@@ -1469,9 +1468,10 @@ active_spotlight_region(ShaulaPreviewState *state) {
 
 void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
                                                ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.spotlight_border_color = color;
+  persist_color_default(state, &state->tool_defaults.spotlight.border_color,
+                        color, SHAULA_TOOL_DEFAULTS_DIRTY_SPOTLIGHT);
   ShaulaSpotlightRegion *region = active_spotlight_region(state);
   if (region != NULL && !colors_equal(region->border_color, color)) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1484,14 +1484,15 @@ void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
                                                double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.spotlight_border_width = CLAMP(width, 0.0, 16.0);
+  double next = CLAMP(width, 0.0, 16.0);
+  persist_double_default(state, &state->tool_defaults.spotlight.border_width,
+                         next, SHAULA_TOOL_DEFAULTS_DIRTY_SPOTLIGHT);
   ShaulaSpotlightRegion *region = active_spotlight_region(state);
-  if (region != NULL &&
-      fabs(region->border_width - state->properties_hud.spotlight_border_width) > 0.0001) {
+  if (region != NULL && fabs(region->border_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    region->border_width = state->properties_hud.spotlight_border_width;
+    region->border_width = next;
     state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
@@ -1500,9 +1501,13 @@ void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
 
 void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
                                         ShaulaSpotlightShape shape) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.spotlight_shape = shape;
+  if (state->tool_defaults.spotlight.shape != shape) {
+    state->tool_defaults.spotlight.shape = shape;
+    shaula_tool_defaults_mark_dirty(&state->tool_defaults,
+                                    SHAULA_TOOL_DEFAULTS_DIRTY_SPOTLIGHT);
+  }
   ShaulaSpotlightRegion *region = active_spotlight_region(state);
   if (region != NULL && region->shape != shape) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1543,9 +1548,10 @@ active_rectangle_annotation(ShaulaPreviewState *state) {
 
 void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
                                     ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.arrow_color = color;
+  persist_color_default(state, &state->tool_defaults.arrow_line.color, color,
+                        SHAULA_TOOL_DEFAULTS_DIRTY_ARROW_LINE);
   ShaulaAnnotation *arrow = active_arrow_annotation(state);
   if (arrow != NULL && !colors_equal(arrow->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1558,14 +1564,15 @@ void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
                                            double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.arrow_stroke_width = CLAMP(width, 1.0, 12.0);
+  double next = CLAMP(width, 1.0, 12.0);
+  persist_double_default(state, &state->tool_defaults.arrow_line.stroke_width,
+                         next, SHAULA_TOOL_DEFAULTS_DIRTY_ARROW_LINE);
   ShaulaAnnotation *arrow = active_arrow_annotation(state);
-  if (arrow != NULL &&
-      fabs(arrow->stroke_width - state->properties_hud.arrow_stroke_width) > 0.0001) {
+  if (arrow != NULL && fabs(arrow->stroke_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    arrow->stroke_width = state->properties_hud.arrow_stroke_width;
+    arrow->stroke_width = next;
     shaula_annotation_update_bounds(arrow);
     state->document.modified = TRUE;
   }
@@ -1575,28 +1582,33 @@ void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
 
 void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
                                            PreviewArrowStrokeStyle style) {
-  if (state == NULL)
-    return;
-  ShaulaAnnotation *arrow = active_arrow_annotation(state);
-  if (arrow == NULL)
-    return;
-  if (style < PREVIEW_ARROW_STROKE_SOLID || style > PREVIEW_ARROW_STROKE_DOTTED)
-    return;
-  if (arrow->data.arrow.stroke_style == style)
+  if (state == NULL || state->properties_hud.syncing_widgets ||
+      style < PREVIEW_ARROW_STROKE_SOLID ||
+      style > PREVIEW_ARROW_STROKE_DOTTED)
     return;
 
-  begin_property_history_if_targeted(state, TRUE);
-  arrow->data.arrow.stroke_style = style;
-  state->document.modified = TRUE;
+  if (state->tool_defaults.arrow_line.stroke_style != style) {
+    state->tool_defaults.arrow_line.stroke_style = style;
+    shaula_tool_defaults_mark_dirty(
+        &state->tool_defaults, SHAULA_TOOL_DEFAULTS_DIRTY_ARROW_LINE);
+  }
+
+  ShaulaAnnotation *arrow = active_arrow_annotation(state);
+  if (arrow != NULL && arrow->data.arrow.stroke_style != style) {
+    begin_property_history_if_targeted(state, TRUE);
+    arrow->data.arrow.stroke_style = style;
+    state->document.modified = TRUE;
+  }
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
 }
 
 void shaula_preview_set_rectangle_color(ShaulaPreviewState *state,
                                         ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.rectangle_color = color;
+  persist_color_default(state, &state->tool_defaults.rectangle.color, color,
+                        SHAULA_TOOL_DEFAULTS_DIRTY_RECTANGLE);
   ShaulaAnnotation *rectangle = active_rectangle_annotation(state);
   if (rectangle != NULL && !colors_equal(rectangle->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1609,14 +1621,15 @@ void shaula_preview_set_rectangle_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_rectangle_stroke_width(ShaulaPreviewState *state,
                                                double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.rectangle_stroke_width = CLAMP(width, 1.0, 12.0);
+  double next = CLAMP(width, 1.0, 12.0);
+  persist_double_default(state, &state->tool_defaults.rectangle.stroke_width,
+                         next, SHAULA_TOOL_DEFAULTS_DIRTY_RECTANGLE);
   ShaulaAnnotation *rectangle = active_rectangle_annotation(state);
-  if (rectangle != NULL &&
-      fabs(rectangle->stroke_width - state->properties_hud.rectangle_stroke_width) > 0.0001) {
+  if (rectangle != NULL && fabs(rectangle->stroke_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    rectangle->stroke_width = state->properties_hud.rectangle_stroke_width;
+    rectangle->stroke_width = next;
     shaula_annotation_update_bounds(rectangle);
     state->document.modified = TRUE;
   }
@@ -1626,10 +1639,15 @@ void shaula_preview_set_rectangle_stroke_width(ShaulaPreviewState *state,
 
 void shaula_preview_set_rectangle_stroke_style(ShaulaPreviewState *state,
                                                PreviewArrowStrokeStyle style) {
-  if (state == NULL || style < PREVIEW_ARROW_STROKE_SOLID ||
+  if (state == NULL || state->properties_hud.syncing_widgets ||
+      style < PREVIEW_ARROW_STROKE_SOLID ||
       style > PREVIEW_ARROW_STROKE_DASHED)
     return;
-  state->properties_hud.rectangle_stroke_style = style;
+  if (state->tool_defaults.rectangle.stroke_style != style) {
+    state->tool_defaults.rectangle.stroke_style = style;
+    shaula_tool_defaults_mark_dirty(
+        &state->tool_defaults, SHAULA_TOOL_DEFAULTS_DIRTY_RECTANGLE);
+  }
   ShaulaAnnotation *rectangle = active_rectangle_annotation(state);
   if (rectangle != NULL && rectangle->data.rectangle.stroke_style != style) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1642,9 +1660,13 @@ void shaula_preview_set_rectangle_stroke_style(ShaulaPreviewState *state,
 
 void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
                                          gboolean filled) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.rectangle_filled = filled;
+  if (state->tool_defaults.rectangle.filled != filled) {
+    state->tool_defaults.rectangle.filled = filled;
+    shaula_tool_defaults_mark_dirty(
+        &state->tool_defaults, SHAULA_TOOL_DEFAULTS_DIRTY_RECTANGLE);
+  }
   ShaulaAnnotation *rectangle = active_rectangle_annotation(state);
   if (rectangle != NULL && rectangle->data.rectangle.filled != filled) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1657,10 +1679,15 @@ void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
 
 void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
                                           PreviewRectangleCorners corners) {
-  if (state == NULL || corners < PREVIEW_RECTANGLE_CORNERS_ROUNDED ||
+  if (state == NULL || state->properties_hud.syncing_widgets ||
+      corners < PREVIEW_RECTANGLE_CORNERS_ROUNDED ||
       corners > PREVIEW_RECTANGLE_CORNERS_SQUARE)
     return;
-  state->properties_hud.rectangle_corners = corners;
+  if (state->tool_defaults.rectangle.corners != corners) {
+    state->tool_defaults.rectangle.corners = corners;
+    shaula_tool_defaults_mark_dirty(
+        &state->tool_defaults, SHAULA_TOOL_DEFAULTS_DIRTY_RECTANGLE);
+  }
   ShaulaAnnotation *rectangle = active_rectangle_annotation(state);
   if (rectangle != NULL && rectangle->data.rectangle.corners != corners) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1683,12 +1710,15 @@ selected_annotation_of_type(ShaulaPreviewState *state,
 
 void shaula_preview_set_pen_color(ShaulaPreviewState *state,
                                   ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  color.a = CLAMP(state->properties_hud.pen_opacity, 0.1, 1.0);
-  state->properties_hud.pen_color = color;
   ShaulaAnnotation *pen =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
+  ShaulaColor default_color = color;
+  default_color.a = CLAMP(state->tool_defaults.pen.opacity, 0.1, 1.0);
+  persist_color_default(state, &state->tool_defaults.pen.color, default_color,
+                        SHAULA_TOOL_DEFAULTS_DIRTY_PEN);
+  color.a = pen != NULL ? pen->color.a : default_color.a;
   if (pen != NULL && !colors_equal(pen->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     pen->color = color;
@@ -1700,15 +1730,16 @@ void shaula_preview_set_pen_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
                                          double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.pen_stroke_width = CLAMP(width, 1.0, 24.0);
+  double next = CLAMP(width, 1.0, 24.0);
+  persist_double_default(state, &state->tool_defaults.pen.stroke_width, next,
+                         SHAULA_TOOL_DEFAULTS_DIRTY_PEN);
   ShaulaAnnotation *pen =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
-  if (pen != NULL &&
-      fabs(pen->stroke_width - state->properties_hud.pen_stroke_width) > 0.0001) {
+  if (pen != NULL && fabs(pen->stroke_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    pen->stroke_width = state->properties_hud.pen_stroke_width;
+    pen->stroke_width = next;
     shaula_annotation_update_bounds(pen);
     state->document.modified = TRUE;
   }
@@ -1717,15 +1748,17 @@ void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
 }
 
 void shaula_preview_set_pen_opacity(ShaulaPreviewState *state, double opacity) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.pen_opacity = CLAMP(opacity, 0.1, 1.0);
-  state->properties_hud.pen_color.a = state->properties_hud.pen_opacity;
+  double next = CLAMP(opacity, 0.1, 1.0);
+  persist_double_default(state, &state->tool_defaults.pen.opacity, next,
+                         SHAULA_TOOL_DEFAULTS_DIRTY_PEN);
+  state->tool_defaults.pen.color.a = next;
   ShaulaAnnotation *pen =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_PEN);
-  if (pen != NULL && fabs(pen->color.a - state->properties_hud.pen_opacity) > 0.0001) {
+  if (pen != NULL && fabs(pen->color.a - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    pen->color.a = state->properties_hud.pen_opacity;
+    pen->color.a = next;
     state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
@@ -1734,12 +1767,15 @@ void shaula_preview_set_pen_opacity(ShaulaPreviewState *state, double opacity) {
 
 void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
                                         ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  color.a = CLAMP(state->properties_hud.highlight_opacity, 0.05, 1.0);
-  state->properties_hud.highlight_color = color;
   ShaulaAnnotation *highlight =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
+  ShaulaColor default_color = color;
+  default_color.a = CLAMP(state->tool_defaults.highlight.opacity, 0.05, 1.0);
+  persist_color_default(state, &state->tool_defaults.highlight.color,
+                        default_color, SHAULA_TOOL_DEFAULTS_DIRTY_HIGHLIGHT);
+  color.a = highlight != NULL ? highlight->color.a : default_color.a;
   if (highlight != NULL && !colors_equal(highlight->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
     highlight->color = color;
@@ -1751,15 +1787,16 @@ void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
                                                double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.highlight_stroke_width = CLAMP(width, 4.0, 48.0);
+  double next = CLAMP(width, 4.0, 48.0);
+  persist_double_default(state, &state->tool_defaults.highlight.stroke_width,
+                         next, SHAULA_TOOL_DEFAULTS_DIRTY_HIGHLIGHT);
   ShaulaAnnotation *highlight =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
-  if (highlight != NULL &&
-      fabs(highlight->stroke_width - state->properties_hud.highlight_stroke_width) > 0.0001) {
+  if (highlight != NULL && fabs(highlight->stroke_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    highlight->stroke_width = state->properties_hud.highlight_stroke_width;
+    highlight->stroke_width = next;
     shaula_annotation_update_bounds(highlight);
     state->document.modified = TRUE;
   }
@@ -1769,16 +1806,17 @@ void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
 
 void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
                                           double opacity) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.highlight_opacity = CLAMP(opacity, 0.05, 1.0);
-  state->properties_hud.highlight_color.a = state->properties_hud.highlight_opacity;
+  double next = CLAMP(opacity, 0.05, 1.0);
+  persist_double_default(state, &state->tool_defaults.highlight.opacity, next,
+                         SHAULA_TOOL_DEFAULTS_DIRTY_HIGHLIGHT);
+  state->tool_defaults.highlight.color.a = next;
   ShaulaAnnotation *highlight =
       selected_annotation_of_type(state, SHAULA_ANNOTATION_HIGHLIGHT);
-  if (highlight != NULL &&
-      fabs(highlight->color.a - state->properties_hud.highlight_opacity) > 0.0001) {
+  if (highlight != NULL && fabs(highlight->color.a - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    highlight->color.a = state->properties_hud.highlight_opacity;
+    highlight->color.a = next;
     state->document.modified = TRUE;
   }
   shaula_preview_toolbar_update_selection_state(state);
@@ -1787,10 +1825,11 @@ void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
 
 void shaula_preview_set_text_color(ShaulaPreviewState *state,
                                    ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
   color.a = 1.0;
-  state->properties_hud.text_color = color;
+  persist_color_default(state, &state->tool_defaults.text.color, color,
+                        SHAULA_TOOL_DEFAULTS_DIRTY_TEXT);
   ShaulaAnnotation *text = state->text_entry == NULL
                                ? selected_annotation_of_type(
                                      state, SHAULA_ANNOTATION_TEXT)
@@ -1806,17 +1845,18 @@ void shaula_preview_set_text_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
                                        double font_size) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.text_font_size = CLAMP(font_size, 12.0, 72.0);
+  double next = CLAMP(font_size, 12.0, 72.0);
+  persist_double_default(state, &state->tool_defaults.text.font_size, next,
+                         SHAULA_TOOL_DEFAULTS_DIRTY_TEXT);
   ShaulaAnnotation *text = state->text_entry == NULL
                                ? selected_annotation_of_type(
                                      state, SHAULA_ANNOTATION_TEXT)
                                : NULL;
-  if (text != NULL &&
-      fabs(text->data.text.font_size - state->properties_hud.text_font_size) > 0.0001) {
+  if (text != NULL && fabs(text->data.text.font_size - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    text->data.text.font_size = state->properties_hud.text_font_size;
+    text->data.text.font_size = next;
     shaula_annotation_update_bounds(text);
     state->document.modified = TRUE;
   }
@@ -1826,9 +1866,13 @@ void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
 
 void shaula_preview_set_text_align(ShaulaPreviewState *state,
                                    ShaulaTextAlign align) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.text_align = align;
+  if (state->tool_defaults.text.align != align) {
+    state->tool_defaults.text.align = align;
+    shaula_tool_defaults_mark_dirty(&state->tool_defaults,
+                                    SHAULA_TOOL_DEFAULTS_DIRTY_TEXT);
+  }
   ShaulaAnnotation *text = state->text_entry == NULL
                                ? selected_annotation_of_type(
                                      state, SHAULA_ANNOTATION_TEXT)
@@ -1845,11 +1889,15 @@ void shaula_preview_set_text_align(ShaulaPreviewState *state,
 
 void shaula_preview_set_text_font_mode(ShaulaPreviewState *state,
                                        ShaulaTextFontMode font_mode) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
   if (font_mode != SHAULA_TEXT_FONT_SKETCH)
     font_mode = SHAULA_TEXT_FONT_NORMAL;
-  state->properties_hud.text_font_mode = font_mode;
+  if (state->tool_defaults.text.font_mode != font_mode) {
+    state->tool_defaults.text.font_mode = font_mode;
+    shaula_tool_defaults_mark_dirty(&state->tool_defaults,
+                                    SHAULA_TOOL_DEFAULTS_DIRTY_TEXT);
+  }
   ShaulaAnnotation *text = state->text_entry == NULL
                                ? selected_annotation_of_type(
                                      state, SHAULA_ANNOTATION_TEXT)
@@ -1878,9 +1926,10 @@ static ShaulaAnnotation *active_measure_annotation(ShaulaPreviewState *state) {
 
 void shaula_preview_set_measure_color(ShaulaPreviewState *state,
                                       ShaulaColor color) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.measure_color = color;
+  persist_color_default(state, &state->tool_defaults.measure.color, color,
+                        SHAULA_TOOL_DEFAULTS_DIRTY_MEASURE);
   ShaulaAnnotation *measure = active_measure_annotation(state);
   if (measure != NULL && !colors_equal(measure->color, color)) {
     begin_property_history_if_targeted(state, TRUE);
@@ -1893,14 +1942,15 @@ void shaula_preview_set_measure_color(ShaulaPreviewState *state,
 
 void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
                                              double width) {
-  if (state == NULL)
+  if (state == NULL || state->properties_hud.syncing_widgets)
     return;
-  state->properties_hud.measure_stroke_width = CLAMP(width, 1.0, 8.0);
+  double next = CLAMP(width, 1.0, 8.0);
+  persist_double_default(state, &state->tool_defaults.measure.stroke_width,
+                         next, SHAULA_TOOL_DEFAULTS_DIRTY_MEASURE);
   ShaulaAnnotation *measure = active_measure_annotation(state);
-  if (measure != NULL &&
-      fabs(measure->stroke_width - state->properties_hud.measure_stroke_width) > 0.0001) {
+  if (measure != NULL && fabs(measure->stroke_width - next) > 0.0001) {
     begin_property_history_if_targeted(state, TRUE);
-    measure->stroke_width = state->properties_hud.measure_stroke_width;
+    measure->stroke_width = next;
     shaula_annotation_update_bounds(measure);
     state->document.modified = TRUE;
   }

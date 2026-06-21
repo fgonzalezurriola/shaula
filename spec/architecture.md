@@ -393,6 +393,9 @@ focused output. It must not probe compositor/backend state again.
   conversion helpers.
 - `preview/preview_image_io.zig` and `preview/preview_clipboard.zig` own preview
   image and clipboard runtime calls.
+- `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
+  tolerant INI loading, debounced dirty-key persistence, and cross-preview file
+  locking. Inspector/widget state remains in `preview_properties_hud.*`.
 - `runtime/c_compat.zig` owns C/GTK string and status compatibility glue;
   returned GLib strings remain GLib-owned and must be released with `g_free`.
 - `ShaulaPreviewDocument` owns output-affecting preview model state. GTK widgets,

@@ -3,15 +3,7 @@
 
 #include <glib.h>
 
-#include "preview_annotations.h"
-#include "preview_geometry.h"
-
 typedef struct _GtkWidget GtkWidget;
-
-#define SHAULA_ERASER_SIZE_MIN 8.0
-#define SHAULA_ERASER_SIZE_MAX 48.0
-#define SHAULA_ERASER_SIZE_DEFAULT 14.0
-#define SHAULA_ERASER_SIZE_STEP 2.0
 
 typedef enum {
   SHAULA_PROPERTIES_PANEL_NONE,
@@ -26,43 +18,16 @@ typedef enum {
   SHAULA_PROPERTIES_PANEL_MEASURE
 } ShaulaPropertiesPanel;
 
-typedef enum {
-  SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE,
-  SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE
-} ShaulaSpotlightShape;
-
-/* Owns floating properties HUD state and widget handles. These fields are
- * UI/config state only: keep them out of undo/redo document snapshots.
+/* Owns floating properties HUD targets and widget handles. Tool creation
+ * defaults are stored separately in ShaulaPreviewState.
  */
 typedef struct {
   ShaulaPropertiesPanel active_panel;
+  gboolean syncing_widgets;
   int spotlight_index;
   int arrow_index;
   int rectangle_index;
   int measure_index;
-  ShaulaColor spotlight_border_color;
-  double spotlight_border_width;
-  ShaulaSpotlightShape spotlight_shape;
-  ShaulaColor arrow_color;
-  double arrow_stroke_width;
-  ShaulaColor rectangle_color;
-  double rectangle_stroke_width;
-  PreviewArrowStrokeStyle rectangle_stroke_style;
-  gboolean rectangle_filled;
-  PreviewRectangleCorners rectangle_corners;
-  ShaulaColor pen_color;
-  double pen_stroke_width;
-  double pen_opacity;
-  ShaulaColor highlight_color;
-  double highlight_stroke_width;
-  double highlight_opacity;
-  ShaulaColor text_color;
-  double text_font_size;
-  ShaulaTextAlign text_align;
-  ShaulaTextFontMode text_font_mode;
-  ShaulaColor measure_color;
-  double measure_stroke_width;
-  double eraser_size;
 
   GtkWidget *properties_box;
   GtkWidget *spotlight_color_button;
@@ -102,6 +67,5 @@ typedef struct {
 void shaula_properties_hud_state_init(ShaulaPropertiesHudState *hud);
 gboolean shaula_properties_hud_set_panel(ShaulaPropertiesHudState *hud,
                                          ShaulaPropertiesPanel panel);
-void shaula_properties_hud_save_eraser_size(double size);
 
 #endif

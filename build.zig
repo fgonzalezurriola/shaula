@@ -162,6 +162,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     command.addFileArg(b.path("src/preview/preview_paths.c"));
     command.addFileArg(b.path("src/preview/preview_properties_hud.c"));
     command.addFileArg(b.path("src/preview/preview_properties_panel.c"));
+    command.addFileArg(b.path("src/preview/preview_tool_defaults.c"));
     command.addFileArg(b.path("src/preview/preview_render.c"));
     command.addFileArg(b.path("src/preview/preview_spotlight.c"));
     command.addFileArg(b.path("src/preview/preview_state.c"));

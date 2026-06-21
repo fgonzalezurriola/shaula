@@ -9,6 +9,7 @@
 #include "preview_geometry.h"
 #include "preview_measure.h"
 #include "preview_properties_hud.h"
+#include "preview_tool_defaults.h"
 
 enum {
   PREVIEW_MIN_W = 900,
@@ -172,6 +173,7 @@ typedef struct {
   ShaulaColor hover_color;
   char hover_hex[8];
   /* UI/config state only. Must stay out of undo history snapshots. */
+  ShaulaPreviewToolDefaults tool_defaults;
   ShaulaPropertiesHudState properties_hud;
   /* Set when the helper already emitted the user-facing save/copy banner. */
   gboolean notified;

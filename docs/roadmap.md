@@ -37,9 +37,11 @@ daily use.
   modal tools, temporary Hand/Pan, or active selections.
 - Keep selection, multi-selection, annotation clipboard, duplicate, delete, and
   undo/redo behavior consistent across annotation types.
-- Finish rough edges in tool HUD persistence and creation/editing transitions,
-  especially Rectangle, Arrow/Line, Text, Pen, Highlight, Spotlight, and
-  Annotation Eraser.
+- Keep every HUD-controlled creation default persisted across sessions: colors,
+  stroke widths, stroke styles, fill, corner shape, text size/font/alignment,
+  opacity, Spotlight border options, and Annotation Eraser size.
+- Finish rough edges in tool creation/editing transitions, especially Rectangle,
+  Arrow/Line, Text, Pen, Highlight, Spotlight, and Annotation Eraser.
 - Keep hit testing based on visible geometry rather than surprising bounding-box
   behavior.
 

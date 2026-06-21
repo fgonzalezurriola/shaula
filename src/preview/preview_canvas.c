@@ -127,7 +127,7 @@ static gboolean begin_space_pan_tool(ShaulaPreviewState *state,
 }
 
 static double eraser_radius_image(ShaulaPreviewState *state) {
-  double radius = state != NULL ? state->properties_hud.eraser_size
+  double radius = state != NULL ? state->tool_defaults.eraser.size
                                 : SHAULA_ERASER_SIZE_DEFAULT;
   return state != NULL && state->zoom > 0.0
              ? radius / state->zoom
@@ -490,18 +490,22 @@ static void draw_plain_draft_rect(cairo_t *cr, ShaulaRect rect,
 
 static void draw_arrow_draft(cairo_t *cr, ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = shaula_annotation_new_arrow(
-      state->drag_start_image, state->drag_current_image, state->properties_hud.arrow_color,
-      state->properties_hud.arrow_stroke_width);
+      state->drag_start_image, state->drag_current_image,
+      state->tool_defaults.arrow_line.color,
+      state->tool_defaults.arrow_line.stroke_width);
   annotation->data.arrow.has_head =
       state->operation != SHAULA_OPERATION_LINE;
+  annotation->data.arrow.stroke_style =
+      state->tool_defaults.arrow_line.stroke_style;
   shaula_annotation_draw(cr, annotation);
   shaula_annotation_free(annotation);
 }
 
 static void draw_measure_draft(cairo_t *cr, ShaulaPreviewState *state) {
   ShaulaAnnotation *annotation = shaula_annotation_new_measure(
-      state->drag_start_image, state->drag_current_image, state->properties_hud.measure_color,
-      state->properties_hud.measure_stroke_width);
+      state->drag_start_image, state->drag_current_image,
+      state->tool_defaults.measure.color,
+      state->tool_defaults.measure.stroke_width);
   shaula_annotation_draw(cr, annotation);
   shaula_annotation_free(annotation);
 }
@@ -529,7 +533,7 @@ static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state,
                                       ShaulaRect caret) {
   double zoom = MAX(state->zoom, 0.01);
   double line_width = MAX(1.25 / zoom, 0.8);
-  double height = MAX(caret.height, state->properties_hud.text_font_size * 1.1);
+  double height = MAX(caret.height, state->tool_defaults.text.font_size * 1.1);
   double x = caret.x;
   double y0 = caret.y;
   double y1 = y0 + height;
@@ -542,8 +546,10 @@ static void draw_text_insertion_caret(cairo_t *cr, ShaulaPreviewState *state,
   cairo_line_to(cr, x, y1);
   cairo_stroke(cr);
 
-  cairo_set_source_rgba(cr, state->properties_hud.text_color.r, state->properties_hud.text_color.g,
-                        state->properties_hud.text_color.b, state->properties_hud.text_color.a);
+  cairo_set_source_rgba(cr, state->tool_defaults.text.color.r,
+                        state->tool_defaults.text.color.g,
+                        state->tool_defaults.text.color.b,
+                        state->tool_defaults.text.color.a);
   cairo_set_line_width(cr, line_width);
   cairo_move_to(cr, x, y0);
   cairo_line_to(cr, x, y1);
@@ -559,8 +565,9 @@ static void draw_text_draft(cairo_t *cr, ShaulaPreviewState *state) {
   int cursor_byte_index =
       text_view_cursor_byte_index(GTK_TEXT_VIEW(state->text_entry), text);
   ShaulaAnnotation *annotation = shaula_annotation_new_text(
-      state->text_anchor_image, text, state->properties_hud.text_color, state->properties_hud.text_font_size,
-      state->properties_hud.text_align, state->properties_hud.text_font_mode);
+      state->text_anchor_image, text, state->tool_defaults.text.color,
+      state->tool_defaults.text.font_size, state->tool_defaults.text.align,
+      state->tool_defaults.text.font_mode);
   shaula_annotation_draw(cr, annotation);
   ShaulaRect caret = {0};
   gboolean has_caret =
@@ -659,9 +666,11 @@ static void draw_live_measure(cairo_t *cr, ShaulaPreviewState *state) {
   double y1 = (double)r->bottom + 1.0;
 
   cairo_save(cr);
-  cairo_set_source_rgba(cr, state->properties_hud.measure_color.r, state->properties_hud.measure_color.g,
-                        state->properties_hud.measure_color.b, 0.85);
-  cairo_set_line_width(cr, state->properties_hud.measure_stroke_width / state->zoom);
+  cairo_set_source_rgba(cr, state->tool_defaults.measure.color.r,
+                        state->tool_defaults.measure.color.g,
+                        state->tool_defaults.measure.color.b, 0.85);
+  cairo_set_line_width(
+      cr, state->tool_defaults.measure.stroke_width / state->zoom);
 
   if (r->width > 1 && r->height > 1) {
     cairo_rectangle(cr, x0, y0, x1 - x0, y1 - y0);
@@ -677,7 +686,8 @@ static void draw_live_measure(cairo_t *cr, ShaulaPreviewState *state) {
   }
 
   double foot = 6.0 / state->zoom;
-  cairo_set_line_width(cr, state->properties_hud.measure_stroke_width / state->zoom);
+  cairo_set_line_width(
+      cr, state->tool_defaults.measure.stroke_width / state->zoom);
   if (r->width > 1) {
     cairo_move_to(cr, x0, y0 - foot);
     cairo_line_to(cr, x0, y0 + foot);
@@ -744,19 +754,22 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
     draw_draft_rect(cr,
                     shaula_rect_from_points(state->drag_start_image,
                                             state->drag_current_image),
-                    state->properties_hud.rectangle_color, state->properties_hud.rectangle_stroke_width,
-                    state->properties_hud.rectangle_stroke_style, state->properties_hud.rectangle_corners,
-                    state->properties_hud.rectangle_filled);
+                    state->tool_defaults.rectangle.color,
+                    state->tool_defaults.rectangle.stroke_width,
+                    state->tool_defaults.rectangle.stroke_style,
+                    state->tool_defaults.rectangle.corners,
+                    state->tool_defaults.rectangle.filled);
     break;
   case SHAULA_OPERATION_HIGHLIGHT:
-    draw_path_draft(cr, state, state->properties_hud.highlight_color,
-                    state->properties_hud.highlight_stroke_width);
+    draw_path_draft(cr, state, state->tool_defaults.highlight.color,
+                    state->tool_defaults.highlight.stroke_width);
     break;
   case SHAULA_OPERATION_MEASURE:
     draw_measure_draft(cr, state);
     break;
   case SHAULA_OPERATION_PEN:
-    draw_path_draft(cr, state, state->properties_hud.pen_color, state->properties_hud.pen_stroke_width);
+    draw_path_draft(cr, state, state->tool_defaults.pen.color,
+                    state->tool_defaults.pen.stroke_width);
     break;
   case SHAULA_OPERATION_TEXT:
     draw_text_draft(cr, state);
@@ -765,7 +778,7 @@ static void draw_drafts(ShaulaPreviewState *state, cairo_t *cr) {
     draw_plain_draft_rect(cr,
                           shaula_rect_from_points(state->drag_start_image,
                                                   state->drag_current_image),
-                          state->properties_hud.spotlight_border_color, FALSE);
+                          state->tool_defaults.spotlight.border_color, FALSE);
     break;
   case SHAULA_OPERATION_CROP:
   case SHAULA_OPERATION_ERASE_ANNOTATIONS:
@@ -799,7 +812,7 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
   }
 
   if (state->eraser_trail != NULL && state->eraser_trail->len > 1) {
-    double radius = state->properties_hud.eraser_size;
+    double radius = state->tool_defaults.eraser.size;
     cairo_save(cr);
     cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
@@ -838,7 +851,7 @@ static void draw_eraser_overlay(ShaulaPreviewState *state, cairo_t *cr) {
   }
 
   if (state->active_tool == SHAULA_TOOL_ERASER && state->eraser_hover_valid) {
-    double radius = state->properties_hud.eraser_size;
+    double radius = state->tool_defaults.eraser.size;
     cairo_save(cr);
     cairo_set_line_width(cr, 1.5);
     cairo_set_source_rgba(cr, fg.red, fg.green, fg.blue, 0.88);
@@ -896,8 +909,9 @@ static void finish_text_entry(ShaulaPreviewState *state) {
   gboolean created = FALSE;
   if (trimmed[0] != '\0') {
     ShaulaAnnotation *annotation = shaula_annotation_new_text(
-        state->text_anchor_image, text, state->properties_hud.text_color,
-        state->properties_hud.text_font_size, state->properties_hud.text_align, state->properties_hud.text_font_mode);
+        state->text_anchor_image, text, state->tool_defaults.text.color,
+        state->tool_defaults.text.font_size, state->tool_defaults.text.align,
+        state->tool_defaults.text.font_mode);
     shaula_preview_add_annotation(state, annotation);
     shaula_preview_select_annotation(state, annotation);
     state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
@@ -1424,7 +1438,8 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
         ShaulaPoint me = {(double)mr->right + 1.0, (double)mr->bottom + 1.0};
         if (shaula_point_distance(ms, me) >= 3.0) {
           ShaulaAnnotation *annotation = shaula_annotation_new_measure(
-              ms, me, state->properties_hud.measure_color, state->properties_hud.measure_stroke_width);
+              ms, me, state->tool_defaults.measure.color,
+              state->tool_defaults.measure.stroke_width);
           annotation->data.measure.rect_width = mr->width;
           annotation->data.measure.rect_height = mr->height;
           shaula_preview_add_annotation(state, annotation);
@@ -1686,20 +1701,27 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
                               state->drag_current_image) >= 3.0)
       annotation = shaula_annotation_new_arrow(
           state->drag_start_image, state->drag_current_image,
-          state->properties_hud.arrow_color, state->properties_hud.arrow_stroke_width);
-    if (annotation != NULL && state->operation == SHAULA_OPERATION_LINE)
-      annotation->data.arrow.has_head = FALSE;
+          state->tool_defaults.arrow_line.color,
+          state->tool_defaults.arrow_line.stroke_width);
+    if (annotation != NULL) {
+      annotation->data.arrow.stroke_style =
+          state->tool_defaults.arrow_line.stroke_style;
+      if (state->operation == SHAULA_OPERATION_LINE)
+        annotation->data.arrow.has_head = FALSE;
+    }
     break;
   case SHAULA_OPERATION_RECTANGLE: {
     ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
                                               state->drag_current_image);
     if (rect.width >= 3.0 && rect.height >= 3.0)
       annotation = shaula_annotation_new_rectangle(
-          rect, state->properties_hud.rectangle_color, state->properties_hud.rectangle_stroke_width);
+          rect, state->tool_defaults.rectangle.color,
+          state->tool_defaults.rectangle.stroke_width);
     if (annotation != NULL) {
-      annotation->data.rectangle.stroke_style = state->properties_hud.rectangle_stroke_style;
-      annotation->data.rectangle.corners = state->properties_hud.rectangle_corners;
-      annotation->data.rectangle.filled = state->properties_hud.rectangle_filled;
+      annotation->data.rectangle.stroke_style =
+          state->tool_defaults.rectangle.stroke_style;
+      annotation->data.rectangle.corners = state->tool_defaults.rectangle.corners;
+      annotation->data.rectangle.filled = state->tool_defaults.rectangle.filled;
       shaula_annotation_update_bounds(annotation);
     }
     break;
@@ -1708,8 +1730,9 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
     if (state->draft_pen_points != NULL && state->draft_pen_points->len >= 2) {
       annotation = shaula_annotation_new_highlight(
           (ShaulaPoint *)state->draft_pen_points->data,
-          (int)state->draft_pen_points->len, state->properties_hud.highlight_color,
-          state->properties_hud.highlight_stroke_width);
+          (int)state->draft_pen_points->len,
+          state->tool_defaults.highlight.color,
+          state->tool_defaults.highlight.stroke_width);
     }
     break;
   case SHAULA_OPERATION_MEASURE:
@@ -1717,14 +1740,15 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
                               state->drag_current_image) >= 3.0)
       annotation = shaula_annotation_new_measure(
           state->drag_start_image, state->drag_current_image,
-          state->properties_hud.measure_color, state->properties_hud.measure_stroke_width);
+          state->tool_defaults.measure.color,
+          state->tool_defaults.measure.stroke_width);
     break;
   case SHAULA_OPERATION_PEN:
     if (state->draft_pen_points != NULL && state->draft_pen_points->len >= 2) {
       annotation = shaula_annotation_new_pen(
           (ShaulaPoint *)state->draft_pen_points->data,
-          (int)state->draft_pen_points->len, state->properties_hud.pen_color,
-          state->properties_hud.pen_stroke_width);
+          (int)state->draft_pen_points->len, state->tool_defaults.pen.color,
+          state->tool_defaults.pen.stroke_width);
     }
     break;
   case SHAULA_OPERATION_CROP:

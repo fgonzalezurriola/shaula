@@ -6,7 +6,7 @@
 
 #include "preview_annotations.h"
 #include "preview_geometry.h"
-#include "preview_properties_hud.h"
+#include "preview_tool_defaults.h"
 
 typedef struct {
   /* Document effect entry: copied/saved output must use these stored values,

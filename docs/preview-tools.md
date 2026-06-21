@@ -266,7 +266,32 @@ Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes 
 
 ## Tool Property Persistence
 
-HUD-controlled tool options should persist as last-used preferences across launches rather than resetting every preview session. Eraser Size already follows this contract.
+HUD-controlled tool options persist as per-tool, last-used preferences across
+preview sessions rather than resetting on every launch.
+
+The persistence contract covers every creation default exposed by a HUD:
+
+- Arrow/Line: color, stroke width, and stroke style.
+- Rectangle: color, stroke width, solid/dashed style, filled state, and
+  rounded/square corners.
+- Text: color, size, font mode, and alignment.
+- Pen: color, stroke width, and opacity.
+- Highlight: color, stroke width, and opacity.
+- Measure: color and stroke width.
+- Spotlight: border color, border width, and corner shape.
+- Annotation Eraser: size.
+
+Selecting an existing annotation loads that object's values into the inspector
+without replacing the persisted creation defaults. A deliberate user change to
+a HUD control updates both the selected object and that tool's future creation
+default.
+
+Defaults are stored in `$XDG_STATE_HOME/shaula/preview-tool-hud.ini`. Changes
+are debounced for 500 ms and flushed when the preview closes. Concurrent preview
+windows take a short file lock, reload the current INI, and merge only their
+dirty tool sections so changes to different tools do not overwrite each other. Invalid or
+missing values fall back independently to built-in defaults. Arrow and Line
+share one default profile because they use the same HUD and stroke model.
 
 ## More Menu
 

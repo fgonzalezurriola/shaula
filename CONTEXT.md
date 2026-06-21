@@ -387,9 +387,13 @@ and the working diff.
 ## Preview Tools
 
 - Detailed action, selection, tool, HUD, clipboard, theme, and overflow
-  contracts live in `docs/preview-tools.md`. Repeated annotation paste now uses
-  a small deterministic down-right cascade. It no longer changes direction or
-  clamps expanded hit-test bounds into the image between consecutive pastes.
+  contracts live in `docs/preview-tools.md`. Every HUD-controlled creation
+  default now persists across preview sessions in
+  `$XDG_STATE_HOME/shaula/preview-tool-hud.ini`; selected-object inspection does
+  not overwrite defaults until the user changes a control. Writes are debounced,
+  merged per dirty tool section under a short file lock, and flushed on close. Repeated
+  annotation paste uses a small deterministic down-right cascade and no longer
+  changes direction or clamps expanded hit-test bounds into the image.
 
 ## Visible Metadata
 
