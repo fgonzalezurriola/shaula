@@ -3,7 +3,11 @@
 
 #include <glib.h>
 
+#include "preview_annotations.h"
+#include "preview_tool_defaults.h"
+
 typedef struct _GtkWidget GtkWidget;
+typedef struct ShaulaPreviewState ShaulaPreviewState;
 
 typedef enum {
   SHAULA_PROPERTIES_PANEL_NONE,
@@ -18,8 +22,9 @@ typedef enum {
   SHAULA_PROPERTIES_PANEL_MEASURE
 } ShaulaPropertiesPanel;
 
-/* Owns floating properties HUD targets and widget handles. Tool creation
- * defaults are stored separately in ShaulaPreviewState.
+/* Stores the active target and GTK adapter handles. Property derivation,
+ * mutation, validation, history, persistence, and widget synchronization stay
+ * behind the functions below.
  */
 typedef struct {
   ShaulaPropertiesPanel active_panel;
@@ -64,5 +69,61 @@ typedef struct {
 void shaula_properties_hud_state_init(ShaulaPropertiesHudState *hud);
 gboolean shaula_properties_hud_set_panel(ShaulaPropertiesHudState *hud,
                                          ShaulaPropertiesPanel panel);
+void shaula_properties_hud_show_panel(ShaulaPreviewState *state,
+                                      ShaulaPropertiesPanel panel);
+void shaula_properties_hud_target_annotation(
+    ShaulaPropertiesHudState *hud, const ShaulaAnnotation *annotation);
+void shaula_properties_hud_target_spotlight(ShaulaPropertiesHudState *hud,
+                                            int spotlight_index);
+void shaula_properties_hud_sync_widgets(ShaulaPreviewState *state);
+
+void shaula_properties_hud_set_eraser_size(ShaulaPreviewState *state,
+                                           double size);
+void shaula_properties_hud_set_spotlight_border_color(
+    ShaulaPreviewState *state, ShaulaColor color);
+void shaula_properties_hud_set_spotlight_border_width(
+    ShaulaPreviewState *state, double width);
+void shaula_properties_hud_set_spotlight_shape(ShaulaPreviewState *state,
+                                               ShaulaSpotlightShape shape);
+void shaula_properties_hud_set_arrow_color(ShaulaPreviewState *state,
+                                           ShaulaColor color);
+void shaula_properties_hud_set_arrow_stroke_width(ShaulaPreviewState *state,
+                                                  double width);
+void shaula_properties_hud_set_arrow_stroke_style(
+    ShaulaPreviewState *state, PreviewArrowStrokeStyle style);
+void shaula_properties_hud_set_rectangle_color(ShaulaPreviewState *state,
+                                               ShaulaColor color);
+void shaula_properties_hud_set_rectangle_stroke_width(
+    ShaulaPreviewState *state, double width);
+void shaula_properties_hud_set_rectangle_stroke_style(
+    ShaulaPreviewState *state, PreviewArrowStrokeStyle style);
+void shaula_properties_hud_set_rectangle_filled(ShaulaPreviewState *state,
+                                                gboolean filled);
+void shaula_properties_hud_set_rectangle_corners(
+    ShaulaPreviewState *state, PreviewRectangleCorners corners);
+void shaula_properties_hud_set_pen_color(ShaulaPreviewState *state,
+                                         ShaulaColor color);
+void shaula_properties_hud_set_pen_stroke_width(ShaulaPreviewState *state,
+                                                double width);
+void shaula_properties_hud_set_pen_opacity(ShaulaPreviewState *state,
+                                           double opacity);
+void shaula_properties_hud_set_highlight_color(ShaulaPreviewState *state,
+                                               ShaulaColor color);
+void shaula_properties_hud_set_highlight_stroke_width(
+    ShaulaPreviewState *state, double width);
+void shaula_properties_hud_set_highlight_opacity(ShaulaPreviewState *state,
+                                                 double opacity);
+void shaula_properties_hud_set_text_color(ShaulaPreviewState *state,
+                                          ShaulaColor color);
+void shaula_properties_hud_set_text_font_size(ShaulaPreviewState *state,
+                                              double font_size);
+void shaula_properties_hud_set_text_align(ShaulaPreviewState *state,
+                                          ShaulaTextAlign align);
+void shaula_properties_hud_set_text_font_mode(ShaulaPreviewState *state,
+                                              ShaulaTextFontMode font_mode);
+void shaula_properties_hud_set_measure_color(ShaulaPreviewState *state,
+                                             ShaulaColor color);
+void shaula_properties_hud_set_measure_stroke_width(ShaulaPreviewState *state,
+                                                    double width);
 
 #endif

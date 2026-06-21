@@ -316,15 +316,20 @@ void shaula_preview_action_set_tool(ShaulaPreviewState *state,
   }
   state->active_tool = tool;
   if (tool == SHAULA_TOOL_PEN)
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_PEN;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_PEN);
   else if (tool == SHAULA_TOOL_HIGHLIGHT)
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_HIGHLIGHT);
   else if (tool == SHAULA_TOOL_TEXT)
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_TEXT);
   else if (tool == SHAULA_TOOL_ERASER)
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_ERASER;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_ERASER);
   else if (state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_ERASER)
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_NONE;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_NONE);
   shaula_preview_toolbar_update_tool_state(state);
   if (state->area != NULL) {
     const char *cursor = "crosshair";
@@ -670,22 +675,22 @@ static void apply_color_to_selected_annotation(ShaulaPreviewState *state,
 
   switch (annotation->type) {
   case SHAULA_ANNOTATION_ARROW:
-    shaula_preview_set_arrow_color(state, color);
+    shaula_properties_hud_set_arrow_color(state, color);
     break;
   case SHAULA_ANNOTATION_RECTANGLE:
-    shaula_preview_set_rectangle_color(state, color);
+    shaula_properties_hud_set_rectangle_color(state, color);
     break;
   case SHAULA_ANNOTATION_HIGHLIGHT:
-    shaula_preview_set_highlight_color(state, color);
+    shaula_properties_hud_set_highlight_color(state, color);
     break;
   case SHAULA_ANNOTATION_PEN:
-    shaula_preview_set_pen_color(state, color);
+    shaula_properties_hud_set_pen_color(state, color);
     break;
   case SHAULA_ANNOTATION_TEXT:
-    shaula_preview_set_text_color(state, color);
+    shaula_properties_hud_set_text_color(state, color);
     break;
   case SHAULA_ANNOTATION_MEASURE:
-    shaula_preview_set_measure_color(state, color);
+    shaula_properties_hud_set_measure_color(state, color);
     break;
   }
 }
@@ -703,38 +708,38 @@ void shaula_preview_action_use_hover_color(ShaulaPreviewState *state) {
     switch (state->active_tool) {
     case SHAULA_TOOL_ARROW:
     case SHAULA_TOOL_LINE:
-      shaula_preview_set_arrow_color(state, color);
+      shaula_properties_hud_set_arrow_color(state, color);
       break;
     case SHAULA_TOOL_MEASURE:
-      shaula_preview_set_measure_color(state, color);
+      shaula_properties_hud_set_measure_color(state, color);
       break;
     case SHAULA_TOOL_RECTANGLE:
-      shaula_preview_set_rectangle_color(state, color);
+      shaula_properties_hud_set_rectangle_color(state, color);
       break;
     case SHAULA_TOOL_HIGHLIGHT:
-      shaula_preview_set_highlight_color(state, color);
+      shaula_properties_hud_set_highlight_color(state, color);
       break;
     case SHAULA_TOOL_PEN:
-      shaula_preview_set_pen_color(state, color);
+      shaula_properties_hud_set_pen_color(state, color);
       break;
     case SHAULA_TOOL_TEXT:
-      shaula_preview_set_text_color(state, color);
+      shaula_properties_hud_set_text_color(state, color);
       break;
     case SHAULA_TOOL_SPOTLIGHT:
-      shaula_preview_set_spotlight_border_color(state, color);
+      shaula_properties_hud_set_spotlight_border_color(state, color);
       break;
     case SHAULA_TOOL_SELECT:
     case SHAULA_TOOL_HAND:
     case SHAULA_TOOL_CROP:
     case SHAULA_TOOL_ERASER:
     case SHAULA_TOOL_COUNT:
-      shaula_preview_set_arrow_color(state, color);
-      shaula_preview_set_rectangle_color(state, color);
-      shaula_preview_set_highlight_color(state, color);
-      shaula_preview_set_pen_color(state, color);
-      shaula_preview_set_text_color(state, color);
-      shaula_preview_set_measure_color(state, color);
-      shaula_preview_set_spotlight_border_color(state, color);
+      shaula_properties_hud_set_arrow_color(state, color);
+      shaula_properties_hud_set_rectangle_color(state, color);
+      shaula_properties_hud_set_highlight_color(state, color);
+      shaula_properties_hud_set_pen_color(state, color);
+      shaula_properties_hud_set_text_color(state, color);
+      shaula_properties_hud_set_measure_color(state, color);
+      shaula_properties_hud_set_spotlight_border_color(state, color);
       break;
     }
   }
@@ -850,26 +855,27 @@ void shaula_preview_on_spotlight_region_clicked(GtkButton *button,
 void shaula_preview_on_properties_back_clicked(GtkButton *button,
                                                gpointer data) {
   (void)button;
-  shaula_preview_set_properties_panel(data, SHAULA_PROPERTIES_PANEL_NONE);
+  shaula_properties_hud_show_panel(data, SHAULA_PROPERTIES_PANEL_NONE);
 }
 
 void shaula_preview_on_spotlight_color_set(GtkColorButton *button,
                                            gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_spotlight_border_color(
+  shaula_properties_hud_set_spotlight_border_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_spotlight_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_spotlight_border_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_spotlight_border_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_spotlight_shape_clicked(GtkButton *button,
                                                gpointer data) {
   ShaulaSpotlightShape shape = (ShaulaSpotlightShape)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "spotlight-shape"));
-  shaula_preview_set_spotlight_shape(data, shape);
+  shaula_properties_hud_set_spotlight_shape(data, shape);
 }
 
 void shaula_preview_on_copy_path_clicked(GtkButton *button, gpointer data) {
@@ -943,45 +949,45 @@ void shaula_preview_on_tool_clicked(GtkButton *button, gpointer data) {
 void shaula_preview_on_arrow_color_set(GtkColorButton *button, gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_arrow_color(
+  shaula_properties_hud_set_arrow_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_arrow_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_arrow_stroke_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_arrow_stroke_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_arrow_stroke_style_clicked(GtkButton *button,
                                                   gpointer data) {
   PreviewArrowStrokeStyle style = (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "arrow-stroke-style"));
-  shaula_preview_set_arrow_stroke_style(data, style);
-  shaula_preview_toolbar_update_selection_state(data);
+  shaula_properties_hud_set_arrow_stroke_style(data, style);
 }
 
 void shaula_preview_on_rectangle_color_set(GtkColorButton *button,
                                            gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_rectangle_color(
+  shaula_properties_hud_set_rectangle_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_rectangle_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_rectangle_stroke_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_rectangle_stroke_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_rectangle_stroke_style_clicked(GtkButton *button,
                                                       gpointer data) {
   PreviewArrowStrokeStyle style = (PreviewArrowStrokeStyle)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "rectangle-stroke-style"));
-  shaula_preview_set_rectangle_stroke_style(data, style);
-  shaula_preview_toolbar_update_selection_state(data);
+  shaula_properties_hud_set_rectangle_stroke_style(data, style);
 }
 
 void shaula_preview_on_rectangle_fill_toggled(GtkButton *button,
                                               gpointer data) {
-  shaula_preview_set_rectangle_filled(
+  shaula_properties_hud_set_rectangle_filled(
       data, gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)));
 }
 
@@ -989,78 +995,84 @@ void shaula_preview_on_rectangle_corners_clicked(GtkButton *button,
                                                  gpointer data) {
   PreviewRectangleCorners corners = (PreviewRectangleCorners)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "rectangle-corners"));
-  shaula_preview_set_rectangle_corners(data, corners);
+  shaula_properties_hud_set_rectangle_corners(data, corners);
 }
 
 void shaula_preview_on_pen_color_set(GtkColorButton *button, gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_pen_color(
+  shaula_properties_hud_set_pen_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_pen_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_pen_stroke_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_pen_stroke_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_pen_opacity_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_pen_opacity(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_pen_opacity(data,
+                                        gtk_range_get_value(range));
 }
 
 void shaula_preview_on_highlight_color_set(GtkColorButton *button,
                                            gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_highlight_color(
+  shaula_properties_hud_set_highlight_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_highlight_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_highlight_stroke_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_highlight_stroke_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_highlight_opacity_changed(GtkRange *range,
                                                  gpointer data) {
-  shaula_preview_set_highlight_opacity(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_highlight_opacity(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_text_color_set(GtkColorButton *button, gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_text_color(
+  shaula_properties_hud_set_text_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, 1.0});
 }
 
 void shaula_preview_on_text_size_clicked(GtkButton *button, gpointer data) {
   double font_size = (double)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "text-font-size"));
-  shaula_preview_set_text_font_size(data, font_size);
+  shaula_properties_hud_set_text_font_size(data, font_size);
 }
 
 void shaula_preview_on_text_style_clicked(GtkButton *button, gpointer data) {
   ShaulaTextFontMode font_mode = (ShaulaTextFontMode)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "text-font-mode"));
-  shaula_preview_set_text_font_mode(data, font_mode);
+  shaula_properties_hud_set_text_font_mode(data, font_mode);
 }
 
 void shaula_preview_on_text_align_clicked(GtkButton *button, gpointer data) {
   ShaulaTextAlign align = (ShaulaTextAlign)GPOINTER_TO_INT(
       g_object_get_data(G_OBJECT(button), "text-align"));
-  shaula_preview_set_text_align(data, align);
+  shaula_properties_hud_set_text_align(data, align);
 }
 
 void shaula_preview_on_measure_color_set(GtkColorButton *button,
                                          gpointer data) {
   GdkRGBA rgba;
   gtk_color_chooser_get_rgba(GTK_COLOR_CHOOSER(button), &rgba);
-  shaula_preview_set_measure_color(
+  shaula_properties_hud_set_measure_color(
       data, (ShaulaColor){rgba.red, rgba.green, rgba.blue, rgba.alpha});
 }
 
 void shaula_preview_on_measure_width_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_measure_stroke_width(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_measure_stroke_width(
+      data, gtk_range_get_value(range));
 }
 
 void shaula_preview_on_eraser_size_changed(GtkRange *range, gpointer data) {
-  shaula_preview_set_eraser_size(data, gtk_range_get_value(range));
+  shaula_properties_hud_set_eraser_size(data,
+                                        gtk_range_get_value(range));
 }

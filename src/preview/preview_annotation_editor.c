@@ -46,27 +46,6 @@ static void selected_ids_remove(ShaulaPreviewState *state, int id) {
   }
 }
 
-static ShaulaPropertiesPanel panel_for_annotation(
-    const ShaulaAnnotation *annotation) {
-  if (annotation == NULL)
-    return SHAULA_PROPERTIES_PANEL_NONE;
-  switch (annotation->type) {
-  case SHAULA_ANNOTATION_ARROW:
-    return SHAULA_PROPERTIES_PANEL_ARROW;
-  case SHAULA_ANNOTATION_RECTANGLE:
-    return SHAULA_PROPERTIES_PANEL_RECTANGLE;
-  case SHAULA_ANNOTATION_PEN:
-    return SHAULA_PROPERTIES_PANEL_PEN;
-  case SHAULA_ANNOTATION_HIGHLIGHT:
-    return SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
-  case SHAULA_ANNOTATION_TEXT:
-    return SHAULA_PROPERTIES_PANEL_TEXT;
-  case SHAULA_ANNOTATION_MEASURE:
-    return SHAULA_PROPERTIES_PANEL_MEASURE;
-  }
-  return SHAULA_PROPERTIES_PANEL_NONE;
-}
-
 /* Selection IDs are the editor source of truth. Annotation flags remain synced
  * because rendering and document snapshots persist that contract.
  */
@@ -91,8 +70,8 @@ static void sync_selection(ShaulaPreviewState *state) {
     }
   }
 
-  state->properties_hud.spotlight_index = -1;
-  state->properties_hud.active_panel = panel_for_annotation(
+  shaula_properties_hud_target_annotation(
+      &state->properties_hud,
       shaula_annotation_editor_single_selection(state));
 }
 

@@ -141,6 +141,16 @@ and the working diff.
   and live-measure work, apply returned cursor names, and request redraws.
   Selection gesture internals such as resize origins and pressed annotations
   must not be added back to `ShaulaPreviewState` as independent fields.
+- Preview property behavior now crosses the deep
+  `preview/preview_properties_hud.{c,h}` Module. Its Interface owns active panel
+  and target derivation, selected-value versus tool-default resolution,
+  validation/clamping, targeted history transactions, annotation and spotlight
+  mutation, tool-default persistence, panel visibility, and GTK widget value
+  synchronization. `preview_properties_panel.c` is only a widget-construction
+  Adapter, `preview_tool_defaults.c` remains the persistence Implementation,
+  Toolbar owns selection-action visibility only, and State no longer exposes
+  property mutation functions. Property widgets must not read tool defaults or
+  selected annotations directly when they are constructed or synchronized.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
   are non-goals. Niri on CachyOS is the primary development and interactive UX

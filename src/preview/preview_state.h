@@ -202,52 +202,5 @@ gboolean shaula_preview_erase_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_spotlight_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
                                        ShaulaRect rect);
-void shaula_preview_set_properties_panel(ShaulaPreviewState *state,
-                                         ShaulaPropertiesPanel panel);
-void shaula_preview_set_eraser_size(ShaulaPreviewState *state, double size);
-void shaula_preview_set_spotlight_border_color(ShaulaPreviewState *state,
-                                               ShaulaColor color);
-void shaula_preview_set_spotlight_border_width(ShaulaPreviewState *state,
-                                               double width);
-void shaula_preview_set_spotlight_shape(ShaulaPreviewState *state,
-                                        ShaulaSpotlightShape shape);
-void shaula_preview_set_arrow_color(ShaulaPreviewState *state,
-                                    ShaulaColor color);
-void shaula_preview_set_arrow_stroke_width(ShaulaPreviewState *state,
-                                           double width);
-void shaula_preview_set_arrow_stroke_style(ShaulaPreviewState *state,
-                                           PreviewArrowStrokeStyle style);
-void shaula_preview_set_rectangle_color(ShaulaPreviewState *state,
-                                        ShaulaColor color);
-void shaula_preview_set_rectangle_stroke_width(ShaulaPreviewState *state,
-                                               double width);
-void shaula_preview_set_rectangle_stroke_style(ShaulaPreviewState *state,
-                                               PreviewArrowStrokeStyle style);
-void shaula_preview_set_rectangle_filled(ShaulaPreviewState *state,
-                                         gboolean filled);
-void shaula_preview_set_rectangle_corners(ShaulaPreviewState *state,
-                                          PreviewRectangleCorners corners);
-void shaula_preview_set_pen_color(ShaulaPreviewState *state, ShaulaColor color);
-void shaula_preview_set_pen_stroke_width(ShaulaPreviewState *state,
-                                         double width);
-void shaula_preview_set_pen_opacity(ShaulaPreviewState *state, double opacity);
-void shaula_preview_set_highlight_color(ShaulaPreviewState *state,
-                                        ShaulaColor color);
-void shaula_preview_set_highlight_stroke_width(ShaulaPreviewState *state,
-                                               double width);
-void shaula_preview_set_highlight_opacity(ShaulaPreviewState *state,
-                                          double opacity);
-void shaula_preview_set_text_color(ShaulaPreviewState *state,
-                                   ShaulaColor color);
-void shaula_preview_set_text_font_size(ShaulaPreviewState *state,
-                                       double font_size);
-void shaula_preview_set_text_align(ShaulaPreviewState *state,
-                                   ShaulaTextAlign align);
-void shaula_preview_set_text_font_mode(ShaulaPreviewState *state,
-                                       ShaulaTextFontMode font_mode);
-void shaula_preview_set_measure_color(ShaulaPreviewState *state,
-                                      ShaulaColor color);
-void shaula_preview_set_measure_stroke_width(ShaulaPreviewState *state,
-                                             double width);
 
 #endif

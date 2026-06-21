@@ -927,7 +927,8 @@ static void finish_text_entry(ShaulaPreviewState *state) {
         state->tool_defaults.text.font_size, state->tool_defaults.text.align,
         state->tool_defaults.text.font_mode);
     shaula_annotation_editor_add_annotation(state, annotation);
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_TEXT);
     created = TRUE;
   }
   g_free(trimmed);
@@ -935,7 +936,8 @@ static void finish_text_entry(ShaulaPreviewState *state) {
   shaula_preview_cancel_operation(state);
   if (created) {
     state->active_tool = SHAULA_TOOL_SELECT;
-    state->properties_hud.active_panel = SHAULA_PROPERTIES_PANEL_TEXT;
+    shaula_properties_hud_set_panel(&state->properties_hud,
+                                    SHAULA_PROPERTIES_PANEL_TEXT);
     if (state->area != NULL)
       gtk_widget_set_cursor_from_name(state->area, "default");
     shaula_preview_toolbar_update_tool_state(state);

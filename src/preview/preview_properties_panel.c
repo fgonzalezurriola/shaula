@@ -356,12 +356,6 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.spotlight_color_button = color;
-  GdkRGBA rgba = {
-      state->tool_defaults.spotlight.border_color.r,
-      state->tool_defaults.spotlight.border_color.g,
-      state->tool_defaults.spotlight.border_color.b,
-      state->tool_defaults.spotlight.border_color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Spotlight border color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -372,7 +366,6 @@ GtkWidget *shaula_preview_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.0, 16.0, 1.0);
   state->properties_hud.spotlight_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.spotlight.border_width);
   gtk_widget_set_tooltip_text(width, "Spotlight border width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -423,11 +416,6 @@ shaula_preview_arrow_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.arrow_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.arrow_line.color.r,
-                  state->tool_defaults.arrow_line.color.g,
-                  state->tool_defaults.arrow_line.color.b,
-                  state->tool_defaults.arrow_line.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Arrow color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -438,7 +426,6 @@ shaula_preview_arrow_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 12.0, 0.5);
   state->properties_hud.arrow_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.arrow_line.stroke_width);
   gtk_widget_set_tooltip_text(width, "Arrow stroke width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -495,11 +482,6 @@ shaula_preview_rectangle_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.rectangle_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.rectangle.color.r,
-                  state->tool_defaults.rectangle.color.g,
-                  state->tool_defaults.rectangle.color.b,
-                  state->tool_defaults.rectangle.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Rectangle color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -510,7 +492,6 @@ shaula_preview_rectangle_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 12.0, 0.5);
   state->properties_hud.rectangle_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.rectangle.stroke_width);
   gtk_widget_set_tooltip_text(width, "Rectangle stroke width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -594,11 +575,6 @@ shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.pen_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.pen.color.r,
-                  state->tool_defaults.pen.color.g,
-                  state->tool_defaults.pen.color.b,
-                  state->tool_defaults.pen.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Pen color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -609,7 +585,6 @@ shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 24.0, 0.5);
   state->properties_hud.pen_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.pen.stroke_width);
   gtk_widget_set_tooltip_text(width, "Pen stroke width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -621,7 +596,6 @@ shaula_preview_pen_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *opacity =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.1, 1.0, 0.05);
   state->properties_hud.pen_opacity_scale = opacity;
-  gtk_range_set_value(GTK_RANGE(opacity), state->tool_defaults.pen.opacity);
   gtk_widget_set_tooltip_text(opacity, "Pen opacity");
   gtk_widget_set_size_request(opacity, 90, -1);
   gtk_scale_set_draw_value(GTK_SCALE(opacity), FALSE);
@@ -653,11 +627,6 @@ shaula_preview_highlight_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.highlight_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.highlight.color.r,
-                  state->tool_defaults.highlight.color.g,
-                  state->tool_defaults.highlight.color.b,
-                  state->tool_defaults.highlight.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Highlight color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -668,7 +637,6 @@ shaula_preview_highlight_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 4.0, 48.0, 1.0);
   state->properties_hud.highlight_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.highlight.stroke_width);
   gtk_widget_set_tooltip_text(width, "Highlight width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -681,7 +649,6 @@ shaula_preview_highlight_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *opacity =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0.05, 1.0, 0.05);
   state->properties_hud.highlight_opacity_scale = opacity;
-  gtk_range_set_value(GTK_RANGE(opacity), state->tool_defaults.highlight.opacity);
   gtk_widget_set_tooltip_text(opacity, "Highlight opacity");
   gtk_widget_set_size_request(opacity, 90, -1);
   gtk_scale_set_draw_value(GTK_SCALE(opacity), FALSE);
@@ -714,11 +681,6 @@ shaula_preview_text_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.text_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.text.color.r,
-                  state->tool_defaults.text.color.g,
-                  state->tool_defaults.text.color.b,
-                  state->tool_defaults.text.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Text color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -809,11 +771,6 @@ shaula_preview_measure_properties_panel_build(ShaulaPreviewState *state) {
 
   GtkWidget *color = gtk_color_button_new();
   state->properties_hud.measure_color_button = color;
-  GdkRGBA rgba = {state->tool_defaults.measure.color.r,
-                  state->tool_defaults.measure.color.g,
-                  state->tool_defaults.measure.color.b,
-                  state->tool_defaults.measure.color.a};
-  gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(color), &rgba);
   gtk_widget_set_tooltip_text(color, "Measure color");
   gtk_widget_set_valign(color, GTK_ALIGN_CENTER);
   gtk_widget_set_size_request(color, 30, 28);
@@ -824,7 +781,6 @@ shaula_preview_measure_properties_panel_build(ShaulaPreviewState *state) {
   GtkWidget *width =
       gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1.0, 8.0, 0.5);
   state->properties_hud.measure_width_scale = width;
-  gtk_range_set_value(GTK_RANGE(width), state->tool_defaults.measure.stroke_width);
   gtk_widget_set_tooltip_text(width, "Measure stroke width");
   gtk_widget_set_size_request(width, 120, -1);
   gtk_scale_set_draw_value(GTK_SCALE(width), FALSE);
@@ -858,7 +814,6 @@ shaula_preview_eraser_properties_panel_build(ShaulaPreviewState *state) {
       GTK_ORIENTATION_HORIZONTAL, SHAULA_ERASER_SIZE_MIN,
       SHAULA_ERASER_SIZE_MAX, SHAULA_ERASER_SIZE_STEP);
   state->properties_hud.eraser_size_scale = size;
-  gtk_range_set_value(GTK_RANGE(size), state->tool_defaults.eraser.size);
   gtk_widget_set_tooltip_text(size, "Eraser size");
   gtk_widget_set_size_request(size, 140, -1);
   gtk_scale_set_draw_value(GTK_SCALE(size), TRUE);

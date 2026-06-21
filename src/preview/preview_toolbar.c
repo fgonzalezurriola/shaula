@@ -733,9 +733,6 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
 
-  gboolean was_syncing = state->properties_hud.syncing_widgets;
-  state->properties_hud.syncing_widgets = TRUE;
-
   gboolean can_duplicate = shaula_preview_command_available(
       state, SHAULA_PREVIEW_COMMAND_DUPLICATE_SELECTED);
   gboolean can_crop = shaula_preview_command_available(
@@ -750,254 +747,17 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
       state, SHAULA_PREVIEW_COMMAND_DELETE_SELECTED);
   guint selected_count = shaula_annotation_editor_selected_count(state);
   gboolean has_object_selection = selected_count > 0;
-  gboolean has_single_object_selection = selected_count == 1;
   gboolean has_region_selection = state->has_region_selection;
   gboolean show_group =
       state->active_tool == SHAULA_TOOL_SELECT &&
       state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_NONE &&
       (can_duplicate || can_crop || can_blur || can_erase || can_spotlight ||
        can_delete);
-  gboolean show_spotlight_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_SPOTLIGHT;
-  gboolean show_arrow_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_ARROW;
-  gboolean show_rectangle_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_RECTANGLE;
-  gboolean show_pen_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_PEN;
-  gboolean show_highlight_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
-  gboolean show_text_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_TEXT;
-  gboolean show_measure_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_MEASURE;
-  gboolean show_eraser_properties =
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_ERASER;
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);
-  if (state->properties_hud.properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.properties_box,
-                           show_spotlight_properties);
-  if (state->properties_hud.arrow_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.arrow_properties_box,
-                           show_arrow_properties);
-  if (state->properties_hud.rectangle_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.rectangle_properties_box,
-                           show_rectangle_properties);
-  if (state->properties_hud.pen_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.pen_properties_box,
-                           show_pen_properties);
-  if (state->properties_hud.highlight_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.highlight_properties_box,
-                           show_highlight_properties);
-  if (state->properties_hud.text_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.text_properties_box,
-                           show_text_properties);
-  if (state->properties_hud.measure_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.measure_properties_box,
-                           show_measure_properties);
-  if (state->properties_hud.eraser_properties_box != NULL)
-    gtk_widget_set_visible(state->properties_hud.eraser_properties_box,
-                           show_eraser_properties);
-  ShaulaAnnotation *selected =
-      has_single_object_selection
-          ? shaula_annotation_editor_single_selection(state)
-          : NULL;
+  shaula_properties_hud_sync_widgets(state);
 
-  ShaulaColor arrow_color = state->tool_defaults.arrow_line.color;
-  double arrow_width = state->tool_defaults.arrow_line.stroke_width;
-  PreviewArrowStrokeStyle arrow_style =
-      state->tool_defaults.arrow_line.stroke_style;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_ARROW) {
-    arrow_color = selected->color;
-    arrow_width = selected->stroke_width;
-    arrow_style = selected->data.arrow.stroke_style;
-  }
-  if (state->properties_hud.arrow_color_button != NULL) {
-    GdkRGBA rgba = {arrow_color.r, arrow_color.g, arrow_color.b, arrow_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.arrow_color_button), &rgba);
-  }
-  if (state->properties_hud.arrow_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.arrow_width_scale)) -
-           arrow_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.arrow_width_scale),
-                        arrow_width);
-  for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DOTTED; i++)
-    if (state->properties_hud.arrow_stroke_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.arrow_stroke_buttons[i]),
-          i == (int)arrow_style);
-
-  ShaulaColor rectangle_color = state->tool_defaults.rectangle.color;
-  double rectangle_width = state->tool_defaults.rectangle.stroke_width;
-  PreviewArrowStrokeStyle rectangle_style =
-      state->tool_defaults.rectangle.stroke_style;
-  gboolean rectangle_filled = state->tool_defaults.rectangle.filled;
-  PreviewRectangleCorners rectangle_corners =
-      state->tool_defaults.rectangle.corners;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_RECTANGLE) {
-    rectangle_color = selected->color;
-    rectangle_width = selected->stroke_width;
-    rectangle_style = selected->data.rectangle.stroke_style;
-    rectangle_filled = selected->data.rectangle.filled;
-    rectangle_corners = selected->data.rectangle.corners;
-  }
-  if (state->properties_hud.rectangle_color_button != NULL) {
-    GdkRGBA rgba = {rectangle_color.r, rectangle_color.g, rectangle_color.b,
-                    rectangle_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.rectangle_color_button), &rgba);
-  }
-  if (state->properties_hud.rectangle_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.rectangle_width_scale)) -
-           rectangle_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.rectangle_width_scale),
-                        rectangle_width);
-  for (int i = PREVIEW_ARROW_STROKE_SOLID; i <= PREVIEW_ARROW_STROKE_DASHED; i++)
-    if (state->properties_hud.rectangle_stroke_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.rectangle_stroke_buttons[i]),
-          i == (int)rectangle_style);
-  if (state->properties_hud.rectangle_fill_button != NULL)
-    gtk_toggle_button_set_active(
-        GTK_TOGGLE_BUTTON(state->properties_hud.rectangle_fill_button),
-        rectangle_filled);
-  for (int i = PREVIEW_RECTANGLE_CORNERS_ROUNDED;
-       i <= PREVIEW_RECTANGLE_CORNERS_SQUARE; i++)
-    if (state->properties_hud.rectangle_corner_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.rectangle_corner_buttons[i]),
-          i == (int)rectangle_corners);
-
-  ShaulaSpotlightToolDefaults spotlight = state->tool_defaults.spotlight;
-  if (state->properties_hud.spotlight_index >= 0 &&
-      state->document.spotlight_regions != NULL &&
-      (guint)state->properties_hud.spotlight_index <
-          state->document.spotlight_regions->len) {
-    ShaulaSpotlightRegion *region = &g_array_index(
-        state->document.spotlight_regions, ShaulaSpotlightRegion,
-        (guint)state->properties_hud.spotlight_index);
-    spotlight.border_color = region->border_color;
-    spotlight.border_width = region->border_width;
-    spotlight.shape = region->shape;
-  }
-  if (state->properties_hud.spotlight_color_button != NULL) {
-    GdkRGBA rgba = {spotlight.border_color.r, spotlight.border_color.g,
-                    spotlight.border_color.b, spotlight.border_color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.spotlight_color_button), &rgba);
-  }
-  if (state->properties_hud.spotlight_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.spotlight_width_scale)) -
-           spotlight.border_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.spotlight_width_scale),
-                        spotlight.border_width);
-  if (state->properties_hud.spotlight_sharp_button != NULL)
-    gtk_toggle_button_set_active(
-        GTK_TOGGLE_BUTTON(state->properties_hud.spotlight_sharp_button),
-        spotlight.shape == SHAULA_SPOTLIGHT_SHAPE_SHARP_RECTANGLE);
-  if (state->properties_hud.spotlight_rounded_button != NULL)
-    gtk_toggle_button_set_active(
-        GTK_TOGGLE_BUTTON(state->properties_hud.spotlight_rounded_button),
-        spotlight.shape == SHAULA_SPOTLIGHT_SHAPE_ROUNDED_RECTANGLE);
-
-  ShaulaFreehandToolDefaults pen = state->tool_defaults.pen;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_PEN) {
-    pen.color = selected->color;
-    pen.stroke_width = selected->stroke_width;
-    pen.opacity = selected->color.a;
-  }
-  if (state->properties_hud.pen_color_button != NULL) {
-    GdkRGBA rgba = {pen.color.r, pen.color.g, pen.color.b, pen.color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.pen_color_button), &rgba);
-  }
-  if (state->properties_hud.pen_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.pen_width_scale)) -
-           pen.stroke_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.pen_width_scale),
-                        pen.stroke_width);
-  if (state->properties_hud.pen_opacity_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.pen_opacity_scale)) -
-           pen.opacity) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.pen_opacity_scale),
-                        pen.opacity);
-
-  ShaulaFreehandToolDefaults highlight = state->tool_defaults.highlight;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-    highlight.color = selected->color;
-    highlight.stroke_width = selected->stroke_width;
-    highlight.opacity = selected->color.a;
-  }
-  if (state->properties_hud.highlight_color_button != NULL) {
-    GdkRGBA rgba = {highlight.color.r, highlight.color.g, highlight.color.b,
-                    highlight.color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.highlight_color_button), &rgba);
-  }
-  if (state->properties_hud.highlight_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.highlight_width_scale)) -
-           highlight.stroke_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.highlight_width_scale),
-                        highlight.stroke_width);
-  if (state->properties_hud.highlight_opacity_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.highlight_opacity_scale)) -
-           highlight.opacity) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.highlight_opacity_scale),
-                        highlight.opacity);
-
-  ShaulaTextToolDefaults text = state->tool_defaults.text;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_TEXT) {
-    text.color = selected->color;
-    text.font_size = selected->data.text.font_size;
-    text.align = selected->data.text.align;
-    text.font_mode = selected->data.text.font_mode;
-  }
-  if (state->properties_hud.text_color_button != NULL) {
-    GdkRGBA rgba = {text.color.r, text.color.g, text.color.b, text.color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.text_color_button), &rgba);
-  }
-  double font_sizes[4] = {16.0, 24.0, 36.0, 64.0};
-  for (int i = 0; i < 4; i++)
-    if (state->properties_hud.text_size_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.text_size_buttons[i]),
-          fabs(text.font_size - font_sizes[i]) < 0.01);
-  for (int i = 0; i < 2; i++)
-    if (state->properties_hud.text_font_mode_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.text_font_mode_buttons[i]),
-          text.font_mode == (ShaulaTextFontMode)i);
-  for (int i = SHAULA_TEXT_ALIGN_LEFT; i <= SHAULA_TEXT_ALIGN_RIGHT; i++)
-    if (state->properties_hud.text_align_buttons[i] != NULL)
-      gtk_toggle_button_set_active(
-          GTK_TOGGLE_BUTTON(state->properties_hud.text_align_buttons[i]),
-          i == (int)text.align);
-
-  ShaulaMeasureToolDefaults measure = state->tool_defaults.measure;
-  if (selected != NULL && selected->type == SHAULA_ANNOTATION_MEASURE) {
-    measure.color = selected->color;
-    measure.stroke_width = selected->stroke_width;
-  }
-  if (state->properties_hud.measure_color_button != NULL) {
-    GdkRGBA rgba = {measure.color.r, measure.color.g, measure.color.b,
-                    measure.color.a};
-    gtk_color_chooser_set_rgba(
-        GTK_COLOR_CHOOSER(state->properties_hud.measure_color_button), &rgba);
-  }
-  if (state->properties_hud.measure_width_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.measure_width_scale)) -
-           measure.stroke_width) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.measure_width_scale),
-                        measure.stroke_width);
-  if (state->properties_hud.eraser_size_scale != NULL &&
-      fabs(gtk_range_get_value(GTK_RANGE(state->properties_hud.eraser_size_scale)) -
-           state->tool_defaults.eraser.size) > 0.01)
-    gtk_range_set_value(GTK_RANGE(state->properties_hud.eraser_size_scale),
-                        state->tool_defaults.eraser.size);
   if (state->duplicate_button != NULL) {
     const char *duplicate_label =
         selected_count > 1 ? "Duplicate selected annotations (Ctrl+D)"
@@ -1038,5 +798,4 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
         selected_count > 1 ? "Delete selected annotations (Delete)"
                            : "Delete selected annotation (Delete)");
   }
-  state->properties_hud.syncing_widgets = was_syncing;
 }
