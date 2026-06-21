@@ -3,7 +3,6 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "preview_actions.h"
 #include "preview_commands.h"
 #include "preview_measure.h"
 #include "preview_properties_panel.h"
@@ -1535,11 +1534,11 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   }
 
   if (!ctrl && (keyval == GDK_KEY_plus || keyval == GDK_KEY_equal)) {
-    shaula_preview_action_zoom_in(state);
+    shaula_preview_execute_command(state, SHAULA_PREVIEW_COMMAND_ZOOM_IN);
     return TRUE;
   }
   if (!ctrl && keyval == GDK_KEY_minus) {
-    shaula_preview_action_zoom_out(state);
+    shaula_preview_execute_command(state, SHAULA_PREVIEW_COMMAND_ZOOM_OUT);
     return TRUE;
   }
   return FALSE;

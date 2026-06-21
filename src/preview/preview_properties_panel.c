@@ -1,6 +1,6 @@
 #include "preview_properties_panel.h"
 
-#include "preview_actions.h"
+#include "preview_action_callbacks.h"
 #include "preview_icons.h"
 
 static void install_properties_panel_css(void) {

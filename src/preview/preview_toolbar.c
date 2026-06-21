@@ -1,6 +1,6 @@
 #include "preview_toolbar.h"
 
-#include "preview_actions.h"
+#include "preview_action_callbacks.h"
 #include "preview_commands.h"
 #include "preview_icons.h"
 

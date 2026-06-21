@@ -151,6 +151,15 @@ and the working diff.
   Toolbar owns selection-action visibility only, and State no longer exposes
   property mutation functions. Property widgets must not read tool defaults or
   selected annotations directly when they are constructed or synchronized.
+- Preview command routing now uses `preview/preview_commands.{c,h}` as the
+  external command Interface for availability, shortcut lookup, tool-command
+  mapping, and execution. `preview_actions.{c,h}` is an internal runtime
+  Implementation for save/copy/window and sampled-color operations; only
+  Commands may call it. `preview_action_callbacks.{c,h}` is the GTK Adapter and
+  translates widget events into commands or property intents. Canvas, Toolbar,
+  and property panels must not call runtime actions directly. This keeps
+  availability and execution on the same path and prevents the former
+  Commands-to-Actions-to-Commands dependency cycle from returning.
 - Documentation now treats Shaula as screenshot-only for v0.1.x: screen
   recording, OCR, scrolling capture, Share/upload, and Pin/window persistence
   are non-goals. Niri on CachyOS is the primary development and interactive UX

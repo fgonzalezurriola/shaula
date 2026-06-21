@@ -25,11 +25,14 @@ typedef enum {
   SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS,
   SHAULA_PREVIEW_COMMAND_COPY_PATH,
   SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR,
+  SHAULA_PREVIEW_COMMAND_USE_HOVER_COLOR,
   SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER,
   SHAULA_PREVIEW_COMMAND_CLOSE,
   SHAULA_PREVIEW_COMMAND_DISCARD,
   SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN,
   SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE,
+  SHAULA_PREVIEW_COMMAND_ZOOM_IN,
+  SHAULA_PREVIEW_COMMAND_ZOOM_OUT,
   SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT,
   SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND,
   SHAULA_PREVIEW_COMMAND_SET_TOOL_CROP,
@@ -56,6 +59,8 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
                                         ShaulaPreviewCommand command);
 gboolean shaula_preview_shortcut_command(guint keyval,
                                          GdkModifierType modifiers,
+                                         ShaulaPreviewCommand *command);
+gboolean shaula_preview_command_for_tool(ShaulaTool tool,
                                          ShaulaPreviewCommand *command);
 const char *shaula_preview_command_shortcut_label(
     ShaulaPreviewCommand command);

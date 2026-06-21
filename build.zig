@@ -152,6 +152,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     const output = command.addOutputFileArg("shaula-preview");
     command.addFileArg(b.path("src/preview/native_gtk_preview.c"));
     command.addFileArg(b.path("src/preview/preview_actions.c"));
+    command.addFileArg(b.path("src/preview/preview_action_callbacks.c"));
     command.addFileArg(b.path("src/preview/preview_annotation_editor.c"));
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
     command.addFileArg(b.path("src/preview/preview_canvas.c"));

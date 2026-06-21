@@ -234,6 +234,8 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_DONE:
   case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
   case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:
+  case SHAULA_PREVIEW_COMMAND_ZOOM_IN:
+  case SHAULA_PREVIEW_COMMAND_ZOOM_OUT:
     return state->document.image != NULL;
   case SHAULA_PREVIEW_COMMAND_RESET_ANNOTATIONS:
     return state->document.annotations != NULL && state->document.annotations->len > 0;
@@ -242,6 +244,8 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return state->document.path != NULL;
   case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
     return state->document.image != NULL;
+  case SHAULA_PREVIEW_COMMAND_USE_HOVER_COLOR:
+    return state->hover_color_valid;
   case SHAULA_PREVIEW_COMMAND_CLOSE:
   case SHAULA_PREVIEW_COMMAND_DISCARD:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
@@ -322,6 +326,9 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   case SHAULA_PREVIEW_COMMAND_COPY_HOVER_COLOR:
     shaula_preview_action_copy_hover_color(state);
     return TRUE;
+  case SHAULA_PREVIEW_COMMAND_USE_HOVER_COLOR:
+    shaula_preview_action_use_hover_color(state);
+    return TRUE;
   case SHAULA_PREVIEW_COMMAND_OPEN_CONTAINING_FOLDER:
     shaula_preview_action_open_containing_folder(state);
     return TRUE;
@@ -332,10 +339,16 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     shaula_preview_action_discard(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_FIT_TO_SCREEN:
-    shaula_preview_action_fit(state);
+    shaula_preview_set_fit_mode(state, TRUE);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_ACTUAL_SIZE:
-    shaula_preview_action_actual_size(state);
+    shaula_preview_set_actual_size(state);
+    return TRUE;
+  case SHAULA_PREVIEW_COMMAND_ZOOM_IN:
+    shaula_preview_zoom_by_factor(state, 1.12);
+    return TRUE;
+  case SHAULA_PREVIEW_COMMAND_ZOOM_OUT:
+    shaula_preview_zoom_by_factor(state, 1.0 / 1.12);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_SELECT:
   case SHAULA_PREVIEW_COMMAND_SET_TOOL_HAND:
@@ -362,6 +375,19 @@ gboolean shaula_preview_shortcut_command(guint keyval,
     const ShaulaPreviewCommandSpec *spec = &command_specs[i];
     if (spec->keyval != 0 && spec->keyval == keyval &&
         spec->modifiers == normalized) {
+      if (command != NULL)
+        *command = spec->command;
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+gboolean shaula_preview_command_for_tool(ShaulaTool tool,
+                                         ShaulaPreviewCommand *command) {
+  for (guint i = 0; i < G_N_ELEMENTS(command_specs); i++) {
+    const ShaulaPreviewCommandSpec *spec = &command_specs[i];
+    if (spec->is_tool_command && spec->tool == tool) {
       if (command != NULL)
         *command = spec->command;
       return TRUE;
