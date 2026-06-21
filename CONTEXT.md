@@ -391,8 +391,13 @@ and the working diff.
   default now persists across preview sessions in
   `$XDG_STATE_HOME/shaula/preview-tool-hud.ini`; selected-object inspection does
   not overwrite defaults until the user changes a control. Writes are debounced,
-  merged per dirty tool section under a short file lock, and flushed on close. Repeated
-  annotation paste uses a small deterministic down-right cascade and no longer
+  merged per dirty tool section under a short file lock, and flushed on close.
+  Properties HUDs use a flat bordered surface without a drop-shadow glow; the
+  Annotation Eraser value is shown beside its slider to keep the track centered.
+  Pen selection keeps a stroke-following halo whose separation scales with pen
+  thickness, while Highlight selection uses a dashed geometric bounding box so
+  selecting it does not visually recolor or darken the highlight itself.
+  Repeated annotation paste uses a small deterministic down-right cascade and no longer
   changes direction or clamps expanded hit-test bounds into the image.
 
 ## Visible Metadata

@@ -16,7 +16,6 @@ static void install_properties_panel_css(void) {
       "  border-radius: 8px;"
       "  padding: 6px;"
       "  color: @theme_fg_color;"
-      "  box-shadow: 0 10px 28px alpha(@theme_fg_color, 0.18);"
       "}"
       ".shaula-properties-panel button {"
       "  min-width: 28px;"
@@ -863,6 +862,7 @@ shaula_preview_eraser_properties_panel_build(ShaulaPreviewState *state) {
   gtk_widget_set_size_request(size, 140, -1);
   gtk_scale_set_draw_value(GTK_SCALE(size), TRUE);
   gtk_scale_set_digits(GTK_SCALE(size), 0);
+  gtk_scale_set_value_pos(GTK_SCALE(size), GTK_POS_RIGHT);
   gtk_widget_set_valign(size, GTK_ALIGN_CENTER);
   g_signal_connect(size, "value-changed",
                    G_CALLBACK(shaula_preview_on_eraser_size_changed), state);

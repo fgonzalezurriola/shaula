@@ -670,14 +670,14 @@ static void draw_path_selection(cairo_t *cr, ShaulaPenPath path,
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
   cairo_set_dash(cr, NULL, 0, 0);
-  cairo_set_line_width(cr, MAX(stroke_width + 4.0, 6.0));
+  cairo_set_line_width(cr, MAX(stroke_width * 1.5 + 6.0, 8.0));
   cairo_set_source_rgba(cr, 0.10, 0.11, 0.12, 0.26);
   cairo_move_to(cr, path.points[0].x, path.points[0].y);
   for (int i = 1; i < path.len; i++)
     cairo_line_to(cr, path.points[i].x, path.points[i].y);
   cairo_stroke(cr);
 
-  cairo_set_line_width(cr, MAX(stroke_width + 1.5, 2.5));
+  cairo_set_line_width(cr, MAX(stroke_width * 1.2 + 2.5, 3.5));
   cairo_set_source_rgba(cr, 0.92, 0.94, 0.96, 0.22);
   cairo_move_to(cr, path.points[0].x, path.points[0].y);
   for (int i = 1; i < path.len; i++)
@@ -1156,11 +1156,7 @@ void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation) {
       cairo_set_line_width(cr, annotation->stroke_width);
       draw_pen_path(cr, annotation->data.pen);
     } else if (annotation->type == SHAULA_ANNOTATION_HIGHLIGHT) {
-      draw_path_selection(cr, annotation->data.highlight,
-                          annotation->stroke_width);
-      set_annotation_color(cr, annotation->color, 1.0);
-      cairo_set_line_width(cr, annotation->stroke_width);
-      draw_pen_path(cr, annotation->data.highlight);
+      draw_selection(cr, annotation->bounds);
     } else if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
       draw_rectangle_selection(cr, annotation->data.rectangle.rect);
       set_annotation_color(cr, annotation->color, 1.0);
