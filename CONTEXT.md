@@ -5,6 +5,14 @@ and the working diff.
 
 ## Current focus
 
+- Quick/Area overlay confirmation now carries a typed action through the helper
+  protocol and capture lifecycle. `Ctrl+C` confirms with direct copy as before;
+  `Ctrl+S` confirms with direct save, forces a durable output in the configured
+  save folder, and bypasses preview. The per-mode `copy_to_clipboard` setting is
+  still resolved afterward, so direct save also copies only when that setting is
+  enabled. Invalid, cancelled, or zero-sized helper envelopes cannot request
+  these side effects.
+
 - `shaula settings --json` is the built-in agent discovery entry point. It is
   read-only, does not launch GTK, does not capture pixels, and tells agents the
   recommended flow (`settings --json`, `doctor --json`,

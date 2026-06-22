@@ -107,6 +107,27 @@ fn executeLifecycle(
     return writeCaptureOutcome(allocator, io, environ, resolved_options.command, resolved_options.reported_mode, &outcome, resolved_options.post_flags, precondition_warning, selection_warning);
 }
 
+fn applyOverlayConfirmAction(
+    post_flags: *invocation.PostCaptureFlags,
+    action: overlay_session.ConfirmAction,
+) void {
+    switch (action) {
+        .capture => {},
+        .copy => {
+            post_flags.copy = true;
+            post_flags.copy_explicit = true;
+            post_flags.preview = false;
+            post_flags.preview_explicit = true;
+        },
+        .save => {
+            post_flags.save = true;
+            post_flags.save_explicit = true;
+            post_flags.preview = false;
+            post_flags.preview_explicit = true;
+        },
+    }
+}
+
 fn resolvePostCaptureFlags(
     mode: []const u8,
     explicit: invocation.PostCaptureFlags,
@@ -418,12 +439,7 @@ fn runOverlayMode(
         else => unreachable,
     };
     var resolved_options = options;
-    if (selection_result.copy_requested) {
-        resolved_options.post_flags.copy = true;
-        resolved_options.post_flags.copy_explicit = true;
-        resolved_options.post_flags.preview = false;
-        resolved_options.post_flags.preview_explicit = true;
-    }
+    applyOverlayConfirmAction(&resolved_options.post_flags, selection_result.confirm_action);
     return executeLifecycle(runtime, allocator, io, environ, resolved_options, &session_lock, selection_result.frozen_source, selection_result.selection_warning);
 }
 
@@ -574,7 +590,7 @@ fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeS
 const OverlaySelectionOutcome = struct {
     selection: selection.SelectionResult,
     frozen_source: ?overlay_session.FrozenSource = null,
-    copy_requested: bool = false,
+    confirm_action: overlay_session.ConfirmAction = .capture,
     selection_warning: ?[]const u8 = null,
     exit_code: ?u8 = null,
 
@@ -617,9 +633,9 @@ fn resolveOverlaySelection(
     defer result.deinit(allocator, io);
     if (!result.result.cancelled) {
         const frozen_source = result.frozen_source;
-        const copy_requested = result.copy_requested;
+        const confirm_action = result.confirm_action;
         result.frozen_source = null;
-        return .{ .selection = result.result, .frozen_source = frozen_source, .copy_requested = copy_requested };
+        return .{ .selection = result.result, .frozen_source = frozen_source, .confirm_action = confirm_action };
     }
 
     if (result.unavailable) {
@@ -704,6 +720,48 @@ fn writeCaptureOutcome(
             return recovery_policy.exitCodeFor(failure.code);
         },
     }
+}
+
+test "overlay save action skips preview and keeps configured copy behavior" {
+    var direct_save = invocation.PostCaptureFlags{
+        .save = false,
+        .copy = false,
+        .preview = true,
+    };
+    applyOverlayConfirmAction(&direct_save, .save);
+
+    try std.testing.expect(direct_save.save);
+    try std.testing.expect(direct_save.save_explicit);
+    try std.testing.expect(!direct_save.preview);
+    try std.testing.expect(direct_save.preview_explicit);
+
+    const with_copy = resolvePostCaptureFlags("quick", direct_save, .{
+        .quick = .{ .copy_to_clipboard = true },
+    });
+    try std.testing.expect(with_copy.save);
+    try std.testing.expect(with_copy.copy);
+    try std.testing.expect(!with_copy.preview);
+
+    const without_copy = resolvePostCaptureFlags("quick", direct_save, .{
+        .quick = .{ .copy_to_clipboard = false },
+    });
+    try std.testing.expect(without_copy.save);
+    try std.testing.expect(!without_copy.copy);
+    try std.testing.expect(!without_copy.preview);
+}
+
+test "overlay copy action preserves direct copy behavior" {
+    var direct_copy = invocation.PostCaptureFlags{
+        .save = false,
+        .copy = false,
+        .preview = true,
+    };
+    applyOverlayConfirmAction(&direct_copy, .copy);
+
+    try std.testing.expect(direct_copy.copy);
+    try std.testing.expect(direct_copy.copy_explicit);
+    try std.testing.expect(!direct_copy.preview);
+    try std.testing.expect(direct_copy.preview_explicit);
 }
 
 fn resolveRegionCaptureMode(

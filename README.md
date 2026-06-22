@@ -75,6 +75,11 @@ adding `-2`, `-3`, and so on when a filename already exists.
 The default fullscreen and all-screens shortcuts save a durable copy to the
 configured save folder.
 
+Inside the Quick/Area selection overlay, `Enter` follows the configured capture
+flow, `Ctrl+C` bypasses preview and copies immediately, and `Ctrl+S` bypasses
+preview and saves immediately. Direct save also copies when **Copy to
+clipboard** is enabled for that capture mode in Settings.
+
 ## Development
 
 Requirements:

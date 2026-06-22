@@ -943,6 +943,8 @@ static void confirm(void) { confirm_with_action("capture"); }
 
 static void copy_now(void) { confirm_with_action("copy"); }
 
+static void save_now(void) { confirm_with_action("save"); }
+
 static void cancel(void) {
   if (state.has_selection && state.selection.width > 0 &&
       state.selection.height > 0) {
@@ -1136,6 +1138,11 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   if ((modifiers & GDK_CONTROL_MASK) != 0 &&
       (keyval == GDK_KEY_c || keyval == GDK_KEY_C)) {
     copy_now();
+    return TRUE;
+  }
+  if ((modifiers & GDK_CONTROL_MASK) != 0 &&
+      (keyval == GDK_KEY_s || keyval == GDK_KEY_S)) {
+    save_now();
     return TRUE;
   }
   if (keyval == GDK_KEY_BackSpace || keyval == GDK_KEY_n ||

@@ -12,7 +12,14 @@ const HelperStatus = enum {
 const HelperAction = enum {
     capture,
     copy,
+    save,
     cancel,
+};
+
+pub const ConfirmAction = enum {
+    capture,
+    copy,
+    save,
 };
 
 const HelperGeometry = struct {
@@ -114,16 +121,22 @@ pub fn parseSelectionEnvelope(
     }
 }
 
-/// Extract whether the helper asked the capture lifecycle to copy immediately.
+/// Extract the valid confirmed action requested by the overlay helper.
 ///
-/// Contract constraint: this is only advisory after a valid confirmed selection;
-/// malformed payloads and cancelled sessions never request clipboard side effects.
-pub fn parseCopyRequested(allocator: std.mem.Allocator, payload: []const u8) bool {
-    const parsed = std.json.parseFromSlice(HelperEnvelope, allocator, payload, .{}) catch return false;
+/// Contract constraint: malformed payloads, cancelled sessions, and zero-sized
+/// selections never request capture lifecycle side effects.
+pub fn parseConfirmAction(allocator: std.mem.Allocator, payload: []const u8) ?ConfirmAction {
+    const parsed = std.json.parseFromSlice(HelperEnvelope, allocator, payload, .{}) catch return null;
     defer parsed.deinit();
 
     const envelope = parsed.value;
-    return envelope.status == .ok and envelope.action != null and envelope.action.? == .copy and validEnvelopeGeometry(envelope.geometry) != null;
+    if (envelope.status != .ok or validEnvelopeGeometry(envelope.geometry) == null) return null;
+    return switch (envelope.action orelse return null) {
+        .capture => .capture,
+        .copy => .copy,
+        .save => .save,
+        .cancel => null,
+    };
 }
 
 /// Extract the optional final aspect emitted by the native helper.
@@ -171,7 +184,7 @@ pub fn parseConfirmedLocalSelectionAlloc(allocator: std.mem.Allocator, payload: 
 
 fn isConfirmAction(action: ?HelperAction) bool {
     const value = action orelse return false;
-    return value == .capture or value == .copy;
+    return value == .capture or value == .copy or value == .save;
 }
 
 pub fn reportsUnavailable(allocator: std.mem.Allocator, payload: []const u8) !bool {
@@ -334,6 +347,34 @@ fn cancelledSelection(mode: selection.SelectionMode, constraint: selection.Selec
         .geometry = null,
         .cancelled = true,
     };
+}
+
+test "helper confirmed action accepts direct copy and save requests" {
+    const copy = parseConfirmAction(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"copy\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    try std.testing.expectEqual(ConfirmAction.copy, copy orelse return error.TestExpectedEqual);
+
+    const save = parseConfirmAction(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"save\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    try std.testing.expectEqual(ConfirmAction.save, save orelse return error.TestExpectedEqual);
+}
+
+test "helper confirmed action rejects invalid side effect requests" {
+    const cancelled = parseConfirmAction(
+        std.testing.allocator,
+        "{\"status\":\"cancel\",\"action\":\"save\",\"geometry\":{\"x\":1,\"y\":2,\"width\":3,\"height\":4},\"error\":null}",
+    );
+    try std.testing.expect(cancelled == null);
+
+    const empty = parseConfirmAction(
+        std.testing.allocator,
+        "{\"status\":\"ok\",\"action\":\"save\",\"geometry\":{\"x\":1,\"y\":2,\"width\":0,\"height\":4},\"error\":null}",
+    );
+    try std.testing.expect(empty == null);
 }
 
 test "helper aspect override extracts fixed custom and free values" {
