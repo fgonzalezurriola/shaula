@@ -74,4 +74,4 @@ Numbered canvas tools:
 
 Only implemented numbered tools display GTK keycap badges.
 
-Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As remains a More-menu action.
+Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As and Paste from clipboard remain More-menu actions. System paste shows `Ctrl+Shift+V`, does not add a permanent toolbar button, and must not affect the headerbar's natural width or trigger a floating-window resize.

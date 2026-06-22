@@ -110,6 +110,7 @@ fn buildPreviewDocumentTest(b: *std.Build, target: std.Build.ResolvedTarget, opt
     command.addFileArg(b.path("src/preview/preview_document_test.c"));
     command.addFileArg(b.path("src/preview/preview_document.c"));
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
+    command.addFileArg(b.path("src/preview/preview_paste_placement.c"));
     command.addFileArg(preview_geometry_obj);
     return command;
 }
@@ -163,12 +164,14 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     command.addFileArg(b.path("src/preview/preview_icons.c"));
     command.addFileArg(b.path("src/preview/preview_measure.c"));
     command.addFileArg(b.path("src/preview/preview_paths.c"));
+    command.addFileArg(b.path("src/preview/preview_paste_placement.c"));
     command.addFileArg(b.path("src/preview/preview_properties_hud.c"));
     command.addFileArg(b.path("src/preview/preview_properties_panel.c"));
     command.addFileArg(b.path("src/preview/preview_tool_defaults.c"));
     command.addFileArg(b.path("src/preview/preview_render.c"));
     command.addFileArg(b.path("src/preview/preview_spotlight.c"));
     command.addFileArg(b.path("src/preview/preview_state.c"));
+    command.addFileArg(b.path("src/preview/preview_system_clipboard.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
     command.addFileArg(preview_geometry_obj);
     command.addFileArg(preview_image_io_obj);

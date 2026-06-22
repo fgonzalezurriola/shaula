@@ -2,6 +2,7 @@
 #define SHAULA_PREVIEW_ANNOTATIONS_H
 
 #include <cairo.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
 
 #include "preview_geometry.h"
@@ -12,7 +13,8 @@ typedef enum {
   SHAULA_ANNOTATION_MEASURE,
   SHAULA_ANNOTATION_RECTANGLE,
   SHAULA_ANNOTATION_HIGHLIGHT,
-  SHAULA_ANNOTATION_PEN
+  SHAULA_ANNOTATION_PEN,
+  SHAULA_ANNOTATION_IMAGE
 } ShaulaAnnotationType;
 
 typedef enum {
@@ -89,6 +91,10 @@ typedef struct ShaulaAnnotation {
     } rectangle;
     ShaulaPenPath highlight;
     ShaulaPenPath pen;
+    struct {
+      GdkPixbuf *pixbuf;
+      ShaulaRect rect;
+    } image;
   } data;
 } ShaulaAnnotation;
 
@@ -125,12 +131,20 @@ ShaulaAnnotation *shaula_annotation_new_highlight(const ShaulaPoint *points,
 ShaulaAnnotation *shaula_annotation_new_pen(const ShaulaPoint *points, int len,
                                             ShaulaColor color,
                                             double stroke_width);
+/* Takes ownership of pixbuf on success and failure. */
+ShaulaAnnotation *shaula_annotation_new_image_take(GdkPixbuf *pixbuf,
+                                                   ShaulaRect rect);
 ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation);
 void shaula_annotation_free(gpointer annotation);
 
 GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
+/* Applies a document crop and translates surviving content into the new image
+ * coordinate space. Image annotations crop their owned pixel payload.
+ */
+gboolean shaula_annotation_apply_document_crop(ShaulaAnnotation *annotation,
+                                                ShaulaRect crop);
 void shaula_annotation_draw(cairo_t *cr, const ShaulaAnnotation *annotation);
 void shaula_annotation_draw_preview(cairo_t *cr,
                                     const ShaulaAnnotation *annotation,

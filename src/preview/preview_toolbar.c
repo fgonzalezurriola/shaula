@@ -264,6 +264,9 @@ static GtkWidget *make_menu_action_row(ShaulaPreviewState *state,
   gtk_box_append(GTK_BOX(row), label);
   gtk_button_set_child(GTK_BUTTON(button), row);
   gtk_widget_set_tooltip_text(button, spec->tooltip);
+  gtk_accessible_update_property(GTK_ACCESSIBLE(button),
+                                 GTK_ACCESSIBLE_PROPERTY_LABEL, spec->tooltip,
+                                 -1);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
   install_stable_hover(button);
@@ -326,6 +329,7 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   if (state->more_menu_box == NULL)
     return;
 
+  state->paste_system_button = NULL;
   GtkWidget *child = gtk_widget_get_first_child(state->more_menu_box);
   while (child != NULL) {
     GtkWidget *next = gtk_widget_get_next_sibling(child);
@@ -356,6 +360,14 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   }
   if (has_hidden_utilities)
     append_separator(state->more_menu_box);
+
+  const MenuActionSpec paste_action = {
+      "shaula-copy-symbolic", "Paste from clipboard (Ctrl+Shift+V)",
+      "Paste from clipboard (Ctrl+Shift+V)",
+      G_CALLBACK(shaula_preview_on_paste_system_clipboard_clicked)};
+  state->paste_system_button = make_menu_action_row(state, &paste_action);
+  gtk_box_append(GTK_BOX(state->more_menu_box), state->paste_system_button);
+  shaula_preview_toolbar_update_system_paste_state(state);
 
   const MenuActionSpec actions[] = {
       {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
@@ -727,6 +739,16 @@ void shaula_preview_toolbar_update_history_state(ShaulaPreviewState *state) {
     gtk_widget_set_sensitive(
         state->redo_button,
         shaula_preview_command_available(state, SHAULA_PREVIEW_COMMAND_REDO));
+}
+
+void shaula_preview_toolbar_update_system_paste_state(
+    ShaulaPreviewState *state) {
+  if (state == NULL || state->paste_system_button == NULL)
+    return;
+  gtk_widget_set_sensitive(
+      state->paste_system_button,
+      shaula_preview_command_available(
+          state, SHAULA_PREVIEW_COMMAND_PASTE_SYSTEM_CLIPBOARD));
 }
 
 void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {

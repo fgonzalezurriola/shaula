@@ -7,6 +7,7 @@
 #include "preview_canvas.h"
 #include "preview_icons.h"
 #include "preview_state.h"
+#include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
 
 static ShaulaPreviewState state;
@@ -188,6 +189,12 @@ static void emit_preview_result(void) {
   fflush(stdout);
 }
 
+static gboolean on_close_request(GtkWindow *window, gpointer data) {
+  (void)window;
+  shaula_system_clipboard_paste_cancel(data);
+  return FALSE;
+}
+
 static void on_activate(GtkApplication *app, gpointer data) {
   (void)data;
   state.app = app;
@@ -196,6 +203,8 @@ static void on_activate(GtkApplication *app, gpointer data) {
 
   GtkWidget *window = gtk_application_window_new(app);
   state.window = window;
+  state.system_clipboard_paste =
+      shaula_system_clipboard_paste_new(window, &state);
   gtk_window_set_title(GTK_WINDOW(window), "Shaula Preview");
   gtk_widget_set_size_request(window, PREVIEW_MIN_W, PREVIEW_MIN_H);
   int initial_w = PREVIEW_DEFAULT_W;
@@ -205,6 +214,8 @@ static void on_activate(GtkApplication *app, gpointer data) {
   debug_preview_init("default_width", initial_w);
   debug_preview_init("default_height", initial_h);
   gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+  g_signal_connect(window, "close-request", G_CALLBACK(on_close_request),
+                   &state);
 
   GtkWidget *canvas = shaula_preview_canvas_build(&state);
   GtkWidget *topbar = shaula_preview_toolbar_build(&state);

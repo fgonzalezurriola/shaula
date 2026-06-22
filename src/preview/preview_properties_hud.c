@@ -42,6 +42,8 @@ panel_for_annotation(const ShaulaAnnotation *annotation) {
     return SHAULA_PROPERTIES_PANEL_TEXT;
   case SHAULA_ANNOTATION_MEASURE:
     return SHAULA_PROPERTIES_PANEL_MEASURE;
+  case SHAULA_ANNOTATION_IMAGE:
+    return SHAULA_PROPERTIES_PANEL_NONE;
   }
   return SHAULA_PROPERTIES_PANEL_NONE;
 }
@@ -171,6 +173,8 @@ static void read_property_values(ShaulaPreviewState *state,
     case SHAULA_ANNOTATION_MEASURE:
       values->measure.color = selected->color;
       values->measure.stroke_width = selected->stroke_width;
+      break;
+    case SHAULA_ANNOTATION_IMAGE:
       break;
     }
   }

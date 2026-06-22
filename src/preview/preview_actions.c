@@ -9,6 +9,7 @@
 #include "preview_image_io.h"
 #include "preview_paths.h"
 #include "preview_render.h"
+#include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
 
 extern gboolean shaula_preview_notify(const char *summary, const char *body,
@@ -425,6 +426,7 @@ static void shaula_preview_action_accept(ShaulaPreviewState *state,
   if (state == NULL || state->document.path == NULL)
     return;
 
+  shaula_system_clipboard_paste_cancel(state);
   shaula_preview_commit_eraser_pending(state);
   state->last_action = copy_to_clipboard ? "copy" : "save";
   state->document.saved = FALSE;
@@ -524,6 +526,7 @@ void shaula_preview_action_done(ShaulaPreviewState *state) {
 void shaula_preview_action_close(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_system_clipboard_paste_cancel(state);
   shaula_preview_commit_eraser_pending(state);
   state->last_action = "close";
   state->notified = FALSE;
@@ -602,6 +605,7 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
 void shaula_preview_action_discard(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  shaula_system_clipboard_paste_cancel(state);
   shaula_preview_commit_eraser_pending(state);
   state->last_action = "discard";
   state->notified = FALSE;
@@ -650,6 +654,8 @@ static void apply_color_to_selected_annotation(ShaulaPreviewState *state,
     break;
   case SHAULA_ANNOTATION_MEASURE:
     shaula_properties_hud_set_measure_color(state, color);
+    break;
+  case SHAULA_ANNOTATION_IMAGE:
     break;
   }
 }

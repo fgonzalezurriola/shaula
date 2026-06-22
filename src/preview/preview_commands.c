@@ -1,6 +1,7 @@
 #include "preview_commands.h"
 
 #include "preview_actions.h"
+#include "preview_system_clipboard.h"
 
 static const GdkModifierType shortcut_modifiers =
     GDK_CONTROL_MASK | GDK_SHIFT_MASK | GDK_ALT_MASK | GDK_SUPER_MASK;
@@ -48,6 +49,10 @@ static const ShaulaPreviewCommandSpec command_specs[] = {
      GDK_KEY_x, GDK_CONTROL_MASK, "Ctrl+X"},
     {SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION, FALSE, SHAULA_TOOL_SELECT,
      GDK_KEY_v, GDK_CONTROL_MASK, "Ctrl+V"},
+    {SHAULA_PREVIEW_COMMAND_PASTE_SYSTEM_CLIPBOARD, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_v, GDK_CONTROL_MASK | GDK_SHIFT_MASK, "Ctrl+Shift+V"},
+    {SHAULA_PREVIEW_COMMAND_PASTE_SYSTEM_CLIPBOARD, FALSE, SHAULA_TOOL_SELECT,
+     GDK_KEY_V, GDK_CONTROL_MASK | GDK_SHIFT_MASK, "Ctrl+Shift+V"},
     {SHAULA_PREVIEW_COMMAND_SAVE, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_s,
      GDK_CONTROL_MASK, "Ctrl+S"},
     {SHAULA_PREVIEW_COMMAND_SAVE_AS, FALSE, SHAULA_TOOL_SELECT, GDK_KEY_s,
@@ -200,6 +205,11 @@ gboolean shaula_preview_command_available(ShaulaPreviewState *state,
     return shaula_annotation_editor_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
     return shaula_annotation_editor_can_paste(state);
+  case SHAULA_PREVIEW_COMMAND_PASTE_SYSTEM_CLIPBOARD:
+    return state->document.image != NULL &&
+           state->system_clipboard_paste != NULL &&
+           !shaula_system_clipboard_paste_is_busy(
+               state->system_clipboard_paste);
   case SHAULA_PREVIEW_COMMAND_DELETE_SELECTED:
     return shaula_annotation_editor_has_selection(state);
   case SHAULA_PREVIEW_COMMAND_SELECT_ALL_ANNOTATIONS:
@@ -285,6 +295,8 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
     return shaula_annotation_editor_cut_selected(state);
   case SHAULA_PREVIEW_COMMAND_PASTE_ANNOTATION:
     return shaula_annotation_editor_paste(state);
+  case SHAULA_PREVIEW_COMMAND_PASTE_SYSTEM_CLIPBOARD:
+    return shaula_system_clipboard_paste_request(state);
   case SHAULA_PREVIEW_COMMAND_SAVE:
     shaula_preview_action_save(state);
     return TRUE;

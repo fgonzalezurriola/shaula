@@ -286,6 +286,33 @@ void shaula_annotation_editor_add_annotation(ShaulaPreviewState *state,
   shaula_preview_toolbar_update_history_state(state);
 }
 
+gboolean shaula_annotation_editor_insert_external(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation,
+    gboolean show_text_properties) {
+  if (state == NULL || annotation == NULL || state->document.image == NULL) {
+    shaula_annotation_free(annotation);
+    return FALSE;
+  }
+
+  shaula_preview_cancel_operation(state);
+  shaula_preview_push_undo(state);
+  state->has_region_selection = FALSE;
+  g_array_set_size(state->annotation_editor.selected_ids, 0);
+  shaula_preview_document_add_annotation(&state->document, annotation);
+  selected_ids_add(state, annotation->id);
+  sync_selection(state);
+
+  state->active_tool = SHAULA_TOOL_SELECT;
+  shaula_properties_hud_set_panel(
+      &state->properties_hud,
+      show_text_properties ? SHAULA_PROPERTIES_PANEL_TEXT
+                           : SHAULA_PROPERTIES_PANEL_NONE);
+  shaula_preview_toolbar_update_tool_state(state);
+  refresh_selection_ui(state);
+  shaula_preview_toolbar_update_history_state(state);
+  return TRUE;
+}
+
 void shaula_annotation_editor_move_selected(ShaulaPreviewState *state,
                                             double dx, double dy) {
   if (state == NULL || state->document.annotations == NULL)

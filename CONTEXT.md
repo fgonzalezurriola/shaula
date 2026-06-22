@@ -471,7 +471,13 @@ and the working diff.
   Arrow bounds include exact quadratic extrema and the visible arrowhead. Moving
   any of these annotations cannot change its box size.
   Repeated annotation paste uses a small deterministic down-right cascade and no longer
-  changes direction or clamps expanded hit-test bounds into the image.
+  changes direction or clamps expanded hit-test bounds into the image. `Ctrl+V`
+  remains the preview-local annotation clipboard. `Ctrl+Shift+V` is an explicit,
+  asynchronous system-clipboard command with image-over-text priority and no
+  mutation of the internal clipboard. External text uses current Text defaults;
+  external images become owned Image annotations with deep-cloned pixel payloads,
+  viewport-centered downscaling, normal history/export behavior, and crop-aware
+  payload remapping. GTK text editors retain their native paste shortcuts.
 
 ## Visible Metadata
 
@@ -566,7 +572,7 @@ and the working diff.
 - `preview_commands.*` owns `ShaulaPreviewCommand`,
   `shaula_preview_execute_command`, command availability, and the static
   shortcut map.
-- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+Shift+S,
+- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+Shift+V, Ctrl+S, Ctrl+Shift+S,
   Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`/`F`,
   `0`, number tool hotkeys `1` Select, `2` Rectangle, `3` Arrow, reserved `4`
   Line with no current command, `5` Text, `6` Pen, `7` Highlight, `8` Measure,

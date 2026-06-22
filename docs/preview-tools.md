@@ -138,7 +138,13 @@ The annotation clipboard is scoped to the current preview window:
   bounds into the image.
 - `Ctrl+D` uses the paste path without replacing clipboard contents.
 
-When the text editor has focus, GTK owns normal text-level `Ctrl+A/C/X/V`. External text/image paste as annotations is future work and should remain behind explicit system-paste behavior such as `Ctrl+Shift+V`.
+The preview-local annotation clipboard and the system clipboard are separate mechanisms. `Ctrl+V` always pastes the preview-local annotation payload and never reads or changes the system clipboard. `Ctrl+Shift+V` explicitly reads the system clipboard asynchronously and never replaces or mutates the preview-local annotation clipboard.
+
+System paste accepts one payload per invocation, preferring an image when the clipboard offers both image and text. Text preserves line breaks, rejects empty/whitespace-only or invalid Unicode payloads, and has a 256 KiB limit with no partial insertion. It uses the current Text color, size, font mode, and alignment, starts near the center of the visible viewport in image coordinates, is adjusted so its leading bounds remain inside the base image, selects only the new annotation, returns to Select, opens the Text properties HUD, and creates one undo entry.
+
+System clipboard images become dedicated editable Image annotations rather than modifying the base bitmap. They own a decoded pixel copy, preserve aspect ratio, are centered in the visible viewport, scale down to the visible/base-image intersection with a screen-space margin, and never scale up. Images are limited to 16,384 px per side and 32 megapixels. They participate in preview render/export, Save, Copy, Done, selection, movement, multi-selection, duplicate, internal copy/cut/paste, delete, undo/redo, crop, cloning, and destruction. Unsupported formats and failed, invalid, oversized, or changed clipboard payloads produce transient actionable feedback.
+
+Only one system read may be active. Key repeat is absorbed while a read is pending; closing the Preview cancels the operation silently. If the clipboard changes during a pending read, the payload is rejected instead of inserting stale or mixed content. When a GTK text editor has focus, GTK keeps normal text-level `Ctrl+A/C/X/V`, including its standard `Ctrl+V`; the Preview command router does not intercept those keys.
 
 ## Annotation Eraser
 
@@ -327,6 +333,7 @@ share one default profile because they use the same HUD and stroke model.
 
 `shaula-more-symbolic` exposes:
 
+- Paste from clipboard (`Ctrl+Shift+V`);
 - Save As;
 - Fit to screen;
 - Actual size;

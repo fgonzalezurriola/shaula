@@ -43,6 +43,8 @@ typedef enum {
   SHAULA_TOOL_COUNT
 } ShaulaTool;
 
+typedef struct ShaulaSystemClipboardPaste ShaulaSystemClipboardPaste;
+
 typedef struct {
   double x;
   double y;
@@ -76,7 +78,9 @@ typedef struct ShaulaPreviewState {
   GtkWidget *more_button;
   GtkWidget *more_popover;
   GtkWidget *more_menu_box;
+  GtkWidget *paste_system_button;
   GtkWidget *text_entry;
+  GtkWidget *feedback_label;
 
   /* Output-affecting model state. Keep GTK widgets, view state, tools, and
    * transient gestures in ShaulaPreviewState instead of growing the document.
@@ -122,6 +126,8 @@ typedef struct ShaulaPreviewState {
   ShaulaPoint text_anchor_image;
 
   ShaulaAnnotationEditor annotation_editor;
+  ShaulaSystemClipboardPaste *system_clipboard_paste;
+  guint feedback_timeout_id;
 
   ShaulaColor current_color;
   /* Hover sampling is view state for the metadata readout and Tab copy. It is
@@ -166,6 +172,8 @@ int shaula_preview_image_height(ShaulaPreviewState *state);
 
 void shaula_preview_update_theme_state(ShaulaPreviewState *state);
 void shaula_preview_queue_draw(ShaulaPreviewState *state);
+void shaula_preview_show_feedback(ShaulaPreviewState *state,
+                                  const char *message, gboolean is_error);
 void shaula_preview_update_dimensions_label(ShaulaPreviewState *state);
 void shaula_preview_update_zoom_label(ShaulaPreviewState *state);
 void shaula_preview_update_fit_zoom(ShaulaPreviewState *state);

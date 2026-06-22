@@ -6,6 +6,7 @@
 
 #include "preview_document_edit.h"
 #include "preview_paths.h"
+#include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
 
 #define SHAULA_CROP_MIN_SIZE_PX 4
@@ -83,6 +84,11 @@ void shaula_preview_state_init(ShaulaPreviewState *state, const char *path,
 void shaula_preview_state_free(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
+  if (state->feedback_timeout_id != 0)
+    g_source_remove(state->feedback_timeout_id);
+  state->feedback_timeout_id = 0;
+  shaula_system_clipboard_paste_free(state->system_clipboard_paste);
+  state->system_clipboard_paste = NULL;
   shaula_tool_defaults_flush(&state->tool_defaults);
   shaula_tool_defaults_dispose(&state->tool_defaults);
   if (state->eraser_tail_timeout_id != 0)
@@ -124,6 +130,44 @@ void shaula_preview_update_theme_state(ShaulaPreviewState *state) {
 void shaula_preview_queue_draw(ShaulaPreviewState *state) {
   if (state->area != NULL)
     gtk_widget_queue_draw(state->area);
+}
+
+static gboolean hide_feedback(gpointer data) {
+  ShaulaPreviewState *state = data;
+  state->feedback_timeout_id = 0;
+  if (state->feedback_label != NULL)
+    gtk_widget_set_visible(state->feedback_label, FALSE);
+  return G_SOURCE_REMOVE;
+}
+
+void shaula_preview_show_feedback(ShaulaPreviewState *state,
+                                  const char *message, gboolean is_error) {
+  if (state == NULL || state->canvas_overlay == NULL || message == NULL)
+    return;
+  if (state->feedback_label == NULL) {
+    GtkWidget *label = gtk_label_new(NULL);
+    state->feedback_label = label;
+    gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(label, GTK_ALIGN_START);
+    gtk_widget_set_margin_top(label, 18);
+    gtk_widget_set_margin_start(label, 24);
+    gtk_widget_set_margin_end(label, 24);
+    gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+    gtk_label_set_max_width_chars(GTK_LABEL(label), 58);
+    gtk_widget_add_css_class(label, "osd");
+    gtk_widget_set_can_target(label, FALSE);
+    gtk_overlay_add_overlay(GTK_OVERLAY(state->canvas_overlay), label);
+  }
+
+  gtk_label_set_text(GTK_LABEL(state->feedback_label), message);
+  if (is_error)
+    gtk_widget_add_css_class(state->feedback_label, "error");
+  else
+    gtk_widget_remove_css_class(state->feedback_label, "error");
+  gtk_widget_set_visible(state->feedback_label, TRUE);
+  if (state->feedback_timeout_id != 0)
+    g_source_remove(state->feedback_timeout_id);
+  state->feedback_timeout_id = g_timeout_add_seconds(4, hide_feedback, state);
 }
 
 void shaula_preview_update_dimensions_label(ShaulaPreviewState *state) {
@@ -686,11 +730,10 @@ static void remap_annotations_after_crop(ShaulaPreviewState *state,
     ShaulaAnnotation *annotation =
         g_ptr_array_index(state->document.annotations, (guint)i);
     if (annotation == remove_annotation || annotation == NULL ||
-        !shaula_rect_intersects(annotation->bounds, crop)) {
+        !shaula_annotation_apply_document_crop(annotation, crop)) {
       g_ptr_array_remove_index(state->document.annotations, (guint)i);
       continue;
     }
-    shaula_annotation_move(annotation, -crop.x, -crop.y);
   }
 }
 
@@ -778,6 +821,7 @@ gboolean shaula_preview_apply_crop_to_selected_rect(ShaulaPreviewState *state) {
   case SHAULA_ANNOTATION_TEXT:
   case SHAULA_ANNOTATION_MEASURE:
   case SHAULA_ANNOTATION_PEN:
+  case SHAULA_ANNOTATION_IMAGE:
     return FALSE;
   }
   return FALSE;

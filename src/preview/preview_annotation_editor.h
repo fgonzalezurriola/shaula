@@ -45,6 +45,11 @@ guint shaula_annotation_editor_select_intersecting_rect(
  */
 void shaula_annotation_editor_add_annotation(ShaulaPreviewState *state,
                                              ShaulaAnnotation *annotation);
+/* Inserts one external annotation as one undo transaction without changing the
+ * preview-local annotation clipboard. */
+gboolean shaula_annotation_editor_insert_external(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation,
+    gboolean show_text_properties);
 void shaula_annotation_editor_move_selected(ShaulaPreviewState *state,
                                             double dx, double dy);
 gboolean shaula_annotation_editor_can_paste(const ShaulaPreviewState *state);

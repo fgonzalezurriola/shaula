@@ -7,6 +7,7 @@
 #include "preview_measure.h"
 #include "preview_properties_panel.h"
 #include "preview_spotlight.h"
+#include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
 
 #define SHAULA_ERASER_PENDING_OPACITY 0.35
@@ -1480,6 +1481,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     }
     if (state->last_action == NULL)
       state->last_action = "close";
+    shaula_system_clipboard_paste_cancel(state);
     if (state->app != NULL)
       g_application_quit(G_APPLICATION(state->app));
     return TRUE;
@@ -1487,6 +1489,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   if (keyval == GDK_KEY_q && !ctrl) {
     if (state->last_action == NULL)
       state->last_action = "close";
+    shaula_system_clipboard_paste_cancel(state);
     if (state->app != NULL)
       g_application_quit(G_APPLICATION(state->app));
     return TRUE;

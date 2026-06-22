@@ -6,6 +6,8 @@
 void shaula_preview_on_copy_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_save_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_save_as_clicked(GtkButton *button, gpointer data);
+void shaula_preview_on_paste_system_clipboard_clicked(GtkButton *button,
+                                                      gpointer data);
 void shaula_preview_on_done_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_close_clicked(GtkButton *button, gpointer data);
 void shaula_preview_on_undo_clicked(GtkButton *button, gpointer data);

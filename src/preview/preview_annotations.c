@@ -1,5 +1,6 @@
 #include "preview_annotations.h"
 
+#include <gdk/gdk.h>
 #include <math.h>
 #include <pango/pangocairo.h>
 #include <stdio.h>
@@ -340,6 +341,27 @@ ShaulaAnnotation *shaula_annotation_new_pen(const ShaulaPoint *points, int len,
   return annotation;
 }
 
+ShaulaAnnotation *shaula_annotation_new_image_take(GdkPixbuf *pixbuf,
+                                                   ShaulaRect rect) {
+  if (pixbuf == NULL)
+    return NULL;
+  rect = shaula_rect_normalized(rect);
+  if (shaula_rect_is_empty(rect)) {
+    g_object_unref(pixbuf);
+    return NULL;
+  }
+  ShaulaAnnotation *annotation = annotation_alloc(
+      SHAULA_ANNOTATION_IMAGE, (ShaulaColor){1.0, 1.0, 1.0, 1.0}, 0.0);
+  if (annotation == NULL) {
+    g_object_unref(pixbuf);
+    return NULL;
+  }
+  annotation->data.image.pixbuf = pixbuf;
+  annotation->data.image.rect = rect;
+  shaula_annotation_update_bounds(annotation);
+  return annotation;
+}
+
 ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation) {
   if (annotation == NULL)
     return NULL;
@@ -384,6 +406,17 @@ ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation) {
              sizeof(ShaulaPoint) * annotation->data.pen.len);
     }
     break;
+  case SHAULA_ANNOTATION_IMAGE:
+    clone->data.image.rect = annotation->data.image.rect;
+    clone->data.image.pixbuf = annotation->data.image.pixbuf != NULL
+                                   ? gdk_pixbuf_copy(annotation->data.image.pixbuf)
+                                   : NULL;
+    if (annotation->data.image.pixbuf != NULL &&
+        clone->data.image.pixbuf == NULL) {
+      g_free(clone);
+      return NULL;
+    }
+    break;
   }
   return clone;
 }
@@ -398,6 +431,9 @@ void shaula_annotation_free(gpointer data) {
     g_free(annotation->data.highlight.points);
   if (annotation->type == SHAULA_ANNOTATION_PEN)
     g_free(annotation->data.pen.points);
+  if (annotation->type == SHAULA_ANNOTATION_IMAGE &&
+      annotation->data.image.pixbuf != NULL)
+    g_object_unref(annotation->data.image.pixbuf);
   g_free(annotation);
 }
 
@@ -440,6 +476,8 @@ shaula_annotation_selection_bounds(const ShaulaAnnotation *annotation) {
     return arrow_visual_bounds_c(annotation);
   if (annotation->type == SHAULA_ANNOTATION_RECTANGLE)
     return rect_normalized_c(annotation->data.rectangle.rect);
+  if (annotation->type == SHAULA_ANNOTATION_IMAGE)
+    return rect_normalized_c(annotation->data.image.rect);
   return rect_normalized_c(annotation->bounds);
 }
 
@@ -480,6 +518,11 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
         path_bounds_c(path), annotation->stroke_width / 2.0 + 6.0);
     break;
   }
+  case SHAULA_ANNOTATION_IMAGE:
+    annotation->data.image.rect =
+        shaula_rect_normalized(annotation->data.image.rect);
+    annotation->bounds = annotation->data.image.rect;
+    break;
   }
 }
 
@@ -524,8 +567,76 @@ void shaula_annotation_move(ShaulaAnnotation *annotation, double dx,
       annotation->data.pen.points[i].y += dy;
     }
     break;
+  case SHAULA_ANNOTATION_IMAGE:
+    annotation->data.image.rect.x += dx;
+    annotation->data.image.rect.y += dy;
+    break;
   }
   shaula_annotation_update_bounds(annotation);
+}
+
+static ShaulaRect rect_intersection_c(ShaulaRect a, ShaulaRect b) {
+  a = rect_normalized_c(a);
+  b = rect_normalized_c(b);
+  double x0 = MAX(a.x, b.x);
+  double y0 = MAX(a.y, b.y);
+  double x1 = MIN(a.x + a.width, b.x + b.width);
+  double y1 = MIN(a.y + a.height, b.y + b.height);
+  return (ShaulaRect){x0, y0, MAX(0.0, x1 - x0), MAX(0.0, y1 - y0)};
+}
+
+gboolean shaula_annotation_apply_document_crop(ShaulaAnnotation *annotation,
+                                                ShaulaRect crop) {
+  if (annotation == NULL)
+    return FALSE;
+  crop = rect_normalized_c(crop);
+  if (shaula_rect_is_empty(crop) ||
+      !shaula_rect_intersects(annotation->bounds, crop))
+    return FALSE;
+
+  if (annotation->type != SHAULA_ANNOTATION_IMAGE) {
+    shaula_annotation_move(annotation, -crop.x, -crop.y);
+    return TRUE;
+  }
+
+  ShaulaRect rect = rect_normalized_c(annotation->data.image.rect);
+  ShaulaRect visible = rect_intersection_c(rect, crop);
+  GdkPixbuf *pixbuf = annotation->data.image.pixbuf;
+  if (shaula_rect_is_empty(visible) || pixbuf == NULL || rect.width <= 0.0 ||
+      rect.height <= 0.0)
+    return FALSE;
+
+  int source_width = gdk_pixbuf_get_width(pixbuf);
+  int source_height = gdk_pixbuf_get_height(pixbuf);
+  double scale_x = (double)source_width / rect.width;
+  double scale_y = (double)source_height / rect.height;
+  int source_x = CLAMP((int)floor((visible.x - rect.x) * scale_x), 0,
+                       source_width - 1);
+  int source_y = CLAMP((int)floor((visible.y - rect.y) * scale_y), 0,
+                       source_height - 1);
+  int source_right = CLAMP(
+      (int)ceil((visible.x + visible.width - rect.x) * scale_x), source_x + 1,
+      source_width);
+  int source_bottom = CLAMP(
+      (int)ceil((visible.y + visible.height - rect.y) * scale_y), source_y + 1,
+      source_height);
+  GdkPixbuf *sub = gdk_pixbuf_new_subpixbuf(
+      pixbuf, source_x, source_y, source_right - source_x,
+      source_bottom - source_y);
+  if (sub == NULL)
+    return FALSE;
+  GdkPixbuf *copy = gdk_pixbuf_copy(sub);
+  g_object_unref(sub);
+  if (copy == NULL)
+    return FALSE;
+
+  g_object_unref(annotation->data.image.pixbuf);
+  annotation->data.image.pixbuf = copy;
+  annotation->data.image.rect =
+      (ShaulaRect){visible.x - crop.x, visible.y - crop.y, visible.width,
+                   visible.height};
+  shaula_annotation_update_bounds(annotation);
+  return TRUE;
 }
 
 static void set_annotation_color(cairo_t *cr, ShaulaColor color, double alpha) {
@@ -1229,6 +1340,24 @@ void shaula_annotation_draw_preview(cairo_t *cr,
       draw_pen_path(cr, annotation->data.pen);
     }
     break;
+  case SHAULA_ANNOTATION_IMAGE: {
+    GdkPixbuf *pixbuf = annotation->data.image.pixbuf;
+    ShaulaRect rect = rect_normalized_c(annotation->data.image.rect);
+    if (pixbuf != NULL && !shaula_rect_is_empty(rect)) {
+      int width = gdk_pixbuf_get_width(pixbuf);
+      int height = gdk_pixbuf_get_height(pixbuf);
+      if (width > 0 && height > 0) {
+        cairo_save(cr);
+        cairo_translate(cr, rect.x, rect.y);
+        cairo_scale(cr, rect.width / (double)width,
+                    rect.height / (double)height);
+        gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
+        cairo_paint_with_alpha(cr, CLAMP(annotation->color.a, 0.0, 1.0));
+        cairo_restore(cr);
+      }
+    }
+    break;
+  }
   }
 
   if (annotation->selected && show_selection) {
@@ -1426,6 +1555,11 @@ static ShaulaAnnotationHitKind annotation_hit_kind(ShaulaAnnotation *annotation,
         MAX(tolerance, annotation->stroke_width / 2.0 + 3.0))
       return SHAULA_ANNOTATION_HIT_STROKE;
     break;
+  case SHAULA_ANNOTATION_IMAGE:
+    if (shaula_rect_contains_point(
+            shaula_rect_normalized(annotation->data.image.rect), point))
+      return SHAULA_ANNOTATION_HIT_FILL;
+    break;
   }
   return SHAULA_ANNOTATION_HIT_NONE;
 }
@@ -1500,6 +1634,9 @@ gboolean shaula_annotation_intersects_selection_rect(
     return path_to_rect_distance(annotation->data.pen, rect) <= stroke_tolerance;
   case SHAULA_ANNOTATION_TEXT:
     return shaula_rect_intersects(annotation->bounds, rect);
+  case SHAULA_ANNOTATION_IMAGE:
+    return shaula_rect_intersects(
+        shaula_rect_normalized(annotation->data.image.rect), rect);
   }
 
   return FALSE;
@@ -1551,6 +1688,10 @@ gboolean shaula_annotation_intersects_eraser_segment(
   case SHAULA_ANNOTATION_PEN:
     return path_to_segment_distance(annotation->data.pen, start, end) <=
            MAX(radius, annotation->stroke_width / 2.0 + radius);
+  case SHAULA_ANNOTATION_IMAGE:
+    return segment_to_rect_distance(
+               start, end,
+               shaula_rect_normalized(annotation->data.image.rect)) <= radius;
   }
   return FALSE;
 }
