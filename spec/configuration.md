@@ -51,6 +51,11 @@ skip_preview = true
 copy_to_clipboard = true
 save_to_folder = true
 
+[notifications]
+success = true
+errors = true
+thumbnails = true
+
 [preview.window]
 mode = "floating"
 focused = true
@@ -94,6 +99,11 @@ skip_preview = true
 copy_to_clipboard = true
 save_to_folder = true
 
+[notifications]
+success = true
+errors = true
+thumbnails = true
+
 [preview.window]
 mode = "floating"
 focused = true
@@ -116,6 +126,9 @@ Default after-capture behavior:
 - quick and area show preview and copy on accept, without automatic folder save.
 - fullscreen and all-screens skip preview, copy to clipboard, and save to the
   configured screenshot folder.
+
+`save_to_folder` applies to the direct post-capture path only when preview is
+skipped. When preview opens, Save, Save As, or Done owns durable persistence.
 
 Supported `preview.window.mode` values:
 
@@ -143,14 +156,22 @@ Supported `relative_to` values:
 `default-floating-position` is emitted only when both are set and
 `mode = "floating"`.
 
+Window mode, focus, column display, and floating position are applied through
+the generated Niri rule. Width and height also seed the native preview helper.
+Settings exposes common size and position presets; existing custom values remain
+visible as Custom and are preserved unless the user selects a preset.
+
 `close_preview_on_save` defaults to `true`. When set to `true`, a successful
 preview Ctrl+S quick save sends the screenshot notification and then closes the
 preview window. Failed saves keep the preview open.
 
-Shaula sends screenshot thumbnails in desktop notifications using the
-Freedesktop image-path hint. If your notification daemon does not show
-thumbnails, check that image/icon display is enabled. On Mako, thumbnail size
-depends on notification daemon settings such as max-icon-size.
+`notifications.success` controls successful save/copy banners,
+`notifications.errors` controls save/copy failure banners, and
+`notifications.thumbnails` controls screenshot image hints on eligible saved
+notifications. Shaula sends thumbnails using the Freedesktop image-path hint. If
+your notification daemon does not show them, check that image/icon display is
+enabled. On Mako, thumbnail size depends on notification daemon settings such as
+max-icon-size.
 
 ## CLI
 

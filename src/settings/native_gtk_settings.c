@@ -176,6 +176,12 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
       g_strdup(next.close_preview_on_save ? "true" : "false");
   char *width = g_strdup_printf("%d", next.width);
   char *height = g_strdup_printf("%d", next.height);
+  char *floating_x = next.floating_x_set
+                         ? g_strdup_printf("%d", next.floating_x)
+                         : g_strdup("null");
+  char *floating_y = next.floating_y_set
+                         ? g_strdup_printf("%d", next.floating_y)
+                         : g_strdup("null");
   char *quick_skip = g_strdup(next.quick_skip_preview ? "true" : "false");
   char *quick_copy = g_strdup(next.quick_copy ? "true" : "false");
   char *quick_save = g_strdup(next.quick_save ? "true" : "false");
@@ -213,8 +219,14 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
       width,
       "--height",
       height,
-      "--floating-position",
-      (char *)shaula_settings_position_arg(&next),
+      "--default-column-display",
+      next.column_display != NULL ? next.column_display : "normal",
+      "--floating-x",
+      floating_x,
+      "--floating-y",
+      floating_y,
+      "--floating-relative-to",
+      next.floating_relative_to != NULL ? next.floating_relative_to : "top-left",
       "--after-quick-skip-preview",
       quick_skip,
       "--after-quick-copy",
@@ -258,6 +270,8 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   g_free(close_preview_on_save);
   g_free(width);
   g_free(height);
+  g_free(floating_x);
+  g_free(floating_y);
   g_free(quick_skip);
   g_free(quick_copy);
   g_free(quick_save);
@@ -618,7 +632,7 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
       "--json",
       "--force",
       "--region-mode",
-      "live",
+      "frozen",
       "--preview-mode",
       "floating",
       "--focused",
@@ -629,8 +643,12 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
       "1100",
       "--height",
       "720",
+      "--default-column-display",
+      "normal",
       "--floating-position",
       "centered",
+      "--save-folder",
+      "~/Pictures/shaula",
       NULL,
   };
   gchar *out = NULL;
@@ -874,14 +892,15 @@ static GtkWidget *build_form(void) {
   gtk_box_append(GTK_BOX(box),
                  labeled_row("Window mode", GTK_WIDGET(state.window_combo)));
 
-  const char *sizes[] = {"Small", "Medium", "Large", NULL};
+  const char *sizes[] = {"Small", "Medium", "Large", "Custom", NULL};
   state.size_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(sizes));
   gtk_drop_down_set_selected(
       state.size_combo, shaula_settings_size_preset_for_config(&state.config));
   gtk_box_append(GTK_BOX(box),
                  labeled_row("Preview size", GTK_WIDGET(state.size_combo)));
 
-  const char *positions[] = {"Centered", "Top Left", "Top Right", NULL};
+  const char *positions[] = {"Centered", "Top Left", "Top Right", "Custom",
+                             NULL};
   state.position_combo = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(positions));
   gtk_drop_down_set_selected(state.position_combo,
                              state.config.position_preset);

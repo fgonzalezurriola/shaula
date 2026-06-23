@@ -28,12 +28,14 @@ const SizePreset = enum(CInt) {
     small = 0,
     medium = 1,
     large = 2,
+    custom = 3,
 };
 
 const PositionPreset = enum(CInt) {
     centered = 0,
     top_left = 1,
     top_right = 2,
+    custom = 3,
 };
 
 const ShaulaSettingsConfig = extern struct {
@@ -133,7 +135,7 @@ export fn shaula_settings_size_preset_for_config(config: *const ShaulaSettingsCo
     if (config.width == 900 and config.height == 600) return .small;
     if (config.width == 1100 and config.height == 720) return .medium;
     if (config.width == 1400 and config.height == 900) return .large;
-    return .small;
+    return .custom;
 }
 
 export fn shaula_settings_apply_size_preset(config: *ShaulaSettingsConfig, preset: SizePreset) void {
@@ -150,6 +152,7 @@ export fn shaula_settings_apply_size_preset(config: *ShaulaSettingsConfig, prese
             config.width = 1400;
             config.height = 900;
         },
+        .custom => {},
     }
 }
 
@@ -168,15 +171,8 @@ export fn shaula_settings_apply_position_preset(config: *ShaulaSettingsConfig, p
             config.floating_y = 80;
             replaceString(&config.floating_relative_to, if (preset == .top_left) "top-left" else "top-right");
         },
+        .custom => {},
     }
-}
-
-export fn shaula_settings_position_arg(config: *const ShaulaSettingsConfig) [*:0]const u8 {
-    return switch (config.position_preset) {
-        .top_left => "top-left",
-        .top_right => "top-right",
-        .centered => "centered",
-    };
 }
 
 export fn shaula_settings_resolve_config_path() ?[*:0]u8 {
@@ -274,7 +270,7 @@ fn classifyPosition(config: *const ShaulaSettingsConfig) PositionPreset {
     const relative = if (config.floating_relative_to) |value| std.mem.span(value) else "";
     if (config.floating_x == 80 and config.floating_y == 80 and std.mem.eql(u8, relative, "top-left")) return .top_left;
     if (config.floating_x == 80 and config.floating_y == 80 and std.mem.eql(u8, relative, "top-right")) return .top_right;
-    return .centered;
+    return .custom;
 }
 
 fn jsonStringAfter(json: []const u8, needle: []const u8) ?[*:0]u8 {

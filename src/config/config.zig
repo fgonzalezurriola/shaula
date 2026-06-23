@@ -29,12 +29,14 @@ pub const CaptureAfterModeConfig = struct {
     save_to_folder: bool = false,
 };
 
+pub const default_save_folder = "~/Pictures/shaula";
+
 pub const SaveFolderConfig = struct {
     bytes: [4096]u8 = undefined,
     len: usize = 0,
 
     pub fn value(self: *const SaveFolderConfig) []const u8 {
-        return self.bytes[0..self.len];
+        return if (self.len == 0) default_save_folder else self.bytes[0..self.len];
     }
 
     pub fn set(self: *SaveFolderConfig, value_text: []const u8) !void {

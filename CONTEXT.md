@@ -86,6 +86,12 @@ contracts, active risks, and immediate work.
 - Settings covers region mode, per-mode preview/copy/save behavior, save folder,
   preview window mode/focus/close-on-save/size/position, notification switches,
   and managed Niri integration controls.
+- The integrated defaults are frozen region mode, `~/Pictures/shaula`, success
+  and error notifications with thumbnails, floating 1100x720 preview, focused,
+  normal column display, centered position, and close-on-save enabled.
+- Existing custom preview dimensions, column display, and floating coordinates
+  must survive an unrelated Settings save. The UI shows Custom for values that
+  do not match its common presets and changes them only when a preset is chosen.
 - Saving settings may update Shaula's managed Niri rule block. Shaula does not
   reload or restart Niri or Noctalia.
 - Noctalia is optional. It invokes public CLI contracts and must never become a
@@ -228,7 +234,8 @@ contracts, active risks, and immediate work.
   live-overlay settle barrier remain sensitive runtime areas.
 - Settings has multiple representations of each field (GTK model, config JSON,
   strict TOML, generated Niri rule, helper environment). Changes require an
-  end-to-end consumer audit rather than local UI inspection.
+  end-to-end consumer audit rather than local UI inspection; custom config values
+  must not be collapsed into UI presets during round-trip saves.
 - Preview system clipboard is asynchronous. Window destruction, provider change,
   unsupported payloads, and duplicate feedback must remain distinct outcomes.
 - Image annotation history cost is proportional to pasted image payload size.
@@ -241,15 +248,12 @@ contracts, active risks, and immediate work.
 
 ## Immediate next steps
 
-1. Audit every visible Settings control from UI presentation through config
-   serialization/parsing, runtime propagation, observable effect, default, and
-   documentation. Fix only unambiguous behavior gaps.
-2. Improve the More-menu system clipboard action with its own paste icon, a
+1. Improve the More-menu system clipboard action with its own paste icon, a
    visible optional shortcut badge, and non-destructive unsupported-content
    feedback.
-3. Run `./dev dev-install --yes`, `./dev check`, and `git diff --check` after the
+2. Run `./dev dev-install --yes`, `./dev check`, and `git diff --check` after the
    UI work. Perform a targeted preview check where the environment permits it.
-4. Ask the user to validate interactive preview/capture behavior with
+3. Ask the user to validate interactive preview/capture behavior with
    `./dev capture` and `./dev all`.
 
 ## Relevant source documents

@@ -325,7 +325,7 @@ write_default_config() {
   fi
   cat > "$dest" <<'EOF'
 [capture]
-region_capture_mode = "live"
+region_capture_mode = "frozen"
 
 [preview.window]
 mode = "floating"

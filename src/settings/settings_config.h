@@ -20,12 +20,14 @@ typedef enum {
   SIZE_SMALL = 0,
   SIZE_MEDIUM,
   SIZE_LARGE,
+  SIZE_CUSTOM,
 } SizePreset;
 
 typedef enum {
   POSITION_CENTERED = 0,
   POSITION_TOP_LEFT,
   POSITION_TOP_RIGHT,
+  POSITION_CUSTOM,
 } PositionPreset;
 
 typedef struct {
@@ -71,4 +73,3 @@ gboolean shaula_settings_config_from_show_json(const char *json, ShaulaSettingsC
 SizePreset shaula_settings_size_preset_for_config(const ShaulaSettingsConfig *config);
 void shaula_settings_apply_size_preset(ShaulaSettingsConfig *config, SizePreset preset);
 void shaula_settings_apply_position_preset(ShaulaSettingsConfig *config, PositionPreset preset);
-const char *shaula_settings_position_arg(const ShaulaSettingsConfig *config);

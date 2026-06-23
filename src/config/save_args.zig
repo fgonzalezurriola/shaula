@@ -54,6 +54,26 @@ pub fn apply(
         config.preview.window.height = parsePositiveU32Arg(value) orelse return .{ .invalid = .{ .message = "invalid --height", .field = "height" } };
         return .{ .applied = 1 };
     }
+    if (std.mem.eql(u8, arg, "--default-column-display")) {
+        const value = saveValue(subcommand, next) orelse return .{ .invalid = .{ .message = "--default-column-display is supported only for save and requires a value" } };
+        config.preview.window.default_column_display = config_types.parseColumnDisplay(value) orelse return .{ .invalid = .{ .message = "invalid --default-column-display", .field = "default_column_display" } };
+        return .{ .applied = 1 };
+    }
+    if (std.mem.eql(u8, arg, "--floating-x")) {
+        const value = saveValue(subcommand, next) orelse return .{ .invalid = .{ .message = "--floating-x is supported only for save and requires a value" } };
+        config.preview.window.floating_position.x = if (std.mem.eql(u8, value, "null")) null else parseI32Arg(value) orelse return .{ .invalid = .{ .message = "invalid --floating-x", .field = "floating_x" } };
+        return .{ .applied = 1 };
+    }
+    if (std.mem.eql(u8, arg, "--floating-y")) {
+        const value = saveValue(subcommand, next) orelse return .{ .invalid = .{ .message = "--floating-y is supported only for save and requires a value" } };
+        config.preview.window.floating_position.y = if (std.mem.eql(u8, value, "null")) null else parseI32Arg(value) orelse return .{ .invalid = .{ .message = "invalid --floating-y", .field = "floating_y" } };
+        return .{ .applied = 1 };
+    }
+    if (std.mem.eql(u8, arg, "--floating-relative-to")) {
+        const value = saveValue(subcommand, next) orelse return .{ .invalid = .{ .message = "--floating-relative-to is supported only for save and requires a value" } };
+        config.preview.window.floating_position.relative_to = config_types.parseFloatingRelativeTo(value) orelse return .{ .invalid = .{ .message = "invalid --floating-relative-to", .field = "floating_relative_to" } };
+        return .{ .applied = 1 };
+    }
     if (std.mem.eql(u8, arg, "--floating-position")) {
         const value = saveValue(subcommand, next) orelse return .{ .invalid = .{ .message = "--floating-position is supported only for save and requires a value" } };
         if (std.mem.eql(u8, value, "centered")) {
@@ -148,4 +168,8 @@ fn parsePositiveU32Arg(value: []const u8) ?u32 {
     const parsed = std.fmt.parseInt(u32, value, 10) catch return null;
     if (parsed == 0) return null;
     return parsed;
+}
+
+fn parseI32Arg(value: []const u8) ?i32 {
+    return std.fmt.parseInt(i32, value, 10) catch null;
 }
