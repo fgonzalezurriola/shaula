@@ -687,7 +687,7 @@ missing_arch_runtime_packages() {
     return 0
   fi
   missing=""
-  for package in grim slurp wl-clipboard gtk4 gtk4-layer-shell xdg-desktop-portal xdg-desktop-portal-gtk; do
+  for package in grim wl-clipboard gtk4 gtk4-layer-shell xdg-desktop-portal xdg-desktop-portal-gtk; do
     if ! pacman -Q "$package" >/dev/null 2>&1; then
       missing="${missing} ${package}"
     fi
@@ -762,7 +762,7 @@ run_shaula_setup() {
 }
 
 warn_runtime_tools() {
-  for tool in grim slurp wl-copy wl-paste gdbus niri quickshell; do
+  for tool in grim wl-copy wl-paste gdbus niri quickshell; do
     if ! command -v "$tool" >/dev/null 2>&1; then
       warn "runtime tool not found in PATH: $tool"
     fi

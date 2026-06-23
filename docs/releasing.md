@@ -37,7 +37,7 @@ The installer:
 On Arch/CachyOS, the dependency prompt installs:
 
 ```bash
-sudo pacman -S --needed grim slurp wl-clipboard gtk4 gtk4-layer-shell
+sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell
 ```
 
 The prompt reads from `/dev/tty` so an interactive `curl | sh` install still works. It logs when packages are already installed and uses concise TTY status prefixes without coloring entire log lines. `--yes` must never authorize privilege escalation automatically.

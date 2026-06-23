@@ -333,7 +333,7 @@ share one default profile because they use the same HUD and stroke model.
 
 `shaula-more-symbolic` exposes:
 
-- Paste from clipboard (`Ctrl+Shift+V`);
+- Paste from clipboard (`Ctrl+Shift+V`), inserting clipboard text or an image near the visible canvas center;
 - Save As;
 - Fit to screen;
 - Actual size;

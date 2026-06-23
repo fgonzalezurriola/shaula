@@ -13,9 +13,9 @@ the primary supported environment today.
 ### Arch Linux / CachyOS
 
 ```bash
-paru -S shaula      # or paru -S shaula-bin 
+paru -S shaula      # or paru -S shaula-bin
 shaula setup        # configure Niri shortcuts and Noctalia integration
-````
+```
 
 Uninstall:
 
@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scri
 Runtime dependencies:
 
 ```bash
-sudo pacman -S --needed grim slurp wl-clipboard gtk4 gtk4-layer-shell
+sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell
 ```
 
 Optional fonts:
@@ -67,7 +67,9 @@ shaula explore --json --brief
 
 Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
 the configured save folder, defaulting to `~/Pictures/shaula`, and generate
-`YYYYMMDD-HHMMSS.png` names.
+`YYYYMMDD-HHMMSS.png` names. `Ctrl+Shift+V`, also available as **Paste from
+clipboard** in the More menu, inserts clipboard text or an image near the center
+of the visible canvas.
 
 Direct no-preview saved captures use the same `YYYYMMDD-HHMMSS.png` template,
 adding `-2`, `-3`, and so on when a filename already exists.

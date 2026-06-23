@@ -65,7 +65,7 @@ Numbered canvas tools:
 | `1` | Select |
 | `2` | Rectangle |
 | `3` | Arrow |
-| `4` | Reserved Line slot |
+| `4` | Line |
 | `5` | Text |
 | `6` | Pen |
 | `7` | Highlight |
@@ -74,4 +74,4 @@ Numbered canvas tools:
 
 Only implemented numbered tools display GTK keycap badges.
 
-Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As and Paste from clipboard remain More-menu actions. System paste shows `Ctrl+Shift+V`, does not add a permanent toolbar button, and must not affect the headerbar's natural width or trigger a floating-window resize.
+Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As and Paste from clipboard remain More-menu actions. The paste action explains that clipboard text or images are inserted near the visible canvas center and advertises `Ctrl+Shift+V`. It does not add a permanent toolbar button or affect the headerbar's natural width.

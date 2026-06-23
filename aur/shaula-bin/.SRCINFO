@@ -13,7 +13,6 @@ pkgbase = shaula-bin
 	depends = gtk4
 	depends = gtk4-layer-shell
 	depends = hicolor-icon-theme
-	depends = slurp
 	depends = wayland
 	depends = wl-clipboard
 	optdepends = niri: primary supported compositor and setup integration

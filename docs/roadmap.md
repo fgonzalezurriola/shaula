@@ -106,6 +106,7 @@ v0.1.6 is ready when:
 - Copy, Save, Save As, Done, Discard, and actionable save notifications.
 - Undo/redo history for document edits.
 - Multi-annotation selection, clipboard, duplicate, move, and delete.
+- Explicit system-clipboard paste for text and image annotations.
 - Rectangle, Arrow, Line, Text, Pen, Highlight, Measure, Spotlight, Crop,
   Blur, pixel Erase, and Annotation Eraser workflows.
 - Passive color sampler with Tab copy and swatch-to-active-color apply.
@@ -121,8 +122,6 @@ the toolbar by default:
 - More filename templating and save-path configuration.
 - Additional preview history affordances if users need more visibility or
   control.
-- Explicit external text/image paste as annotations, separate from the
-  preview-local annotation clipboard.
 - General QuickShell integration only after the draft architecture and expected
   user value are reviewed.
 - Deploy the static product landing page.

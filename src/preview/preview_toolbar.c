@@ -362,8 +362,8 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
     append_separator(state->more_menu_box);
 
   const MenuActionSpec paste_action = {
-      "shaula-copy-symbolic", "Paste from clipboard (Ctrl+Shift+V)",
-      "Paste from clipboard (Ctrl+Shift+V)",
+      "shaula-copy-symbolic", "Paste from clipboard",
+      "Paste clipboard text or image near canvas center (Ctrl+Shift+V)",
       G_CALLBACK(shaula_preview_on_paste_system_clipboard_clicked)};
   state->paste_system_button = make_menu_action_row(state, &paste_action);
   gtk_box_append(GTK_BOX(state->more_menu_box), state->paste_system_button);

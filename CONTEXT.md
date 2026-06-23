@@ -90,44 +90,15 @@ and the working diff.
   pretending KDE portal capture was available. Detailed outputs live in
   `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/gnome-portal-test.out` and
   `/home/fgonz/dev/shaula-lab/artifacts/ubuntu2604/kde-portal-test.out`.
-- Preview annotation multi-select is the final v0.1.x editor feature before
-  icon/release work. The GTK preview now uses `selected_annotation_ids` as the
-  annotation selection source of truth, keeps the legacy
-  `selected_annotation` pointer only for single-selection compatibility, and
-  syncs annotation `selected` flags because rendering/export/history snapshots
-  already consume them. Select mode supports normal click select-only,
-  Shift+click toggle, drag marquee using the existing rectangular selection,
-  Ctrl/Cmd+A select all annotations, Esc clear annotation selection before
-  closing, batch Delete/Backspace, and moving multiple selected annotations as
-  one undoable history gesture. A Select drag is a marquee when it intersects
-  annotations: successful object selection clears the temporary region instead
-  of leaving the original drag rectangle visible. When no annotation matches,
-  the rectangle remains available for crop/blur/erase/spotlight actions.
-  Multi-selection suppresses per-object selection boxes and handles, then draws
-  one group bounding box from the union of selected annotation bounds.
-  Interactive performance constraints: drag/move hot paths must not sample hover
-  color, must not redraw the toolbar color swatch on every canvas frame, and
-  should use the synced `annotation->selected` flag for per-frame movement
-  instead of repeated selected-ID scans. Multi-select hides single-object
-  property/crop actions but exposes Duplicate and batch Delete. Duplicate uses
-  the copy glyph, clones the full set through the existing paste path, keeps the
-  preview-local clipboard unchanged, and selects only the offset copies.
-  Selection-box movement is edge-only for single Pen, Highlight, Arrow/Line,
-  Text, Measure, Rectangle, and the multi-selection group box. A shared helper
-  tests the four border segments in screen coordinates with a fixed 8 px
-  tolerance in both press and hover paths; this frame is derived directly in C
-  from the same selection bounds used for rendering rather than through
-  cross-language rectangle struct helpers. Resize/curvature handles use the same
-  fixed screen-space target instead of a zoom-growing minimum. Hit priority is
-  resize/curvature handles, box edges, visible annotation geometry, then
-  empty-space marquee. Handles can act only when already visible on the current
-  single selection, so initially selecting an Arrow/Line near its midpoint must
-  not bend it. Group-edge drags preserve and move the full selection; an edge
-  click without movement leaves selection unchanged, and empty group-box
-  interiors remain transparent so objects behind them can still be selected.
-  Rectangle annotations can be
-  selected by clicking inside their bounds, even when unfilled, because
-  edge-only geometry hit testing made Select feel broken.
+- Preview selection uses `preview_annotation_editor.{c,h}` as its source of
+  truth; `ShaulaPreviewState` stores selected IDs and no longer exposes a legacy
+  `selected_annotation` pointer. Select supports click, Shift+click toggle,
+  marquee intersection, Ctrl/Super+A, batch duplicate/delete, and moving a
+  selected set as one history gesture. Single-selection handles and selection
+  edges use fixed screen-space targets; multi-selection draws one group box.
+  Hit testing follows visible geometry, so transparent interiors of unfilled
+  shapes remain click-through and successful marquees clear the temporary
+  region while unmatched drags remain available for contextual region actions.
 - Preview annotation editing now has one deep Module at
   `preview/preview_annotation_editor.{c,h}`. It owns selection IDs, synchronization
   of persisted `annotation->selected` flags, single-selection derivation, HUD
@@ -186,6 +157,9 @@ and the working diff.
   redaction, and export operate on physical image pixels after output-scale
   normalization. Niri IPC/window semantics, Wayland screencopy migration,
   fractional scaling, and overlay teardown timing remain technical risks.
+- `slurp` is no longer a runtime, installer, doctor, or AUR dependency. Region
+  selection is owned by Shaula's GTK overlay; historical VM evidence may still
+  list `slurp` among packages installed in those test guests.
 - QA script curation: `scripts/qa/README.md` is now the source of truth for QA
   script status. The required baseline remains `./dev check` plus
   `git diff --check`; `./dev qa` is the curated non-intrusive contract lane
@@ -268,7 +242,8 @@ and the working diff.
   while `capture area` is the adjustable overlay flow. The area overlay opens
   with its last confirmed same-output area or a centered 60% default, shows a
   minimal aspect/Discard toolbar, confirms with `y`/Enter, cancels with
-  Ctrl+C/Esc/Backspace/`n`, persists area/aspect only on confirm, and opens the
+  Esc/Backspace/`q`/`n`, supports direct copy with Ctrl+C and direct save with
+  Ctrl+S, persists area/aspect only on confirm, and opens the
   normal post-capture preview. Quick and Area draft state are intentionally
   separate. Helper aspect extraction is parsed separately from `SelectionResult`
   ownership so custom ratios can persist without returning borrowed JSON memory;
@@ -439,7 +414,9 @@ and the working diff.
   dropdown if needed and confirms the capture instead of reopening the menu.
 - Overlay Ctrl+C confirms the current valid selection with helper
   `action:"copy"`; the Zig lifecycle turns that into immediate clipboard copy
-  with preview disabled for that capture. Q/N/Backspace remain cancel shortcuts.
+  with preview disabled. Ctrl+S confirms with `action:"save"`, forces durable
+  output, bypasses preview, and still follows the mode's configured copy setting.
+  Q/N/Backspace remain cancel shortcuts.
 - Area overlay hit-testing is handle-biased: the 8 corner and mid-point handles
   keep resize cursors, while edges themselves and the inner 24px rim keep move behavior,
   and dragging in the selection interior starts a new region. This makes it
@@ -485,7 +462,9 @@ and the working diff.
   mutation of the internal clipboard. External text uses current Text defaults;
   external images become owned Image annotations with deep-cloned pixel payloads,
   viewport-centered downscaling, normal history/export behavior, and crop-aware
-  payload remapping. GTK text editors retain their native paste shortcuts.
+  payload remapping. The More-menu action is labeled `Paste from clipboard` and
+  its tooltip explains center placement plus `Ctrl+Shift+V`. GTK text editors
+  retain their native paste shortcuts.
 
 ## Visible Metadata
 
@@ -580,12 +559,11 @@ and the working diff.
 - `preview_commands.*` owns `ShaulaPreviewCommand`,
   `shaula_preview_execute_command`, command availability, and the static
   shortcut map.
-- Routed shortcuts: Ctrl+Shift+C, Ctrl+C, Ctrl+V, Ctrl+Shift+V, Ctrl+S, Ctrl+Shift+S,
-  Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Backspace, `Tab`, `f`/`F`,
-  `0`, number tool hotkeys `1` Select, `2` Rectangle, `3` Arrow, reserved `4`
-  Line with no current command, `5` Text, `6` Pen, `7` Highlight, `8` Measure,
-  `9` Spotlight, and secondary letter tool hotkeys `V/A/R/T/S/P/H/M/C` plus `B`
-  Blur and `E` Erase when their region command is available. Space-held Hand/Pan
+- Routed shortcuts: Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Shift+V, Ctrl+S,
+  Ctrl+Shift+S, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+D, Delete, Ctrl/Super+A,
+  `Tab`, `f`/`F`, and tool hotkeys `0`/`E` Eraser, `1`/`V` Select, `2`/`R`
+  Rectangle, `3`/`A` Arrow, `4`/`L` Line, `5`/`T` Text, `6`/`P`/`X` Pen,
+  `7`/`H` Highlight, `8` Measure, and `9` Spotlight. Space-held Hand/Pan
   is transient input state in
   `preview_canvas.c`, not a persistent shortcut command, so it can restore the
   previous selected tool safely.

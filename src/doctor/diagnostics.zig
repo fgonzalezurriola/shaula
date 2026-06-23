@@ -60,7 +60,7 @@ pub const Report = struct {
     }
 };
 
-const tool_names = [_][]const u8{ "grim", "slurp", "wl-copy", "wl-paste", "gdbus", "niri", "quickshell" };
+const tool_names = [_][]const u8{ "grim", "wl-copy", "wl-paste", "gdbus", "niri", "quickshell" };
 
 /// Collect install and runtime diagnostics without mutating user state.
 ///

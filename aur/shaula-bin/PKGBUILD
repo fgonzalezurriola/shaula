@@ -14,7 +14,6 @@ depends=(
   'gtk4'
   'gtk4-layer-shell'
   'hicolor-icon-theme'
-  'slurp'
   'wayland'
   'wl-clipboard'
 )
