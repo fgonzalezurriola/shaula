@@ -73,7 +73,12 @@ contracts, active risks, and immediate work.
 - `Ctrl+V` pastes the preview-local annotation clipboard. `Ctrl+Shift+V` reads
   the system clipboard asynchronously, prefers image over text, inserts one
   annotation near the visible canvas center, and never mutates the internal
-  annotation clipboard.
+  annotation clipboard. Its More-menu row uses `shaula-paste-symbolic` and a
+  visible left-aligned shortcut badge.
+- Clipboard content with neither supported text nor image shows the neutral
+  transient message `Clipboard has no supported text or image.` It creates no
+  history entry, does not mutate the document or internal clipboard, and does
+  not close Preview.
 
 ### Settings and integration
 
@@ -200,7 +205,8 @@ contracts, active risks, and immediate work.
 - Preview rendering/export may consume synchronized annotation `selected` flags
   as a hot-path contract; mutations must still pass through the editor.
 - Toolbar overflow uses measured available space and a stable requested action
-  width. Contextual actions and HUD controls must not expand headerbar natural
+  width. More-menu shortcuts are optional action metadata and may widen only the
+  popover. Contextual actions and HUD controls must not expand headerbar natural
   width.
 - New code comments are English and reserved for contracts, boundaries, or
   non-obvious decisions.
@@ -248,12 +254,10 @@ contracts, active risks, and immediate work.
 
 ## Immediate next steps
 
-1. Improve the More-menu system clipboard action with its own paste icon, a
-   visible optional shortcut badge, and non-destructive unsupported-content
-   feedback.
-2. Run `./dev dev-install --yes`, `./dev check`, and `git diff --check` after the
-   UI work. Perform a targeted preview check where the environment permits it.
-3. Ask the user to validate interactive preview/capture behavior with
+1. Run `./dev dev-install --yes`, `./dev check`, and `git diff --check` after
+   preview UI work. Perform a targeted preview check where the environment
+   permits it.
+2. Ask the user to validate interactive preview/capture behavior with
    `./dev capture` and `./dev all`.
 
 ## Relevant source documents

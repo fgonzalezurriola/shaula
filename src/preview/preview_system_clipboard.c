@@ -85,7 +85,7 @@ static void report_feedback(ShaulaSystemClipboardPaste *paste,
   GtkWidget *window = NULL;
   ShaulaPreviewState *state = live_state(paste, &window);
   if (state != NULL)
-    shaula_preview_show_feedback(state, message, TRUE);
+    shaula_preview_show_feedback(state, message, FALSE);
   g_clear_object(&window);
 }
 
@@ -127,16 +127,6 @@ static gboolean formats_offer_text(GdkContentFormats *formats) {
       return TRUE;
   }
   return FALSE;
-}
-
-static gboolean formats_are_empty(GdkContentFormats *formats) {
-  if (formats == NULL)
-    return TRUE;
-  gsize gtype_count = 0;
-  gsize mime_count = 0;
-  gdk_content_formats_get_gtypes(formats, &gtype_count);
-  gdk_content_formats_get_mime_types(formats, &mime_count);
-  return gtype_count == 0 && mime_count == 0;
 }
 
 static ShaulaRect visible_viewport_image(ShaulaPreviewState *state) {
@@ -387,17 +377,11 @@ gboolean shaula_system_clipboard_paste_request(ShaulaPreviewState *state) {
     return TRUE;
 
   GdkContentFormats *formats = gdk_clipboard_get_formats(paste->clipboard);
-  if (formats_are_empty(formats)) {
-    shaula_preview_show_feedback(state, "System clipboard is empty.", TRUE);
-    return TRUE;
-  }
-
   gboolean has_image = formats_offer_image(formats);
   gboolean has_text = formats_offer_text(formats);
   if (!has_image && !has_text) {
     shaula_preview_show_feedback(
-        state, "System clipboard does not contain a supported image or text.",
-        TRUE);
+        state, "Clipboard has no supported text or image.", FALSE);
     return TRUE;
   }
 

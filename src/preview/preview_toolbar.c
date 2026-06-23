@@ -15,6 +15,7 @@ typedef struct {
 typedef struct {
   const char *icon_name;
   const char *label;
+  const char *shortcut;
   const char *tooltip;
   GCallback callback;
 } MenuActionSpec;
@@ -32,11 +33,12 @@ static const ToolActionSpec secondary_tools[] = {
 };
 
 static const MenuActionSpec utility_actions[] = {
-    {"shaula-fit-to-screen-symbolic", "Fit to screen", "Fit to screen (F)",
-     G_CALLBACK(shaula_preview_on_fit_clicked)},
-    {"shaula-actual-size-symbolic", "Actual size", "Actual size",
+    {"shaula-fit-to-screen-symbolic", "Fit to screen", NULL,
+     "Fit to screen (F)", G_CALLBACK(shaula_preview_on_fit_clicked)},
+    {"shaula-actual-size-symbolic", "Actual size", NULL, "Actual size",
      G_CALLBACK(shaula_preview_on_actual_clicked)},
-    {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
+    {"shaula-discard-symbolic", "Reset annotations", NULL,
+     "Reset annotations",
      G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
 };
 
@@ -133,6 +135,17 @@ static void install_toolbar_css(void) {
                     "  color: @theme_fg_color;"
                     "  font-size: 9px;"
                     "  font-weight: 400;"
+                    "}"
+                    ".shaula-menu-shortcut {"
+                    "  min-width: 0;"
+                    "  min-height: 0;"
+                    "  padding: 2px 5px;"
+                    "  border: 1px solid alpha(@theme_fg_color, 0.16);"
+                    "  border-radius: 4px;"
+                    "  background: alpha(@theme_fg_color, 0.06);"
+                    "  color: alpha(@theme_fg_color, 0.72);"
+                    "  font-family: monospace;"
+                    "  font-size: 0.78em;"
                     "}"
                     "popover.shaula-preview-popover contents {"
                     "  background: alpha(@theme_bg_color, 0.98);"
@@ -260,6 +273,13 @@ static GtkWidget *make_menu_action_row(ShaulaPreviewState *state,
   GtkWidget *label = gtk_label_new(spec->label);
   gtk_widget_set_halign(label, GTK_ALIGN_START);
   gtk_widget_set_hexpand(label, TRUE);
+  if (spec->shortcut != NULL && spec->shortcut[0] != '\0') {
+    GtkWidget *shortcut = gtk_label_new(spec->shortcut);
+    gtk_widget_add_css_class(shortcut, "shaula-menu-shortcut");
+    gtk_widget_set_halign(shortcut, GTK_ALIGN_START);
+    gtk_widget_set_valign(shortcut, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(row), shortcut);
+  }
   gtk_box_append(GTK_BOX(row), icon);
   gtk_box_append(GTK_BOX(row), label);
   gtk_button_set_child(GTK_BUTTON(button), row);
@@ -362,17 +382,17 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
     append_separator(state->more_menu_box);
 
   const MenuActionSpec paste_action = {
-      "shaula-copy-symbolic", "Paste from clipboard",
-      "Paste clipboard text or image near canvas center (Ctrl+Shift+V)",
+      "shaula-paste-symbolic", "Paste from clipboard", "Ctrl+Shift+V",
+      "Paste clipboard text or image near canvas center; shortcut Ctrl+Shift+V",
       G_CALLBACK(shaula_preview_on_paste_system_clipboard_clicked)};
   state->paste_system_button = make_menu_action_row(state, &paste_action);
   gtk_box_append(GTK_BOX(state->more_menu_box), state->paste_system_button);
   shaula_preview_toolbar_update_system_paste_state(state);
 
   const MenuActionSpec actions[] = {
-      {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
+      {"shaula-save-symbolic", "Save As", NULL, "Save As (Ctrl+Shift+S)",
        G_CALLBACK(shaula_preview_on_save_as_clicked)},
-      {"shaula-more-symbolic", "Open preview directory",
+      {"shaula-more-symbolic", "Open preview directory", NULL,
        "Open preview directory",
        G_CALLBACK(shaula_preview_on_open_folder_clicked)},
   };
@@ -451,6 +471,7 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
   gtk_widget_set_margin_bottom(menu_box, 6);
   gtk_widget_set_margin_start(menu_box, 6);
   gtk_widget_set_margin_end(menu_box, 6);
+  gtk_widget_set_size_request(menu_box, 300, -1);
   gtk_popover_set_child(GTK_POPOVER(popover), menu_box);
   gtk_menu_button_set_popover(GTK_MENU_BUTTON(button), popover);
 
