@@ -12,7 +12,7 @@ This document owns the implemented preview action and tool contracts.
 
 `shaula-save-symbolic` and `Ctrl+S` save a new timestamped PNG under `~/Pictures/shaula/YYYYMMDD-HHMMSS.png`, adding a numeric suffix on collisions and falling back to `~/shaula` when the Pictures directory cannot be created or written.
 
-Quick Save updates preview save metadata but does not create undo history.
+Quick Save updates preview save metadata but does not create undo history. After a successful save, it closes the preview only when the close-on-save setting is enabled.
 
 ### Save As
 

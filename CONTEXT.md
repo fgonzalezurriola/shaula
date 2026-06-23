@@ -254,8 +254,10 @@ and the working diff.
   placement clamps to `(12,12)` before GTK measures the canvas.
 - Preview Ctrl+S and Ctrl+Shift+C success banners now use `Screenshot captured`
   desktop notifications with Freedesktop `image-path` screenshot thumbnails
-  and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint and keeps
-  the preview open; Save As/Ctrl+Shift+S also keeps the preview open. The Done
+  and `notify-send -i` fallback. Save/Ctrl+S is a neutral checkpoint: it closes
+  after a successful save only when `preview.window.close_preview_on_save` is
+  enabled; otherwise it keeps the preview open. Save As/Ctrl+Shift+S keeps the
+  preview open. The Done
   headerbar action is the final action: it saves/promotes the current result if
   needed, copies the saved PNG to the clipboard when capture
   `copy_to_clipboard` requested copy-on-accept, emits the normal copy/save

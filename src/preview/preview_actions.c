@@ -419,6 +419,9 @@ void shaula_preview_action_save(ShaulaPreviewState *state) {
   else
     state->notified = TRUE;
   g_free(target);
+
+  if (state->close_preview_on_save && state->app != NULL)
+    g_application_quit(G_APPLICATION(state->app));
 }
 
 static void shaula_preview_action_accept(ShaulaPreviewState *state,
