@@ -673,7 +673,8 @@ void shaula_properties_hud_set_text_font_size(ShaulaPreviewState *state,
                                               double font_size) {
   if (!property_input_allowed(state))
     return;
-  double next = CLAMP(font_size, 12.0, 72.0);
+  double next = CLAMP(font_size, SHAULA_TEXT_FONT_SIZE_MIN,
+                      SHAULA_TEXT_FONT_SIZE_MAX);
   persist_double_default(state, &state->tool_defaults.text.font_size, next,
                          SHAULA_TOOL_DEFAULTS_DIRTY_TEXT);
   ShaulaAnnotation *text =

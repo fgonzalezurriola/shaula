@@ -51,7 +51,11 @@ After presentation, toolbar updates may change sensitivity, active state, or men
 
 ## Selection Chrome
 
-Selected Rectangle annotations draw an external selection outline derived from `data.rectangle.rect`, not from the broad-phase annotation bounds. Padding remains stable in screen pixels so selection chrome stays aligned across zoom levels. The real rectangle stroke is repainted above the outline so dashed content remains visible.
+Selected Rectangle annotations draw an external selection outline derived from `data.rectangle.rect`, not from the broad-phase annotation bounds. Padding remains stable in screen pixels so selection chrome stays aligned across zoom levels. The real rectangle stroke is repainted above the outline so dashed content remains visible. Rectangle keeps eight square resize handles.
+
+Singly selected Image and committed Text annotations keep their existing selection boxes and add four square corner handles. Handle drawing and hit targets remain stable in screen pixels. Image corner resize preserves aspect ratio, keeps the opposite corner fixed, prevents flipping, and changes only `data.image.rect`. Text corner resize changes `font_size` uniformly and corrects `data.text.position` after Pango recomputation so the opposite visual corner remains fixed.
+
+Per-object handles are single-selection only. Multi-selection draws one group box without resize handles. Multi-selection resize, rotation, flipping, freeform Image distortion, and Text wrapping or fixed-width boxes remain out of scope.
 
 ## Tool Placement
 

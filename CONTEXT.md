@@ -70,6 +70,13 @@ contracts, active risks, and immediate work.
   be routed through destructive blur/erase pixel helpers.
 - Tool HUD defaults persist separately from selected-object inspection. Reading a
   selected object must not overwrite future creation defaults.
+- A singly selected Image or committed Text annotation exposes four corner
+  resize handles. Image resize mutates only `data.image.rect`, preserves aspect
+  ratio, prevents flipping, and clamps to the base screenshot. Text resize
+  derives each update from gesture-start position/font size, scales the font
+  uniformly, and reanchors the opposite visual corner after Pango bounds
+  recomputation. Resize remains single-selection only, creates at most one undo
+  entry per drag, and never updates future Text creation defaults.
 - `Ctrl+V` pastes the preview-local annotation clipboard. `Ctrl+Shift+V` reads
   the system clipboard asynchronously, prefers image over text, inserts one
   annotation near the visible canvas center, and never mutates the internal

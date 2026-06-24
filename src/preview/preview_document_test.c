@@ -97,6 +97,59 @@ static void assert_paste_validation(void) {
                                                        999999));
 }
 
+static void assert_image_resize_contract(void) {
+  GdkPixbuf *pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, 8, 4);
+  require_true(pixbuf != NULL);
+  ShaulaAnnotation *image = shaula_annotation_new_image_take(
+      pixbuf, (ShaulaRect){50, 50, 80, 40});
+  require_true(image != NULL);
+  GdkPixbuf *owned_pixbuf = image->data.image.pixbuf;
+  ShaulaRect origin = image->data.image.rect;
+
+  require_true(shaula_annotation_resize_image_from_origin(
+      image, origin, (ShaulaPoint){130, 90}, (ShaulaPoint){50, 50},
+      (ShaulaPoint){10, 30}, (ShaulaRect){0, 0, 200, 120}, 16.0));
+  require_close(image->data.image.rect.x, 10.0);
+  require_close(image->data.image.rect.y, 30.0);
+  require_close(image->data.image.rect.width, 120.0);
+  require_close(image->data.image.rect.height, 60.0);
+  require_close(image->data.image.rect.width / image->data.image.rect.height,
+                2.0);
+  require_close(image->data.image.rect.x + image->data.image.rect.width,
+                130.0);
+  require_close(image->data.image.rect.y + image->data.image.rect.height,
+                90.0);
+  require_true(image->data.image.pixbuf == owned_pixbuf);
+
+  require_true(shaula_annotation_resize_image_from_origin(
+      image, origin, (ShaulaPoint){130, 90}, (ShaulaPoint){50, 50},
+      (ShaulaPoint){140, 95}, (ShaulaRect){0, 0, 200, 120}, 16.0));
+  require_close(image->data.image.rect.width, 32.0);
+  require_close(image->data.image.rect.height, 16.0);
+  require_close(image->data.image.rect.x + image->data.image.rect.width,
+                130.0);
+  require_close(image->data.image.rect.y + image->data.image.rect.height,
+                90.0);
+
+  require_true(shaula_annotation_resize_image_from_origin(
+      image, origin, (ShaulaPoint){50, 50}, (ShaulaPoint){130, 90},
+      (ShaulaPoint){500, 500}, (ShaulaRect){0, 0, 200, 120}, 16.0));
+  require_close(image->data.image.rect.x, 50.0);
+  require_close(image->data.image.rect.y, 50.0);
+  require_close(image->data.image.rect.width, 140.0);
+  require_close(image->data.image.rect.height, 70.0);
+  require_true(image->data.image.pixbuf == owned_pixbuf);
+
+  ShaulaAnnotation *clone = shaula_annotation_clone(image);
+  require_true(clone != NULL);
+  require_close(clone->data.image.rect.x, 50.0);
+  require_close(clone->data.image.rect.y, 50.0);
+  require_close(clone->data.image.rect.width, 140.0);
+  require_close(clone->data.image.rect.height, 70.0);
+  shaula_annotation_free(clone);
+  shaula_annotation_free(image);
+}
+
 static void assert_image_annotation_contract(void) {
   GdkPixbuf *pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, 4, 4);
   require_true(pixbuf != NULL);
@@ -145,6 +198,10 @@ static void assert_image_snapshot_contract(ShaulaPreviewDocument *document) {
   require_true(image != NULL);
   shaula_preview_document_add_annotation(document, image);
 
+  require_true(shaula_annotation_resize_image_from_origin(
+      image, image->data.image.rect, (ShaulaPoint){0, 0},
+      (ShaulaPoint){2, 2}, (ShaulaPoint){3, 3},
+      (ShaulaRect){0, 0, 4, 3}, 0.5));
   ShaulaPreviewSnapshot *snapshot =
       shaula_preview_document_snapshot_new(document);
   require_true(snapshot != NULL);
@@ -153,9 +210,140 @@ static void assert_image_snapshot_contract(ShaulaPreviewDocument *document) {
   require_true(document->annotations->len == 1);
   ShaulaAnnotation *restored = g_ptr_array_index(document->annotations, 0);
   require_true(restored->type == SHAULA_ANNOTATION_IMAGE);
+  require_close(restored->data.image.rect.width, 3.0);
+  require_close(restored->data.image.rect.height, 3.0);
   require_true(gdk_pixbuf_get_pixels(restored->data.image.pixbuf)[0] == 0x77);
   shaula_preview_snapshot_free(snapshot);
   require_true(shaula_preview_document_clear_annotations(document));
+}
+
+static ShaulaPoint fixed_corner_for_bounds(ShaulaRect bounds,
+                                           ShaulaPoint fixed,
+                                           ShaulaPoint dragged) {
+  return (ShaulaPoint){fixed.x > dragged.x ? bounds.x + bounds.width : bounds.x,
+                       fixed.y > dragged.y ? bounds.y + bounds.height
+                                           : bounds.y};
+}
+
+static void assert_text_resize_contract(void) {
+  const ShaulaTextAlign alignments[] = {
+      SHAULA_TEXT_ALIGN_LEFT,
+      SHAULA_TEXT_ALIGN_CENTER,
+      SHAULA_TEXT_ALIGN_RIGHT,
+  };
+  const ShaulaTextFontMode modes[] = {
+      SHAULA_TEXT_FONT_NORMAL,
+      SHAULA_TEXT_FONT_SKETCH,
+  };
+
+  for (guint mode_index = 0; mode_index < G_N_ELEMENTS(modes); mode_index++) {
+    for (guint align_index = 0; align_index < G_N_ELEMENTS(alignments);
+         align_index++) {
+      ShaulaAnnotation *text = shaula_annotation_new_text(
+          (ShaulaPoint){400, 220}, "First line\nSecond line",
+          shaula_color_default(), 24.0, alignments[align_index],
+          modes[mode_index]);
+      require_true(text != NULL);
+      ShaulaPoint origin_position = text->data.text.position;
+      ShaulaRect origin_bounds = shaula_annotation_selection_bounds(text);
+      require_true(isfinite(origin_bounds.x) && isfinite(origin_bounds.y));
+      require_true(origin_bounds.width > 0.0 && origin_bounds.height > 0.0);
+
+      ShaulaPoint fixed;
+      ShaulaPoint dragged;
+      if (alignments[align_index] == SHAULA_TEXT_ALIGN_LEFT) {
+        fixed = (ShaulaPoint){origin_bounds.x + origin_bounds.width,
+                             origin_bounds.y + origin_bounds.height};
+        dragged = (ShaulaPoint){origin_bounds.x, origin_bounds.y};
+      } else if (alignments[align_index] == SHAULA_TEXT_ALIGN_CENTER) {
+        fixed = (ShaulaPoint){origin_bounds.x, origin_bounds.y};
+        dragged = (ShaulaPoint){origin_bounds.x + origin_bounds.width,
+                                origin_bounds.y + origin_bounds.height};
+      } else {
+        fixed = (ShaulaPoint){origin_bounds.x + origin_bounds.width,
+                              origin_bounds.y};
+        dragged = (ShaulaPoint){origin_bounds.x,
+                                origin_bounds.y + origin_bounds.height};
+      }
+      ShaulaPoint pointer = {
+          fixed.x + 1.5 * (dragged.x - fixed.x),
+          fixed.y + 1.5 * (dragged.y - fixed.y),
+      };
+
+      require_true(shaula_annotation_resize_text_from_origin(
+          text, origin_position, 24.0, origin_bounds, fixed, dragged, pointer,
+          (ShaulaRect){0, 0, 1600, 1000}));
+      require_close(text->data.text.font_size, 36.0);
+      require_true(strcmp(text->data.text.text,
+                          "First line\nSecond line") == 0);
+      require_true(text->data.text.align == alignments[align_index]);
+      require_true(text->data.text.font_mode == modes[mode_index]);
+
+      ShaulaRect resized_bounds = shaula_annotation_selection_bounds(text);
+      require_true(isfinite(resized_bounds.x) && isfinite(resized_bounds.y));
+      require_true(isfinite(resized_bounds.width) &&
+                   isfinite(resized_bounds.height));
+      require_true(resized_bounds.width > 0.0 && resized_bounds.height > 0.0);
+      ShaulaPoint resized_fixed =
+          fixed_corner_for_bounds(resized_bounds, fixed, dragged);
+      require_close(resized_fixed.x, fixed.x);
+      require_close(resized_fixed.y, fixed.y);
+
+      ShaulaAnnotation *clone = shaula_annotation_clone(text);
+      require_true(clone != NULL);
+      require_close(clone->data.text.font_size, text->data.text.font_size);
+      require_close(clone->data.text.position.x, text->data.text.position.x);
+      require_close(clone->data.text.position.y, text->data.text.position.y);
+      require_true(strcmp(clone->data.text.text, text->data.text.text) == 0);
+      shaula_annotation_free(clone);
+      shaula_annotation_free(text);
+    }
+  }
+}
+
+static void assert_text_snapshot_contract(void) {
+  GdkPixbuf *base =
+      gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, 800, 600);
+  require_true(base != NULL);
+  ShaulaPreviewDocument document;
+  memset(&document, 0, sizeof(document));
+  shaula_preview_document_init(&document, "/tmp/shaula-text-snapshot.png",
+                               base);
+
+  ShaulaAnnotation *text = shaula_annotation_new_text(
+      (ShaulaPoint){400, 180}, "Snapshot\ntext", shaula_color_default(), 24.0,
+      SHAULA_TEXT_ALIGN_CENTER, SHAULA_TEXT_FONT_SKETCH);
+  require_true(text != NULL);
+  ShaulaRect origin_bounds = shaula_annotation_selection_bounds(text);
+  ShaulaPoint fixed = {origin_bounds.x, origin_bounds.y};
+  ShaulaPoint dragged = {origin_bounds.x + origin_bounds.width,
+                         origin_bounds.y + origin_bounds.height};
+  ShaulaPoint pointer = {fixed.x + 1.5 * (dragged.x - fixed.x),
+                         fixed.y + 1.5 * (dragged.y - fixed.y)};
+  require_true(shaula_annotation_resize_text_from_origin(
+      text, text->data.text.position, text->data.text.font_size, origin_bounds,
+      fixed, dragged, pointer, (ShaulaRect){0, 0, 800, 600}));
+  double resized_font_size = text->data.text.font_size;
+  ShaulaPoint resized_position = text->data.text.position;
+  shaula_preview_document_add_annotation(&document, text);
+
+  ShaulaPreviewSnapshot *snapshot =
+      shaula_preview_document_snapshot_new(&document);
+  require_true(snapshot != NULL);
+  text->data.text.font_size = SHAULA_TEXT_FONT_SIZE_MIN;
+  text->data.text.position = (ShaulaPoint){0, 0};
+  shaula_annotation_update_bounds(text);
+  shaula_preview_document_restore_snapshot(&document, snapshot);
+  require_true(document.annotations->len == 1);
+  ShaulaAnnotation *restored = g_ptr_array_index(document.annotations, 0);
+  require_true(restored->type == SHAULA_ANNOTATION_TEXT);
+  require_close(restored->data.text.font_size, resized_font_size);
+  require_close(restored->data.text.position.x, resized_position.x);
+  require_close(restored->data.text.position.y, resized_position.y);
+  require_true(strcmp(restored->data.text.text, "Snapshot\ntext") == 0);
+
+  shaula_preview_snapshot_free(snapshot);
+  shaula_preview_document_free(&document);
 }
 
 static void assert_selected_group_bounds(void) {
@@ -268,8 +456,11 @@ int main(void) {
 
   assert_paste_placement();
   assert_paste_validation();
+  assert_image_resize_contract();
   assert_image_annotation_contract();
   assert_image_snapshot_contract(&document);
+  assert_text_resize_contract();
+  assert_text_snapshot_contract();
   assert_selected_group_bounds();
 
   shaula_preview_document_free(&document);

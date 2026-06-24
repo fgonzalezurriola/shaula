@@ -526,6 +526,187 @@ void shaula_annotation_update_bounds(ShaulaAnnotation *annotation) {
   }
 }
 
+static gboolean projected_uniform_scale(ShaulaPoint fixed_corner,
+                                         ShaulaPoint dragged_corner,
+                                         ShaulaPoint pointer,
+                                         double *scale_out) {
+  ShaulaPoint origin_vector = {dragged_corner.x - fixed_corner.x,
+                               dragged_corner.y - fixed_corner.y};
+  ShaulaPoint pointer_vector = {pointer.x - fixed_corner.x,
+                                pointer.y - fixed_corner.y};
+  double denominator = origin_vector.x * origin_vector.x +
+                       origin_vector.y * origin_vector.y;
+  if (denominator <= 0.000001 || scale_out == NULL)
+    return FALSE;
+  double scale = (pointer_vector.x * origin_vector.x +
+                  pointer_vector.y * origin_vector.y) /
+                 denominator;
+  if (!isfinite(scale))
+    return FALSE;
+  *scale_out = scale;
+  return TRUE;
+}
+
+static double uniform_scale_limit_for_axis(double fixed, double delta,
+                                           double minimum, double maximum) {
+  if (fabs(delta) <= 0.000001)
+    return G_MAXDOUBLE;
+  double boundary = delta > 0.0 ? maximum : minimum;
+  return (boundary - fixed) / delta;
+}
+
+static gboolean rects_close(ShaulaRect a, ShaulaRect b) {
+  return fabs(a.x - b.x) < 0.0001 && fabs(a.y - b.y) < 0.0001 &&
+         fabs(a.width - b.width) < 0.0001 &&
+         fabs(a.height - b.height) < 0.0001;
+}
+
+gboolean shaula_annotation_resize_image_from_origin(
+    ShaulaAnnotation *annotation, ShaulaRect origin_rect,
+    ShaulaPoint fixed_corner, ShaulaPoint dragged_corner, ShaulaPoint pointer,
+    ShaulaRect limits, double minimum_size) {
+  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_IMAGE)
+    return FALSE;
+
+  origin_rect = rect_normalized_c(origin_rect);
+  limits = rect_normalized_c(limits);
+  if (shaula_rect_is_empty(origin_rect) || shaula_rect_is_empty(limits))
+    return FALSE;
+
+  double projected_scale = 0.0;
+  if (!projected_uniform_scale(fixed_corner, dragged_corner, pointer,
+                               &projected_scale))
+    return FALSE;
+
+  ShaulaPoint origin_vector = {dragged_corner.x - fixed_corner.x,
+                               dragged_corner.y - fixed_corner.y};
+  double maximum_scale = MIN(
+      uniform_scale_limit_for_axis(
+          fixed_corner.x, origin_vector.x, limits.x, limits.x + limits.width),
+      uniform_scale_limit_for_axis(fixed_corner.y, origin_vector.y, limits.y,
+                                   limits.y + limits.height));
+  if (!isfinite(maximum_scale) || maximum_scale <= 0.0)
+    return FALSE;
+
+  double minimum_scale = MAX(
+      MAX(0.0, minimum_size) / origin_rect.width,
+      MAX(0.0, minimum_size) / origin_rect.height);
+  minimum_scale = MIN(MAX(minimum_scale, 0.000001), maximum_scale);
+  double scale = CLAMP(projected_scale, minimum_scale, maximum_scale);
+  ShaulaPoint next_dragged = {
+      fixed_corner.x + origin_vector.x * scale,
+      fixed_corner.y + origin_vector.y * scale,
+  };
+  ShaulaRect next = rect_from_points_c(fixed_corner, next_dragged);
+  next = shaula_rect_clamped_c(next, limits.x + limits.width,
+                               limits.y + limits.height);
+  next.x = MAX(next.x, limits.x);
+  next.y = MAX(next.y, limits.y);
+
+  ShaulaRect previous = annotation->data.image.rect;
+  annotation->data.image.rect = next;
+  shaula_annotation_update_bounds(annotation);
+  return !rects_close(previous, annotation->data.image.rect);
+}
+
+static gboolean rect_is_inside_limits(ShaulaRect rect, ShaulaRect limits) {
+  rect = rect_normalized_c(rect);
+  limits = rect_normalized_c(limits);
+  const double tolerance = 0.01;
+  return rect.x >= limits.x - tolerance && rect.y >= limits.y - tolerance &&
+         rect.x + rect.width <= limits.x + limits.width + tolerance &&
+         rect.y + rect.height <= limits.y + limits.height + tolerance;
+}
+
+static ShaulaRect apply_text_scale_from_origin(
+    ShaulaAnnotation *annotation, ShaulaPoint origin_position,
+    double origin_font_size, double scale, ShaulaPoint fixed_corner,
+    gboolean fixed_on_right, gboolean fixed_on_bottom) {
+  annotation->data.text.position = origin_position;
+  annotation->data.text.font_size =
+      CLAMP(origin_font_size * scale, SHAULA_TEXT_FONT_SIZE_MIN,
+            SHAULA_TEXT_FONT_SIZE_MAX);
+  shaula_annotation_update_bounds(annotation);
+
+  ShaulaRect bounds = shaula_annotation_selection_bounds(annotation);
+  ShaulaPoint current_fixed = {
+      fixed_on_right ? bounds.x + bounds.width : bounds.x,
+      fixed_on_bottom ? bounds.y + bounds.height : bounds.y,
+  };
+  annotation->data.text.position.x += fixed_corner.x - current_fixed.x;
+  annotation->data.text.position.y += fixed_corner.y - current_fixed.y;
+  shaula_annotation_update_bounds(annotation);
+  return shaula_annotation_selection_bounds(annotation);
+}
+
+gboolean shaula_annotation_resize_text_from_origin(
+    ShaulaAnnotation *annotation, ShaulaPoint origin_position,
+    double origin_font_size, ShaulaRect origin_bounds,
+    ShaulaPoint fixed_corner, ShaulaPoint dragged_corner, ShaulaPoint pointer,
+    ShaulaRect limits) {
+  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_TEXT ||
+      origin_font_size <= 0.0)
+    return FALSE;
+
+  origin_bounds = rect_normalized_c(origin_bounds);
+  limits = rect_normalized_c(limits);
+  if (shaula_rect_is_empty(origin_bounds) || shaula_rect_is_empty(limits))
+    return FALSE;
+
+  double projected_scale = 0.0;
+  if (!projected_uniform_scale(fixed_corner, dragged_corner, pointer,
+                               &projected_scale))
+    return FALSE;
+
+  ShaulaPoint origin_vector = {dragged_corner.x - fixed_corner.x,
+                               dragged_corner.y - fixed_corner.y};
+  double bounds_scale = MIN(
+      uniform_scale_limit_for_axis(
+          fixed_corner.x, origin_vector.x, limits.x, limits.x + limits.width),
+      uniform_scale_limit_for_axis(fixed_corner.y, origin_vector.y, limits.y,
+                                   limits.y + limits.height));
+  double maximum_scale =
+      MIN(SHAULA_TEXT_FONT_SIZE_MAX / origin_font_size, bounds_scale);
+  if (!isfinite(maximum_scale) || maximum_scale <= 0.0)
+    return FALSE;
+
+  double minimum_scale = SHAULA_TEXT_FONT_SIZE_MIN / origin_font_size;
+  minimum_scale = MIN(MAX(minimum_scale, 0.000001), maximum_scale);
+  double scale = CLAMP(projected_scale, minimum_scale, maximum_scale);
+  gboolean fixed_on_right = fixed_corner.x > dragged_corner.x;
+  gboolean fixed_on_bottom = fixed_corner.y > dragged_corner.y;
+  ShaulaRect next_bounds = apply_text_scale_from_origin(
+      annotation, origin_position, origin_font_size, scale, fixed_corner,
+      fixed_on_right, fixed_on_bottom);
+
+  if (!rect_is_inside_limits(next_bounds, limits)) {
+    ShaulaRect minimum_bounds = apply_text_scale_from_origin(
+        annotation, origin_position, origin_font_size, minimum_scale,
+        fixed_corner, fixed_on_right, fixed_on_bottom);
+    if (rect_is_inside_limits(minimum_bounds, limits)) {
+      double low = minimum_scale;
+      double high = scale;
+      for (int i = 0; i < 24; i++) {
+        double middle = (low + high) * 0.5;
+        ShaulaRect middle_bounds = apply_text_scale_from_origin(
+            annotation, origin_position, origin_font_size, middle,
+            fixed_corner, fixed_on_right, fixed_on_bottom);
+        if (rect_is_inside_limits(middle_bounds, limits))
+          low = middle;
+        else
+          high = middle;
+      }
+      (void)apply_text_scale_from_origin(
+          annotation, origin_position, origin_font_size, low, fixed_corner,
+          fixed_on_right, fixed_on_bottom);
+    }
+  }
+
+  return fabs(annotation->data.text.position.x - origin_position.x) > 0.0001 ||
+         fabs(annotation->data.text.position.y - origin_position.y) > 0.0001 ||
+         fabs(annotation->data.text.font_size - origin_font_size) > 0.0001;
+}
+
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx,
                             double dy) {
   if (annotation == NULL)
@@ -694,6 +875,18 @@ static void draw_round_handle(cairo_t *cr, ShaulaPoint point) {
   cairo_restore(cr);
 }
 
+static void draw_corner_handles(cairo_t *cr, ShaulaRect rect) {
+  rect = shaula_rect_normalized(rect);
+  double x0 = rect.x;
+  double y0 = rect.y;
+  double x1 = rect.x + rect.width;
+  double y1 = rect.y + rect.height;
+  draw_square_handle(cr, (ShaulaPoint){x0, y0});
+  draw_square_handle(cr, (ShaulaPoint){x1, y0});
+  draw_square_handle(cr, (ShaulaPoint){x1, y1});
+  draw_square_handle(cr, (ShaulaPoint){x0, y1});
+}
+
 static void draw_rectangle_handles(cairo_t *cr, ShaulaRect rect) {
   rect = shaula_rect_normalized(rect);
   double x0 = rect.x;
@@ -702,13 +895,10 @@ static void draw_rectangle_handles(cairo_t *cr, ShaulaRect rect) {
   double y1 = rect.y + rect.height;
   double cx = rect.x + rect.width / 2.0;
   double cy = rect.y + rect.height / 2.0;
-  draw_square_handle(cr, (ShaulaPoint){x0, y0});
+  draw_corner_handles(cr, rect);
   draw_square_handle(cr, (ShaulaPoint){cx, y0});
-  draw_square_handle(cr, (ShaulaPoint){x1, y0});
   draw_square_handle(cr, (ShaulaPoint){x1, cy});
-  draw_square_handle(cr, (ShaulaPoint){x1, y1});
   draw_square_handle(cr, (ShaulaPoint){cx, y1});
-  draw_square_handle(cr, (ShaulaPoint){x0, y1});
   draw_square_handle(cr, (ShaulaPoint){x0, cy});
 }
 
@@ -1373,8 +1563,13 @@ void shaula_annotation_draw_preview(cairo_t *cr,
       if (show_edit_handles)
         draw_rectangle_handles(cr, annotation->data.rectangle.rect);
     } else {
-      shaula_annotation_draw_selection_box(
-          cr, shaula_annotation_selection_bounds(annotation));
+      ShaulaRect selection_bounds =
+          shaula_annotation_selection_bounds(annotation);
+      shaula_annotation_draw_selection_box(cr, selection_bounds);
+      if (show_edit_handles &&
+          (annotation->type == SHAULA_ANNOTATION_IMAGE ||
+           annotation->type == SHAULA_ANNOTATION_TEXT))
+        draw_corner_handles(cr, selection_bounds);
     }
     if (annotation->type == SHAULA_ANNOTATION_ARROW) {
       if (show_edit_handles) {

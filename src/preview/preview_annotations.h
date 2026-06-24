@@ -39,6 +39,9 @@ typedef enum {
   SHAULA_TEXT_FONT_SKETCH,
 } ShaulaTextFontMode;
 
+#define SHAULA_TEXT_FONT_SIZE_MIN 12.0
+#define SHAULA_TEXT_FONT_SIZE_MAX 72.0
+
 typedef enum {
   SHAULA_ANNOTATION_HIT_NONE,
   SHAULA_ANNOTATION_HIT_TEXT_BOUNDS,
@@ -139,6 +142,22 @@ void shaula_annotation_free(gpointer annotation);
 
 GPtrArray *shaula_annotations_clone_array(GPtrArray *annotations);
 void shaula_annotation_update_bounds(ShaulaAnnotation *annotation);
+/* Applies Image resize from immutable gesture-start geometry. Only the
+ * destination rect changes; the owned pixbuf remains untouched during drag.
+ */
+gboolean shaula_annotation_resize_image_from_origin(
+    ShaulaAnnotation *annotation, ShaulaRect origin_rect,
+    ShaulaPoint fixed_corner, ShaulaPoint dragged_corner, ShaulaPoint pointer,
+    ShaulaRect limits, double minimum_size);
+/* Applies committed Text resize from immutable gesture-start state. Font size
+ * changes uniformly and position is corrected so the opposite visual corner
+ * remains fixed after each Pango bounds recomputation.
+ */
+gboolean shaula_annotation_resize_text_from_origin(
+    ShaulaAnnotation *annotation, ShaulaPoint origin_position,
+    double origin_font_size, ShaulaRect origin_bounds,
+    ShaulaPoint fixed_corner, ShaulaPoint dragged_corner, ShaulaPoint pointer,
+    ShaulaRect limits);
 void shaula_annotation_move(ShaulaAnnotation *annotation, double dx, double dy);
 /* Applies a document crop and translates surviving content into the new image
  * coordinate space. Image annotations crop their owned pixel payload.

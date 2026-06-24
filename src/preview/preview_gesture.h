@@ -29,14 +29,14 @@ typedef enum {
 
 typedef enum {
   SHAULA_RESIZE_HANDLE_NONE,
-  SHAULA_RESIZE_HANDLE_RECT_NW,
-  SHAULA_RESIZE_HANDLE_RECT_N,
-  SHAULA_RESIZE_HANDLE_RECT_NE,
-  SHAULA_RESIZE_HANDLE_RECT_E,
-  SHAULA_RESIZE_HANDLE_RECT_SE,
-  SHAULA_RESIZE_HANDLE_RECT_S,
-  SHAULA_RESIZE_HANDLE_RECT_SW,
-  SHAULA_RESIZE_HANDLE_RECT_W,
+  SHAULA_RESIZE_HANDLE_NW,
+  SHAULA_RESIZE_HANDLE_N,
+  SHAULA_RESIZE_HANDLE_NE,
+  SHAULA_RESIZE_HANDLE_E,
+  SHAULA_RESIZE_HANDLE_SE,
+  SHAULA_RESIZE_HANDLE_S,
+  SHAULA_RESIZE_HANDLE_SW,
+  SHAULA_RESIZE_HANDLE_W,
   SHAULA_RESIZE_HANDLE_ARROW_START,
   SHAULA_RESIZE_HANDLE_ARROW_END,
   SHAULA_RESIZE_HANDLE_ARROW_CONTROL
@@ -47,6 +47,10 @@ typedef struct {
   gboolean preserved_multi_selection;
   ShaulaAnnotationResizeHandle resize_handle;
   ShaulaRect resize_origin_rect;
+  ShaulaPoint resize_fixed_corner;
+  ShaulaPoint resize_dragged_corner;
+  ShaulaPoint resize_origin_text_position;
+  double resize_origin_text_font_size;
   ShaulaPoint resize_origin_arrow_start;
   ShaulaPoint resize_origin_arrow_end;
   ShaulaPoint resize_origin_arrow_control;

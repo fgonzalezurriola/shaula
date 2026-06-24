@@ -76,7 +76,7 @@ Temporary region selections are not annotations, are not exported, and do not en
 
 Annotation multi-select supports click-only selection, Shift+click toggle, marquee intersection, select-all, batch duplication, batch deletion, and moving the selected set as one undoable gesture. A successful marquee clears its temporary region rectangle after selecting objects. A drag with no annotation matches remains a contextual region. Multi-selection suppresses all per-object selection boxes and handles, then draws one group bounding box around the selected set.
 
-Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rectangle, and the multi-selection group box. Only the four border segments are move targets; empty box interiors remain transparent to hit testing so visible objects behind them can still be selected. Edge and handle tolerances are fixed at 8 screen pixels. The edge target is computed from the rendered selection frame in screen coordinates for both hover and drag begin. Input priority is resize/curvature handles, selection-box edges, visible annotation geometry, then empty-space marquee. Edge drags preserve the current single or grouped selection, use `grab`/`grabbing` cursors, and commit movement as one history gesture. A press and release without movement does not collapse or otherwise change the selection. Resize and curvature can begin only from handles already visible on the current single selection; selecting an Arrow or Line near its midpoint must not bend it.
+Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rectangle, Image, and the multi-selection group box. Only the four border segments are move targets; empty box interiors remain transparent to hit testing so visible objects behind them can still be selected. Edge and handle tolerances are fixed at 8 screen pixels. The edge target is computed from the rendered selection frame in screen coordinates for both hover and drag begin. Input priority is resize/curvature handles, selection-box edges, visible annotation geometry, then empty-space marquee. Edge drags preserve the current single or grouped selection, use `grab`/`grabbing` cursors, and commit movement as one history gesture. A press and release without movement does not collapse or otherwise change the selection. Resize and curvature can begin only from handles already visible on the current single selection; selecting an Arrow or Line near its midpoint must not bend it. Rectangle keeps eight box handles, while Image and committed Text expose only four corner handles. Per-object handles remain single-selection only; multi-selection resize is not supported.
 
 ## Crop
 
@@ -142,7 +142,7 @@ The preview-local annotation clipboard and the system clipboard are separate mec
 
 System paste accepts one payload per invocation, preferring an image when the clipboard offers both image and text. Text preserves line breaks, rejects empty/whitespace-only or invalid Unicode payloads, and has a 256 KiB limit with no partial insertion. It uses the current Text color, size, font mode, and alignment, starts near the center of the visible viewport in image coordinates, is adjusted so its leading bounds remain inside the base image, selects only the new annotation, returns to Select, opens the Text properties HUD, and creates one undo entry.
 
-System clipboard images become dedicated editable Image annotations rather than modifying the base bitmap. They own a decoded pixel copy, preserve aspect ratio, are centered in the visible viewport, scale down to the visible/base-image intersection with a screen-space margin, and never scale up. Images are limited to 16,384 px per side and 32 megapixels. They participate in preview render/export, Save, Copy, Done, selection, movement, multi-selection, duplicate, internal copy/cut/paste, delete, undo/redo, crop, cloning, and destruction. Empty or unsupported clipboard content produces the neutral transient message `Clipboard has no supported text or image.` without creating history, mutating the document or preview-local clipboard, or closing Preview. Failed, invalid, oversized, or changed payloads keep their specific actionable feedback.
+System clipboard images become dedicated editable Image annotations rather than modifying the base bitmap. They own a decoded pixel copy, preserve aspect ratio, are centered in the visible viewport, scale down to the visible/base-image intersection with a screen-space margin, and never scale up during insertion. A singly selected Image keeps its selection box and adds four square corner handles. Corner resize uses `data.image.rect` as authoritative geometry, keeps the opposite corner fixed, locks aspect ratio, prevents flipping, enforces a usable screen-space minimum, and clamps the result to the base screenshot. Interactive resize changes only the destination rect; the renderer continues scaling the existing pixbuf and does not resample or replace it during drag. Images are limited to 16,384 px per side and 32 megapixels. They participate in preview render/export, Save, Copy, Done, selection, movement, multi-selection, duplicate, internal copy/cut/paste, delete, undo/redo, crop, cloning, and destruction. Empty or unsupported clipboard content produces the neutral transient message `Clipboard has no supported text or image.` without creating history, mutating the document or preview-local clipboard, or closing Preview. Failed, invalid, oversized, or changed payloads keep their specific actionable feedback.
 
 Only one system read may be active. Key repeat is absorbed while a read is pending; closing the Preview cancels the operation silently. If the clipboard changes during a pending read, the payload is rejected instead of inserting stale or mixed content. When a GTK text editor has focus, GTK keeps normal text-level `Ctrl+A/C/X/V`, including its standard `Ctrl+V`; the Preview command router does not intercept those keys.
 
@@ -237,6 +237,11 @@ Text invariants:
 - `GtkTextBuffer::mark-set` redraws caret movement even when content is unchanged.
 - Active drafts show text and caret, not an editing bounds rectangle.
 - HUD changes during a draft update draft state without mutating a previously selected committed annotation.
+- A singly selected committed Text annotation exposes four square corner handles.
+- Corner resize changes `font_size` uniformly, recomputes bounds through Pango, and corrects `position` so the opposite visual corner remains fixed.
+- Every drag update derives from gesture-start position and font size, avoiding cumulative Pango rounding drift.
+- Resize preserves content, line breaks, alignment, color, and Normal/Sketch mode; it does not create wrapping or a fixed-width text box.
+- Resizing an existing Text annotation does not change future Text creation defaults. Non-preset sizes leave all numeric HUD preset buttons inactive.
 - Drag release must keep `SHAULA_OPERATION_TEXT` active while drafting.
 
 Keyboard behavior:
@@ -281,6 +286,8 @@ Rectangle hit testing uses visible geometry:
 Marquee selection follows the same visible-object contract. Arrows, Measure lines, Pen/Highlight paths, and unfilled Rectangles are selected only when the region intersects visible stroke geometry.
 
 Selected Rectangles draw external selection chrome from actual Rectangle geometry with eight resize handles, then repaint the real stroke above the chrome.
+
+Rotation, flipping, freeform Image distortion, Text wrapping/fixed-width boxes, and multi-selection resize remain out of scope.
 
 ## Pen
 

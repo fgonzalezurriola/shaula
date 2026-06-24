@@ -8,6 +8,7 @@
 
 #define SHAULA_SELECTION_EDGE_TARGET_PX 8.0
 #define SHAULA_SELECTION_HANDLE_TARGET_PX 8.0
+#define SHAULA_IMAGE_RESIZE_MIN_SCREEN_PX 16.0
 
 static ShaulaPoint screen_to_image(const ShaulaPreviewState *state, double x,
                                    double y) {
@@ -56,9 +57,10 @@ selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
   if (annotation == NULL)
     return SHAULA_RESIZE_HANDLE_NONE;
 
-  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
-    ShaulaRect rect =
-        shaula_rect_normalized(annotation->data.rectangle.rect);
+  if (annotation->type == SHAULA_ANNOTATION_RECTANGLE ||
+      annotation->type == SHAULA_ANNOTATION_IMAGE ||
+      annotation->type == SHAULA_ANNOTATION_TEXT) {
+    ShaulaRect rect = shaula_annotation_selection_bounds(annotation);
     const ShaulaPoint handles[] = {
         {rect.x, rect.y},
         {rect.x + rect.width / 2.0, rect.y},
@@ -70,14 +72,23 @@ selected_resize_handle_at(ShaulaPreviewState *state, ShaulaPoint image_point,
         {rect.x, rect.y + rect.height / 2.0},
     };
     const ShaulaAnnotationResizeHandle kinds[] = {
-        SHAULA_RESIZE_HANDLE_RECT_NW, SHAULA_RESIZE_HANDLE_RECT_N,
-        SHAULA_RESIZE_HANDLE_RECT_NE, SHAULA_RESIZE_HANDLE_RECT_E,
-        SHAULA_RESIZE_HANDLE_RECT_SE, SHAULA_RESIZE_HANDLE_RECT_S,
-        SHAULA_RESIZE_HANDLE_RECT_SW, SHAULA_RESIZE_HANDLE_RECT_W,
+        SHAULA_RESIZE_HANDLE_NW, SHAULA_RESIZE_HANDLE_N,
+        SHAULA_RESIZE_HANDLE_NE, SHAULA_RESIZE_HANDLE_E,
+        SHAULA_RESIZE_HANDLE_SE, SHAULA_RESIZE_HANDLE_S,
+        SHAULA_RESIZE_HANDLE_SW, SHAULA_RESIZE_HANDLE_W,
     };
-    for (guint i = 0; i < G_N_ELEMENTS(handles); i++) {
-      if (shaula_point_distance(image_point, handles[i]) <= tolerance)
-        return kinds[i];
+    if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+      for (guint i = 0; i < G_N_ELEMENTS(handles); i++) {
+        if (shaula_point_distance(image_point, handles[i]) <= tolerance)
+          return kinds[i];
+      }
+    } else {
+      const guint corner_indices[] = {0, 2, 4, 6};
+      for (guint i = 0; i < G_N_ELEMENTS(corner_indices); i++) {
+        guint index = corner_indices[i];
+        if (shaula_point_distance(image_point, handles[index]) <= tolerance)
+          return kinds[index];
+      }
     }
   } else if (annotation->type == SHAULA_ANNOTATION_ARROW) {
     if (shaula_point_distance(image_point, annotation->data.arrow.start) <=
@@ -151,17 +162,17 @@ static gboolean selection_box_edge_at(ShaulaPreviewState *state,
 static const char *cursor_for_resize_handle(
     ShaulaAnnotationResizeHandle handle) {
   switch (handle) {
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
+  case SHAULA_RESIZE_HANDLE_NW:
+  case SHAULA_RESIZE_HANDLE_SE:
     return "nwse-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
+  case SHAULA_RESIZE_HANDLE_NE:
+  case SHAULA_RESIZE_HANDLE_SW:
     return "nesw-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_E:
-  case SHAULA_RESIZE_HANDLE_RECT_W:
+  case SHAULA_RESIZE_HANDLE_E:
+  case SHAULA_RESIZE_HANDLE_W:
     return "ew-resize";
-  case SHAULA_RESIZE_HANDLE_RECT_N:
-  case SHAULA_RESIZE_HANDLE_RECT_S:
+  case SHAULA_RESIZE_HANDLE_N:
+  case SHAULA_RESIZE_HANDLE_S:
     return "ns-resize";
   case SHAULA_RESIZE_HANDLE_ARROW_START:
   case SHAULA_RESIZE_HANDLE_ARROW_END:
@@ -171,6 +182,44 @@ static const char *cursor_for_resize_handle(
     return "default";
   }
   return "default";
+}
+
+static gboolean capture_box_corner_points(
+    ShaulaPreviewGestureState *gesture, ShaulaRect bounds,
+    ShaulaAnnotationResizeHandle handle) {
+  bounds = shaula_rect_normalized(bounds);
+  double left = bounds.x;
+  double top = bounds.y;
+  double right = bounds.x + bounds.width;
+  double bottom = bounds.y + bounds.height;
+  switch (handle) {
+  case SHAULA_RESIZE_HANDLE_NW:
+    gesture->resize_dragged_corner = (ShaulaPoint){left, top};
+    gesture->resize_fixed_corner = (ShaulaPoint){right, bottom};
+    return TRUE;
+  case SHAULA_RESIZE_HANDLE_NE:
+    gesture->resize_dragged_corner = (ShaulaPoint){right, top};
+    gesture->resize_fixed_corner = (ShaulaPoint){left, bottom};
+    return TRUE;
+  case SHAULA_RESIZE_HANDLE_SE:
+    gesture->resize_dragged_corner = (ShaulaPoint){right, bottom};
+    gesture->resize_fixed_corner = (ShaulaPoint){left, top};
+    return TRUE;
+  case SHAULA_RESIZE_HANDLE_SW:
+    gesture->resize_dragged_corner = (ShaulaPoint){left, bottom};
+    gesture->resize_fixed_corner = (ShaulaPoint){right, top};
+    return TRUE;
+  case SHAULA_RESIZE_HANDLE_NONE:
+  case SHAULA_RESIZE_HANDLE_N:
+  case SHAULA_RESIZE_HANDLE_E:
+  case SHAULA_RESIZE_HANDLE_S:
+  case SHAULA_RESIZE_HANDLE_W:
+  case SHAULA_RESIZE_HANDLE_ARROW_START:
+  case SHAULA_RESIZE_HANDLE_ARROW_END:
+  case SHAULA_RESIZE_HANDLE_ARROW_CONTROL:
+    return FALSE;
+  }
+  return FALSE;
 }
 
 static void capture_resize_origin(ShaulaPreviewState *state,
@@ -184,6 +233,18 @@ static void capture_resize_origin(ShaulaPreviewState *state,
   if (annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
     gesture->resize_origin_rect =
         shaula_rect_normalized(annotation->data.rectangle.rect);
+  } else if (annotation->type == SHAULA_ANNOTATION_IMAGE) {
+    gesture->resize_origin_rect =
+        shaula_rect_normalized(annotation->data.image.rect);
+    (void)capture_box_corner_points(gesture, gesture->resize_origin_rect,
+                                    handle);
+  } else if (annotation->type == SHAULA_ANNOTATION_TEXT) {
+    gesture->resize_origin_rect =
+        shaula_annotation_selection_bounds(annotation);
+    gesture->resize_origin_text_position = annotation->data.text.position;
+    gesture->resize_origin_text_font_size = annotation->data.text.font_size;
+    (void)capture_box_corner_points(gesture, gesture->resize_origin_rect,
+                                    handle);
   } else if (annotation->type == SHAULA_ANNOTATION_ARROW) {
     gesture->resize_origin_arrow_start = annotation->data.arrow.start;
     gesture->resize_origin_arrow_end = annotation->data.arrow.end;
@@ -207,32 +268,32 @@ static void resize_selected_rectangle(ShaulaPreviewState *state,
   double bottom = origin.y + origin.height;
 
   switch (gesture->resize_handle) {
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
+  case SHAULA_RESIZE_HANDLE_NW:
     left = point.x;
     top = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_N:
+  case SHAULA_RESIZE_HANDLE_N:
     top = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
+  case SHAULA_RESIZE_HANDLE_NE:
     right = point.x;
     top = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_E:
+  case SHAULA_RESIZE_HANDLE_E:
     right = point.x;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
+  case SHAULA_RESIZE_HANDLE_SE:
     right = point.x;
     bottom = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_S:
+  case SHAULA_RESIZE_HANDLE_S:
     bottom = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
+  case SHAULA_RESIZE_HANDLE_SW:
     left = point.x;
     bottom = point.y;
     break;
-  case SHAULA_RESIZE_HANDLE_RECT_W:
+  case SHAULA_RESIZE_HANDLE_W:
     left = point.x;
     break;
   case SHAULA_RESIZE_HANDLE_NONE:
@@ -251,6 +312,57 @@ static void resize_selected_rectangle(ShaulaPreviewState *state,
   annotation->data.rectangle.rect = next;
   shaula_annotation_update_bounds(annotation);
   state->document.modified = TRUE;
+}
+
+static gboolean resize_selected_image(ShaulaPreviewState *state,
+                                      ShaulaPoint point) {
+  ShaulaAnnotation *annotation =
+      shaula_annotation_editor_single_selection(state);
+  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_IMAGE)
+    return FALSE;
+
+  ShaulaPreviewGestureState *gesture = &state->gesture;
+  (void)shaula_annotation_resize_image_from_origin(
+      annotation, gesture->resize_origin_rect, gesture->resize_fixed_corner,
+      gesture->resize_dragged_corner, point,
+      (ShaulaRect){0.0, 0.0, shaula_preview_image_width(state),
+                   shaula_preview_image_height(state)},
+      SHAULA_IMAGE_RESIZE_MIN_SCREEN_PX / state->zoom);
+  ShaulaRect rect = shaula_rect_normalized(annotation->data.image.rect);
+  ShaulaRect origin = gesture->resize_origin_rect;
+  gboolean changed = fabs(rect.x - origin.x) > 0.0001 ||
+                     fabs(rect.y - origin.y) > 0.0001 ||
+                     fabs(rect.width - origin.width) > 0.0001 ||
+                     fabs(rect.height - origin.height) > 0.0001;
+  if (changed)
+    state->document.modified = TRUE;
+  return changed;
+}
+
+static gboolean resize_selected_text(ShaulaPreviewState *state,
+                                     ShaulaPoint point) {
+  ShaulaAnnotation *annotation =
+      shaula_annotation_editor_single_selection(state);
+  if (annotation == NULL || annotation->type != SHAULA_ANNOTATION_TEXT)
+    return FALSE;
+
+  ShaulaPreviewGestureState *gesture = &state->gesture;
+  (void)shaula_annotation_resize_text_from_origin(
+      annotation, gesture->resize_origin_text_position,
+      gesture->resize_origin_text_font_size, gesture->resize_origin_rect,
+      gesture->resize_fixed_corner, gesture->resize_dragged_corner, point,
+      (ShaulaRect){0.0, 0.0, shaula_preview_image_width(state),
+                   shaula_preview_image_height(state)});
+  gboolean changed =
+      fabs(annotation->data.text.position.x -
+           gesture->resize_origin_text_position.x) > 0.0001 ||
+      fabs(annotation->data.text.position.y -
+           gesture->resize_origin_text_position.y) > 0.0001 ||
+      fabs(annotation->data.text.font_size -
+           gesture->resize_origin_text_font_size) > 0.0001;
+  if (changed)
+    state->document.modified = TRUE;
+  return changed;
 }
 
 static void resize_selected_arrow(ShaulaPreviewState *state,
@@ -279,14 +391,14 @@ static void resize_selected_arrow(ShaulaPreviewState *state,
     control.y = 2.0 * point.y - 0.5 * start.y - 0.5 * end.y;
     break;
   case SHAULA_RESIZE_HANDLE_NONE:
-  case SHAULA_RESIZE_HANDLE_RECT_NW:
-  case SHAULA_RESIZE_HANDLE_RECT_N:
-  case SHAULA_RESIZE_HANDLE_RECT_NE:
-  case SHAULA_RESIZE_HANDLE_RECT_E:
-  case SHAULA_RESIZE_HANDLE_RECT_SE:
-  case SHAULA_RESIZE_HANDLE_RECT_S:
-  case SHAULA_RESIZE_HANDLE_RECT_SW:
-  case SHAULA_RESIZE_HANDLE_RECT_W:
+  case SHAULA_RESIZE_HANDLE_NW:
+  case SHAULA_RESIZE_HANDLE_N:
+  case SHAULA_RESIZE_HANDLE_NE:
+  case SHAULA_RESIZE_HANDLE_E:
+  case SHAULA_RESIZE_HANDLE_SE:
+  case SHAULA_RESIZE_HANDLE_S:
+  case SHAULA_RESIZE_HANDLE_SW:
+  case SHAULA_RESIZE_HANDLE_W:
     return;
   }
 
@@ -493,17 +605,27 @@ gboolean shaula_preview_gesture_update(ShaulaPreviewState *state,
     return TRUE;
   }
   case SHAULA_OPERATION_RESIZE_ANNOTATION: {
-    if (!state->operation_changed &&
-        (fabs(clamped.x - state->drag_start_image.x) > 0.5 ||
-         fabs(clamped.y - state->drag_start_image.y) > 0.5))
-      state->operation_changed = TRUE;
-    if (state->operation_changed) {
-      ShaulaAnnotation *selected =
-          shaula_annotation_editor_single_selection(state);
-      if (selected != NULL &&
+    gboolean pointer_moved =
+        fabs(clamped.x - state->drag_start_image.x) > 0.5 ||
+        fabs(clamped.y - state->drag_start_image.y) > 0.5;
+    ShaulaAnnotation *selected =
+        shaula_annotation_editor_single_selection(state);
+    if (selected != NULL &&
+        (selected->type == SHAULA_ANNOTATION_IMAGE ||
+         selected->type == SHAULA_ANNOTATION_TEXT)) {
+      ShaulaPoint resize_point =
+          pointer_moved ? clamped : state->gesture.resize_dragged_corner;
+      state->operation_changed =
+          selected->type == SHAULA_ANNOTATION_IMAGE
+              ? resize_selected_image(state, resize_point)
+              : resize_selected_text(state, resize_point);
+    } else {
+      if (!state->operation_changed && pointer_moved)
+        state->operation_changed = TRUE;
+      if (state->operation_changed && selected != NULL &&
           selected->type == SHAULA_ANNOTATION_RECTANGLE)
         resize_selected_rectangle(state, clamped);
-      else if (selected != NULL &&
+      else if (state->operation_changed && selected != NULL &&
                selected->type == SHAULA_ANNOTATION_ARROW)
         resize_selected_arrow(state, clamped);
     }
@@ -558,11 +680,21 @@ gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state) {
       !shaula_preview_gesture_is_selection_operation(state->operation))
     return FALSE;
 
+  gboolean sync_text_hud = FALSE;
+  if (state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION &&
+      state->operation_changed) {
+    ShaulaAnnotation *selected =
+        shaula_annotation_editor_single_selection(state);
+    sync_text_hud =
+        selected != NULL && selected->type == SHAULA_ANNOTATION_TEXT;
+  }
   if (state->operation == SHAULA_OPERATION_MOVE ||
       state->operation == SHAULA_OPERATION_BEND_ARROW ||
       state->operation == SHAULA_OPERATION_RESIZE_ANNOTATION) {
     shaula_preview_commit_history_gesture(state, state->operation_changed);
   }
+  if (sync_text_hud)
+    shaula_properties_hud_sync_widgets(state);
   if (state->operation == SHAULA_OPERATION_MOVE &&
       !state->operation_changed &&
       state->gesture.preserved_multi_selection &&
