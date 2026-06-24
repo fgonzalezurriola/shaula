@@ -1,6 +1,6 @@
 # Maintainer: fgonzalezurriola <fgonzalezurriola@gmail.com>
 pkgname=shaula
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc='Wayland screenshot tool for Niri'
 arch=('x86_64' 'aarch64')
@@ -31,7 +31,7 @@ provides=('shaula')
 conflicts=('shaula-bin')
 install='shaula.install'
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('856b50d8e1842677b9063b7f0e72b9ed0cb6a1d8990585808452cc7799efddd0')
+sha256sums=('9bd5f0f2110b8cf028ad388ffee8985c9ad5f849c65169019a39a1fa6cf631cf')
 
 build() {
   cd "${srcdir}/${pkgname}-${pkgver}"

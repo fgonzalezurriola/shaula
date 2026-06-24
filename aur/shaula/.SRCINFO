@@ -1,6 +1,6 @@
 pkgbase = shaula
 	pkgdesc = Wayland screenshot tool for Niri
-	pkgver = 0.1.4
+	pkgver = 0.1.5
 	pkgrel = 1
 	url = https://github.com/fgonzalezurriola/shaula
 	install = shaula.install
@@ -24,7 +24,7 @@ pkgbase = shaula
 	optdepends = ttf-excalifont: recommended annotation font
 	provides = shaula
 	conflicts = shaula-bin
-	source = shaula-0.1.4.tar.gz::https://github.com/fgonzalezurriola/shaula/archive/refs/tags/v0.1.4.tar.gz
-	sha256sums = 856b50d8e1842677b9063b7f0e72b9ed0cb6a1d8990585808452cc7799efddd0
+	source = shaula-0.1.5.tar.gz::https://github.com/fgonzalezurriola/shaula/archive/refs/tags/v0.1.5.tar.gz
+	sha256sums = 9bd5f0f2110b8cf028ad388ffee8985c9ad5f849c65169019a39a1fa6cf631cf
 
 pkgname = shaula

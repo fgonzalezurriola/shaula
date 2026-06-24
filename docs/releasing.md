@@ -130,7 +130,7 @@ AUR maintainer metadata uses:
 fgonzalezurriola <fgonzalezurriola@gmail.com>
 ```
 
-Keep `shaula` and `shaula-bin` aligned when publishing releases. Both scaffolds are currently at v0.1.4 with regenerated `.SRCINFO` and their corresponding source/binary checksums.
+Keep `shaula` and `shaula-bin` aligned when publishing releases. Both scaffolds are currently at v0.1.5 with regenerated `.SRCINFO` and their corresponding source/binary checksums.
 
 ## Icon Packaging
 
