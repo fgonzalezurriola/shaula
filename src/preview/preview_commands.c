@@ -16,17 +16,15 @@ typedef struct {
 } ShaulaPreviewCommandSpec;
 
 static const char *const tool_shortcut_hints[SHAULA_TOOL_COUNT] = {
-    [SHAULA_TOOL_SELECT] = "V, 1",
+    [SHAULA_TOOL_SELECT] = "V",
     [SHAULA_TOOL_HAND] = "hold Space",
-    [SHAULA_TOOL_ERASER] = "E, 0",
-    [SHAULA_TOOL_ARROW] = "A, 3",
-    [SHAULA_TOOL_LINE] = "L, 4",
-    [SHAULA_TOOL_TEXT] = "T, 5",
-    [SHAULA_TOOL_MEASURE] = "8",
-    [SHAULA_TOOL_RECTANGLE] = "R, 2",
-    [SHAULA_TOOL_HIGHLIGHT] = "H, 7",
-    [SHAULA_TOOL_PEN] = "P/X, 6",
-    [SHAULA_TOOL_SPOTLIGHT] = "9",
+    [SHAULA_TOOL_ERASER] = "E",
+    [SHAULA_TOOL_ARROW] = "A",
+    [SHAULA_TOOL_LINE] = "L",
+    [SHAULA_TOOL_TEXT] = "T",
+    [SHAULA_TOOL_RECTANGLE] = "R",
+    [SHAULA_TOOL_HIGHLIGHT] = "H",
+    [SHAULA_TOOL_PEN] = "P/X",
 };
 
 static const char *const tool_shortcut_badges[SHAULA_TOOL_COUNT] = {

@@ -15,7 +15,6 @@ typedef struct {
 typedef struct {
   const char *icon_name;
   const char *label;
-  const char *shortcut;
   const char *tooltip;
   GCallback callback;
 } MenuActionSpec;
@@ -33,12 +32,11 @@ static const ToolActionSpec secondary_tools[] = {
 };
 
 static const MenuActionSpec utility_actions[] = {
-    {"shaula-fit-to-screen-symbolic", "Fit to screen", NULL,
-     "Fit to screen (F)", G_CALLBACK(shaula_preview_on_fit_clicked)},
-    {"shaula-actual-size-symbolic", "Actual size", NULL, "Actual size",
+    {"shaula-fit-to-screen-symbolic", "Fit to screen", "Fit to screen (F)",
+     G_CALLBACK(shaula_preview_on_fit_clicked)},
+    {"shaula-actual-size-symbolic", "Actual size", "Actual size",
      G_CALLBACK(shaula_preview_on_actual_clicked)},
-    {"shaula-discard-symbolic", "Reset annotations", NULL,
-     "Reset annotations",
+    {"shaula-discard-symbolic", "Reset annotations", "Reset annotations",
      G_CALLBACK(shaula_preview_on_reset_annotations_clicked)},
 };
 
@@ -93,66 +91,56 @@ static void install_toolbar_css(void) {
     return;
 
   GtkCssProvider *provider = gtk_css_provider_new();
-  const char *css = "headerbar.shaula-preview-toolbar {"
-                    "  background: alpha(@theme_bg_color, 0.98);"
-                    "  color: @theme_fg_color;"
-                    "  border-bottom: 1px solid @borders;"
-                    "  box-shadow: 0 1px 0 alpha(@theme_fg_color, 0.06);"
-                    "}"
-                    "headerbar.shaula-preview-toolbar button.flat,"
-                    "popover.shaula-preview-popover button.flat {"
-                    "  color: @theme_fg_color;"
-                    "  border: 1px solid transparent;"
-                    "  border-radius: 7px;"
-                    "  background: transparent;"
-                    "}"
-                    "headerbar.shaula-preview-toolbar button.flat:hover,"
-                    "popover.shaula-preview-popover button.flat:hover,"
-                    "headerbar.shaula-preview-toolbar button.shaula-stable-hover,"
-                    "popover.shaula-preview-popover button.shaula-stable-hover {"
-                    "  background: alpha(@theme_fg_color, 0.08);"
-                    "  border-color: alpha(@theme_fg_color, 0.12);"
-                    "}"
-                    "headerbar.shaula-preview-toolbar button.flat:checked,"
-                    "headerbar.shaula-preview-toolbar button.flat:active,"
-                    "popover.shaula-preview-popover button.flat:active {"
-                    "  background: alpha(@theme_fg_color, 0.14);"
-                    "  border-color: alpha(@theme_fg_color, 0.20);"
-                    "}"
-                    "headerbar.shaula-preview-toolbar button.flat:disabled {"
-                    "  opacity: 0.42;"
-                    "}"
-                    "headerbar.shaula-preview-toolbar button.suggested-action {"
-                    "  border-radius: 7px;"
-                    "}"
-                    ".shaula-shortcut-badge {"
-                    "  min-width: 0;"
-                    "  min-height: 0;"
-                    "  padding: 0;"
-                    "  margin: 0;"
-                    "  border: none;"
-                    "  background: transparent;"
-                    "  color: @theme_fg_color;"
-                    "  font-size: 9px;"
-                    "  font-weight: 400;"
-                    "}"
-                    ".shaula-menu-shortcut {"
-                    "  min-width: 0;"
-                    "  min-height: 0;"
-                    "  padding: 2px 5px;"
-                    "  border: 1px solid alpha(@theme_fg_color, 0.16);"
-                    "  border-radius: 4px;"
-                    "  background: alpha(@theme_fg_color, 0.06);"
-                    "  color: alpha(@theme_fg_color, 0.72);"
-                    "  font-family: monospace;"
-                    "  font-size: 0.78em;"
-                    "}"
-                    "popover.shaula-preview-popover contents {"
-                    "  background: alpha(@theme_bg_color, 0.98);"
-                    "  color: @theme_fg_color;"
-                    "  border: 1px solid @borders;"
-                    "  border-radius: 8px;"
-                    "}";
+  const char *css =
+      "headerbar.shaula-preview-toolbar {"
+      "  background: alpha(@theme_bg_color, 0.98);"
+      "  color: @theme_fg_color;"
+      "  border-bottom: 1px solid @borders;"
+      "  box-shadow: 0 1px 0 alpha(@theme_fg_color, 0.06);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat,"
+      "popover.shaula-preview-popover button.flat {"
+      "  color: @theme_fg_color;"
+      "  border: 1px solid transparent;"
+      "  border-radius: 7px;"
+      "  background: transparent;"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:hover,"
+      "popover.shaula-preview-popover button.flat:hover,"
+      "headerbar.shaula-preview-toolbar button.shaula-stable-hover,"
+      "popover.shaula-preview-popover button.shaula-stable-hover {"
+      "  background: alpha(@theme_fg_color, 0.08);"
+      "  border-color: alpha(@theme_fg_color, 0.12);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:checked,"
+      "headerbar.shaula-preview-toolbar button.flat:active,"
+      "popover.shaula-preview-popover button.flat:active {"
+      "  background: alpha(@theme_fg_color, 0.14);"
+      "  border-color: alpha(@theme_fg_color, 0.20);"
+      "}"
+      "headerbar.shaula-preview-toolbar button.flat:disabled {"
+      "  opacity: 0.42;"
+      "}"
+      "headerbar.shaula-preview-toolbar button.suggested-action {"
+      "  border-radius: 7px;"
+      "}"
+      ".shaula-shortcut-badge {"
+      "  min-width: 0;"
+      "  min-height: 0;"
+      "  padding: 0;"
+      "  margin: 0;"
+      "  border: none;"
+      "  background: transparent;"
+      "  color: @theme_fg_color;"
+      "  font-size: 9px;"
+      "  font-weight: 400;"
+      "}"
+      "popover.shaula-preview-popover contents {"
+      "  background: alpha(@theme_bg_color, 0.98);"
+      "  color: @theme_fg_color;"
+      "  border: 1px solid @borders;"
+      "  border-radius: 8px;"
+      "}";
   gtk_css_provider_load_from_data(provider, css, -1);
   gtk_style_context_add_provider_for_display(
       gdk_display_get_default(), GTK_STYLE_PROVIDER(provider),
@@ -273,20 +261,12 @@ static GtkWidget *make_menu_action_row(ShaulaPreviewState *state,
   GtkWidget *label = gtk_label_new(spec->label);
   gtk_widget_set_halign(label, GTK_ALIGN_START);
   gtk_widget_set_hexpand(label, TRUE);
-  if (spec->shortcut != NULL && spec->shortcut[0] != '\0') {
-    GtkWidget *shortcut = gtk_label_new(spec->shortcut);
-    gtk_widget_add_css_class(shortcut, "shaula-menu-shortcut");
-    gtk_widget_set_halign(shortcut, GTK_ALIGN_START);
-    gtk_widget_set_valign(shortcut, GTK_ALIGN_CENTER);
-    gtk_box_append(GTK_BOX(row), shortcut);
-  }
   gtk_box_append(GTK_BOX(row), icon);
   gtk_box_append(GTK_BOX(row), label);
   gtk_button_set_child(GTK_BUTTON(button), row);
   gtk_widget_set_tooltip_text(button, spec->tooltip);
-  gtk_accessible_update_property(GTK_ACCESSIBLE(button),
-                                 GTK_ACCESSIBLE_PROPERTY_LABEL, spec->tooltip,
-                                 -1);
+  gtk_accessible_update_property(
+      GTK_ACCESSIBLE(button), GTK_ACCESSIBLE_PROPERTY_LABEL, spec->tooltip, -1);
   gtk_widget_add_css_class(button, "flat");
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
   install_stable_hover(button);
@@ -382,17 +362,17 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
     append_separator(state->more_menu_box);
 
   const MenuActionSpec paste_action = {
-      "shaula-paste-symbolic", "Paste from clipboard", "Ctrl+Shift+V",
-      "Paste clipboard text or image near canvas center; shortcut Ctrl+Shift+V",
+      "shaula-paste-symbolic", "Paste text/image",
+      "Insert clipboard text or image (Ctrl+Shift+V)",
       G_CALLBACK(shaula_preview_on_paste_system_clipboard_clicked)};
   state->paste_system_button = make_menu_action_row(state, &paste_action);
   gtk_box_append(GTK_BOX(state->more_menu_box), state->paste_system_button);
   shaula_preview_toolbar_update_system_paste_state(state);
 
   const MenuActionSpec actions[] = {
-      {"shaula-save-symbolic", "Save As", NULL, "Save As (Ctrl+Shift+S)",
+      {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
        G_CALLBACK(shaula_preview_on_save_as_clicked)},
-      {"shaula-more-symbolic", "Open preview directory", NULL,
+      {"shaula-more-symbolic", "Open preview directory",
        "Open preview directory",
        G_CALLBACK(shaula_preview_on_open_folder_clicked)},
   };
@@ -471,7 +451,6 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
   gtk_widget_set_margin_bottom(menu_box, 6);
   gtk_widget_set_margin_start(menu_box, 6);
   gtk_widget_set_margin_end(menu_box, 6);
-  gtk_widget_set_size_request(menu_box, 300, -1);
   gtk_popover_set_child(GTK_POPOVER(popover), menu_box);
   gtk_menu_button_set_popover(GTK_MENU_BUTTON(button), popover);
 
@@ -483,9 +462,9 @@ static GtkWidget *make_more_button(ShaulaPreviewState *state) {
 
 static void append_secondary_toolbar_button(ShaulaPreviewState *state,
                                             GtkWidget *actions, int index) {
-  GtkWidget *button = make_tool_toggle(
-      state, secondary_tools[index].icon_name, secondary_tools[index].label,
-      secondary_tools[index].tool);
+  GtkWidget *button = make_tool_toggle(state, secondary_tools[index].icon_name,
+                                       secondary_tools[index].label,
+                                       secondary_tools[index].tool);
   gtk_widget_set_visible(button, FALSE);
   gtk_box_append(GTK_BOX(actions), button);
   state->toolbar_secondary[state->toolbar_secondary_count] = button;
@@ -557,7 +536,7 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(
       GTK_BOX(actions),
       make_toolbar_button(state, "shaula-copy-symbolic",
-                          "Copy image (Ctrl+C when no annotations selected)",
+                          "Copy image (Ctrl+C)",
                           G_CALLBACK(shaula_preview_on_copy_clicked)));
   gtk_box_append(
       GTK_BOX(actions),
@@ -574,9 +553,9 @@ static GtkWidget *build_tool_group(ShaulaPreviewState *state) {
   gtk_box_append(GTK_BOX(actions), state->undo_button);
   gtk_box_append(GTK_BOX(actions), state->redo_button);
 
-  gtk_box_append(GTK_BOX(actions),
-                 make_tool_toggle(state, "shaula-hand-symbolic", "Pan",
-                                  SHAULA_TOOL_HAND));
+  gtk_box_append(
+      GTK_BOX(actions),
+      make_tool_toggle(state, "shaula-hand-symbolic", "Pan", SHAULA_TOOL_HAND));
   gtk_box_append(GTK_BOX(actions),
                  make_tool_toggle(state, "shaula-crop-symbolic", "Crop",
                                   SHAULA_TOOL_CROP));
@@ -808,9 +787,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
     gtk_widget_set_visible(state->duplicate_button, has_object_selection);
     gtk_widget_set_sensitive(state->duplicate_button, can_duplicate);
     gtk_widget_set_tooltip_text(state->duplicate_button, duplicate_label);
-    gtk_accessible_update_property(
-        GTK_ACCESSIBLE(state->duplicate_button),
-        GTK_ACCESSIBLE_PROPERTY_LABEL, duplicate_label, -1);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(state->duplicate_button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   duplicate_label, -1);
   }
   if (state->crop_selected_button != NULL) {
     gtk_widget_set_visible(state->crop_selected_button, can_crop);
@@ -836,9 +815,9 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   if (state->delete_button != NULL) {
     gtk_widget_set_visible(state->delete_button, has_object_selection);
     gtk_widget_set_sensitive(state->delete_button, can_delete);
-    gtk_widget_set_tooltip_text(
-        state->delete_button,
-        selected_count > 1 ? "Delete selected annotations (Delete)"
-                           : "Delete selected annotation (Delete)");
+    gtk_widget_set_tooltip_text(state->delete_button,
+                                selected_count > 1
+                                    ? "Delete selected annotations (Delete)"
+                                    : "Delete selected annotation (Delete)");
   }
 }

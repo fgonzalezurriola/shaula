@@ -74,4 +74,4 @@ Numbered canvas tools:
 
 Only implemented numbered tools display GTK keycap badges.
 
-Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As and Paste from clipboard remain More-menu actions. The paste row uses `shaula-paste-symbolic` and presents `Ctrl+Shift+V` as a discrete left-aligned shortcut badge before the icon and label. Optional shortcuts belong to the shared menu-action specification rather than paste-specific row construction. The popover may widen to fit the row, but the action does not add a permanent toolbar button or affect the headerbar's natural width.
+Fit to screen, Actual size, and Reset annotations are overflow utility actions. Save As and Paste text/image remain More-menu actions. The paste row uses `shaula-paste-symbolic` and the same icon-label layout as the other actions. `Ctrl+Shift+V` is exposed in its tooltip rather than as inline row chrome. The action does not add a permanent toolbar button or affect the headerbar's natural width.

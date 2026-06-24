@@ -57,8 +57,8 @@ release. Crop and contextual Blur have no letter shortcut. `F` remains the
 Fit-to-screen shortcut.
 
 Toolbar badges show the numeric slot. Tooltips and responsive More-menu rows
-show the mnemonic letter first, followed by the numeric alternative when one
-exists.
+show only the mnemonic letter when one exists; numeric-only tools keep the plain
+tool name because the badge already exposes their slot.
 
 ## Selection Model
 
@@ -333,7 +333,7 @@ share one default profile because they use the same HUD and stroke model.
 
 `shaula-more-symbolic` exposes:
 
-- Paste from clipboard (`Ctrl+Shift+V`), using `shaula-paste-symbolic` and a visible left-aligned shortcut badge, inserting clipboard text or an image near the visible canvas center;
+- Paste text/image (`Ctrl+Shift+V`), using `shaula-paste-symbolic` and the same icon-label row as the other actions, inserting clipboard text or an image near the visible canvas center;
 - Save As;
 - Fit to screen;
 - Actual size;

@@ -73,8 +73,9 @@ contracts, active risks, and immediate work.
 - `Ctrl+V` pastes the preview-local annotation clipboard. `Ctrl+Shift+V` reads
   the system clipboard asynchronously, prefers image over text, inserts one
   annotation near the visible canvas center, and never mutates the internal
-  annotation clipboard. Its More-menu row uses `shaula-paste-symbolic` and a
-  visible left-aligned shortcut badge.
+  annotation clipboard. Its More-menu row uses `shaula-paste-symbolic`, the
+  compact label `Paste text/image`, and the same icon-label layout as the other
+  actions; the shortcut remains in the tooltip.
 - Clipboard content with neither supported text nor image shows the neutral
   transient message `Clipboard has no supported text or image.` It creates no
   history entry, does not mutate the document or internal clipboard, and does
@@ -205,8 +206,10 @@ contracts, active risks, and immediate work.
 - Preview rendering/export may consume synchronized annotation `selected` flags
   as a hot-path contract; mutations must still pass through the editor.
 - Toolbar overflow uses measured available space and a stable requested action
-  width. More-menu shortcuts are optional action metadata and may widen only the
-  popover. Contextual actions and HUD controls must not expand headerbar natural
+  width. More-menu actions use a consistent icon-label row and keep shortcuts in
+  tooltips rather than widening individual rows. Numbered tool badges own the
+  numeric slot; tooltips and overflow rows show only mnemonic letters when one
+  exists. Contextual actions and HUD controls must not expand headerbar natural
   width.
 - New code comments are English and reserved for contracts, boundaries, or
   non-obvious decisions.
