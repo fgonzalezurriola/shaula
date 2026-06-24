@@ -15,96 +15,100 @@ Detailed notes live in `docs/release-v0.1.5.md`.
 
 ## Current Release Focus: v0.1.6
 
-v0.1.6 is the **UX rough-corners release**.
+v0.1.6 is the **image composition and expandable canvas release**.
 
-The goal is not to add another large headline feature. The goal is to make the
-features already present feel coherent, predictable, fast, and ready for normal
-daily use.
+The release has no fixed date. It should ship when the new document model and
+human workflow are coherent, bounded, and manually validated. The active plan
+lives in `docs/plan-v0.1.6.md`.
 
-### Capture workflow polish
+### Core direction
 
-- Keep Quick Capture immediate and capture-on-release.
-- Keep Area Capture adjustable without making the overlay feel heavy.
-- Make Quick, Area, Fullscreen, All Screens, Window, and Previous Area naming
-  and behavior consistent across the CLI, Niri shortcuts, Noctalia, Settings,
-  notifications, and documentation.
-- Prevent overlapping hotkey invocations from producing confusing duplicate
-  overlays or captures.
-- Preserve the selected output, previous-area state, and logical-to-physical
-  coordinate behavior across mixed-monitor layouts.
-- Keep live and frozen region capture behavior understandable and reliable.
+- Separate bounded document canvas dimensions from the original screenshot
+  pixbuf.
+- Make canvas expansion undoable and deterministic.
+- Compose a small ordered set of images vertically or horizontally.
+- Import images from the current clipboard and explicit files.
+- Keep imported images editable instead of flattening immediately.
+- Preserve Copy, Save, Save As, Done, crop, Spotlight, selection, resize, and
+  export across expanded documents.
+- Keep one composition apply as one undo step.
+- Refit the view after document-size changes.
+- Add explicit canvas dimension, total-pixel, and memory limits.
+- Keep global clipboard history out of the core product.
 
-### Preview and editor polish
+### Planned additions
 
-- Keep Copy, Save, Save As, Done, and Discard semantics clear and consistent.
-- Keep temporary runtime artifacts separate from durable saved screenshots in
-  notifications, folder actions, and cleanup behavior.
-- Prevent toolbar, metadata, HUD, and tool changes from resizing or shifting the
-  floating preview window.
-- Keep primary actions usable at every supported preview size, with predictable
-  overflow behavior.
-- Polish keyboard behavior so shortcuts do not conflict with text editing,
-  modal tools, temporary Hand/Pan, or active selections.
-- Keep selection, multi-selection, annotation clipboard, duplicate, delete, and
-  undo/redo behavior consistent across annotation types.
-- Keep every HUD-controlled creation default persisted across sessions: colors,
-  stroke widths, stroke styles, fill, corner shape, text size/font/alignment,
-  opacity, Spotlight border options, and Annotation Eraser size.
-- Finish rough edges in tool creation/editing transitions, especially Rectangle,
-  Arrow/Line, Text, Pen, Highlight, Spotlight, and Annotation Eraser.
-- Keep hit testing based on visible geometry rather than surprising bounding-box
-  behavior.
+- Recent Shaula captures as a composition source.
+- Direct controls for adding canvas space above, below, left, or right.
+- Canvas background controls.
+- `Capture and add…` from an existing Preview.
+- Grid and equal-cell comparison layouts.
+- Simple alignment and distribution guidance for free placement.
 
-### Feedback and error handling
+These additions must not appear as placeholders. Each one enters the public UI
+only when its source loading, cancellation, history, export, and failure paths
+are complete.
 
-- Make successful save/copy flows produce concise, consistent notifications.
-- Keep notification actions useful without exposing internal runtime paths.
-- Surface actionable errors for missing tools, unsupported runtime paths,
-  invalid configuration, clipboard failures, and capture conflicts.
-- Avoid silent failures from compositor keybindings, shell integrations, or
-  setup-generated commands.
+### Emergent work
 
-### Setup, integration, and first-run polish
+v0.1.6 may also include work discovered during implementation when it:
 
-- Keep `shaula setup` explicit about every Niri or Noctalia change before it is
-  applied.
-- Preserve backups and existing user configuration.
-- Keep user-local installation, AUR packages, release archives, desktop files,
-  icons, and helper binaries aligned.
-- Ensure Settings edits only the supported public configuration contract.
-- Keep Noctalia optional: capture must work normally when the widget is absent,
-  disabled, or broken.
+- fixes a bug exposed by the new document model;
+- removes a confusing capture or Preview interaction;
+- reduces memory, rendering, history, or ownership risk;
+- improves module boundaries or testability needed by the release;
+- aligns Settings, installation, integration, or documentation;
+- addresses a concrete issue found during normal daily use.
 
-### Documentation and release quality
+This lane keeps the plan flexible without turning v0.1.6 into an unrelated
+feature collection.
 
-- Keep README, roadmap, specs, and runtime capability reporting aligned with the
-  actual supported Wayland backends and compositor behavior.
-- Remove stale version-specific guidance and completed implementation history
-  from active handoff documentation.
-- Verify release archives include every required helper, icon, desktop asset,
-  and optional integration payload.
-- Run the automated baseline before release:
+### Existing workflow quality
 
-  ```bash
-  ./dev check
-  git diff --check
-  ```
+The stable v0.1.5 baseline remains part of the release bar:
 
-- Manually verify the main user journeys before tagging v0.1.6:
-  Quick Capture, Area Capture, Fullscreen, All Screens, Copy, Save, Save As,
-  Done, Discard, Undo/Redo, Annotation Eraser, Settings, `shaula setup`, and the
-  Noctalia widget.
+- Quick, Area, Fullscreen, All Screens, and Window capture must stay predictable.
+- Copy, Save, Save As, Done, and Discard must keep their documented semantics.
+- Preview toolbar width and overflow must remain stable.
+- Keyboard shortcuts must not conflict with text editing, modal tools, or active
+  selections.
+- Settings must preserve custom values during unrelated saves.
+- Noctalia remains optional and outside the capture hot path.
+- Errors and notifications must remain actionable without exposing temporary
+  runtime artifacts.
 
 ### v0.1.6 release bar
 
 v0.1.6 is ready when:
 
-- the primary capture flows have no known high-impact UX regressions;
-- save/copy/notification behavior is predictable;
-- preview layout remains stable during normal editing;
-- the documented shortcuts and integration actions work as described;
-- installation and setup do not silently mutate user configuration;
-- automated checks pass and the primary flows receive a manual Wayland test.
+- vertical and horizontal composition solve the navbar/footer and comparison
+  workflows cleanly;
+- undo and redo restore canvas bounds, assets, and pixels deterministically;
+- Copy, Save, Save As, Done, crop, and Spotlight operate on the expanded canvas;
+- cancel and failure paths leave the document unchanged;
+- supported image and history limits keep memory bounded;
+- no known high-impact regression affects the v0.1.5 capture or Preview flows;
+- automated checks pass;
+- the final candidate receives manual Wayland/Niri validation.
+
+Required automated baseline:
+
+```bash
+./dev check
+git diff --check
+```
+
+After UI changes:
+
+```bash
+./dev dev-install --yes
+```
+
+Detailed product and technical contracts:
+
+- `docs/plan-v0.1.6.md`
+- `docs/plan-image-composition.md`
+- `docs/preview-expandable-canvas-design.md`
 
 ## Shipped Foundation
 
@@ -124,33 +128,33 @@ v0.1.6 is ready when:
 
 ## After v0.1.6
 
-Potential follow-up work should be driven by real usage rather than expanding
-the toolbar by default:
+Potential follow-up work should continue to be driven by real usage:
 
 - Dedicated active eyedropper mode if passive sampling and swatch apply are not
   sufficient.
 - More filename templating and save-path configuration.
 - Additional preview history affordances if users need more visibility or
   control.
-- Structured image composition and an expandable bounded canvas, following the
-  draft product and technical plans in `docs/plan-image-composition.md` and
-  `docs/preview-expandable-canvas-design.md`.
 - General QuickShell integration only after the draft architecture and expected
   user value are reviewed.
-- Deploy the static product landing page.
+- Deploy and maintain the static product landing page.
+- Composition refinements that do not fit coherently into the v0.1.6 release.
 
 ## Current Non-Goals
 
-These are not part of the v0.1.6 UX-polish scope:
+These are not targets for v0.1.6:
 
-- exposing placeholders for unfinished features in the public UI;
+- exposing placeholders for unfinished features;
+- infinite canvas;
 - OCR;
 - scrolling capture;
 - screen recording;
-- deep redaction;
-- AI removal;
+- deep or semantic redaction;
+- AI removal or automatic background removal;
 - smart selection;
-- combining screenshots or exposing expandable-canvas controls; these remain
-  future work documented separately from the current release;
-- Share/upload backend;
-- Pin action/window persistence.
+- global clipboard history;
+- multi-page documents;
+- Share/upload backend or collaboration;
+- Pin action/window persistence;
+- perspective transforms or freeform image distortion;
+- turning Preview into a general-purpose design application.

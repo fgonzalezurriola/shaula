@@ -9,9 +9,9 @@ contracts, active risks, and immediate work.
 
 - v0.1.5 is the latest released baseline, published on 2026-06-24 after manual
   Wayland/Niri validation. Release notes live in `docs/release-v0.1.5.md`.
-- v0.1.6 is a UX and reliability pass over existing capture, preview/editor,
-  feedback, setup, integration, and documentation flows. Do not add another
-  large feature before those paths are coherent.
+- v0.1.6 is the image composition and expandable canvas release. It has no
+  fixed date and should ship only when the new document model, history, export,
+  memory limits, and human workflow are coherent. See `docs/plan-v0.1.6.md`.
 - The preview toolbar and More menu are the active UI surfaces. Keep the
   headerbar compact, stable in natural width, and honest about available actions.
 - Settings must expose the public config contract without inventing a second
@@ -19,11 +19,15 @@ contracts, active risks, and immediate work.
 - `Ctrl+Shift+V` is the dedicated system-clipboard paste command. It is separate
   from preview-local annotation paste (`Ctrl+V`) and must preserve the async
   ownership rules in ADR 0001.
-- Scrolling capture, recording, OCR, upload/share, Pin persistence, smart
-  selection, AI removal, and screenshot combining remain out of scope.
-- Future image composition and expandable-canvas work is exploratory only and is
+- Image composition and bounded canvas expansion are active v0.1.6 scope,
   documented in `docs/plan-image-composition.md` and
-  `docs/preview-expandable-canvas-design.md`; do not treat it as v0.1.6 scope.
+  `docs/preview-expandable-canvas-design.md`.
+- Related bugs, UX polish, ownership refactors, and integration/documentation
+  fixes discovered during implementation may enter v0.1.6. Unrelated large
+  features still require separate scope.
+- Scrolling capture, recording, OCR, upload/share, Pin persistence, smart
+  selection, AI removal, infinite canvas, and global clipboard history remain
+  out of scope.
 
 ## Current product behavior
 
@@ -260,6 +264,11 @@ contracts, active risks, and immediate work.
 - Preview system clipboard is asynchronous. Window destruction, provider change,
   unsupported payloads, and duplicate feedback must remain distinct outcomes.
 - Image annotation history cost is proportional to pasted image payload size.
+  v0.1.6 composition work must move immutable image pixels to shared assets
+  before relying on multi-image documents and repeated snapshots.
+- Most Preview geometry currently treats the base screenshot as the complete
+  document bounds. Canvas work requires an explicit audit of render, export,
+  crop, Spotlight, gestures, selection, paste placement, metadata, and fit.
 - Preview GTK/C orchestration remains large; respect module ownership to avoid
   recreating command/action/state dependency cycles.
 - Manual VM and compositor evidence is maintained outside this handoff. Do not
@@ -269,11 +278,14 @@ contracts, active risks, and immediate work.
 
 ## Immediate next steps
 
-1. Run `./dev dev-install --yes`, `./dev check`, and `git diff --check` after
-   preview UI work. Perform a targeted preview check where the environment
-   permits it.
-2. Ask the user to validate interactive preview/capture behavior with
-   `./dev capture` and `./dev all`.
+1. Resolve the early v0.1.6 document decisions: canvas background, base-image
+   selection contract, shared image asset ownership, maximum dimensions/pixels,
+   and crop behavior. Record durable choices in an ADR before implementation.
+2. Implement explicit canvas dimensions and base-image placement without visible
+   behavior changes, then audit ambiguous image/document dimension helpers.
+3. Run `./dev check` and `git diff --check` after every change. After UI changes
+   also run `./dev dev-install --yes`; interactive Preview/capture work requires
+   targeted checks and user validation through `./dev capture` and `./dev all`.
 
 ## Relevant source documents
 
@@ -289,10 +301,13 @@ contracts, active risks, and immediate work.
 - `docs/preview-ui-contract.md`: headerbar packing, overflow, startup readiness,
   selection chrome, and placement contracts.
 - `docs/release-v0.1.5.md`: shipped release highlights, validation, and scope.
-- `docs/plan-image-composition.md`: draft post-v0.1.6 product flow for stitching
+- `docs/plan-v0.1.6.md`: active release scope, milestones, emergent-work rules,
+  quality gates, and release bar.
+- `docs/plan-image-composition.md`: approved v0.1.6 product flow for stitching
   and composing images without global clipboard history.
-- `docs/preview-expandable-canvas-design.md`: draft technical model for bounded
-  canvas expansion, shared image assets, history, rendering, and geometry.
+- `docs/preview-expandable-canvas-design.md`: active v0.1.6 technical design for
+  bounded canvas expansion, shared image assets, history, rendering, and
+  geometry.
 - `docs/releasing.md`: install/setup/release, icon packaging, and managed
   integration contracts.
 - `docs/roadmap.md`: current release scope and non-goals.

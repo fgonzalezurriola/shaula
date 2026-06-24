@@ -1,10 +1,12 @@
 # Preview Expandable Canvas Design
 
-> Status: **Draft technical exploration** — No implementation commitment
+> Status: **Active technical design** — Implementation details remain subject to ADRs
 >
 > Product plan: `docs/plan-image-composition.md`
 >
-> Release scope: **After v0.1.6**
+> Release plan: `docs/plan-v0.1.6.md`
+>
+> Release scope: **v0.1.6**
 
 ## 1. Problem Statement
 
@@ -486,5 +488,6 @@ Recommended order:
 - Whether imported images always render above Spotlight.
 
 These decisions are durable enough to warrant an ADR when implementation begins.
-Until then, this file remains exploratory and must not be treated as shipped
-architecture.
+This file guides v0.1.6 implementation, but unresolved alternatives must not be
+treated as shipped architecture until code, tests, and the relevant ADR settle
+them.
