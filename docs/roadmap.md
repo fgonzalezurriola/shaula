@@ -3,6 +3,16 @@
 Shaula is a focused Wayland screenshot workflow with a native capture overlay
 and post-capture preview/editor.
 
+## Released: v0.1.5
+
+v0.1.5 was released on 2026-06-24 after manual validation of the primary
+Wayland/Niri journeys. It delivers system-clipboard text/image paste, Image and
+Text resize, Annotation Eraser, stronger selection and history behavior, direct
+Quick/Area copy and save shortcuts, expanded runtime discovery, and removal of
+the resident-daemon architecture.
+
+Detailed notes live in `docs/release-v0.1.5.md`.
+
 ## Current Release Focus: v0.1.6
 
 v0.1.6 is the **UX rough-corners release**.
@@ -122,6 +132,9 @@ the toolbar by default:
 - More filename templating and save-path configuration.
 - Additional preview history affordances if users need more visibility or
   control.
+- Structured image composition and an expandable bounded canvas, following the
+  draft product and technical plans in `docs/plan-image-composition.md` and
+  `docs/preview-expandable-canvas-design.md`.
 - General QuickShell integration only after the draft architecture and expected
   user value are reviewed.
 - Deploy the static product landing page.
@@ -137,6 +150,7 @@ These are not part of the v0.1.6 UX-polish scope:
 - deep redaction;
 - AI removal;
 - smart selection;
-- combining screenshots;
+- combining screenshots or exposing expandable-canvas controls; these remain
+  future work documented separately from the current release;
 - Share/upload backend;
 - Pin action/window persistence.

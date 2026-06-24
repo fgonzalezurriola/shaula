@@ -7,6 +7,8 @@ contracts, active risks, and immediate work.
 
 ## Current focus
 
+- v0.1.5 is the latest released baseline, published on 2026-06-24 after manual
+  Wayland/Niri validation. Release notes live in `docs/release-v0.1.5.md`.
 - v0.1.6 is a UX and reliability pass over existing capture, preview/editor,
   feedback, setup, integration, and documentation flows. Do not add another
   large feature before those paths are coherent.
@@ -19,6 +21,9 @@ contracts, active risks, and immediate work.
   ownership rules in ADR 0001.
 - Scrolling capture, recording, OCR, upload/share, Pin persistence, smart
   selection, AI removal, and screenshot combining remain out of scope.
+- Future image composition and expandable-canvas work is exploratory only and is
+  documented in `docs/plan-image-composition.md` and
+  `docs/preview-expandable-canvas-design.md`; do not treat it as v0.1.6 scope.
 
 ## Current product behavior
 
@@ -283,6 +288,11 @@ contracts, active risks, and immediate work.
   HUD persistence, and More-menu behavior.
 - `docs/preview-ui-contract.md`: headerbar packing, overflow, startup readiness,
   selection chrome, and placement contracts.
+- `docs/release-v0.1.5.md`: shipped release highlights, validation, and scope.
+- `docs/plan-image-composition.md`: draft post-v0.1.6 product flow for stitching
+  and composing images without global clipboard history.
+- `docs/preview-expandable-canvas-design.md`: draft technical model for bounded
+  canvas expansion, shared image assets, history, rendering, and geometry.
 - `docs/releasing.md`: install/setup/release, icon packaging, and managed
   integration contracts.
 - `docs/roadmap.md`: current release scope and non-goals.

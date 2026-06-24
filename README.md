@@ -8,6 +8,12 @@ the primary supported environment today.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
+## Current release
+
+The latest stable release is **v0.1.5**. See
+[`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for highlights, validation,
+and scope notes.
+
 ## Installation
 
 ### Arch Linux / CachyOS
@@ -67,8 +73,8 @@ shaula explore --json --brief
 
 Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
 the configured save folder, defaulting to `~/Pictures/shaula`, and generate
-`YYYYMMDD-HHMMSS.png` names. `Ctrl+Shift+V`, also available as **Paste from
-clipboard** in the More menu, inserts clipboard text or an image near the center
+`YYYYMMDD-HHMMSS.png` names. `Ctrl+Shift+V`, also available as **Paste
+text/image** in the More menu, inserts clipboard text or an image near the center
 of the visible canvas.
 
 Direct no-preview saved captures use the same `YYYYMMDD-HHMMSS.png` template,

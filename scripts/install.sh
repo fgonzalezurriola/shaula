@@ -29,7 +29,7 @@ NOCTALIA_MANAGED_MARKER=".shaula-managed"
 usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [options]
-       scripts/install.sh v0.1.2
+       scripts/install.sh v0.1.5
 
 Install Shaula for the current user. The installer only uses sudo when you
 explicitly confirm Arch runtime dependency installation and never overwrites an
