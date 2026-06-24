@@ -316,6 +316,30 @@ EOF
   log "installed $dest"
 }
 
+# Desktop caches are optional runtime integration points. Refresh them when the
+# host provides the tools, but do not make a successful install depend on cache
+# utilities that may be absent from minimal systems.
+refresh_desktop_caches() {
+  icon_theme_dir="${XDG_DATA_HOME}/icons/hicolor"
+  applications_dir="${XDG_DATA_HOME}/applications"
+
+  if [ -d "$icon_theme_dir" ] && command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    if gtk-update-icon-cache -f -t "$icon_theme_dir" >/dev/null 2>&1; then
+      log "updated icon cache in $icon_theme_dir"
+    else
+      warn "could not update icon cache in $icon_theme_dir"
+    fi
+  fi
+
+  if [ -d "$applications_dir" ] && command -v update-desktop-database >/dev/null 2>&1; then
+    if update-desktop-database -q "$applications_dir" >/dev/null 2>&1; then
+      log "updated desktop database in $applications_dir"
+    else
+      warn "could not update desktop database in $applications_dir"
+    fi
+  fi
+}
+
 write_default_config() {
   dest="${SHAULA_CONFIG_DIR}/config.toml"
   mkdir -p "$SHAULA_CONFIG_DIR" "$SHAULA_GENERATED_DIR"
@@ -826,10 +850,15 @@ install_release() {
     if [ -n "$bundled_icon" ]; then
       install_file_if_present "$bundled_icon" "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg" 0644
     elif [ -n "$bundled_png_icon" ]; then
+      remove_path "${XDG_DATA_HOME}/icons/hicolor/scalable/apps/shaula.svg"
       log "installed bundled PNG app icons"
     else
       write_icon_file
     fi
+  fi
+
+  if [ "$INSTALL_DESKTOP" -eq 1 ] || [ "$INSTALL_ICON" -eq 1 ]; then
+    refresh_desktop_caches
   fi
 
   warn_runtime_tools
@@ -861,6 +890,7 @@ run_uninstall() {
   for size in 48x48 64x64 128x128 256x256 512x512; do
     remove_path "${XDG_DATA_HOME}/icons/hicolor/${size}/apps/shaula.png"
   done
+  refresh_desktop_caches
   remove_path "${SHAULA_GENERATED_DIR}/niri-shaula.kdl"
   uninstall_noctalia_widget
   log "kept ${SHAULA_CONFIG_DIR}/config.toml"

@@ -120,12 +120,30 @@ jobs:
           xdg_bin="${tmp_dir}/bin"
           xdg_data="${tmp_dir}/share"
           xdg_config="${tmp_dir}/config"
+          fake_bin="${tmp_dir}/fake-bin"
+          cache_log="${tmp_dir}/desktop-cache.log"
           mkdir -p \
             "${home_dir}" \
             "${xdg_bin}" \
             "${xdg_data}" \
+            "${fake_bin}" \
             "${xdg_config}/niri" \
             "${xdg_config}/noctalia"
+
+          cat > "${fake_bin}/gtk-update-icon-cache" <<'EOF'
+          #!/bin/sh
+          printf 'gtk-update-icon-cache %s\n' "$*" >> "${SHAULA_TEST_CACHE_LOG}"
+          EOF
+          cat > "${fake_bin}/update-desktop-database" <<'EOF'
+          #!/bin/sh
+          printf 'update-desktop-database %s\n' "$*" >> "${SHAULA_TEST_CACHE_LOG}"
+          EOF
+          chmod +x \
+            "${fake_bin}/gtk-update-icon-cache" \
+            "${fake_bin}/update-desktop-database"
+
+          mkdir -p "${xdg_data}/icons/hicolor/scalable/apps"
+          printf '<svg/>\n' > "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
 
           printf '// fake niri config for installer detection\n' > "${xdg_config}/niri/config.kdl"
           printf '{"version":2,"states":{}}\n' > "${xdg_config}/noctalia/plugins.json"
@@ -133,9 +151,11 @@ jobs:
 
           env \
             HOME="${home_dir}" \
+            PATH="${fake_bin}:${PATH}" \
             XDG_BIN_HOME="${xdg_bin}" \
             XDG_DATA_HOME="${xdg_data}" \
             XDG_CONFIG_HOME="${xdg_config}" \
+            SHAULA_TEST_CACHE_LOG="${cache_log}" \
             SHAULA_RELEASE_ASSET_URL="file://${PWD}/dist/shaula-linux-x86_64.tar.gz" \
             SHAULA_SHA256SUMS_URL="file://${PWD}/dist/SHA256SUMS" \
             scripts/install.sh --yes
@@ -147,6 +167,13 @@ jobs:
           test -f "${xdg_data}/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
           test -f "${xdg_data}/icons/hicolor/256x256/apps/shaula.png"
           test -f "${xdg_data}/icons/hicolor/512x512/apps/shaula.png"
+          test ! -e "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
+          grep -Fxq \
+            "gtk-update-icon-cache -f -t ${xdg_data}/icons/hicolor" \
+            "${cache_log}"
+          grep -Fxq \
+            "update-desktop-database -q ${xdg_data}/applications" \
+            "${cache_log}"
           test -f "${xdg_config}/shaula/config.toml"
           grep -q "BEGIN SHAULA PREVIEW WINDOW RULE" "${xdg_config}/niri/config.kdl"
           test -f "${xdg_config}/noctalia/plugins/shaula/manifest.json"

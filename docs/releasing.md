@@ -30,6 +30,8 @@ The installer:
 - supports the latest stable release, `--version`, a positional `v*` version, and `SHAULA_VERSION`;
 - warns about missing runtime tools;
 - installs desktop and icon assets;
+- refreshes the user hicolor icon cache and desktop application database when
+  `gtk-update-icon-cache` and `update-desktop-database` are available;
 - delegates user configuration and integrations to `shaula setup`;
 - preserves an existing `~/.config/shaula/config.toml`;
 - uses `sudo` only after explicit Arch/CachyOS runtime-dependency confirmation.
@@ -146,7 +148,8 @@ The desktop launcher uses `Icon=shaula`. The application icon is distributed as 
 
 The source raster is `src/preview/icons/source/shaula-source.png`. Do not add unused root-level icon copies.
 
-Uninstall removes these PNG sizes and the legacy fallback SVG application icon.
+Uninstall removes these PNG sizes and the legacy fallback SVG application icon,
+then refreshes the same desktop caches when the host tools are available.
 
 Preview toolbar icons are loaded from `../share/icons` relative to the installed helper. Missing `scalable/actions/shaula-*-symbolic.svg` assets appear as GTK missing-icon glyphs and must be caught by release archive/install verification.
 

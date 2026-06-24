@@ -118,6 +118,10 @@ contracts, active risks, and immediate work.
   reload or restart Niri or Noctalia.
 - Noctalia is optional. It invokes public CLI contracts and must never become a
   capture hot-path dependency.
+- Release and development installs refresh the user hicolor icon cache and
+  desktop application database after desktop/icon changes when the host cache
+  utilities are available. Cache refresh failures warn but do not invalidate an
+  otherwise successful install.
 - `shaula doctor --json`, `preflight --json`, `capabilities list --json`, and
   `explore --json [--brief]` are read-only runtime/discovery surfaces.
 
