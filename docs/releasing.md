@@ -146,10 +146,16 @@ The desktop launcher uses `Icon=shaula`. The application icon is distributed as 
 - `256x256`
 - `512x512`
 
-The source raster is `src/preview/icons/source/shaula-source.png`. Do not add unused root-level icon copies.
+It is also distributed as a raster-preserving `scalable/apps/shaula.svg` so
+launchers that prefer scalable app icons, including Noctalia/Quickshell, can
+resolve `Icon=shaula` without changing the app artwork.
 
-Uninstall removes these PNG sizes and the legacy fallback SVG application icon,
-then refreshes the same desktop caches when the host tools are available.
+The source raster is `src/preview/icons/source/shaula-source.png`. Regenerate
+the scalable app SVG from that source with Inkscape. Do not add unused
+root-level icon copies.
+
+Uninstall removes these PNG sizes and the SVG application icon, then refreshes
+the same desktop caches when the host tools are available.
 
 Preview toolbar icons are loaded from `../share/icons` relative to the installed helper. Missing `scalable/actions/shaula-*-symbolic.svg` assets appear as GTK missing-icon glyphs and must be caught by release archive/install verification.
 

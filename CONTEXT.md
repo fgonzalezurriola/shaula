@@ -122,6 +122,10 @@ contracts, active risks, and immediate work.
   desktop application database after desktop/icon changes when the host cache
   utilities are available. Cache refresh failures warn but do not invalidate an
   otherwise successful install.
+- The desktop launcher uses `Icon=shaula`. App icon packaging includes fixed
+  PNG sizes and a raster-preserving `scalable/apps/shaula.svg` generated from
+  `src/preview/icons/source/shaula-source.png`; Noctalia/Quickshell can
+  otherwise resolve the icon name to a missing scalable app icon.
 - Release archives and `shaula-bin` must install and verify all helper binaries,
   including `shaula-portal-screenshot`.
 - `shaula doctor --json`, `preflight --json`, `capabilities list --json`, and

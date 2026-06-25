@@ -1,7 +1,7 @@
 [Icon Theme]
 Name=hicolor
 Hidden=true
-Directories=48x48/apps,64x64/apps,128x128/apps,256x256/apps,512x512/apps,scalable/actions
+Directories=48x48/apps,64x64/apps,128x128/apps,256x256/apps,512x512/apps,scalable/apps,scalable/actions
 
 [48x48/apps]
 Size=48
@@ -26,6 +26,13 @@ Context=Applications
 [512x512/apps]
 Size=512
 Type=Fixed
+Context=Applications
+
+[scalable/apps]
+Size=128
+MinSize=16
+MaxSize=512
+Type=Scalable
 Context=Applications
 
 [scalable/actions]
