@@ -133,10 +133,7 @@ fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
 }
 
 fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) std.Build.LazyPath {
-    const preview_geometry_obj = buildZigObject(b, "preview-geometry", "src/preview/preview_geometry.zig", target, optimize);
-    const preview_image_io_obj = buildZigObject(b, "preview-image-io", "src/preview/preview_image_io.zig", target, optimize);
-    const preview_clipboard_obj = buildZigObject(b, "preview-clipboard", "src/preview/preview_clipboard.zig", target, optimize);
-    const preview_notify_obj = buildPreviewNotifyObject(b, target, optimize);
+    const preview_bridge_obj = buildPreviewBridgeObject(b, target, optimize);
 
     const command = b.addSystemCommand(&.{
         "sh",
@@ -173,10 +170,7 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     command.addFileArg(b.path("src/preview/preview_state.c"));
     command.addFileArg(b.path("src/preview/preview_system_clipboard.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
-    command.addFileArg(preview_geometry_obj);
-    command.addFileArg(preview_image_io_obj);
-    command.addFileArg(preview_clipboard_obj);
-    command.addFileArg(preview_notify_obj);
+    command.addFileArg(preview_bridge_obj);
     return output;
 }
 
@@ -233,13 +227,13 @@ fn buildNativePortalScreenshotHelper(b: *std.Build) std.Build.LazyPath {
     return output;
 }
 
-fn buildPreviewNotifyObject(
+fn buildPreviewBridgeObject(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) std.Build.LazyPath {
     const module = b.createModule(.{
-        .root_source_file = b.path("src/preview/preview_notify.zig"),
+        .root_source_file = b.path("src/preview/preview_bridge.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -252,7 +246,7 @@ fn buildPreviewNotifyObject(
     });
     module.addImport("notify_request", notify_request_module);
     const object = b.addObject(.{
-        .name = "preview-notify",
+        .name = "preview-bridge",
         .root_module = module,
     });
     return object.getEmittedBin();
