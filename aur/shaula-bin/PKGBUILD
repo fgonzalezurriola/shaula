@@ -37,6 +37,7 @@ package() {
   install -Dm755 "${srcdir}/bin/shaula-preview" "${pkgdir}/usr/bin/shaula-preview"
   install -Dm755 "${srcdir}/bin/shaula-settings" "${pkgdir}/usr/bin/shaula-settings"
   install -Dm755 "${srcdir}/bin/shaula-crop-image" "${pkgdir}/usr/bin/shaula-crop-image"
+  install -Dm755 "${srcdir}/bin/shaula-portal-screenshot" "${pkgdir}/usr/bin/shaula-portal-screenshot"
 
   cp -a "${srcdir}/share/." "${pkgdir}/usr/share/"
   install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

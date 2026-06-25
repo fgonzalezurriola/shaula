@@ -26,23 +26,23 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run shaula executable");
     run_step.dependOn(&run_cmd.step);
 
-    const overlay_helper_bin = buildNativeGtkOverlayHelper(b);
+    const overlay_helper_bin = buildNativeGtkOverlayHelper(b, strip);
     const install_overlay_helper = b.addInstallFileWithDir(overlay_helper_bin, .bin, "shaula-overlay");
     b.getInstallStep().dependOn(&install_overlay_helper.step);
 
-    const preview_helper_bin = buildNativeGtkPreviewHelper(b, target, optimize);
+    const preview_helper_bin = buildNativeGtkPreviewHelper(b, target, optimize, strip);
     const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
     b.getInstallStep().dependOn(&install_preview_helper.step);
 
-    const settings_helper_bin = buildNativeGtkSettingsHelper(b, target, optimize);
+    const settings_helper_bin = buildNativeGtkSettingsHelper(b, target, optimize, strip);
     const install_settings_helper = b.addInstallFileWithDir(settings_helper_bin, .bin, "shaula-settings");
     b.getInstallStep().dependOn(&install_settings_helper.step);
 
-    const crop_helper_bin = buildNativeCropImageHelper(b);
+    const crop_helper_bin = buildNativeCropImageHelper(b, strip);
     const install_crop_helper = b.addInstallFileWithDir(crop_helper_bin, .bin, "shaula-crop-image");
     b.getInstallStep().dependOn(&install_crop_helper.step);
 
-    const portal_helper_bin = buildNativePortalScreenshotHelper(b);
+    const portal_helper_bin = buildNativePortalScreenshotHelper(b, strip);
     const install_portal_helper = b.addInstallFileWithDir(portal_helper_bin, .bin, "shaula-portal-screenshot");
     b.getInstallStep().dependOn(&install_portal_helper.step);
 
@@ -115,39 +115,56 @@ fn buildPreviewDocumentTest(b: *std.Build, target: std.Build.ResolvedTarget, opt
     return command;
 }
 
-fn buildNativeGtkOverlayHelper(b: *std.Build) std.Build.LazyPath {
+fn buildNativeGtkOverlayHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
+        \\out="$1"
+        \\strip_flag="$2"
+        \\shift 2
+        \\if [ -n "${strip_flag}" ]; then
+        \\  set -- "${strip_flag}" "$@"
+        \\fi
         \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  -DSHAULA_OVERLAY_STANDALONE \
-        \\  "$2" \
-        \\  -o "$1" \
-        \\ $(pkg-config --cflags --libs gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo) -lm
+        \\  "$@" \
+        \\  -o "${out}" \
+        \\ $(pkg-config --cflags --libs gtk4 gtk4-layer-shell-0)
         ,
         "build-shaula-overlay",
     });
     const output = command.addOutputFileArg("shaula-overlay");
+    command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/overlay/native_gtk_overlay.c"));
     return output;
 }
 
-fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) std.Build.LazyPath {
+fn buildNativeGtkPreviewHelper(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    strip: bool,
+) std.Build.LazyPath {
     const preview_bridge_obj = buildPreviewBridgeObject(b, target, optimize);
 
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
         \\out="$1"
-        \\shift
+        \\strip_flag="$2"
+        \\shift 2
+        \\if [ -n "${strip_flag}" ]; then
+        \\  set -- "${strip_flag}" "$@"
+        \\fi
         \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
-        \\ $(pkg-config --cflags --libs gtk4 gdk-pixbuf-2.0 cairo) -lm
+        \\ $(pkg-config --cflags --libs gtk4) -lm
         ,
         "build-shaula-preview",
     });
     const output = command.addOutputFileArg("shaula-preview");
+    command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/preview/native_gtk_preview.c"));
     command.addFileArg(b.path("src/preview/preview_actions.c"));
     command.addFileArg(b.path("src/preview/preview_action_callbacks.c"));
@@ -174,55 +191,79 @@ fn buildNativeGtkPreviewHelper(b: *std.Build, target: std.Build.ResolvedTarget, 
     return output;
 }
 
-fn buildNativeGtkSettingsHelper(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) std.Build.LazyPath {
+fn buildNativeGtkSettingsHelper(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    strip: bool,
+) std.Build.LazyPath {
     const settings_config_obj = buildZigObject(b, "settings-config", "src/settings/settings_config.zig", target, optimize);
 
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
         \\out="$1"
-        \\shift
+        \\strip_flag="$2"
+        \\shift 2
+        \\if [ -n "${strip_flag}" ]; then
+        \\  set -- "${strip_flag}" "$@"
+        \\fi
         \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
         \\  "$@" \
         \\  -o "${out}" \
-        \\ $(pkg-config --cflags --libs gtk4) -lm
+        \\ $(pkg-config --cflags --libs gtk4)
         ,
         "build-shaula-settings",
     });
     const output = command.addOutputFileArg("shaula-settings");
+    command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/settings/native_gtk_settings.c"));
     command.addFileArg(settings_config_obj);
     return output;
 }
 
-fn buildNativeCropImageHelper(b: *std.Build) std.Build.LazyPath {
+fn buildNativeCropImageHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
+        \\out="$1"
+        \\strip_flag="$2"
+        \\shift 2
+        \\if [ -n "${strip_flag}" ]; then
+        \\  set -- "${strip_flag}" "$@"
+        \\fi
         \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
-        \\  "$2" \
-        \\  -o "$1" \
-        \\ $(pkg-config --cflags --libs gdk-pixbuf-2.0) -lm
+        \\  "$@" \
+        \\  -o "${out}" \
+        \\ $(pkg-config --cflags --libs gdk-pixbuf-2.0)
         ,
         "build-shaula-crop-image",
     });
     const output = command.addOutputFileArg("shaula-crop-image");
+    command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/capture/backends/native_crop_image.c"));
     return output;
 }
 
-fn buildNativePortalScreenshotHelper(b: *std.Build) std.Build.LazyPath {
+fn buildNativePortalScreenshotHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
+        \\out="$1"
+        \\strip_flag="$2"
+        \\shift 2
+        \\if [ -n "${strip_flag}" ]; then
+        \\  set -- "${strip_flag}" "$@"
+        \\fi
         \\zig cc -std=c11 -O2 -Wall -Wextra -Wno-deprecated-declarations \
-        \\  "$2" \
-        \\  -o "$1" \
-        \\ $(pkg-config --cflags --libs gio-2.0 glib-2.0)
+        \\  "$@" \
+        \\  -o "${out}" \
+        \\ $(pkg-config --cflags --libs gio-2.0)
         ,
         "build-shaula-portal-screenshot",
     });
     const output = command.addOutputFileArg("shaula-portal-screenshot");
+    command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/capture/backends/native_portal_screenshot.c"));
     return output;
 }

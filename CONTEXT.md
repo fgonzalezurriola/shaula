@@ -122,6 +122,8 @@ contracts, active risks, and immediate work.
   desktop application database after desktop/icon changes when the host cache
   utilities are available. Cache refresh failures warn but do not invalidate an
   otherwise successful install.
+- Release archives and `shaula-bin` must install and verify all helper binaries,
+  including `shaula-portal-screenshot`.
 - `shaula doctor --json`, `preflight --json`, `capabilities list --json`, and
   `explore --json [--brief]` are read-only runtime/discovery surfaces.
 
@@ -156,6 +158,12 @@ contracts, active risks, and immediate work.
   override, sibling binary, then PATH.
 - Capture commands are not retried automatically because retries can create
   duplicate screenshots or repeated portal prompts.
+- `zig build -Dstrip` strips the main executable and every native helper. Helper
+  link commands use the minimal pkg-config module set and retain `-lm` only for
+  Preview, where it is required.
+- The overlay helper is implemented solely by
+  `overlay/native_gtk_overlay.c`; the obsolete Zig wrapper entry points were
+  removed.
 
 ### Overlay
 
