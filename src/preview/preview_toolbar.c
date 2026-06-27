@@ -770,11 +770,14 @@ void shaula_preview_toolbar_update_selection_state(ShaulaPreviewState *state) {
   guint selected_count = shaula_annotation_editor_selected_count(state);
   gboolean has_object_selection = selected_count > 0;
   gboolean has_region_selection = state->has_region_selection;
+  gboolean has_available_action =
+      can_duplicate || can_crop || can_blur || can_erase || can_spotlight ||
+      can_delete;
   gboolean show_group =
-      state->active_tool == SHAULA_TOOL_SELECT &&
-      state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_NONE &&
-      (can_duplicate || can_crop || can_blur || can_erase || can_spotlight ||
-       can_delete);
+      has_available_action &&
+      (state->has_region_selection ||
+       (state->active_tool == SHAULA_TOOL_SELECT &&
+        state->properties_hud.active_panel == SHAULA_PROPERTIES_PANEL_NONE));
 
   if (state->selection_actions_box != NULL)
     gtk_widget_set_visible(state->selection_actions_box, show_group);

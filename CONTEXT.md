@@ -243,6 +243,10 @@ contracts, active risks, and immediate work.
   numeric slot; tooltips and overflow rows show only mnemonic letters when one
   exists. Contextual actions and HUD controls must not expand headerbar natural
   width.
+- The Select contextual HUD is the region-redaction action surface. It must
+  become visible immediately after a valid region drag, even when no annotation
+  was intersected or another tool/property HUD was active, so Crop/Blur/Erase/
+  Spotlight remain reachable without changing the headerbar width.
 - New code comments are English and reserved for contracts, boundaries, or
   non-obvious decisions.
 - Required validation after every change:

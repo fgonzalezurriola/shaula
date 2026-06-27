@@ -5,6 +5,7 @@
 
 #include "preview_annotation_editor.h"
 #include "preview_state.h"
+#include "preview_toolbar.h"
 
 #define SHAULA_SELECTION_EDGE_TARGET_PX 8.0
 #define SHAULA_SELECTION_HANDLE_TARGET_PX 8.0
@@ -706,7 +707,8 @@ gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state) {
     if (state->operation_changed) {
       ShaulaRect rect = shaula_rect_from_points(state->drag_start_image,
                                                 state->drag_current_image);
-      shaula_annotation_editor_select_intersecting_rect(state, rect);
+      if (shaula_annotation_editor_select_intersecting_rect(state, rect) == 0)
+        shaula_preview_toolbar_update_selection_state(state);
     } else {
       shaula_preview_clear_region_selection(state);
     }
