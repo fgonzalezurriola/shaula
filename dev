@@ -22,6 +22,8 @@ Core:
   release-arm Build shaula and overlay helper (ReleaseSafe, aarch64)
   test           Run Zig tests
   check          Run build + tests
+  port-check     Build and run the isolated Meson C port tests
+  port-check-asan Build and run the C port tests with ASan/UBSan
   doctor         Check local toolchain/runtime dependencies
   clean          Remove build and QA scratch artifacts
 
@@ -136,8 +138,25 @@ doctor() {
   return "${fail}"
 }
 
+port_check() {
+  local build_dir="${1}"
+  shift
+  meson setup "${build_dir}" --wipe -Dwerror=true "$@"
+  meson compile -C "${build_dir}"
+  meson test -C "${build_dir}" --print-errorlogs
+}
+
+port_check_asan() {
+  local compiler="${CC:-cc}"
+  local lundef=true
+  if [[ "${compiler##*/}" == *clang* ]]; then
+    lundef=false
+  fi
+  port_check build-asan -Db_sanitize=address,undefined -Db_lundef="${lundef}"
+}
+
 clean() {
-  rm -rf .zig-cache zig-out src/overlay/__pycache__ scripts/qa/__pycache__
+  rm -rf .zig-cache zig-out build-port build-asan build-c-port src/overlay/__pycache__ scripts/qa/__pycache__
   rm -f .qa/evidence/*.tmp .qa/evidence/*.log .qa/evidence/*.txt
   echo "ok clean"
 }
@@ -247,19 +266,151 @@ stage() {
   echo "reload Niri config with your normal Niri workflow before testing preview placement"
 }
 
+import_graphical_session_environment() {
+  local name value current
+  have systemctl || return 0
+
+  while IFS='=' read -r name value; do
+    case "${name}" in
+      WAYLAND_DISPLAY|DISPLAY|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|NIRI_SOCKET)
+        current="${!name-}"
+        if [[ -z "${current}" && -n "${value}" ]]; then
+          export "${name}=${value}"
+        fi
+        ;;
+    esac
+  done < <(systemctl --user show-environment 2>/dev/null || true)
+}
+
+noctalia_instance_ids() {
+  local launcher="${1}"
+  "${launcher}" list --all 2>/dev/null | awk '
+    /^Instance [^:]+:/ {
+      id = $2
+      sub(/:$/, "", id)
+      next
+    }
+    /^[[:space:]]+Config path: .*\/noctalia-shell\/shell\.qml$/ {
+      if (id != "") print id
+      id = ""
+    }
+  ' | sort || true
+}
+
+noctalia_wait_for_instances() {
+  local launcher="${1}"
+  local attempts="${SHAULA_NOCTALIA_READY_ATTEMPTS:-100}"
+  local delay="${SHAULA_NOCTALIA_POLL_SECONDS:-0.1}"
+  local attempt ids
+  for ((attempt = 0; attempt < attempts; attempt++)); do
+    ids="$(noctalia_instance_ids "${launcher}")"
+    if [[ -n "${ids}" ]]; then
+      return 0
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
+noctalia_wait_for_no_instances() {
+  local launcher="${1}"
+  local attempts="${SHAULA_NOCTALIA_STOP_ATTEMPTS:-50}"
+  local delay="${SHAULA_NOCTALIA_POLL_SECONDS:-0.1}"
+  local attempt ids
+  for ((attempt = 0; attempt < attempts; attempt++)); do
+    ids="$(noctalia_instance_ids "${launcher}")"
+    if [[ -z "${ids}" ]]; then
+      return 0
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
+noctalia_wait_for_replaced_instances() {
+  local launcher="${1}"
+  local previous_ids="${2}"
+  local attempts="${SHAULA_NOCTALIA_READY_ATTEMPTS:-100}"
+  local delay="${SHAULA_NOCTALIA_POLL_SECONDS:-0.1}"
+  local attempt current_ids previous_id old_instance_present
+
+  for ((attempt = 0; attempt < attempts; attempt++)); do
+    current_ids="$(noctalia_instance_ids "${launcher}")"
+    if [[ -n "${current_ids}" ]]; then
+      old_instance_present=false
+      while IFS= read -r previous_id; do
+        [[ -z "${previous_id}" ]] && continue
+        if grep -Fxq "${previous_id}" <<<"${current_ids}"; then
+          old_instance_present=true
+          break
+        fi
+      done <<<"${previous_ids}"
+      if [[ "${old_instance_present}" == false ]]; then
+        return 0
+      fi
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
+restart_noctalia_with_launcher() {
+  local launcher="${1}"
+  local log_path="${SHAULA_NOCTALIA_LOG_PATH:-/tmp/shaula-noctalia.log}"
+
+  "${launcher}" kill -c noctalia-shell --any-display >/dev/null 2>&1 || true
+  if ! noctalia_wait_for_no_instances "${launcher}"; then
+    echo "warning: existing Noctalia instances did not stop; refusing to launch a duplicate" >&2
+    return 1
+  fi
+
+  : >"${log_path}"
+  "${launcher}" -d -c noctalia-shell >"${log_path}" 2>&1 &
+
+  if noctalia_wait_for_instances "${launcher}"; then
+    echo "restarted Noctalia with ${launcher} -d -c noctalia-shell"
+    echo "log ${log_path}"
+    return 0
+  fi
+
+  echo "warning: Noctalia did not become ready; see ${log_path}" >&2
+  tail -n 20 "${log_path}" >&2 || true
+  return 1
+}
+
 restart_noctalia() {
-  if systemctl --user restart noctalia.service >/dev/null 2>&1; then
-    echo "restarted noctalia.service"
-  elif have qs; then
-    qs kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'qs .*noctalia-shell' 2>/dev/null || true
-    nohup qs -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with qs -d --allow-duplicate -c noctalia-shell"
-    echo "log /tmp/shaula-noctalia.log"
+  import_graphical_session_environment
+
+  local launcher=""
+  local previous_ids=""
+  if have qs; then
+    launcher=qs
   elif have quickshell; then
-    quickshell kill -c noctalia-shell --any-display >/dev/null 2>&1 || pkill -f 'quickshell .*noctalia-shell' 2>/dev/null || true
-    nohup quickshell -d --allow-duplicate -c noctalia-shell >/tmp/shaula-noctalia.log 2>&1 &
-    echo "restarted Noctalia with quickshell -d --allow-duplicate -c noctalia-shell"
-    echo "log /tmp/shaula-noctalia.log"
+    launcher=quickshell
+  fi
+  if [[ -n "${launcher}" ]]; then
+    previous_ids="$(noctalia_instance_ids "${launcher}")"
+  fi
+
+  if systemctl --user restart noctalia.service >/dev/null 2>&1; then
+    if [[ -n "${launcher}" ]]; then
+      if noctalia_wait_for_replaced_instances "${launcher}" "${previous_ids}"; then
+        echo "restarted noctalia.service and verified a replacement Noctalia instance"
+        return 0
+      fi
+      echo "warning: noctalia.service restarted but previous instances were not replaced" >&2
+      return 1
+    fi
+    if systemctl --user is-active --quiet noctalia.service; then
+      echo "restarted active noctalia.service"
+      return 0
+    fi
+    echo "warning: noctalia.service restart returned success but the service is not active" >&2
+    return 1
+  fi
+
+  if [[ -n "${launcher}" ]]; then
+    restart_noctalia_with_launcher "${launcher}"
   else
     echo "warning: could not restart Noctalia; missing noctalia.service and qs/quickshell" >&2
     return 1
@@ -351,6 +502,10 @@ EOF
   fi
 }
 
+if [[ "${SHAULA_DEV_SOURCE_ONLY:-0}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 cmd="${1:-help}"
 if [[ $# -gt 0 ]]; then
   shift
@@ -375,6 +530,12 @@ release-arm)
   check)
     build
     zig build test
+    ;;
+  port-check)
+    port_check build-port
+    ;;
+  port-check-asan)
+    port_check_asan
     ;;
   doctor)
     doctor

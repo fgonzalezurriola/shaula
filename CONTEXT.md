@@ -12,6 +12,34 @@ contracts, active risks, and immediate work.
 - v0.1.6 is the image composition and expandable canvas release. It has no
   fixed date and should ship only when the new document model, history, export,
   memory limits, and human workflow are coherent. See `docs/plan-v0.1.6.md`.
+- The `port` branch is the accepted Zig-to-C migration line. Its implementation
+  order, compatibility gates, Meson target, and normative ownership rules are
+  defined in `spec/zig-to-c-port.md` and ADR 0002. Port commits must preserve
+  product behavior and remain separate from unrelated feature work.
+- Phase 0/1 implementation has started. `docs/port/baseline.md` records the
+  executable/toolchain/test baseline, `docs/port/migration-matrix.md` maps every
+  Zig module, and Meson builds isolated C port tests without owning production
+  installation yet. The C port workflow runs GCC and Clang with ASan/UBSan and
+  includes fixture-driven runtime environment, Settings process, and Noctalia
+  restart tests.
+- Preview geometry is the first production caller cutover: `shaula-preview` and
+  the Preview document test compile `preview_geometry.c`. Preview image I/O is
+  the second: `shaula-preview` compiles `preview_image_io.c` directly for byte
+  copies, PNG suffix handling, and containing-folder launch. Preview clipboard
+  is the third: PNG copy uses the public Shaula CLI and text copy writes exact
+  bytes to `wl-copy` through an explicit stdin pipe with no shell. Preview
+  notification is the fourth: C owns exact `notify-send` argv, hint-to-icon
+  fallback, timeout flags, URI escaping, and silent best-effort failures. The
+  production Preview helper no longer links an aggregate Zig bridge. Settings
+  configuration is the fifth Phase 2 cutover: `shaula-settings` compiles
+  `settings_config.c` directly for defaults, preset mapping, path resolution,
+  and config-show JSON mapping. `settings_process.c` owns exact save argv and
+  synchronous subprocess behavior. Phase 2 strict cleanup is complete: the five
+  obsolete implementation sources, the unlinked Preview bridge marker, and
+  `runtime/c_compat.zig` have been deleted after repository-wide reference
+  checks. Phase 3 has started with `runtime/env.{c,h}`. Production Zig callers
+  use the C parser through a temporary mechanical `runtime/env.zig` facade; the
+  facade remains until those callers migrate to C.
 - The preview toolbar and More menu are the active UI surfaces. Keep the
   headerbar compact, stable in natural width, and honest about available actions.
 - Settings must expose the public config contract without inventing a second
@@ -86,6 +114,11 @@ contracts, active risks, and immediate work.
   uniformly, and reanchors the opposite visual corner after Pango bounds
   recomputation. Resize remains single-selection only, creates at most one undo
   entry per drag, and never updates future Text creation defaults.
+- Pen, Highlight, and Measure are continuous-drawing tools: after a valid stroke
+  commits, preview drops the selection so the next stroke starts uncluttered,
+  and the tool-defaults HUD stays visible because it owns the editor for color,
+  width, and opacity. The committed stroke can still be re-selected later from
+  Select or via marquee.
 - `Ctrl+V` pastes the preview-local annotation clipboard. `Ctrl+Shift+V` reads
   the system clipboard asynchronously, prefers image over text, inserts one
   annotation near the visible canvas center, and never mutates the internal
@@ -117,7 +150,12 @@ contracts, active risks, and immediate work.
 - Saving settings may update Shaula's managed Niri rule block. Shaula does not
   reload or restart Niri or Noctalia.
 - Noctalia is optional. It invokes public CLI contracts and must never become a
-  capture hot-path dependency.
+  capture hot-path dependency. Development install/reload commands import only
+  allowlisted missing graphical-session variables from the user systemd
+  environment. Direct restarts wait for old instances to disappear, launch
+  without duplicate permission, and require a newly observable running
+  `noctalia-shell`; systemd restarts also require instance or active-service
+  readiness before reporting success.
 - Release and development installs refresh the user hicolor icon cache and
   desktop application database after desktop/icon changes when the host cache
   utilities are available. Cache refresh failures warn but do not invalidate an
@@ -154,8 +192,11 @@ contracts, active risks, and immediate work.
 
 - `capabilities/runtime.zig` owns backend selection. Call its typed decision
   methods rather than comparing backend strings.
-- `runtime/env.zig` owns environment parsing; `runtime/tool_lookup.zig` owns
-  fixed tool candidates and PATH-aware diagnostics.
+- `runtime/env.{c,h}` owns environment trimming, boolean parsing, exact bounded
+  unsigned parsing, and desktop-token extraction. It returns borrowed spans and
+  allocates nothing. `runtime/env.zig` is a temporary lookup/ABI facade for the
+  remaining Zig callers and contains no independent parsing logic.
+- `runtime/tool_lookup.zig` owns fixed tool candidates and PATH-aware diagnostics.
 - `runtime/process_exec.zig` owns shared process execution. Callers still own
   output limits, cleanup, and deterministic error mapping.
 - `runtime/helper_resolution.zig` owns helper lookup order: explicit environment
@@ -189,13 +230,38 @@ contracts, active risks, and immediate work.
 - `config/manager.zig` owns canonical config output, comment-preserving patching,
   backups, and atomic replacement.
 - `config/niri_rule.zig` owns generated preview window-rule semantics.
-- `settings/settings_config.zig` owns the C-facing settings model and config-show
-  JSON mapping. The GTK helper is an adapter; it must not write TOML directly.
+- `settings/settings_config.{c,h}` owns the C-facing settings model, integrated
+  defaults, config path resolution, preset mapping, ABI layout assertions, and
+  permissive config-show JSON field extraction. Returned strings are GLib-owned
+  and cleared through the public config cleanup function.
+- `settings/settings_process.{c,h}` owns exact `config save --json` argv and the
+  synchronous spawn/stdout/stderr/exit mapping used by the GTK helper. The GTK
+  helper must not write TOML directly. The obsolete Zig Settings bridge source
+  was removed during Phase 2 strict cleanup.
 
 ### Preview
 
 - `preview/preview_commands.{c,h}` is the external command interface for
   availability, shortcuts, tool mapping, and execution.
+- `preview/preview_geometry.{c,h}` owns color, point, and rectangle primitives.
+  Production Preview callers no longer depend on the former Zig geometry ABI.
+- `preview/preview_image_io.{c,h}` owns byte-for-byte file copies, PNG extension
+  normalization, and asynchronous containing-folder launch. Returned paths are
+  GLib-owned and released with `g_free`; `xdg-open` receives an explicit argv
+  element without shell interpretation.
+- `preview/preview_clipboard.{c,h}` owns Preview PNG/text clipboard publication.
+  PNG copy resolves an executable sibling `shaula` before PATH fallback and
+  invokes `clipboard copy-image --input <path> --json` with exact argv. Text copy
+  sends owned bytes synchronously to `wl-copy --type text/plain` through stdin.
+  Child stdout is suppressed; PNG stderr is captured and text stderr remains
+  inherited. Borrowed inputs are never retained, and returned `GError` values
+  are caller-owned.
+- `preview/preview_notify.{c,h}` owns the Preview best-effort notification ABI.
+  Required summary/body strings and the optional image path are borrowed for the
+  synchronous call. It invokes `notify-send` through PATH with explicit argv,
+  suppresses stdout/stderr, uses a bytewise escaped freedesktop image-path hint,
+  retries with `-i` only when an image was supplied, and reports every build,
+  spawn, nonzero-exit, or signal failure only as `FALSE` without `GError`.
 - `preview/preview_actions.{c,h}` owns save/copy/window runtime actions and is
   called only by Commands.
 - `preview/preview_action_callbacks.{c,h}` is the GTK callback adapter.
@@ -256,6 +322,13 @@ contracts, active risks, and immediate work.
   git diff --check
   ```
 
+- C port changes additionally run:
+
+  ```bash
+  ./dev port-check
+  ./dev port-check-asan
+  ```
+
 - After UI changes also run:
 
   ```bash
@@ -295,17 +368,24 @@ contracts, active risks, and immediate work.
   convert historical observations into stronger support claims.
 - QuickShell general integration and the static landing page are planned work,
   not part of the current capture/preview reliability scope.
+- The initial baseline is 99/100 Zig tests: the remaining failure is the
+  host-dependent `grim` expectation in `capture_backend_test.zig`. Do not report
+  it as a C-port regression until the environmental assumption is isolated.
+- Uncommitted Preview/UI changes predate the port implementation. They must be
+  reviewed and separated before migration commits are created.
 
 ## Immediate next steps
 
-1. Resolve the early v0.1.6 document decisions: canvas background, base-image
-   selection contract, shared image asset ownership, maximum dimensions/pixels,
-   and crop behavior. Record durable choices in an ADR before implementation.
-2. Implement explicit canvas dimensions and base-image placement without visible
-   behavior changes, then audit ambiguous image/document dimension helpers.
-3. Run `./dev check` and `git diff --check` after every change. After UI changes
-   also run `./dev dev-install --yes`; interactive Preview/capture work requires
-   targeted checks and user validation through `./dev capture` and `./dev all`.
+1. Review and separate the pre-existing Preview/UI working changes from the port
+   specification and implementation so migration commits remain bisectable.
+2. Move a narrow set of `runtime/env.zig` callers to C and delete the temporary
+   facade once no maintained Zig caller imports it.
+3. Expand Phase 0 fixtures for CLI failures, config round trips, and helper
+   protocol outcomes; isolate the host-dependent `grim` test assumption.
+4. Continue Phase 3 with another narrow primitive, preferably
+   `runtime/paths.zig`, without pulling in tool or helper resolution.
+5. Run `./dev check`, `./dev port-check`, `./dev port-check-asan`, and
+   `git diff --check` after C migration changes.
 
 ## Relevant source documents
 
@@ -316,6 +396,14 @@ contracts, active risks, and immediate work.
 - `spec/configuration.md`: public TOML schema, defaults, CLI, and Niri examples.
 - `docs/adr/0001-preview-paste-architecture.md`: accepted async clipboard and
   image-ownership decision.
+- `docs/adr/0002-port-zig-core-to-c.md`: accepted decision to remove Zig and
+  converge on a C/Meson implementation.
+- `spec/zig-to-c-port.md`: normative migration phases, compatibility gates,
+  verification requirements, and C memory-management rules.
+- `docs/port/baseline.md`: initial executable, dependency, fixture, and known
+  failure baseline.
+- `docs/port/migration-matrix.md`: grouped mapping from every Zig source/test
+  module to callers, characterization, phase, and status.
 - `docs/preview-tools.md`: detailed preview actions, selection, clipboard, tools,
   HUD persistence, and More-menu behavior.
 - `docs/preview-ui-contract.md`: headerbar packing, overflow, startup readiness,

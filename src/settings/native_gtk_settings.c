@@ -3,6 +3,7 @@
 #include <glib/gstdio.h>
 #include <string.h>
 #include "settings_config.h"
+#include "settings_process.h"
 
 typedef struct {
   GtkApplication *app;
@@ -61,27 +62,6 @@ static AppState state;
 static const int SETTINGS_CONTROL_W = 132;
 static const int SETTINGS_SWITCH_W = 46;
 static const int SETTINGS_SWITCH_H = 26;
-
-static gboolean run_shaula(char **argv, gchar **stdout_text,
-                           gchar **stderr_text, int *exit_code) {
-  gint status = 1;
-  GError *error = NULL;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
-                   stdout_text, stderr_text, &status, &error);
-  if (!spawned) {
-    if (stderr_text != NULL)
-      *stderr_text = g_strdup(error != NULL ? error->message : "spawn failed");
-    if (error != NULL)
-      g_error_free(error);
-    if (exit_code != NULL)
-      *exit_code = 127;
-    return FALSE;
-  }
-  if (exit_code != NULL)
-    *exit_code = g_spawn_check_wait_status(status, NULL) ? 0 : 1;
-  return TRUE;
-}
 
 static gboolean json_niri_changed(const char *json) {
   const char *niri = strstr(json, "\"niri\":");
@@ -171,122 +151,12 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   next.save_folder = g_strdup(state.config.save_folder);
   read_controls(&next);
 
-  char *focused = g_strdup(next.focused ? "true" : "false");
-  char *close_preview_on_save =
-      g_strdup(next.close_preview_on_save ? "true" : "false");
-  char *width = g_strdup_printf("%d", next.width);
-  char *height = g_strdup_printf("%d", next.height);
-  char *floating_x = next.floating_x_set
-                         ? g_strdup_printf("%d", next.floating_x)
-                         : g_strdup("null");
-  char *floating_y = next.floating_y_set
-                         ? g_strdup_printf("%d", next.floating_y)
-                         : g_strdup("null");
-  char *quick_skip = g_strdup(next.quick_skip_preview ? "true" : "false");
-  char *quick_copy = g_strdup(next.quick_copy ? "true" : "false");
-  char *quick_save = g_strdup(next.quick_save ? "true" : "false");
-  char *area_skip = g_strdup(next.area_skip_preview ? "true" : "false");
-  char *area_copy = g_strdup(next.area_copy ? "true" : "false");
-  char *area_save = g_strdup(next.area_save ? "true" : "false");
-  char *fullscreen_skip =
-      g_strdup(next.fullscreen_skip_preview ? "true" : "false");
-  char *fullscreen_copy = g_strdup(next.fullscreen_copy ? "true" : "false");
-  char *fullscreen_save = g_strdup(next.fullscreen_save ? "true" : "false");
-  char *all_screens_skip =
-      g_strdup(next.all_screens_skip_preview ? "true" : "false");
-  char *all_screens_copy = g_strdup(next.all_screens_copy ? "true" : "false");
-  char *all_screens_save = g_strdup(next.all_screens_save ? "true" : "false");
-  char *notifications_success =
-      g_strdup(next.notifications_success ? "true" : "false");
-  char *notifications_errors =
-      g_strdup(next.notifications_errors ? "true" : "false");
-  char *notifications_thumbnails =
-      g_strdup(next.notifications_thumbnails ? "true" : "false");
-  char *argv[] = {
-      state.shaula_bin,
-      "config",
-      "save",
-      "--json",
-      "--region-mode",
-      (char *)shaula_settings_region_mode_text(next.region_mode),
-      "--preview-mode",
-      (char *)shaula_settings_window_mode_text(next.window_mode),
-      "--focused",
-      focused,
-      "--close-preview-on-save",
-      close_preview_on_save,
-      "--width",
-      width,
-      "--height",
-      height,
-      "--default-column-display",
-      next.column_display != NULL ? next.column_display : "normal",
-      "--floating-x",
-      floating_x,
-      "--floating-y",
-      floating_y,
-      "--floating-relative-to",
-      next.floating_relative_to != NULL ? next.floating_relative_to : "top-left",
-      "--after-quick-skip-preview",
-      quick_skip,
-      "--after-quick-copy",
-      quick_copy,
-      "--after-quick-save",
-      quick_save,
-      "--after-area-skip-preview",
-      area_skip,
-      "--after-area-copy",
-      area_copy,
-      "--after-area-save",
-      area_save,
-      "--after-fullscreen-skip-preview",
-      fullscreen_skip,
-      "--after-fullscreen-copy",
-      fullscreen_copy,
-      "--after-fullscreen-save",
-      fullscreen_save,
-      "--after-all-screens-skip-preview",
-      all_screens_skip,
-      "--after-all-screens-copy",
-      all_screens_copy,
-      "--after-all-screens-save",
-      all_screens_save,
-      "--save-folder",
-      next.save_folder != NULL ? next.save_folder : "",
-      "--notifications-success",
-      notifications_success,
-      "--notifications-errors",
-      notifications_errors,
-      "--notifications-thumbnails",
-      notifications_thumbnails,
-      "--apply-niri",
-      NULL,
-  };
+  g_auto(GStrv) argv =
+      shaula_settings_build_save_argv(state.shaula_bin, &next);
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
-  g_free(focused);
-  g_free(close_preview_on_save);
-  g_free(width);
-  g_free(height);
-  g_free(floating_x);
-  g_free(floating_y);
-  g_free(quick_skip);
-  g_free(quick_copy);
-  g_free(quick_save);
-  g_free(area_skip);
-  g_free(area_copy);
-  g_free(area_save);
-  g_free(fullscreen_skip);
-  g_free(fullscreen_copy);
-  g_free(fullscreen_save);
-  g_free(all_screens_skip);
-  g_free(all_screens_copy);
-  g_free(all_screens_save);
-  g_free(notifications_success);
-  g_free(notifications_errors);
-  g_free(notifications_thumbnails);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
 
   if (exit_code != 0) {
     char *message =
@@ -333,7 +203,7 @@ static void on_open_clicked(GtkButton *button, gpointer data) {
   char *argv[] = {"xdg-open", state.config_path, NULL};
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, NULL, &err, &exit_code);
+  shaula_settings_run_command(argv, NULL, &err, &exit_code);
   if (exit_code != 0) {
     char *message = g_strdup_printf("Could not open config file. %s",
                                     err != NULL ? err : "");
@@ -382,7 +252,7 @@ static void refresh_niri_status(void) {
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
 
   if (exit_code == 0 && out != NULL) {
     const char *detected = json_bool(out, "niri_detected");
@@ -507,7 +377,7 @@ static void do_niri_install(gboolean force) {
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
 
   if (exit_code != 0) {
     char *message =
@@ -569,7 +439,7 @@ static void on_niri_remove_response(GtkDialog *dialog, int response,
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
 
   if (exit_code != 0) {
     char *message =
@@ -601,7 +471,7 @@ static void on_niri_open_config_clicked(GtkButton *button, gpointer data) {
   char *argv[] = {"xdg-open", state.niri_config_path, NULL};
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, NULL, &err, &exit_code);
+  shaula_settings_run_command(argv, NULL, &err, &exit_code);
   if (exit_code != 0) {
     char *message = g_strdup_printf("Could not open Niri config. %s",
                                     err != NULL ? err : "");
@@ -654,7 +524,7 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
   if (exit_code != 0) {
     char *message =
         g_strdup_printf("%s%s", out != NULL && *out != '\0' ? out : "",
@@ -1063,7 +933,7 @@ static void load_initial_state(AppState *app) {
   gchar *out = NULL;
   gchar *err = NULL;
   int exit_code = 1;
-  run_shaula(argv, &out, &err, &exit_code);
+  shaula_settings_run_command(argv, &out, &err, &exit_code);
   app->config_exists = g_file_test(app->config_path, G_FILE_TEST_EXISTS);
   if (exit_code != 0) {
     app->config_invalid = TRUE;

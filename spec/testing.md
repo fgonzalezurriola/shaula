@@ -42,13 +42,33 @@ Deterministic failure token for non-ready environment:
 
 ## Test Matrix
 
-### Current Gate (`./dev check`, `git diff --check`, `./dev qa`)
+### Current Gate (`./dev check`, C port checks, `git diff --check`, `./dev qa`)
 
-- `./dev check` builds and runs Zig/C helper tests.
+- `./dev check` builds the production mixed-language application and runs the
+  maintained Zig/C helper tests.
+- `./dev port-check` configures Meson with warnings as errors and runs the
+  isolated C migration tests.
+- `./dev port-check-asan` runs the same C tests under AddressSanitizer and
+  UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
+  matching the maintained CI compiler matrix.
+- The C lane currently contains eight tests. It covers runtime environment
+  strings, booleans, bounded unsigned values, and desktop tokens; Preview
+  geometry, image I/O, clipboard, and notifications; Settings config parsing/ABI
+  and exact process argv/spawn behavior; plus fixture-driven Noctalia restart
+  readiness.
 - `git diff --check` rejects whitespace errors.
 - `./dev qa` runs the curated non-intrusive contract lane:
   `run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
   matrix, and exit-code mapping.
+
+### Runtime environment contract (`tests/unit/runtime_env_test.c`)
+
+- Missing, empty, whitespace-only, trimmed, and non-ASCII borrowed values
+- Borrowed lifetime across another parser call
+- Tri-state, ASCII case-insensitive boolean variants and malformed inputs
+- Base-10 unsigned signs, underscores, exact type maxima, overflow, and defaults
+- Colon/semicolon desktop tokens, repeated separators, empty tokens, case
+  preservation, and exact first-token extraction
 
 ### Unit / Contracts / Mocks (`scripts/qa/run-unit-tests.sh`)
 

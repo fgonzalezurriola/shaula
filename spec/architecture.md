@@ -376,6 +376,23 @@ focused output. It must not probe compositor/backend state again.
 - `cli/json.zig` owns shared timestamps, escaping, and deterministic JSON
   envelopes used by preview, history, errors, doctor, and notify commands.
 
+### Runtime environment boundary
+
+- `runtime/env.{c,h}` owns allocation-free environment value parsing: borrowed
+  spans, ASCII whitespace trimming, tri-state booleans, exact bounded unsigned
+  integers, and first desktop-token extraction.
+- Environment value pointers may be `NULL` to represent a missing variable.
+  Returned spans are borrowed from caller-supplied storage, require no free
+  function, remain valid across another parser call, and are invalidated only
+  when the backing environment is mutated or released.
+- The C functions have no mutable global state and are thread-safe while callers
+  keep each input buffer stable. Malformed booleans return `INVALID`; malformed
+  or overflowing unsigned values return the caller-provided default.
+- `runtime/env.zig` is a temporary production facade for existing Zig callers.
+  It preserves lookup against each caller's `std.process.Environ` and performs
+  only ABI conversion and integer-width bounding. Delete it when no maintained
+  Zig source imports it.
+
 ### Diagnostics and configuration
 
 - `doctor/diagnostics.zig` owns installed/runtime discovery.
@@ -383,21 +400,29 @@ focused output. It must not probe compositor/backend state again.
   applies flags to the config draft.
 - `config/command.zig` owns command-level config flags, orchestration, and JSON
   envelopes.
-- `settings/settings_config.zig` owns the settings configuration contract.
+- `settings/settings_config.{c,h}` owns the C-facing Settings model,
+  integrated defaults, config path resolution, preset mapping, and permissive
+  `config show --json` field extraction. `settings/settings_process.{c,h}` owns
+  exact Settings helper argv construction and synchronous process execution.
+  The obsolete Zig Settings bridge source was deleted during Phase 2 cleanup.
 
 ### Preview boundaries
 
 - `preview/preview_paths.{c,h}` owns the helper-side temporary capture-path
   contract and must stay aligned with `runtime/paths.zig`.
-- `preview/preview_geometry.zig` owns cross-language preview geometry and color
-  conversion helpers.
-- `preview/preview_image_io.zig` and `preview/preview_clipboard.zig` own preview
-  image and clipboard runtime calls.
+- `preview/preview_geometry.{c,h}` owns Preview geometry and color conversion.
+- `preview/preview_image_io.{c,h}` and `preview/preview_clipboard.{c,h}` own
+  Preview image and clipboard runtime calls. The clipboard C port intentionally
+  replaces shell-mediated text publication with exact argv/stdin and suppresses
+  child stdout so nested `--json` output cannot escape the helper boundary.
+- `preview/preview_notify.{c,h}` owns best-effort Preview notification argv,
+  image-hint fallback, timeout normalization, and silent failure behavior.
 - `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
   tolerant INI loading, debounced dirty-key persistence, and cross-preview file
   locking. Inspector/widget state remains in `preview_properties_hud.*`.
-- `runtime/c_compat.zig` owns C/GTK string and status compatibility glue;
-  returned GLib strings remain GLib-owned and must be released with `g_free`.
+- Phase 2 strict cleanup removed the obsolete Zig Preview/Settings bridge
+  sources and `runtime/c_compat.zig`; the maintained build has one C owner for
+  each migrated bridge symbol.
 - `ShaulaPreviewDocument` owns output-affecting preview model state. GTK widgets,
   view state, tools, gestures, and rendering remain in the C preview surface.
 

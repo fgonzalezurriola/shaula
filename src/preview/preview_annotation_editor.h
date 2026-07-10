@@ -45,6 +45,12 @@ guint shaula_annotation_editor_select_intersecting_rect(
  */
 void shaula_annotation_editor_add_annotation(ShaulaPreviewState *state,
                                              ShaulaAnnotation *annotation);
+/* Adds one annotation as one undo transaction without selecting it. Used by
+ * continuous-drawing tools (Pen, Highlight, Measure) so the just-committed
+ * stroke does not leave selection chrome over the canvas. The caller is
+ * responsible for keeping the appropriate tool-defaults HUD visible. */
+void shaula_annotation_editor_add_annotation_unselected(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation);
 /* Inserts one external annotation as one undo transaction without changing the
  * preview-local annotation clipboard. */
 gboolean shaula_annotation_editor_insert_external(

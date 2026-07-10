@@ -1367,13 +1367,42 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
   }
 
   if (annotation != NULL) {
-    shaula_annotation_editor_add_annotation(state, annotation);
-    if (annotation->type == SHAULA_ANNOTATION_ARROW ||
-        annotation->type == SHAULA_ANNOTATION_RECTANGLE) {
+    gboolean keep_selected =
+        annotation->type == SHAULA_ANNOTATION_ARROW ||
+        annotation->type == SHAULA_ANNOTATION_RECTANGLE;
+
+    if (keep_selected) {
+      shaula_annotation_editor_add_annotation(state, annotation);
       state->active_tool = SHAULA_TOOL_SELECT;
       shaula_preview_toolbar_update_tool_state(state);
       if (state->area != NULL)
         gtk_widget_set_cursor_from_name(state->area, "default");
+    } else {
+      /* Pen, Highlight, and Measure are continuous-drawing tools: drop the
+       * just-committed selection so the next stroke is unobstructed. The
+       * tool-defaults HUD must stay visible; for Pen/Highlight it was opened
+       * on tool activation, but Measure only opens through selection today,
+       * so re-assert its panel here.
+       */
+      ShaulaPropertiesPanel tool_panel = SHAULA_PROPERTIES_PANEL_NONE;
+      switch (annotation->type) {
+      case SHAULA_ANNOTATION_PEN:
+        tool_panel = SHAULA_PROPERTIES_PANEL_PEN;
+        break;
+      case SHAULA_ANNOTATION_HIGHLIGHT:
+        tool_panel = SHAULA_PROPERTIES_PANEL_HIGHLIGHT;
+        break;
+      case SHAULA_ANNOTATION_MEASURE:
+        tool_panel = SHAULA_PROPERTIES_PANEL_MEASURE;
+        break;
+      default:
+        break;
+      }
+      shaula_annotation_editor_add_annotation_unselected(state, annotation);
+      if (tool_panel != SHAULA_PROPERTIES_PANEL_NONE) {
+        shaula_properties_hud_set_panel(&state->properties_hud, tool_panel);
+        shaula_preview_toolbar_update_selection_state(state);
+      }
     }
   }
 }

@@ -1,5 +1,8 @@
 .zig-cache/
 zig-out/
+/build-port/
+/build-asan/
+/build-c-port/
 .pi/
 .qa/evidence/
 

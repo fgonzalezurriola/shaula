@@ -1,0 +1,85 @@
+name: C port
+
+on:
+  push:
+    branches:
+      - port
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  meson:
+    name: Meson ${{ matrix.compiler }} ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - gcc
+          - clang
+        mode:
+          - normal
+          - asan-ubsan
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            clang \
+            git \
+            meson \
+            ninja-build \
+            pkg-config \
+            libgtk-4-dev \
+            libgdk-pixbuf-2.0-dev \
+            libcairo2-dev \
+            libwayland-dev \
+            wayland-protocols
+
+      - name: Install gtk4-layer-shell
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v1.3.0 https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
+          meson setup /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell \
+            --prefix=/usr \
+            -Dexamples=false \
+            -Ddocs=false \
+            -Dtests=false \
+            -Dintrospection=false \
+            -Dvapi=false
+          meson compile -C /tmp/gtk4-layer-shell/build
+          sudo meson install -C /tmp/gtk4-layer-shell/build
+          sudo ldconfig
+
+      - name: Configure C port tests
+        env:
+          CC: ${{ matrix.compiler }}
+          SHAULA_C_PORT_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          args=(-Dwerror=true)
+          if [ "${SHAULA_C_PORT_MODE}" = "asan-ubsan" ]; then
+            lundef=true
+            if [ "${CC}" = "clang" ]; then
+              lundef=false
+            fi
+            args+=(
+              -Db_sanitize=address,undefined
+              -Db_lundef="${lundef}"
+            )
+          fi
+          meson setup build-c-port "${args[@]}"
+
+      - name: Compile C port tests
+        run: meson compile -C build-c-port
+
+      - name: Run C port tests
+        run: meson test -C build-c-port --print-errorlogs

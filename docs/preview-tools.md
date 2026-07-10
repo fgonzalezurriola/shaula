@@ -295,6 +295,8 @@ Rotation, flipping, freeform Image distortion, Text wrapping/fixed-width boxes, 
 
 Pen hit testing uses path distance instead of bounds. A singly selected path shows one per-object bounding box with no endpoint handles or redraw pass. In multi-selection, the path contributes its bounds to the single group box instead. Bounds come from point min/max extents, so translating a path preserves box size.
 
+After a valid Pen stroke commits, preview drops the selection so the next stroke starts uncluttered; the Pen HUD stays visible because it owns the tool-defaults editor. The committed path can still be re-selected later from Select or via marquee.
+
 Future Pen styles belong in this HUD rather than the primary toolbar.
 
 ## Highlight
@@ -303,9 +305,13 @@ Future Pen styles belong in this HUD rather than the primary toolbar.
 
 Highlight is a wide, low-opacity freehand path with round caps. Its HUD exposes color, width, and opacity. A singly selected Highlight shows one per-object bounding box with no endpoint handles and no redraw pass that alters the visible color. In multi-selection, it contributes its bounds to the single group box instead. Freehand bounds come from point min/max extents, so translating a path preserves box size. It keeps its own semantics rather than inheriting future Pen brush styles.
 
+After a valid Highlight stroke commits, preview drops the selection so the next stroke starts uncluttered; the Highlight HUD stays visible because it owns the tool-defaults editor. The committed path can still be re-selected later from Select or via marquee.
+
 ## Measure
 
 `shaula-measure-symbolic` is implemented as the preview ruler/distance tool.
+
+After a valid measurement commits, preview drops the selection so the next measurement starts uncluttered; the Measure HUD opens (or stays open) because it owns the tool-defaults editor for color and stroke width. The committed measurement can still be re-selected later from Select or via marquee.
 
 ## Tool Property Persistence
 

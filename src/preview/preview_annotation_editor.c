@@ -286,6 +286,15 @@ void shaula_annotation_editor_add_annotation(ShaulaPreviewState *state,
   shaula_preview_toolbar_update_history_state(state);
 }
 
+void shaula_annotation_editor_add_annotation_unselected(
+    ShaulaPreviewState *state, ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL)
+    return;
+  shaula_preview_push_undo(state);
+  shaula_preview_document_add_annotation(&state->document, annotation);
+  shaula_preview_toolbar_update_history_state(state);
+}
+
 gboolean shaula_annotation_editor_insert_external(
     ShaulaPreviewState *state, ShaulaAnnotation *annotation,
     gboolean show_text_properties) {

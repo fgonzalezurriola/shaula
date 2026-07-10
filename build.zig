@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    addRuntimeEnvC(b, main_module);
 
     const strip = b.option(bool, "strip", "Strip debug symbols from the binary") orelse false;
     const exe = b.addExecutable(.{
@@ -30,11 +31,11 @@ pub fn build(b: *std.Build) void {
     const install_overlay_helper = b.addInstallFileWithDir(overlay_helper_bin, .bin, "shaula-overlay");
     b.getInstallStep().dependOn(&install_overlay_helper.step);
 
-    const preview_helper_bin = buildNativeGtkPreviewHelper(b, target, optimize, strip);
+    const preview_helper_bin = buildNativeGtkPreviewHelper(b, strip);
     const install_preview_helper = b.addInstallFileWithDir(preview_helper_bin, .bin, "shaula-preview");
     b.getInstallStep().dependOn(&install_preview_helper.step);
 
-    const settings_helper_bin = buildNativeGtkSettingsHelper(b, target, optimize, strip);
+    const settings_helper_bin = buildNativeGtkSettingsHelper(b, strip);
     const install_settings_helper = b.addInstallFileWithDir(settings_helper_bin, .bin, "shaula-settings");
     b.getInstallStep().dependOn(&install_settings_helper.step);
 
@@ -77,6 +78,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    addRuntimeEnvC(b, unit_test_module);
 
     const unit_tests = b.addTest(.{
         .root_module = unit_test_module,
@@ -87,12 +89,19 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
 
-    const preview_document_test = buildPreviewDocumentTest(b, target, optimize);
+    const preview_document_test = buildPreviewDocumentTest(b);
     test_step.dependOn(&preview_document_test.step);
 }
 
-fn buildPreviewDocumentTest(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Run {
-    const preview_geometry_obj = buildZigObject(b, "preview-document-test-geometry", "src/preview/preview_geometry.zig", target, optimize);
+fn addRuntimeEnvC(b: *std.Build, module: *std.Build.Module) void {
+    module.link_libc = true;
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/env.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+}
+
+fn buildPreviewDocumentTest(b: *std.Build) *std.Build.Step.Run {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -111,7 +120,7 @@ fn buildPreviewDocumentTest(b: *std.Build, target: std.Build.ResolvedTarget, opt
     command.addFileArg(b.path("src/preview/preview_document.c"));
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
     command.addFileArg(b.path("src/preview/preview_paste_placement.c"));
-    command.addFileArg(preview_geometry_obj);
+    command.addFileArg(b.path("src/preview/preview_geometry.c"));
     return command;
 }
 
@@ -139,14 +148,7 @@ fn buildNativeGtkOverlayHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     return output;
 }
 
-fn buildNativeGtkPreviewHelper(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    strip: bool,
-) std.Build.LazyPath {
-    const preview_bridge_obj = buildPreviewBridgeObject(b, target, optimize);
-
+fn buildNativeGtkPreviewHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -167,6 +169,9 @@ fn buildNativeGtkPreviewHelper(
     command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/preview/native_gtk_preview.c"));
     command.addFileArg(b.path("src/preview/preview_actions.c"));
+    command.addFileArg(b.path("src/preview/preview_clipboard.c"));
+    command.addFileArg(b.path("src/preview/preview_image_io.c"));
+    command.addFileArg(b.path("src/preview/preview_notify.c"));
     command.addFileArg(b.path("src/preview/preview_action_callbacks.c"));
     command.addFileArg(b.path("src/preview/preview_annotation_editor.c"));
     command.addFileArg(b.path("src/preview/preview_annotations.c"));
@@ -175,6 +180,7 @@ fn buildNativeGtkPreviewHelper(
     command.addFileArg(b.path("src/preview/preview_document.c"));
     command.addFileArg(b.path("src/preview/preview_document_edit.c"));
     command.addFileArg(b.path("src/preview/preview_gesture.c"));
+    command.addFileArg(b.path("src/preview/preview_geometry.c"));
     command.addFileArg(b.path("src/preview/preview_icons.c"));
     command.addFileArg(b.path("src/preview/preview_measure.c"));
     command.addFileArg(b.path("src/preview/preview_paths.c"));
@@ -187,18 +193,10 @@ fn buildNativeGtkPreviewHelper(
     command.addFileArg(b.path("src/preview/preview_state.c"));
     command.addFileArg(b.path("src/preview/preview_system_clipboard.c"));
     command.addFileArg(b.path("src/preview/preview_toolbar.c"));
-    command.addFileArg(preview_bridge_obj);
     return output;
 }
 
-fn buildNativeGtkSettingsHelper(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    strip: bool,
-) std.Build.LazyPath {
-    const settings_config_obj = buildZigObject(b, "settings-config", "src/settings/settings_config.zig", target, optimize);
-
+fn buildNativeGtkSettingsHelper(b: *std.Build, strip: bool) std.Build.LazyPath {
     const command = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -218,7 +216,8 @@ fn buildNativeGtkSettingsHelper(
     const output = command.addOutputFileArg("shaula-settings");
     command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/settings/native_gtk_settings.c"));
-    command.addFileArg(settings_config_obj);
+    command.addFileArg(b.path("src/settings/settings_config.c"));
+    command.addFileArg(b.path("src/settings/settings_process.c"));
     return output;
 }
 
@@ -266,65 +265,4 @@ fn buildNativePortalScreenshotHelper(b: *std.Build, strip: bool) std.Build.LazyP
     command.addArg(if (strip) "-s" else "");
     command.addFileArg(b.path("src/capture/backends/native_portal_screenshot.c"));
     return output;
-}
-
-fn buildPreviewBridgeObject(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-) std.Build.LazyPath {
-    const module = b.createModule(.{
-        .root_source_file = b.path("src/preview/preview_bridge.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    addCCompatImport(b, module, target, optimize);
-    const notify_request_module = b.createModule(.{
-        .root_source_file = b.path("src/notify/request.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    module.addImport("notify_request", notify_request_module);
-    const object = b.addObject(.{
-        .name = "preview-bridge",
-        .root_module = module,
-    });
-    return object.getEmittedBin();
-}
-
-fn buildZigObject(
-    b: *std.Build,
-    name: []const u8,
-    source_path: []const u8,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-) std.Build.LazyPath {
-    const module = b.createModule(.{
-        .root_source_file = b.path(source_path),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    addCCompatImport(b, module, target, optimize);
-    const object = b.addObject(.{
-        .name = name,
-        .root_module = module,
-    });
-    return object.getEmittedBin();
-}
-
-fn addCCompatImport(
-    b: *std.Build,
-    module: *std.Build.Module,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-) void {
-    const c_compat_module = b.createModule(.{
-        .root_source_file = b.path("src/runtime/c_compat.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    module.addImport("c_compat", c_compat_module);
 }
