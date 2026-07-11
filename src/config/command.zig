@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const error_c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -371,7 +370,7 @@ fn writeInitJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, 
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"created\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":[]}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             path_json,
@@ -408,7 +407,7 @@ fn writeInstallJson(
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"installed\":{s},\"replaced\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":{s}}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             path_json,
@@ -468,7 +467,7 @@ fn writeSaveJson(
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"created\":{s},\"changed\":{s},\"dry_run\":{s},\"niri\":{s}}},\"warnings\":{s}}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             path_json,
@@ -500,7 +499,7 @@ fn writeShowJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8, 
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"loaded\":{s},\"config\":{s}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_json, ts_json, path_json, if (loaded.loaded) "true" else "false", config_json },
+        .{ jsonContractVersion(), command_json, ts_json, path_json, if (loaded.loaded) "true" else "false", config_json },
     );
     try stdout.interface.flush();
 }
@@ -528,7 +527,7 @@ fn writeNiriRuleJson(allocator: std.mem.Allocator, io: std.Io, command: []const 
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"loaded\":{s},\"target\":\"preview\",\"app_id\":{s},\"title\":{s},\"kdl\":{s}}},\"warnings\":{s}}}\n",
-        .{ protocol.contract_version, command_json, ts_json, path_json, if (loaded.loaded) "true" else "false", app_id_json, title_json, kdl_json, warnings_json },
+        .{ jsonContractVersion(), command_json, ts_json, path_json, if (loaded.loaded) "true" else "false", app_id_json, title_json, kdl_json, warnings_json },
     );
     try stdout.interface.flush();
 }
@@ -547,7 +546,7 @@ fn writeKeybindsJson(allocator: std.mem.Allocator, io: std.Io, command: []const 
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"kdl\":{s}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_json, ts_json, kdl_json },
+        .{ jsonContractVersion(), command_json, ts_json, kdl_json },
     );
     try stdout.interface.flush();
 }
@@ -569,7 +568,7 @@ fn writeKeybindsInstallJson(allocator: std.mem.Allocator, io: std.Io, command: [
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"installed\":{s},\"replaced\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":[]}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             path_json,
@@ -600,7 +599,7 @@ fn writeKeybindsRemoveJson(allocator: std.mem.Allocator, io: std.Io, command: []
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"path\":{s},\"backup_path\":{s},\"removed\":{s},\"changed\":{s},\"dry_run\":{s}}},\"warnings\":[]}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             path_json,
@@ -651,7 +650,7 @@ fn writeKeybindsStatusJson(
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"niri_detected\":{s},\"config_path\":{s},\"installed\":{s},\"conflicts\":{s}}},\"warnings\":[]}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             if (niri_detected) "true" else "false",
@@ -685,7 +684,7 @@ fn writeKeybindsConflictJson(allocator: std.mem.Allocator, io: std.Io, command: 
         .{conflicts_json.items},
     );
     defer allocator.free(details_json);
-    try cli_json.writeErrorWithDetails(io, command, "ERR_NIRI_KEYBIND_CONFLICT", "existing keybind conflicts detected; use --force to overwrite", false, details_json);
+    try writeErrorWithDetails(io, command, "ERR_NIRI_KEYBIND_CONFLICT", "existing keybind conflicts detected; use --force to overwrite", false, details_json);
 }
 
 fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
@@ -759,11 +758,13 @@ fn afterModeJson(mode: config_types.CaptureAfterModeConfig) []const u8 {
 }
 
 fn nullableU32Json(allocator: std.mem.Allocator, value: ?u32) ![]u8 {
-    return cli_json.nullableU32Alloc(allocator, value);
+    if (value) |number| return std.fmt.allocPrint(allocator, "{d}", .{number});
+    return allocator.dupe(u8, "null");
 }
 
 fn nullableI32Json(allocator: std.mem.Allocator, value: ?i32) ![]u8 {
-    return cli_json.nullableI32Alloc(allocator, value);
+    if (value) |number| return std.fmt.allocPrint(allocator, "{d}", .{number});
+    return allocator.dupe(u8, "null");
 }
 
 fn writeErrorJson(
@@ -793,23 +794,76 @@ fn writeErrorJson(
         .{ path_json, line_json, field_json },
     );
     defer allocator.free(details_json);
-    try cli_json.writeErrorWithDetails(io, command, code, message, retryable, details_json);
+    try writeErrorWithDetails(io, command, code, message, retryable, details_json);
+}
+
+fn jsonSpan(value: []const u8) error_c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = error_c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn writeErrorWithDetails(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool, details_json: []const u8) !void {
+    var output: error_c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer error_c.shaula_json_owned_bytes_clear(&output);
+    const status = error_c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan(details_json),
+        &output,
+    );
+    if (status != error_c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }
 
 fn warningsJson(allocator: std.mem.Allocator, warnings: []const []const u8) ![]u8 {
-    return cli_json.warningsAlloc(allocator, warnings);
+    const spans = try allocator.alloc(error_c.ShaulaJsonSpan, warnings.len);
+    defer allocator.free(spans);
+    for (warnings, 0..) |warning, index| spans[index] = jsonSpan(warning);
+
+    var output: error_c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer error_c.shaula_json_owned_bytes_clear(&output);
+    const status = error_c.shaula_json_warnings_serialize(if (spans.len == 0) null else spans.ptr, spans.len, &output);
+    if (status != error_c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    return cli_json.stringAlloc(allocator, value);
+    var output: error_c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer error_c.shaula_json_owned_bytes_clear(&output);
+    const status = error_c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != error_c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
-    return cli_json.nullableStringAlloc(allocator, value);
+    var output: error_c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer error_c.shaula_json_owned_bytes_clear(&output);
+    const status = error_c.shaula_json_nullable_string_escape(
+        @intFromBool(value != null),
+        if (value) |text| jsonSpan(text) else .{ .data = null, .length = 0 },
+        &output,
+    );
+    if (status != error_c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    return cli_json.nowIso8601(allocator, io);
+    var output: error_c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer error_c.shaula_json_owned_bytes_clear(&output);
+    const status = error_c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != error_c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {

@@ -1,9 +1,10 @@
 const std = @import("std");
 
-const protocol = @import("../ipc/protocol.zig");
 const capture_types = @import("types.zig");
-const cli_json = @import("../cli/json.zig");
 const types = @import("post_capture_types.zig");
+const c = @cImport({
+    @cInclude("cli/json.h");
+});
 
 /// Render the stable capture success JSON envelope.
 ///
@@ -23,17 +24,17 @@ pub fn write(
     const partial = (flags.save and outcome.saved.ok) and (flags.copy and !outcome.clipboard.ok);
     const overall_ok = partial or ((!flags.save or outcome.saved.ok) and (!flags.copy or outcome.clipboard.ok));
 
-    const command_json = try cli_json.stringAlloc(allocator, command);
+    const command_json = try jsonStringAlloc(allocator, command);
     defer allocator.free(command_json);
-    const ts_json = try cli_json.stringAlloc(allocator, outcome.timestamp);
+    const ts_json = try jsonStringAlloc(allocator, outcome.timestamp);
     defer allocator.free(ts_json);
-    const mode_json = try cli_json.stringAlloc(allocator, reported_mode);
+    const mode_json = try jsonStringAlloc(allocator, reported_mode);
     defer allocator.free(mode_json);
-    const path_json = try cli_json.stringAlloc(allocator, success.path);
+    const path_json = try jsonStringAlloc(allocator, success.path);
     defer allocator.free(path_json);
-    const mime_json = try cli_json.stringAlloc(allocator, success.mime);
+    const mime_json = try jsonStringAlloc(allocator, success.mime);
     defer allocator.free(mime_json);
-    const backend_json = try cli_json.stringAlloc(allocator, success.backend_used);
+    const backend_json = try jsonStringAlloc(allocator, success.backend_used);
     defer allocator.free(backend_json);
 
     const saved_error_json = try errorJsonField(allocator, outcome.saved.code, outcome.saved.message);
@@ -42,7 +43,7 @@ pub fn write(
     defer allocator.free(clipboard_error_json);
     const preview_json = try previewJsonField(allocator, outcome.preview);
     defer allocator.free(preview_json);
-    const warnings_json = try cli_json.warningsAlloc(allocator, warnings);
+    const warnings_json = try jsonWarningsAlloc(allocator, warnings);
     defer allocator.free(warnings_json);
 
     const saved_report_ok = flags.save and outcome.saved.ok;
@@ -56,7 +57,7 @@ pub fn write(
         "{{\"ok\":{s},\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"degraded\":{s},\"saved\":{{\"ok\":{s},\"path\":{s},\"error\":{s}}},\"clipboard\":{{\"ok\":{s},\"error\":{s}}},\"preview\":{s},\"partial\":{s},\"result\":{{\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"saved\":{{\"ok\":{s},\"path\":{s}}},\"clipboard\":{{\"ok\":{s}}},\"preview\":{s}}},\"warnings\":{s}}}\n",
         .{
             if (overall_ok) "true" else "false",
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             mode_json,
@@ -95,9 +96,9 @@ fn errorJsonField(allocator: std.mem.Allocator, code: ?[]const u8, message: ?[]c
     if (code == null or message == null) {
         return allocator.dupe(u8, "null");
     }
-    const code_json = try cli_json.stringAlloc(allocator, code.?);
+    const code_json = try jsonStringAlloc(allocator, code.?);
     defer allocator.free(code_json);
-    const message_json = try cli_json.stringAlloc(allocator, message.?);
+    const message_json = try jsonStringAlloc(allocator, message.?);
     defer allocator.free(message_json);
     return std.fmt.allocPrint(allocator, "{{\"code\":{s},\"message\":{s}}}", .{ code_json, message_json });
 }
@@ -107,12 +108,12 @@ fn previewJsonField(allocator: std.mem.Allocator, result: types.PreviewPipelineR
     defer allocator.free(error_json);
 
     const action_json = if (result.action) |action|
-        try cli_json.stringAlloc(allocator, action.asString())
+        try jsonStringAlloc(allocator, action.asString())
     else
         try allocator.dupe(u8, "null");
     defer allocator.free(action_json);
 
-    const saved_path_json = try cli_json.nullableStringAlloc(allocator, result.saved_path);
+    const saved_path_json = try jsonNullableStringAlloc(allocator, result.saved_path);
     defer allocator.free(saved_path_json);
 
     return std.fmt.allocPrint(
@@ -128,6 +129,47 @@ fn previewJsonField(allocator: std.mem.Allocator, result: types.PreviewPipelineR
             saved_path_json,
         },
     );
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_nullable_string_escape(
+        @intFromBool(value != null),
+        if (value) |text| jsonSpan(text) else .{ .data = null, .length = 0 },
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonWarningsAlloc(allocator: std.mem.Allocator, warnings: []const []const u8) ![]u8 {
+    const spans = try allocator.alloc(c.ShaulaJsonSpan, warnings.len);
+    defer allocator.free(spans);
+    for (warnings, 0..) |warning, index| spans[index] = jsonSpan(warning);
+
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_warnings_serialize(if (spans.len == 0) null else spans.ptr, spans.len, &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 test "pipeline error json field escapes quotes" {

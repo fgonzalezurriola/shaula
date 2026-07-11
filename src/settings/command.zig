@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
     @cInclude("runtime/helper_resolution.h");
 });
@@ -64,7 +63,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     }
 
     if (argv.len > 2) {
-        try cli_json.writeBasicError(io, "settings", "ERR_CLI_USAGE", "usage: shaula settings [--json]", false);
+        try writeBasicError(io, "settings", "ERR_CLI_USAGE", "usage: shaula settings [--json]", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -79,12 +78,12 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         .stdout = .ignore,
         .stderr = .ignore,
     }) catch {
-        try cli_json.writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper is unavailable", true);
+        try writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper is unavailable", true);
         return recovery_policy.exitCodeFor("ERR_SETTINGS_UNAVAILABLE");
     };
 
     const term = child.wait(io) catch {
-        try cli_json.writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper is unavailable", true);
+        try writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper is unavailable", true);
         return recovery_policy.exitCodeFor("ERR_SETTINGS_UNAVAILABLE");
     };
 
@@ -93,7 +92,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         else => false,
     };
     if (!ok) {
-        try cli_json.writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper failed", true);
+        try writeBasicError(io, "settings", "ERR_SETTINGS_UNAVAILABLE", "settings helper failed", true);
         return recovery_policy.exitCodeFor("ERR_SETTINGS_UNAVAILABLE");
     }
 
@@ -105,17 +104,62 @@ fn resolveSettingsBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.
 }
 
 fn writeDiscoveryJson(allocator: std.mem.Allocator, io: std.Io) !void {
-    const ts = try cli_json.nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
-    const ts_json = try cli_json.stringAlloc(allocator, ts);
+    const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
 
     var stdout_buffer: [8192]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"settings\",\"timestamp\":{s},\"result\":{{\"purpose\":\"shaula_agent_discovery\",\"human_ui\":\"shaula settings\",\"privacy\":{{\"explore_captures_pixels\":false,\"capture_captures_pixels\":true,\"window_titles_may_be_sensitive\":true,\"screenshots_stay_local_by_default\":true}},\"recommended_flow\":[\"shaula settings --json\",\"shaula doctor --json\",\"shaula capabilities list --json\",\"shaula explore --json --brief\",\"shaula explore --json\",\"shaula capture fullscreen --json --no-preview\"],\"commands\":{{\"discover\":\"shaula settings --json\",\"health\":\"shaula doctor --json\",\"capabilities\":\"shaula capabilities list --json\",\"desktop_inventory\":\"shaula explore --json [--brief]\",\"capture_current_output\":\"shaula capture fullscreen --json --no-preview\",\"capture_all_outputs\":\"shaula capture all-screens --json --no-preview\",\"capture_area\":\"shaula capture area --json --no-preview\",\"open_settings_ui\":\"shaula settings\"}},\"json_contract\":{{\"success_path\":\".result\",\"error_code_path\":\".error.code\",\"warnings_path\":\".warnings\",\"capture_path\":\".result.path // .path\",\"recommended_capture_path\":\".result.recommended_capture\"}}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts_json },
+        .{jsonContractVersion(), ts_json},
     );
+    try stdout.interface.flush();
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn writeBasicError(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
     try stdout.interface.flush();
 }
 

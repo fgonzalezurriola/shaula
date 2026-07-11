@@ -1,14 +1,13 @@
 const std = @import("std");
 const root = @import("root");
 const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
-const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
 const standalone_protocol = struct {
-    pub const contract_version = "1.0.0";
     pub const ipc_version = "1.0.0";
 };
 
@@ -46,12 +45,12 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         return recovery_policy.exitCodeFor("ERR_UNSUPPORTED_COMPOSITOR");
     }
 
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     const backend = runtime.backendUsedLabel();
     const fallbacks = runtime_capabilities.fallbacksFor(runtime.backend);
-    const fallbacks_json = try stringArrayJson(allocator, fallbacks);
+    const fallbacks_json = try jsonStringArrayAlloc(allocator, fallbacks);
     defer allocator.free(fallbacks_json);
 
     var warning_values: [2][]const u8 = undefined;
@@ -64,7 +63,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
         warning_values[warning_count] = backend_contract.warning_portal_fallback;
         warning_count += 1;
     }
-    const warnings = try cli_json.warningsAlloc(allocator, warning_values[0..warning_count]);
+    const warnings = try jsonStringArrayAlloc(allocator, warning_values[0..warning_count]);
     defer allocator.free(warnings);
 
     var stdout_buffer: [4096]u8 = undefined;
@@ -72,7 +71,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"capabilities list\",\"timestamp\":\"{s}\",\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"portal_window_capable\":{s},\"result\":{{\"capture\":{{\"area\":{s},\"fullscreen\":{s},\"all_screens\":{s},\"window\":{s}}},\"backend\":\"{s}\",\"fallbacks\":{s},\"compositor\":\"{s}\",\"ipc_version\":\"{s}\",\"portal_available\":{s},\"portal_window_capable\":{s},\"overlay_supported\":{s}}},\"warnings\":{s}}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             ts,
             boolToJson(runtime.capture.area),
             boolToJson(runtime.capture.fullscreen),
@@ -103,26 +102,41 @@ fn boolToJson(value: bool) []const u8 {
     return if (value) "true" else "false";
 }
 
-fn stringArrayJson(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
-    if (values.len == 0) {
-        return allocator.dupe(u8, "[]");
-    }
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
-    var list = try std.ArrayList(u8).initCapacity(allocator, 32);
-    defer list.deinit(allocator);
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
 
-    try list.append(allocator, '[');
-    for (values, 0..) |value, index| {
-        if (index != 0) {
-            try list.append(allocator, ',');
-        }
-        const encoded = try cli_json.stringAlloc(allocator, value);
-        defer allocator.free(encoded);
-        try list.appendSlice(allocator, encoded);
-    }
-    try list.append(allocator, ']');
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
 
-    return list.toOwnedSlice(allocator);
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonStringArrayAlloc(allocator: std.mem.Allocator, values: []const []const u8) ![]u8 {
+    const spans = try allocator.alloc(c.ShaulaJsonSpan, values.len);
+    defer allocator.free(spans);
+    for (values, 0..) |value, index| spans[index] = jsonSpan(value);
+
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_warnings_serialize(if (spans.len == 0) null else spans.ptr, spans.len, &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool, detected_compositor: []const u8) !void {
@@ -130,7 +144,7 @@ fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const compositor_json = try cli_json.stringAlloc(allocator, detected_compositor);
+    const compositor_json = try jsonStringAlloc(allocator, detected_compositor);
     defer allocator.free(compositor_json);
     const details_json = try std.fmt.allocPrint(
         allocator,
@@ -138,11 +152,24 @@ fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []
         .{compositor_json},
     );
     defer allocator.free(details_json);
-    try cli_json.writeErrorWithDetails(io, command, code, message, retryable, details_json);
-}
 
-fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    return cli_json.nowIso8601(allocator, io);
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan(details_json),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }
 
 test "capabilities compositor guard is deterministic" {

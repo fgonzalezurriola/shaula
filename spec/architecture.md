@@ -186,8 +186,9 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - Canonical machine-readable source is `shaula errors list --json`.
 - `errors/taxonomy.{c,h}` owns the current 28-entry inventory, exact ordering,
   messages, retryability, classes, recovery actions, exit codes, and retry
-  budgets. Command-level JSON emission remains in `errors/command.zig` until the
-  shared envelope migration.
+  budgets. `errors/command.zig` owns only command parsing and enumeration of that
+  table; shared contract-version, timestamp, escaping, and basic-error policy is
+  provided by `cli/json.{c,h}`.
 - Every failure must map deterministically as `error.code -> recovery action -> exit code`.
 - Unknown, malformed, or otherwise unmapped codes resolve to the exact
   `ERR_UNKNOWN_UNMAPPED` record with stable exit code `99` and retry budget `0`.
@@ -406,8 +407,49 @@ focused output. It must not probe compositor/backend state again.
 - `capture/post_capture_types.zig` owns post-capture state types.
 - `capture/post_capture_json.zig` owns the stable capture result envelope,
   duplicated top-level/result fields, and partial/degraded rules.
-- `cli/json.zig` owns shared timestamps, escaping, and deterministic JSON
-  envelopes used by preview, history, errors, doctor, and notify commands.
+- `cli/json.{c,h}` owns the shared contract-version literal, byte-string
+  escaping, warning-array serialization, UTC timestamp formatting, and complete
+  basic-error envelope. Maintained Zig commands include the C header directly
+  and keep only caller-local ABI/allocator/writer adaptation.
+
+### Public JSON boundary
+
+- `shaula_json_contract_version` returns borrowed immutable process-lifetime
+  bytes for public contract version `1.0.0`. `ipc/protocol.zig` owns only the
+  independent IPC version.
+- Every C JSON input is an explicit `data + length` span. NULL with zero length
+  means an empty byte string; NULL with nonzero length is invalid. Arbitrary
+  bytes are never silently interpreted as NUL-terminated text.
+- JSON escaping is byte-oriented and preserves the previous default Zig
+  stringifier behavior. Quote and backslash are escaped; slash is unchanged;
+  backspace, form feed, tab, carriage return, and newline use short escapes;
+  every other byte `0x00..0x1f` uses lowercase `\\u00xx`; and every other byte
+  is copied unchanged. Valid UTF-8, invalid UTF-8, and non-ASCII bytes therefore
+  pass through unchanged, while embedded NUL becomes `\\u0000`.
+- Nullable strings preserve absence as JSON `null` and a present zero-length
+  span as JSON `""`; callers must not collapse those states.
+- Timestamp formatting consumes caller-supplied Unix seconds and emits exactly
+  `YYYY-MM-DDTHH:MM:SSZ`. Callers still obtain the clock through their existing
+  `std.Io` boundary before crossing the ABI, preserving test-clock behavior.
+- Successful C builders return GLib-owned length-bearing bytes with a trailing
+  NUL for convenience. The authoritative length may include escaped source NULs;
+  callers clear outputs with `shaula_json_owned_bytes_clear`. Repeated clear and
+  replacement are safe. Callers that retain bytes in Zig copy them into their
+  existing allocator before C cleanup.
+- The shared basic error preserves canonical order
+  `ok, contract_version, command, timestamp, error, warnings`, writes one complete
+  object with exactly one final newline, and never writes stderr. Its borrowed
+  `details_json` fragment is inserted verbatim and is intentionally not parsed or
+  validated, preserving the previous compatibility boundary.
+- Command-specific serializers remain responsible for typed result and detail
+  fields: capture and post-capture state, config details, history records,
+  capabilities, doctor/explore inventory, errors-list records, Preview results,
+  directory/clipboard results, settings discovery, and notification results.
+  They must call the C policy for strings, warnings, timestamps, versions, and
+  basic errors rather than retaining duplicate escaping rules. Clipboard success
+  paths are the explicit compatibility exception: their legacy serializer inserts
+  path bytes raw, and changing pathological quote/control-byte behavior requires
+  a separate public-contract decision.
 - `preview/preview_result.{c,h}` owns the typed final-result parser at the Preview
   helper stdout boundary. `preview/service.zig` owns helper execution, stable
   error mapping, and caller-local transfer into the Preview/post-capture model.
@@ -422,9 +464,9 @@ focused output. It must not probe compositor/backend state again.
   directory, doctor, errors, explore, history, notify, preview, settings, and
   setup commands. Each includes the C header directly and performs only
   immediate caller-local slice/span or record conversion.
-- `errors/command.zig` owns only argument validation, timestamped JSON envelope
-  emission, and canonical field order. It enumerates the C table and must not
-  retain a second taxonomy.
+- `errors/command.zig` owns only argument validation and the typed compact
+  `errors list` result object. It enumerates the C table, obtains shared JSON
+  policy through `cli/json.h`, and must not retain a second taxonomy.
 - Inputs are borrowed `data + length` spans. A NULL pointer with nonzero length
   is invalid; empty, malformed, unknown, case-changed, whitespace-padded,
   prefixed, suffixed, non-ASCII-substituted, and embedded-NUL values do not match.

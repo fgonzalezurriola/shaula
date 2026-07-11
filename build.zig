@@ -126,6 +126,10 @@ fn addRuntimeC(b: *std.Build, module: *std.Build.Module) void {
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });
     module.addCSourceFile(.{
+        .file = b.path("src/cli/json.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
         .file = b.path("src/core/capture_mode.c"),
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });

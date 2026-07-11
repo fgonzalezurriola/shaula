@@ -1,3 +1,15 @@
+cli_json_test = executable(
+  'cli-json-test',
+  'cli_json_test.c',
+  dependencies: shaula_cli_json_dep,
+)
+
+test(
+  'cli-json-c',
+  cli_json_test,
+  suite: ['port', 'unit'],
+)
+
 error_taxonomy_test = executable(
   'error-taxonomy-test',
   'error_taxonomy_test.c',

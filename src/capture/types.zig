@@ -78,7 +78,7 @@ pub const CaptureSuccess = struct {
 
 /// Failure payload returned by capture backend.
 ///
-/// `code` must map to taxonomy in `src/errors/taxonomy.zig`. Keep this deterministic
+/// `code` must map to taxonomy in `src/errors/taxonomy.{c,h}`. Keep this deterministic
 /// because exit-code mapping, QA matrix, and release-readiness gates depend on it.
 pub const CaptureFailure = struct {
     mode: CaptureMode,

@@ -1,8 +1,14 @@
 const std = @import("std");
-const json = @import("command_json.zig");
+const c = @cImport({
+    @cInclude("cli/json.h");
+});
 
-test "json string helper escapes embedded quotes" {
-    const encoded = try json.jsonStringAlloc(std.testing.allocator, "/tmp/shaula/q\"uote\".png");
-    defer std.testing.allocator.free(encoded);
-    try std.testing.expectEqualStrings("\"/tmp/shaula/q\\\"uote\\\".png\"", encoded);
+test "capture Zig caller receives shared C JSON escaping" {
+    const value = "/tmp/shaula/q\"uote\".png";
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+
+    const status = c.shaula_json_string_escape(.{ .data = value.ptr, .length = value.len }, &output);
+    try std.testing.expectEqual(c.SHAULA_JSON_STATUS_OK, status);
+    try std.testing.expectEqualStrings("\"/tmp/shaula/q\\\"uote\\\".png\"", output.data[0..output.length]);
 }

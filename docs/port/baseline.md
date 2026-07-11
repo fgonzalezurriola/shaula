@@ -34,8 +34,8 @@ or replace production binaries until the final cutover gates are met.
 After Phase 2 strict cleanup, all seven Phase 3 production cutovers, and three
 Phase 4 pure-model cutovers, the repository contains:
 
-- 71 Zig source/test paths under `src`, including four zero-byte obsolete
-  placeholders pending physical unlink;
+- Zig source/test paths under `src` after Phase 4 pure-model cutovers, with
+  obsolete zero-byte placeholders physically deleted;
 - 43 C source files under `src`, including the runtime environment, path,
   tool-lookup, helper-resolution, previous-area, capture-session lock,
   process-execution, core capture-mode, Preview result, and error-taxonomy slices
@@ -46,8 +46,9 @@ Phase 4 pure-model cutovers, the repository contains:
 - Zig-owned CLI, capture lifecycle, configuration, capability, diagnostics, and
   most remaining pure-model modules. Maintained runtime, capture-mode, and
   Preview-service callers use C headers directly. The seven Phase 3 and one core
-  capture-mode obsolete Zig paths have been physically deleted; only
-  `src/preview_result.zig` remains as a zero-byte tracked placeholder.
+  capture-mode obsolete Zig paths have been physically deleted, along with
+  the later zero-byte `preview_result.zig`, taxonomy/policy, and `cli/json.zig`
+  placeholders.
 
 The complete grouped migration inventory is maintained in
 `docs/port/migration-matrix.md`.
@@ -484,8 +485,8 @@ into its existing Zig allocator, and preserves the established
 The authoritative Zig build compiles the C module for production and the mixed
 unit root. Existing Preview service tests retain caller-level action-token and
 length-bearing ownership coverage. Repository-wide maintained imports of the
-old Zig implementation are zero. `src/preview_result.zig` is a zero-byte tracked
-placeholder because this DevSpace interface cannot unlink it.
+old Zig implementation are zero. `src/preview_result.zig` has been physically
+deleted.
 
 ## Phase 4 public error-taxonomy and recovery-policy slice
 
@@ -528,18 +529,80 @@ stability, and deterministic consistency with
 array byte-for-byte after excluding the timestamp envelope.
 
 The authoritative Zig build compiles `taxonomy.c` into production and the mixed
-unit root. Meson now contains seventeen tests under normal and sanitizer lanes.
+unit root. Meson now contains eighteen tests under normal and sanitizer lanes.
 Repository-wide maintained imports of the old Zig taxonomy and policy are zero.
-Because this DevSpace interface cannot unlink files, `src/errors/taxonomy.zig`,
-`src/recovery/policy.zig`, and `src/recovery/policy_test.zig` remain zero-byte
-tracked placeholders alongside the prior `src/preview_result.zig` placeholder.
-Strict physical module removal therefore remains pending.
+The obsolete `src/errors/taxonomy.zig`, `src/recovery/policy.zig`,
+`src/recovery/policy_test.zig`, and `src/preview_result.zig` paths have been
+physically deleted.
+
+## Phase 4 shared JSON envelope and escaping slice
+
+`src/cli/json.{c,h}` now owns the public contract-version literal, exact JSON
+byte-string escaping, warning-array serialization, UTC timestamp formatting, and
+the complete shared basic-error envelope. `src/ipc/protocol.zig` retains only the
+independent IPC version. The authoritative Zig build compiles `json.c` directly;
+Meson exposes the same module to `tests/unit/cli_json_test.c`.
+
+The ABI uses borrowed `data + length` spans and a fixed 32-bit status type.
+NULL with zero length is a valid empty span; NULL with nonzero length is invalid.
+The contract version is borrowed immutable process-lifetime storage. Successful
+builders return GLib-owned length-bearing bytes with trailing-NUL storage and
+must be released with `shaula_json_owned_bytes_clear`; repeated clear is safe.
+Callers that must retain output in Zig copy it into their existing allocator
+before clearing the C result.
+
+Escaping is byte-oriented and matches the previous default Zig stringifier.
+The nullable-string API preserves the shared distinction between absent `null`
+and a present empty string `""`. Quote and backslash are escaped, slash is
+unchanged, backspace/form feed/tab/
+carriage return/newline use their short escapes, all other control bytes
+`0x00..0x1f` use lowercase `\\u00xx`, and every other byte is copied unchanged.
+Consequently valid multibyte UTF-8, invalid UTF-8, and arbitrary non-ASCII bytes
+are preserved; embedded NUL is observed and emitted as `\\u0000`. No API silently
+treats arbitrary input as NUL-terminated text.
+
+The basic-error builder preserves exact field order
+`ok, contract_version, command, timestamp, error, warnings` and appends exactly
+one newline. `details_json` remains a borrowed raw fragment and is deliberately
+not parsed or validated, preserving the historical compatibility boundary.
+Command-specific success and rich error serializers remain in their owning Zig
+modules for capture/post-capture, config, history, capabilities, doctor, explore,
+Preview, clipboard, directory, settings, notify, and errors-list payloads. Those
+modules use only caller-local span, status, allocator, nullable-value, and writer
+adaptation; they no longer contain a second escaping or warning-array policy.
+For strict compatibility, clipboard success payloads retain their preexisting raw
+path insertion rather than silently changing pathological quote/control-byte
+output in this slice. That command-specific legacy edge is not a second escaping
+policy and remains future cleanup work behind an explicit contract decision.
+
+The direct production caller inventory is the top-level dispatcher; capture
+command and post-capture JSON; capabilities and preflight; clipboard, config,
+directory, doctor, errors, explore, history, notify, Preview, settings, and setup.
+`tests/unit/cli_json_test.c` freezes null versus empty strings, empty and long
+strings, every control byte, quotes/backslashes/slashes, embedded NUL, valid and
+invalid UTF-8, exact output
+lengths, checked overflow, invalid spans, repeated cleanup, warning order, empty
+warnings, contract-literal lifetime, timestamps, exact basic-error ordering and
+newline framing, and unvalidated raw details.
+
+A temporary clean `HEAD` archive was built for differential comparison. After
+normalizing only the top-level timestamp, thirteen representative old/new command
+outputs were byte-identical: errors-list, root and family usage errors,
+capabilities success and warning arrays, preflight details errors, Preview,
+history, clipboard, doctor, settings, capture, config, explore, and an adversarial
+command containing quote, backslash, newline, tab, and a control byte. Every
+migrated output parsed as exactly one JSON object, ended in one newline, and
+wrote no stderr. GCC 16.1.1 and Clang 22.1.8 pass all eighteen normal and
+ASan/UBSan Meson tests with warnings as errors.
+
+Maintained imports of the old shared Zig implementation are zero. The obsolete
+`src/cli/json.zig` path has been physically deleted, along with the prior
+Preview-result and error-taxonomy/recovery placeholders.
 
 ## Existing unrelated work
 
-The checkout already contained the uncommitted runtime-path migration at the
-start of this continuation. That work was preserved and extended in place.
-Preview/UI work mentioned by the accepted port specification is already
-represented in branch history and remains outside this model migration. This
-slice changed only the Preview service's helper-result boundary; no GTK Preview
-UI, action, notification, capture, or rendering implementation was migrated.
+The checkout was clean before this shared JSON slice. Preview/UI and unrelated
+command-orchestration work remain outside the migration. This slice changed only
+the shared JSON policy, direct caller adapters, build/test integration, and the
+required ownership documentation; it did not migrate GTK Preview UI, capture
+lifecycle, configuration persistence, notification execution, or history storage.

@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -124,7 +124,7 @@ fn parseOptions(io: std.Io, argv: []const [*:0]const u8) !SetupOptions {
             options.dry_run = true;
             continue;
         }
-        try cli_json.writeBasicError(io, "setup", "ERR_CLI_USAGE", "unsupported setup flag", false);
+        try writeBasicError(io, "setup", "ERR_CLI_USAGE", "unsupported setup flag", false);
         return error.InvalidArgument;
     }
     return options;
@@ -634,6 +634,30 @@ fn print(io: std.Io, comptime fmt: []const u8, args: anytype) !void {
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &buffer);
     try stdout.interface.print(fmt, args);
+    try stdout.interface.flush();
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn writeBasicError(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
     try stdout.interface.flush();
 }
 

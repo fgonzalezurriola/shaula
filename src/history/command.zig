@@ -1,9 +1,8 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const history_store = @import("store.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -67,7 +66,7 @@ fn runList(allocator: std.mem.Allocator, io: std.Io) !u8 {
     const entries = try history_store.listEntries(allocator, io);
     defer history_store.deinitEntries(allocator, entries);
 
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     const ts_json = try jsonStringAlloc(allocator, ts);
@@ -78,7 +77,7 @@ fn runList(allocator: std.mem.Allocator, io: std.Io) !u8 {
 
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"history list\",\"timestamp\":{s},\"result\":{{\"entries\":[",
-        .{ protocol.contract_version, ts_json },
+        .{ jsonContractVersion(), ts_json },
     );
     for (entries, 0..) |entry, idx| {
         if (idx != 0) try stdout.interface.print(",", .{});
@@ -109,7 +108,7 @@ fn runShow(allocator: std.mem.Allocator, io: std.Io, entry_id: []const u8) !u8 {
         return recovery_policy.exitCodeFor("ERR_HISTORY_ENTRY_NOT_FOUND");
     }
 
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     const ts_json = try jsonStringAlloc(allocator, ts);
@@ -129,26 +128,59 @@ fn runShow(allocator: std.mem.Allocator, io: std.Io, entry_id: []const u8) !u8 {
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"history show\",\"timestamp\":{s},\"result\":{{\"id\":\"latest\",\"entry\":{{\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"timestamp\":{s}}}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts_json, path_json, mime_json, entry.width, entry.height, backend_json, entry_ts_json },
+        .{ jsonContractVersion(), ts_json, path_json, mime_json, entry.width, entry.height, backend_json, entry_ts_json },
     );
     try stdout.interface.flush();
     return 0;
 }
 
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    return cli_json.stringAlloc(allocator, value);
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
-}
-
-fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
-    try cli_json.writeBasicError(io, command, code, message, retryable);
-}
-
-fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    return cli_json.nowIso8601(allocator, io);
 }
 
 test "history json helper escapes quoted paths" {

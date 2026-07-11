@@ -1,8 +1,7 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -61,7 +60,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 }
 
 fn writeSuccessJson(allocator: std.mem.Allocator, io: std.Io, path: []const u8, result: preview_service.PreviewRunResult) !void {
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     const path_json = try jsonStringAlloc(allocator, path);
@@ -76,7 +75,7 @@ fn writeSuccessJson(allocator: std.mem.Allocator, io: std.Io, path: []const u8, 
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"preview\",\"timestamp\":\"{s}\",\"result\":{{\"path\":{s},\"closed\":{s},\"action\":{s},\"copied\":{s},\"saved\":{s},\"saved_path\":{s}}},\"warnings\":[]}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             ts,
             path_json,
             if (result.closed) "true" else "false",
@@ -89,22 +88,63 @@ fn writeSuccessJson(allocator: std.mem.Allocator, io: std.Io, path: []const u8, 
     try stdout.interface.flush();
 }
 
-fn argToSlice(arg: [*:0]const u8) []const u8 {
-    return std.mem.sliceTo(arg, 0);
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
 }
 
-fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
-    try cli_json.writeBasicError(io, command, code, message, retryable);
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
-    return cli_json.stringAlloc(allocator, value);
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
-    return cli_json.nullableStringAlloc(allocator, value);
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_nullable_string_escape(
+        @intFromBool(value != null),
+        if (value) |text| jsonSpan(text) else .{ .data = null, .length = 0 },
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
-fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    return cli_json.nowIso8601(allocator, io);
+fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
+}
+
+fn argToSlice(arg: [*:0]const u8) []const u8 {
+    return std.mem.sliceTo(arg, 0);
 }

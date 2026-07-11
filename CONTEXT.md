@@ -52,7 +52,8 @@ contracts, active risks, and immediate work.
   caller now invokes those C ABIs directly through caller-local ownership/status
   conversion; repository-wide facade imports are zero, the obsolete facade
   bodies/tests have been removed, and the seven former facade paths have now
-  been physically deleted. Phase 4 has three completed pure-model cutovers.
+  been physically deleted. Phase 4 has four completed pure-model/shared-policy
+  cutovers.
   `core/capture_mode.{c,h}` owns exact CLI/region tokens, runtime and backend
   lane mapping, and interactive-selection policy. Capture, configuration, and
   overlay callers include the C header directly and keep only caller-local
@@ -61,9 +62,8 @@ contracts, active risks, and immediate work.
   parser and exact action tokens. `preview/service.zig` includes that header
   directly, maps fixed-width statuses/actions locally, and copies an optional
   GLib-owned saved path into its existing Zig allocator before clearing the C
-  result. The obsolete `preview_result.zig` implementation and tests are gone;
-  its former path remains only as a zero-byte tracked placeholder because this
-  DevSpace interface cannot unlink files. `errors/taxonomy.{c,h}` now owns the
+  result. The obsolete `preview_result.zig` path has been physically deleted.
+  `errors/taxonomy.{c,h}` now owns the
   canonical 28-entry public error table, class and recovery-action tokens, exact
   lookup, retry budgets, and exit-code fallback. Every maintained command caller
   includes the C header directly; `errors/command.zig` retains only command-level
@@ -71,8 +71,18 @@ contracts, active risks, and immediate work.
   literals, enums cross the ABI as asserted 32-bit values, and unknown or invalid
   spans collapse to `ERR_UNKNOWN_UNMAPPED` with exit code 99. The currently
   emitted but unlisted `ERR_PREVIEW_RESULT_INVALID` intentionally preserves that
-  fallback behavior. The three obsolete taxonomy/policy Zig paths are zero-byte
-  placeholders because this DevSpace interface cannot unlink them.
+  fallback behavior. The obsolete taxonomy/policy Zig paths
+  (`errors/taxonomy.zig`, `recovery/policy.zig`, `recovery/policy_test.zig`) have
+  been physically deleted.
+  `cli/json.{c,h}` now owns the public contract-version literal, exact byte-level
+  JSON string escaping, warning-array serialization, UTC timestamp formatting,
+  and complete basic error envelopes. Inputs are borrowed explicit-length byte
+  spans; invalid UTF-8 and non-ASCII bytes are preserved, embedded NUL and other
+  controls are escaped, and returned buffers are GLib-owned until cleared.
+  Maintained command callers include the C header directly and retain only
+  caller-local ABI/allocator adaptation plus their typed result/detail fields.
+  `ipc/protocol.zig` now owns only `ipc_version`. The obsolete `cli/json.zig`
+  path has been physically deleted.
 - The preview toolbar and More menu are the active UI surfaces. Keep the
   headerbar compact, stable in natural width, and honest about available actions.
 - Settings must expose the public config contract without inventing a second
@@ -232,8 +242,21 @@ contracts, active risks, and immediate work.
   and invalid spans. Unknown or unmapped inputs return the final
   `ERR_UNKNOWN_UNMAPPED` record, exit code 99, and retry budget 0. Maintained Zig
   callers include the header directly and perform only immediate slice/span
-  conversion. `errors/command.zig` still owns timestamped JSON serialization and
-  field ordering until the shared JSON-envelope slice.
+  conversion. `errors/command.zig` owns only command parsing and enumeration of
+  the C table; shared timestamp, contract-version, escaping, and basic-error
+  envelope policy comes from `cli/json.h`.
+- `cli/json.{c,h}` owns shared public JSON policy. `shaula_json_contract_version`
+  returns borrowed immutable process-lifetime bytes. String, warning-array,
+  timestamp, nullable-string, and error-envelope builders return GLib-owned length-bearing buffers
+  with trailing-NUL storage; callers must clear them with
+  `shaula_json_owned_bytes_clear`. String inputs are arbitrary bytes, not
+  NUL-terminated text: quote and backslash use short escapes, named controls use
+  `\\b`, `\\f`, `\\n`, `\\r`, and `\\t`, other bytes `0x00..0x1f` use lowercase
+  `\\u00xx`, slash is unchanged, and every byte at or above `0x20` other than
+  quote/backslash is copied unchanged, including valid or invalid UTF-8. Absent
+  nullable strings encode as `null`; present empty spans encode as `""`. Basic
+  errors preserve canonical field order and exactly one final newline; raw
+  details fragments remain caller-owned and unvalidated for compatibility.
 - `core/capture_mode.{c,h}` owns capture-mode enum tables, exact CLI and region
   parsing, canonical tokens, runtime/backend lane mapping, and interactive
   selection requirements. Header assertions and the C unit test pin every enum
@@ -457,23 +480,21 @@ contracts, active risks, and immediate work.
 - `./dev check` is green in the current checkout. Host-dependent Wayland,
   compositor, and external-tool assumptions still require explicit fixtures or
   manual evidence before stronger portability claims are made.
-- The checkout was clean before the runtime-path slice. Historical Preview/UI
-  work remains outside this migration scope and no Preview/UI file was changed
-  by the slice.
+- The checkout was clean before this shared JSON slice. Historical Preview/UI
+  and unrelated orchestration work remain outside the migration; this slice
+  changed only JSON policy, direct caller adapters, build/tests, and ownership
+  documentation.
 
 ## Immediate next steps
 
 1. Continue Phase 4 with another explicitly selected pure-model or small-command
-   slice; do not fold the shared JSON-envelope migration into unrelated work.
-2. Physically delete the zero-byte `preview_result.zig`, `errors/taxonomy.zig`,
-   `recovery/policy.zig`, and `recovery/policy_test.zig` placeholders once a
-   workspace with unlink support is available; maintained imports are already
-   zero.
-3. Expand Phase 0 fixtures for CLI failures, config round trips, helper protocol
+   slice; the shared JSON-envelope boundary is complete and must not absorb
+   unrelated command orchestration.
+2. Expand Phase 0 fixtures for CLI failures, config round trips, helper protocol
    outcomes, and remaining host-dependent tool assumptions.
-4. Keep `preview/preview_paths.{c,h}` aligned with the runtime capture-artifact
+3. Keep `preview/preview_paths.{c,h}` aligned with the runtime capture-artifact
    contract until the Preview boundary is consolidated.
-5. Run `./dev check`, `./dev port-check`, `./dev port-check-asan`, and
+4. Run `./dev check`, `./dev port-check`, `./dev port-check-asan`, and
    `git diff --check` after C migration changes.
 
 ## Relevant source documents

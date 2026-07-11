@@ -1,15 +1,14 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 const focused_output = @import("../compositor/focused_output.zig");
-const protocol = @import("../ipc/protocol.zig");
 const recovery_policy = struct {
     fn exitCodeFor(code: []const u8) u8 {
         return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
     }
 };
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
     @cInclude("runtime/process_exec.h");
 });
@@ -57,7 +56,7 @@ pub fn run(
 ) !u8 {
     const flags = parseFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (!flags.json_mode) {
-        try cli_json.writeBasicError(io, "explore", "ERR_CLI_USAGE", "--json is required", false);
+        try writeBasicError(io, "explore", "ERR_CLI_USAGE", "--json is required", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -68,17 +67,17 @@ pub fn run(
     const inventory = try resolveInventory(allocator, io, compositor, focused_output_name, flags.brief);
     defer inventory.deinit(allocator);
 
-    const ts = try cli_json.nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
-    const ts_json = try cli_json.stringAlloc(allocator, ts);
+    const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
-    const kind_json = try cli_json.stringAlloc(allocator, @tagName(compositor.kind));
+    const kind_json = try jsonStringAlloc(allocator, @tagName(compositor.kind));
     defer allocator.free(kind_json);
-    const label_json = try cli_json.stringAlloc(allocator, compositor.label);
+    const label_json = try jsonStringAlloc(allocator, compositor.label);
     defer allocator.free(label_json);
-    const focused_output_json = try cli_json.nullableStringAlloc(allocator, focused_output_name);
+    const focused_output_json = try jsonNullableStringAlloc(allocator, focused_output_name);
     defer allocator.free(focused_output_json);
-    const warnings_json = try cli_json.warningsAlloc(
+    const warnings_json = try jsonWarningsAlloc(
         allocator,
         if (inventory.inventory_available) &.{} else &.{warning_inventory_unavailable},
     );
@@ -90,7 +89,7 @@ pub fn run(
         try stdout.interface.print(
             "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"explore\",\"timestamp\":{s},\"result\":{{\"compositor\":{{\"kind\":{s},\"label\":{s}}},\"focused\":{{\"output_id\":{s},\"workspace_id\":{s},\"window_id\":{s}}},\"recommended_capture\":{s}}},\"warnings\":{s}}}\n",
             .{
-                protocol.contract_version,
+                jsonContractVersion(),
                 ts_json,
                 kind_json,
                 label_json,
@@ -105,7 +104,7 @@ pub fn run(
         try stdout.interface.print(
             "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"explore\",\"timestamp\":{s},\"result\":{{\"compositor\":{{\"kind\":{s},\"label\":{s}}},\"focused\":{{\"output_id\":{s},\"workspace_id\":{s},\"window_id\":{s}}},\"outputs\":{s},\"workspaces\":{s},\"windows\":{s},\"recommended_capture\":{s}}},\"warnings\":{s}}}\n",
             .{
-                protocol.contract_version,
+                jsonContractVersion(),
                 ts_json,
                 kind_json,
                 label_json,
@@ -137,7 +136,7 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8) !ExploreFlags {
             flags.brief = true;
             continue;
         }
-        try cli_json.writeBasicError(io, "explore", "ERR_CLI_USAGE", "usage: shaula explore --json [--brief]", false);
+        try writeBasicError(io, "explore", "ERR_CLI_USAGE", "usage: shaula explore --json [--brief]", false);
         return error.InvalidArgument;
     }
     return flags;
@@ -279,9 +278,9 @@ fn outputsJson(allocator: std.mem.Allocator, value: std.json.Value, focused_outp
 
 fn appendOutputJson(allocator: std.mem.Allocator, list: *std.ArrayList(u8), value: std.json.Value, fallback_name: ?[]const u8, focused_output_name: ?[]const u8) !void {
     const name = stringField(value, "name") orelse stringField(value, "id") orelse fallback_name orelse "";
-    const id_json = try cli_json.stringAlloc(allocator, name);
+    const id_json = try jsonStringAlloc(allocator, name);
     defer allocator.free(id_json);
-    const name_json = try cli_json.stringAlloc(allocator, name);
+    const name_json = try jsonStringAlloc(allocator, name);
     defer allocator.free(name_json);
     const focused = boolField(value, "focused") orelse if (focused_output_name) |focused_name| std.mem.eql(u8, focused_name, name) else false;
     const geometry = try geometryJson(allocator, value);
@@ -397,7 +396,7 @@ fn focusedWindowJson(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 
 
 fn recommendedCaptureJson(allocator: std.mem.Allocator, focused_output_name: ?[]const u8) ![]u8 {
     if (focused_output_name) |name| {
-        const id_json = try cli_json.stringAlloc(allocator, name);
+        const id_json = try jsonStringAlloc(allocator, name);
         defer allocator.free(id_json);
         return std.fmt.allocPrint(allocator, "{{\"mode\":\"output\",\"id\":{s},\"reason\":\"focused_output\"}}", .{id_json});
     }
@@ -414,7 +413,7 @@ fn geometryJson(allocator: std.mem.Allocator, value: std.json.Value) ![]u8 {
 }
 
 fn nullableFieldStringJson(allocator: std.mem.Allocator, value: std.json.Value, key: []const u8) ![]u8 {
-    if (stringField(value, key)) |text| return cli_json.stringAlloc(allocator, text);
+    if (stringField(value, key)) |text| return jsonStringAlloc(allocator, text);
     return allocator.dupe(u8, "null");
 }
 
@@ -462,6 +461,75 @@ fn numberField(value: std.json.Value, key: []const u8) ?std.json.Value {
         };
     }
     return null;
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_nullable_string_escape(
+        @intFromBool(value != null),
+        if (value) |text| jsonSpan(text) else .{ .data = null, .length = 0 },
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonWarningsAlloc(allocator: std.mem.Allocator, warnings: []const []const u8) ![]u8 {
+    const spans = try allocator.alloc(c.ShaulaJsonSpan, warnings.len);
+    defer allocator.free(spans);
+    for (warnings, 0..) |warning, index| spans[index] = jsonSpan(warning);
+
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_warnings_serialize(if (spans.len == 0) null else spans.ptr, spans.len, &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn writeBasicError(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }
 
 fn boolJson(value: bool) []const u8 {

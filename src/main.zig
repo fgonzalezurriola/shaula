@@ -6,7 +6,6 @@ pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 pub const protocol_module = @import("ipc/protocol.zig");
 pub const compositor_runtime_module = @import("compositor/runtime.zig");
 
-const cli_json = @import("cli/json.zig");
 const preflight_probe = @import("preflight/probe.zig");
 const capabilities_probe = @import("capabilities/probe.zig");
 const capture_command = @import("capture/command.zig");
@@ -22,6 +21,7 @@ const settings_command = @import("settings/command.zig");
 const directory_command = @import("directory/command.zig");
 const setup_command = @import("setup/command.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -37,7 +37,7 @@ pub fn main(init: std.process.Init) !u8 {
     const argv = init.minimal.args.vector;
 
     if (argv.len < 2) {
-        try cli_json.writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|setup|directory|doctor|explore|preflight|capabilities|history|clipboard|errors> ...", false);
+        try writeBasicError(io, "", "ERR_CLI_USAGE", "usage: shaula <capture|preview|notify|config|settings|setup|directory|doctor|explore|preflight|capabilities|history|clipboard|errors> ...", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -46,7 +46,7 @@ pub fn main(init: std.process.Init) !u8 {
     if (std.mem.eql(u8, family, "preflight")) {
         const flags = parseFlags(io, argv, 2, "preflight") catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
-            try cli_json.writeBasicError(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
+            try writeBasicError(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
         return preflight_probe.run(allocator, io, init.minimal.environ);
@@ -62,14 +62,14 @@ pub fn main(init: std.process.Init) !u8 {
                 flags_start = 3;
                 flags_command = "capabilities list";
             } else if (maybe_subcommand.len == 0 or maybe_subcommand[0] != '-') {
-                try cli_json.writeBasicError(io, "capabilities list", "ERR_CLI_USAGE", "usage: shaula capabilities [list] --json", false);
+                try writeBasicError(io, "capabilities list", "ERR_CLI_USAGE", "usage: shaula capabilities [list] --json", false);
                 return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
             }
         }
 
         const flags = parseFlags(io, argv, flags_start, flags_command) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         if (!flags.json_mode) {
-            try cli_json.writeBasicError(io, flags_command, "ERR_CLI_USAGE", "--json is required", false);
+            try writeBasicError(io, flags_command, "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
         return capabilities_probe.run(allocator, io, init.minimal.environ);
@@ -123,7 +123,7 @@ pub fn main(init: std.process.Init) !u8 {
         return errors_command.run(allocator, io, argv);
     }
 
-    try cli_json.writeBasicError(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
+    try writeBasicError(io, family, "ERR_CLI_USAGE", "unsupported command family", false);
     return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
 }
 
@@ -142,7 +142,7 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, command: []
             continue;
         }
 
-        try cli_json.writeBasicError(io, command, "ERR_CLI_USAGE", "unsupported flag", false);
+        try writeBasicError(io, command, "ERR_CLI_USAGE", "unsupported flag", false);
         return error.InvalidArgument;
     }
 
@@ -151,4 +151,35 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8, start: usize, command: []
 
 fn argToSlice(arg: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(arg, 0);
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn writeBasicError(
+    io: std.Io,
+    command: []const u8,
+    code: []const u8,
+    message: []const u8,
+    retryable: bool,
+) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }

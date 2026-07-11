@@ -47,9 +47,9 @@ Status vocabulary:
 | Zig module(s) | Primary callers | Current characterization | Status |
 | --- | --- | --- | --- |
 | `core/capture_mode.{c,h}` / former capture-mode Zig facade | capture grammar/dispatch, invocation/lifecycle, configuration, and overlay selection | `tests/unit/core_capture_mode_test.c`; direct-caller integration through `./dev check`; production symbol inspection | C active / Zig removed |
-| `errors/taxonomy.{c,h}`, `errors/command.zig` / former taxonomy and recovery-policy Zig modules | all public error metadata, action/retry/exit mapping, and `errors list` | `tests/unit/error_taxonomy_test.c`; `tests/fixtures/port/errors-list.json`; mixed command tests | C active / caller cleanup complete; three zero-byte placeholders pending unlink |
-| `cli/json.zig`, `ipc/protocol.zig` | public JSON envelopes for every command family | Broad command tests; dedicated fixtures being added | Zig active |
-| `preview/preview_result.{c,h}` / former `preview_result.zig` | final Preview helper result parsing in `preview/service.zig`; action tokens consumed by Preview CLI and post-capture JSON | `tests/unit/preview_result_test.c`; direct caller tests in `preview/service.zig`; production mixed-build integration | C active / caller cleanup complete; zero-byte placeholder pending unlink |
+| `errors/taxonomy.{c,h}`, `errors/command.zig` / former taxonomy and recovery-policy Zig modules | all public error metadata, action/retry/exit mapping, and `errors list` | `tests/unit/error_taxonomy_test.c`; `tests/fixtures/port/errors-list.json`; mixed command tests | C active / Zig removed |
+| `cli/json.{c,h}` / former `cli/json.zig`; `ipc/protocol.zig` IPC-only | shared contract version, byte escaping, warning arrays, timestamps, and basic error envelopes for every command family | `tests/unit/cli_json_test.c`; mixed Zig integration; normalized old/new command differential matrix | C active / Zig removed |
+| `preview/preview_result.{c,h}` / former `preview_result.zig` | final Preview helper result parsing in `preview/service.zig`; action tokens consumed by Preview CLI and post-capture JSON | `tests/unit/preview_result_test.c`; direct caller tests in `preview/service.zig`; production mixed-build integration | C active / Zig removed |
 | `notify/request.zig`, `notify.zig`, `notify/command.zig` | notification model, runtime action, CLI | Inline request tests and post-capture tests | Zig active |
 | `capture/command_flags.zig`, `capture/command_grammar.zig`, `capture/command_guards.zig`, `capture/warnings.zig` | capture CLI parsing and deterministic usage outcomes | `command_flags_test.zig`, `command_test.zig`, inline grammar tests | Zig active |
 | `capture/post_capture_types.zig` | post-capture result and side-effect model | Imported by `test_root.zig` | Zig active |
@@ -114,7 +114,7 @@ Status vocabulary:
 | `capture/command_test.zig` | command grammar/outcomes | C contract tests against fixtures | Test-only Zig |
 | `capture/types_test.zig` | capture types/geometry | C model tests | Test-only Zig |
 | `overlay/toolbar_layout_test.zig` | toolbar layout | C geometry/layout unit tests | Test-only Zig |
-| former `recovery/policy_test.zig` | error actions, retry budgets, and exit codes | `tests/unit/error_taxonomy_test.c` with fixture comparison | C replacement active; zero-byte placeholder pending unlink |
+| former `recovery/policy_test.zig` | error actions, retry budgets, and exit codes | `tests/unit/error_taxonomy_test.c` with fixture comparison | C replacement active / Zig removed |
 | `test_root.zig` | aggregate Zig test root | Meson test suites | Test-only Zig |
 
 ## Current Phase 2 dependency changes
@@ -605,11 +605,63 @@ errors list --json` output matches `tests/fixtures/port/errors-list.json`
 semantically and the canonical compact error array byte-for-byte after removing
 the timestamp envelope.
 
-Characterization, C implementation, production caller cutover, and maintained
-import cleanup are complete. This DevSpace interface cannot unlink tracked
-files, so the obsolete `src/errors/taxonomy.zig`, `src/recovery/policy.zig`, and
-`src/recovery/policy_test.zig` paths remain zero-byte placeholders. Strict
-physical module completion is pending a workspace with unlink support.
+Characterization, C implementation, production caller cutover, maintained
+import cleanup, and physical deletion of the obsolete
+`src/errors/taxonomy.zig`, `src/recovery/policy.zig`, and
+`src/recovery/policy_test.zig` paths are complete.
+
+## Phase 4 shared JSON characterization and cutover
+
+`src/cli/json.{c,h}` owns the shared public JSON policy. The authoritative Zig
+build compiles `json.c` into production, and every maintained caller includes
+`cli/json.h` directly. `src/ipc/protocol.zig` now owns only `ipc_version`; the
+public `contract_version` literal is borrowed from C.
+
+Direct caller inventory:
+
+| Importing module(s) | Shared C operations | Command-specific behavior retained in Zig |
+| --- | --- | --- |
+| `main.zig`, `setup/command.zig` | contract timestamp and complete basic-error envelope | command dispatch and usage decisions |
+| `capabilities/probe.zig`, `preflight/probe.zig` | contract version, timestamp, string/warning serialization, basic errors with raw details | capability fields, backend data, compositor details, and IPC version |
+| `capture/command_json.zig`, `capture/post_capture.zig`, `capture/post_capture_json.zig` | contract version, timestamp, byte strings, nullable strings, warning arrays | capture fields, selection objects, result duplication, partial/degraded state, and side-effect outcomes |
+| `clipboard/command.zig`, `directory/command.zig`, `history/command.zig`, `preview/command.zig`, `settings/command.zig`, `notify/command.zig` | contract version, timestamps, byte strings where historically shared, nullable strings, and basic errors | typed command result payloads and orchestration; clipboard success paths retain legacy raw insertion for exact compatibility |
+| `config/command.zig` | contract version, timestamp, byte strings, warning arrays, and basic errors with raw typed details | configuration parsing/persistence, numeric nulls, Niri payloads, and conflicts |
+| `doctor/command.zig`, `explore/command.zig`, `errors/command.zig` | contract version, timestamps, strings/warnings, and basic errors | diagnostic/inventory/taxonomy result objects and canonical command-specific field order |
+
+The C ABI is explicit-length and fixed-width. Inputs are borrowed byte spans;
+NULL plus zero length is empty, while NULL plus nonzero length is invalid. The
+contract literal is immutable process-lifetime storage. Builder results are
+GLib-owned length-bearing buffers with trailing-NUL storage and repeat-safe clear.
+Caller-local Zig adapters may copy those bytes into an existing allocator but
+must not recreate escaping or warning policy.
+
+The nullable-string builder preserves absent `null` versus present empty `""`.
+The frozen escaping contract matches the prior default Zig stringifier: quote
+and backslash are escaped, slash is not, the five named controls plus backspace
+and form feed use short escapes, every other byte `0x00..0x1f` uses lowercase
+`\\u00xx`, and all remaining bytes are copied unchanged. This preserves valid
+UTF-8, invalid UTF-8, and non-ASCII bytes and converts embedded NUL to
+`\\u0000`. The timestamp is `YYYY-MM-DDTHH:MM:SSZ`. The shared basic error has
+exact order `ok, contract_version, command, timestamp, error, warnings`, accepts
+a borrowed unvalidated raw details fragment for compatibility, and ends in one
+newline. Clipboard success-path fields intentionally remain outside the shared
+escaping policy because the previous serializer inserted them raw; changing that
+pathological quote/control-byte behavior requires a separate contract decision.
+
+`tests/unit/cli_json_test.c` covers null versus empty strings, the complete
+byte/control table, empty and long strings, exact lengths, checked overflow,
+invalid spans and NULL rules,
+valid/invalid UTF-8, embedded NUL, warning order and emptiness, timestamp format,
+contract-literal lifetime, repeat-safe init/clear, exact basic-error order, raw
+details behavior, and one-object newline framing. The mixed Zig root confirms a
+direct caller receives C escaping. A temporary clean `HEAD` build and the
+migrated build produced byte-identical output after timestamp-only normalization
+for thirteen representative commands, including errors-list, warning arrays,
+details errors, usage errors, and adversarial control bytes. GCC and Clang pass
+all normal and ASan/UBSan lanes.
+
+Maintained imports of `src/cli/json.zig` are zero. The obsolete path has been
+physically deleted.
 
 ## Phase 4 Preview result characterization and cutover
 
@@ -660,6 +712,5 @@ and raw NUL behavior, invalid spans, owned-output replacement, and repeat-safe
 cleanup. The mixed Zig tests cover the caller-local allocator copy and action
 serialization. Characterization, C implementation, tests, production cutover,
 and caller cleanup are complete. Repository-wide maintained imports of the old
-Zig implementation are zero; only the zero-byte `src/preview_result.zig`
-placeholder awaits physical unlink because this DevSpace interface has no unlink
-operation.
+Zig implementation are zero, and the obsolete `src/preview_result.zig` path has
+been physically deleted.

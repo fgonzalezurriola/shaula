@@ -51,8 +51,9 @@ Deterministic failure token for non-ready environment:
 - `./dev port-check-asan` runs the same C tests under AddressSanitizer and
   UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
   matching the maintained CI compiler matrix.
-- The C lane currently contains seventeen tests. It covers the public error
-  taxonomy and recovery mapping; the core capture-mode model; runtime environment
+- The C lane currently contains eighteen tests. It covers the shared public JSON
+  envelope/escaping policy; the public error taxonomy and recovery mapping; the
+  core capture-mode model; runtime environment
   strings, booleans, bounded unsigned values, and
   desktop tokens; runtime path resolution, ownership, artifact classification,
   and parent creation; runtime tool lookup, helper resolution, previous-area
@@ -85,6 +86,38 @@ Deterministic failure token for non-ready environment:
 - Mixed-build command coverage confirming `shaula errors list --json` matches the
   fixture semantically and its compact canonical error array byte-for-byte after
   excluding the timestamp envelope
+
+### Shared JSON contract (`tests/unit/cli_json_test.c`)
+
+- Fixed 32-bit status ABI and borrowed process-lifetime contract-version literal
+- Explicit-length spans: NULL plus zero length accepted as empty, NULL plus
+  nonzero length rejected, and no hidden NUL-terminated input contract
+- Empty strings, plain ASCII, unchanged slash, quote/backslash escaping, named
+  control escapes, and every byte `0x00..0x1f` with exact lowercase output
+- Nullable strings distinguish absent JSON `null` from a present empty JSON
+  string, including invalid presence flags and spans
+- Embedded NUL serialized as `\\u0000`; valid multibyte UTF-8, invalid UTF-8,
+  non-ASCII bytes, and arbitrary bytes at or above `0x20` preserved unchanged
+- Very long strings, exact output lengths, trailing-NUL storage, checked
+  allocation-size overflow, invalid spans, and allocation-status propagation
+- GLib-owned result replacement, repeated init/clear, and idempotent cleanup
+- Warning-array order, exact escaping, empty arrays, and invalid warning spans
+- Deterministic `YYYY-MM-DDTHH:MM:SSZ` timestamps, epoch and pre-epoch coverage,
+  and out-of-range failure
+- Exact basic-error field order, boolean encoding, raw details insertion,
+  one-object-plus-one-newline framing, and no partial or doubled object
+- Explicit characterization that malformed raw details are not validated, matching
+  the previous shared helper contract
+- Mixed Zig caller coverage through `capture/command_test.zig` and the full
+  `./dev check` command suite
+- Temporary clean-`HEAD` differential build: timestamp-only normalization followed
+  by byte-for-byte comparison for errors-list, root/capture/config/Preview/history/
+  clipboard/doctor/settings/explore usage errors, preflight typed details,
+  capabilities warnings, and adversarial quote/backslash/newline/tab/control bytes
+- Command-matrix validation that each output is one parseable JSON object, ends in
+  exactly one newline, preserves canonical leading field order, and emits no
+  stderr
+- GCC and Clang normal plus ASan/UBSan Meson lanes with warnings as errors
 
 ### Core capture-mode contract (`tests/unit/core_capture_mode_test.c`)
 

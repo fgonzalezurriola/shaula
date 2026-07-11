@@ -1,15 +1,11 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const selection = @import("../selection/selection.zig");
 const capture_types = @import("types.zig");
 const warning_tokens = @import("warnings.zig");
-
-pub const jsonStringAlloc = cli_json.stringAlloc;
-pub const jsonNullableStringAlloc = cli_json.nullableStringAlloc;
-pub const warningsJson = cli_json.warningsAlloc;
-pub const nowIso8601 = cli_json.nowIso8601;
+const c = @cImport({
+    @cInclude("cli/json.h");
+});
 
 pub const known_warning_capture_selection_portal = warning_tokens.selection_portal;
 
@@ -46,7 +42,7 @@ pub fn writeSuccessJson(
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d},\"degraded\":{s},\"result\":{{\"mode\":{s},\"path\":{s},\"mime\":{s},\"dimensions\":{{\"width\":{d},\"height\":{d}}},\"backend_used\":{s},\"latency_ms\":{d}}},\"warnings\":{s}}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             mode_json,
@@ -99,7 +95,7 @@ pub fn writeSelectionDryRunJson(allocator: std.mem.Allocator, io: std.Io, comman
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"selection\":{{\"mode\":{s},\"aspect\":{s},\"geometry\":{s},\"cancelled\":false}},\"preview\":{{\"attempted\":false,\"ok\":false,\"error\":null}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_json, ts_json, mode_json, aspect_json, geometry_json },
+        .{ jsonContractVersion(), command_json, ts_json, mode_json, aspect_json, geometry_json },
     );
     try stdout.interface.flush();
 }
@@ -145,7 +141,7 @@ pub fn writeErrorJson(
     try stdout.interface.print(
         "{{\"ok\":false,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"mode\":{s},\"backend_used\":{s},\"degraded\":{s},\"error\":{{\"code\":{s},\"message\":{s},\"retryable\":{s},\"details\":{{\"mode\":{s}}}}},\"warnings\":{s}}}\n",
         .{
-            protocol.contract_version,
+            jsonContractVersion(),
             command_json,
             ts_json,
             mode_json,
@@ -159,4 +155,53 @@ pub fn writeErrorJson(
         },
     );
     try stdout.interface.flush();
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonNullableStringAlloc(allocator: std.mem.Allocator, value: ?[]const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_nullable_string_escape(
+        @intFromBool(value != null),
+        if (value) |text| jsonSpan(text) else .{ .data = null, .length = 0 },
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn warningsJson(allocator: std.mem.Allocator, warnings: []const []const u8) ![]u8 {
+    const spans = try allocator.alloc(c.ShaulaJsonSpan, warnings.len);
+    defer allocator.free(spans);
+    for (warnings, 0..) |warning, index| spans[index] = jsonSpan(warning);
+
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_warnings_serialize(if (spans.len == 0) null else spans.ptr, spans.len, &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn nowIso8601(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }

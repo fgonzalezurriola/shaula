@@ -1,9 +1,8 @@
 const std = @import("std");
 
-const cli_json = @import("../cli/json.zig");
-const protocol = @import("../ipc/protocol.zig");
 const clipboard_service = @import("service.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
 });
 
@@ -87,14 +86,14 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     };
     defer allocator.free(imported_path);
 
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"clipboard import-image\",\"timestamp\":\"{s}\",\"path\":\"{s}\",\"result\":{{\"path\":\"{s}\"}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts, imported_path, imported_path },
+        .{ jsonContractVersion(), ts, imported_path, imported_path },
     );
     try stdout.interface.flush();
     return 0;
@@ -113,25 +112,56 @@ fn runCopyImage(allocator: std.mem.Allocator, io: std.Io, environ: std.process.E
         return recovery_policy.exitCodeFor(code);
     }
 
-    const ts = try nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
 
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":\"clipboard copy-image\",\"timestamp\":\"{s}\",\"result\":{{\"input\":\"{s}\",\"copied\":true}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, ts, input_path },
+        .{ jsonContractVersion(), ts, input_path },
     );
     try stdout.interface.flush();
     return 0;
 }
 
-fn argToSlice(arg: [*:0]const u8) []const u8 {
-    return std.mem.sliceTo(arg, 0);
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
 }
 
 fn writeErrorJson(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
-    try cli_json.writeBasicError(io, command, code, message, retryable);
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
+    try stdout.interface.flush();
 }
 
-const nowIso8601 = cli_json.nowIso8601;
+fn argToSlice(arg: [*:0]const u8) []const u8 {
+    return std.mem.sliceTo(arg, 0);
+}

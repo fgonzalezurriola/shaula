@@ -1,10 +1,9 @@
 const std = @import("std");
 
 const output_path = @import("../capture/backends/capture_backend_output_path.zig");
-const cli_json = @import("../cli/json.zig");
 const config_loader = @import("../config/loader.zig");
-const protocol = @import("../ipc/protocol.zig");
 const c = @cImport({
+    @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
     @cInclude("runtime/process_exec.h");
 });
@@ -33,13 +32,13 @@ const recovery_policy = struct {
 /// captures, so shell integrations do not duplicate path fallback rules.
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const [*:0]const u8) !u8 {
     if (argv.len < 3) {
-        try cli_json.writeBasicError(io, "directory", "ERR_CLI_USAGE", "usage: shaula directory screenshots [--open] [--json]", false);
+        try writeBasicError(io, "directory", "ERR_CLI_USAGE", "usage: shaula directory screenshots [--open] [--json]", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
     const target = argToSlice(argv[2]);
     if (!std.mem.eql(u8, target, "screenshots")) {
-        try cli_json.writeBasicError(io, "directory", "ERR_CLI_USAGE", "unsupported directory target", false);
+        try writeBasicError(io, "directory", "ERR_CLI_USAGE", "unsupported directory target", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -56,7 +55,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
             open = true;
             continue;
         }
-        try cli_json.writeBasicError(io, "directory screenshots", "ERR_CLI_USAGE", "unsupported flag", false);
+        try writeBasicError(io, "directory screenshots", "ERR_CLI_USAGE", "unsupported flag", false);
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
@@ -65,7 +64,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     const save_folder = if (loaded_config) |loaded| loaded.config.capture.after.save_folder.value() else null;
 
     const dir = output_path.resolveSavedOutputDir(allocator, io, environ, save_folder) catch {
-        try cli_json.writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "screenshot directory is not writable", false);
+        try writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "screenshot directory is not writable", false);
         return recovery_policy.exitCodeFor("ERR_OUTPUT_PATH_INVALID");
     };
     defer allocator.free(dir);
@@ -73,7 +72,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     if (open) {
         const process_argv = [_]c.ShaulaProcessSpan{ processSpan("xdg-open"), processSpan(dir) };
         if (!runProcessSucceeded(&process_argv, 4096, 4096)) {
-            try cli_json.writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "could not open screenshot directory", false);
+            try writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "could not open screenshot directory", false);
             return recovery_policy.exitCodeFor("ERR_OUTPUT_PATH_INVALID");
         }
     }
@@ -86,21 +85,66 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 }
 
 fn writeDirectoryJson(allocator: std.mem.Allocator, io: std.Io, path: []const u8, opened: bool) !void {
-    const ts = try cli_json.nowIso8601(allocator, io);
+    const ts = try jsonTimestampAlloc(allocator, io);
     defer allocator.free(ts);
-    const command_json = try cli_json.stringAlloc(allocator, "directory screenshots");
+    const command_json = try jsonStringAlloc(allocator, "directory screenshots");
     defer allocator.free(command_json);
-    const ts_json = try cli_json.stringAlloc(allocator, ts);
+    const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
-    const path_json = try cli_json.stringAlloc(allocator, path);
+    const path_json = try jsonStringAlloc(allocator, path);
     defer allocator.free(path_json);
 
     var stdout_buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
     try stdout.interface.print(
         "{{\"ok\":true,\"contract_version\":\"{s}\",\"command\":{s},\"timestamp\":{s},\"result\":{{\"target\":\"screenshots\",\"path\":{s},\"opened\":{s}}},\"warnings\":[]}}\n",
-        .{ protocol.contract_version, command_json, ts_json, path_json, if (opened) "true" else "false" },
+        .{ jsonContractVersion(), command_json, ts_json, path_json, if (opened) "true" else "false" },
     );
+    try stdout.interface.flush();
+}
+
+fn jsonSpan(value: []const u8) c.ShaulaJsonSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn jsonContractVersion() []const u8 {
+    const value = c.shaula_json_contract_version();
+    return value.data[0..value.length];
+}
+
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn jsonStringAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_string_escape(jsonSpan(value), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
+fn writeBasicError(io: std.Io, command: []const u8, code: []const u8, message: []const u8, retryable: bool) !void {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_basic_error_build(
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        jsonSpan(command),
+        jsonSpan(code),
+        jsonSpan(message),
+        @intFromBool(retryable),
+        jsonSpan("{}"),
+        &output,
+    );
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+
+    var buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &buffer);
+    try stdout.interface.writeAll(output.data[0..output.length]);
     try stdout.interface.flush();
 }
 

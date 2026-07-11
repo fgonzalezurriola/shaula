@@ -4,10 +4,12 @@ const capture_types = @import("types.zig");
 const history_store = @import("../history/store.zig");
 const clipboard_service = @import("../clipboard/service.zig");
 const preview_service = @import("../preview/service.zig");
-const cli_json = @import("../cli/json.zig");
 const notify = @import("../notify.zig");
 const post_capture_json = @import("post_capture_json.zig");
 const post_capture_types = @import("post_capture_types.zig");
+const c = @cImport({
+    @cInclude("cli/json.h");
+});
 
 pub const PipelineFlags = struct {
     save: bool,
@@ -56,7 +58,7 @@ fn runPostCaptureWork(
     flags: PipelineFlags,
 ) !post_capture_types.PostCaptureOutcome {
     var outcome = post_capture_types.PostCaptureOutcome{
-        .timestamp = try cli_json.nowIso8601(allocator, io),
+        .timestamp = try jsonTimestampAlloc(allocator, io),
     };
     errdefer outcome.deinit(allocator);
 
@@ -126,6 +128,14 @@ fn runPostCaptureWork(
 ///
 /// Contract constraint: notification failures never change capture JSON or
 /// `ERR_*` outcomes; preview owns its own notification path to avoid duplicates.
+fn jsonTimestampAlloc(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var output: c.ShaulaJsonOwnedBytes = .{ .data = null, .length = 0 };
+    defer c.shaula_json_owned_bytes_clear(&output);
+    const status = c.shaula_json_timestamp_from_unix_seconds(std.Io.Timestamp.now(io, .real).toSeconds(), &output);
+    if (status != c.SHAULA_JSON_STATUS_OK) return error.JsonEncodingFailed;
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
+
 fn notifyForDirectPipeline(
     allocator: std.mem.Allocator,
     io: std.Io,
