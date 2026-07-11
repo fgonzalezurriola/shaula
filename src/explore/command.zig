@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const compositor_runtime = @import("../compositor/runtime.zig");
-const focused_output = @import("../compositor/focused_output.zig");
 const recovery_policy = struct {
     fn exitCodeFor(code: []const u8) u8 {
         return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
@@ -9,9 +7,84 @@ const recovery_policy = struct {
 };
 const c = @cImport({
     @cInclude("cli/json.h");
+    @cInclude("compositor/focused_output.h");
+    @cInclude("compositor/runtime.h");
     @cInclude("errors/taxonomy.h");
     @cInclude("runtime/process_exec.h");
 });
+
+const CompositorKind = enum(i32) {
+    niri = c.SHAULA_COMPOSITOR_KIND_NIRI,
+    wayland = c.SHAULA_COMPOSITOR_KIND_WAYLAND,
+    unsupported = c.SHAULA_COMPOSITOR_KIND_UNSUPPORTED,
+};
+
+const CompositorDetection = struct {
+    kind: CompositorKind,
+    label: []const u8,
+};
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn detectCompositor(environ: std.process.Environ) CompositorDetection {
+    var environment: c.ShaulaCompositorEnvironment = .{
+        .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+        .niri_socket = envValue(environ, "NIRI_SOCKET"),
+        .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+        .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+        .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+    };
+    var result: c.ShaulaCompositorDetection = std.mem.zeroes(c.ShaulaCompositorDetection);
+    if (c.shaula_compositor_detect(&environment, &result) != c.SHAULA_COMPOSITOR_STATUS_OK) {
+        return .{ .kind = .unsupported, .label = "unsupported" };
+    }
+    const kind: CompositorKind = switch (result.kind) {
+        c.SHAULA_COMPOSITOR_KIND_NIRI => .niri,
+        c.SHAULA_COMPOSITOR_KIND_WAYLAND => .wayland,
+        else => .unsupported,
+    };
+    const label = if (result.label.length == 0) "" else result.label.data[0..result.label.length];
+    return .{ .kind = kind, .label = label };
+}
+
+fn compositorKindToken(kind: CompositorKind) []const u8 {
+    const token = c.shaula_compositor_kind_token(@intFromEnum(kind));
+    if (token.length == 0) return "";
+    return token.data[0..token.length];
+}
+
+fn resolveFocusedOutputName(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+) !?[]u8 {
+    var environment: c.ShaulaFocusedOutputEnvironment = .{
+        .overlay_output_name = envValue(environ, "SHAULA_OVERLAY_OUTPUT_NAME"),
+        .compositor = .{
+            .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+            .niri_socket = envValue(environ, "NIRI_SOCKET"),
+            .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+            .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+            .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+        },
+    };
+    var result: c.ShaulaFocusedOutputResult = std.mem.zeroes(c.ShaulaFocusedOutputResult);
+    defer c.shaula_focused_output_result_clear(&result);
+
+    const status = c.shaula_focused_output_resolve(&environment, &result);
+    switch (status) {
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_OK => {},
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_INVALID_ARGUMENT => return error.InvalidFocusedOutputArguments,
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_OUT_OF_MEMORY => return error.OutOfMemory,
+        else => return error.FocusedOutputResolutionFailed,
+    }
+    if (result.present == 0) return null;
+    if (result.present != 1) return error.FocusedOutputResolutionFailed;
+    const data = result.name.data orelse return error.FocusedOutputResolutionFailed;
+    return try allocator.dupe(u8, data[0..result.name.length]);
+}
 
 fn processSpan(value: []const u8) c.ShaulaProcessSpan {
     return .{ .data = value.ptr, .length = value.len };
@@ -60,8 +133,8 @@ pub fn run(
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    const compositor = compositor_runtime.detect(environ);
-    const focused_output_name = focused_output.resolveName(allocator, io, environ) catch null;
+    const compositor = detectCompositor(environ);
+    const focused_output_name = resolveFocusedOutputName(allocator, environ) catch null;
     defer if (focused_output_name) |value| allocator.free(value);
 
     const inventory = try resolveInventory(allocator, io, compositor, focused_output_name, flags.brief);
@@ -71,7 +144,7 @@ pub fn run(
     defer allocator.free(ts);
     const ts_json = try jsonStringAlloc(allocator, ts);
     defer allocator.free(ts_json);
-    const kind_json = try jsonStringAlloc(allocator, @tagName(compositor.kind));
+    const kind_json = try jsonStringAlloc(allocator, compositorKindToken(compositor.kind));
     defer allocator.free(kind_json);
     const label_json = try jsonStringAlloc(allocator, compositor.label);
     defer allocator.free(label_json);
@@ -145,7 +218,7 @@ fn parseFlags(io: std.Io, argv: []const [*:0]const u8) !ExploreFlags {
 fn resolveInventory(
     allocator: std.mem.Allocator,
     io: std.Io,
-    compositor: compositor_runtime.Detection,
+    compositor: CompositorDetection,
     focused_output_name: ?[]const u8,
     brief: bool,
 ) !Inventory {

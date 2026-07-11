@@ -51,9 +51,13 @@ Deterministic failure token for non-ready environment:
 - `./dev port-check-asan` runs the same C tests under AddressSanitizer and
   UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
   matching the maintained CI compiler matrix.
-- The C lane currently contains eighteen tests. It covers the shared public JSON
-  envelope/escaping policy; the public error taxonomy and recovery mapping; the
-  core capture-mode model; runtime environment
+- The C lane currently contains twenty-two tests. It covers the shared public
+  JSON envelope/escaping policy; the public error taxonomy and recovery mapping;
+  the core capture-mode model; the compositor environment detector and support/
+  overlay policy; capability/runtime backend selection and portal probing;
+  focused-output override/process/result resolution; the notification
+  request/argv and file-URI model; runtime
+  environment
   strings, booleans, bounded unsigned values, and
   desktop tokens; runtime path resolution, ownership, artifact classification,
   and parent creation; runtime tool lookup, helper resolution, previous-area
@@ -119,6 +123,34 @@ Deterministic failure token for non-ready environment:
   stderr
 - GCC and Clang normal plus ASan/UBSan Meson lanes with warnings as errors
 
+### Notification request contract (`tests/unit/notify_request_test.c`)
+
+- Fixed 32-bit urgency, image-mode, and status ABI values, including exact low,
+  normal, critical, hint, and icon ordinals
+- Historical request defaults: normal urgency, 2500 millisecond timeout,
+  transient delivery, and absent image/action values
+- Exact `notify-send` argv order for default, non-transient, image-hint,
+  icon-fallback, action, zero-timeout, and maximum-`u32` timeout requests
+- Present empty optionals preserved as image/action values rather than collapsed
+  to absence
+- File-URI escaping for literal `/`, ASCII alphanumerics, `-`, `_`, `.`, and `~`,
+  plus uppercase `%XX` for spaces, punctuation, backslash, embedded NUL, DEL,
+  invalid UTF-8, and arbitrary high bytes
+- Explicit-length NULL/empty/malformed spans without hidden NUL termination,
+  UTF-8 validation, locale dependence, path normalization, filesystem access, or
+  shell execution
+- Borrowed request/literal argv spans plus GLib-owned decimal timeout, image
+  hint, and action buffers with authoritative lengths, trailing-NUL storage,
+  replacement safety, and repeated clear behavior
+- Invalid presence flags, urgency/image modes, spans, output pointers, and
+  checked allocation-size overflow mapped to deterministic status values
+- Mixed Zig caller test confirming direct `notify/request.h` use and caller-local
+  fixed-width/span/argv adaptation without a shared Zig policy facade
+- Clean-`HEAD` command differential checks for copied, error, and
+  saved-action-listener paths, including byte-identical captured `notify-send`
+  argv and timestamp-normalized public JSON where emitted
+- GCC and Clang normal plus ASan/UBSan Meson lanes with warnings as errors
+
 ### Core capture-mode contract (`tests/unit/core_capture_mode_test.c`)
 
 - Fixed capture, runtime, and region enum ABI values
@@ -129,6 +161,95 @@ Deterministic failure token for non-ready environment:
 - Case, whitespace, prefix, suffix, non-ASCII, and embedded-NUL rejection
 - Invalid spans and enum values without out-of-bounds table access
 - Process-lifetime borrowed literal spans and direct maintained-caller C ABI mapping without a Zig policy facade
+
+### Compositor runtime contract (`tests/unit/compositor_runtime_test.c`)
+
+- Fixed 32-bit Niri, Wayland, unsupported, and status ABI values plus stable
+  borrowed kind tokens
+- Exact detection precedence across `SHAULA_COMPOSITOR`, `NIRI_SOCKET`,
+  `XDG_CURRENT_DESKTOP`, `XDG_SESSION_DESKTOP`, `WAYLAND_DISPLAY`, and the
+  unsupported fallback
+- ASCII-only trimming and desktop-token splitting inherited from
+  `runtime/env.{c,h}`, including first-token decisiveness
+- Present-empty `NIRI_SOCKET` and `WAYLAND_DISPLAY` behavior; empty and
+  whitespace-only explicit/session fallthrough
+- Niri canonicalization; complete exact Wayland and wlroots token tables with
+  ASCII case-insensitive matching
+- Historical case-sensitive lowercase `wayland` substring behavior, including
+  the deliberate `foo-wayland-bar` versus `foo-WAYLAND-bar` distinction
+- Explicit-length empty, non-ASCII, invalid-UTF-8, embedded-NUL, malformed, and
+  invalid-span handling without hidden NUL termination or locale dependence
+- Niri/wlroots support and overlay policy plus generic-Wayland portal gating
+- Invalid kinds and boolean ABI values returning deterministic invalid outcomes
+- Borrowed input labels, immutable process-lifetime canonical labels, no
+  allocation/cleanup requirement, and no filesystem/process/global-state access
+- Mixed Zig caller coverage through capabilities, preflight, and explore using
+  the direct C header, plus focused-output boundary integration without a shared
+  Zig compositor facade
+
+### Capability-runtime contract (`tests/unit/capabilities_runtime_test.c`)
+
+- Fixed 32-bit backend-kind and status ABI values plus canonical immutable labels
+- Invalid argument handling that resets caller-provided output to an invalid,
+  clear non-owning decision
+- Exact backend override trimming and matching, unknown-token fallthrough, and
+  force-portal precedence
+- Niri direct, wlroots grim/portal, generic-Wayland portal gating, unsupported
+  compositor, and stub behavior
+- Fixed grim candidate lookup without ownership transfer or executable-mode
+  reinterpretation
+- Caller-supplied portal availability/window overrides, including malformed and
+  unavailable-window behavior
+- Exact `gdbus call --session --timeout 2 --dest
+  org.freedesktop.portal.Desktop --object-path
+  /org/freedesktop/portal/desktop --method
+  org.freedesktop.DBus.Properties.Get org.freedesktop.portal.Screenshot` argv
+  for `version` and `AvailableTargets`
+- Independent 2048-byte stdout/stderr limits and advisory absence for spawn,
+  lookup, exit, signal, stream-limit, and parse failures
+- Last-unsigned parsing and window capability bits `2` and `8`
+- Complete capture-mode matrix and exact case-sensitive public/compatibility
+  token behavior
+- Ordered fallback count/index behavior for every backend kind
+- Degraded-backend, overlay-bypass, portal-selection, previous-area, and
+  portal-fallback mutation helpers, including malformed decision rejection
+- Borrowed environment/compositor labels, immutable backend labels, no result
+  allocation or cleanup, and no mutable global state
+- Mixed production integration through capture dispatch/lifecycle/guards/backend,
+  preflight, capabilities output, and doctor using direct C headers and
+  caller-local fixed-layout conversion across independent `@cImport` namespaces
+
+### Focused-output contract (`tests/unit/compositor_focused_output_test.c`)
+
+- Fixed 32-bit status ABI plus initialized, replaceable, and repeat-safe result
+  cleanup
+- Nonempty ASCII-trimmed `SHAULA_OVERLAY_OUTPUT_NAME` precedence, exact byte
+  copying, and no process invocation when the override wins
+- Missing, empty, and whitespace-only override fallthrough through the C
+  compositor detector
+- Exact Niri argv `niri msg -j focused-output`, 8192-byte stdout limit, and
+  1024-byte stderr limit
+- Exact Sway argv `swaymsg -t get_outputs -r`, 65536-byte stdout limit, and
+  1024-byte stderr limit
+- Unsupported compositor avoidance with no child process
+- Niri required nonempty string `name`, Sway required string `name`, optional
+  boolean `focused` defaulting false, first-focused selection, and validation of
+  every later array item
+- Syntax validation and ignoring of unknown nested fields, while decoded known
+  duplicate keys, wrong known types, missing fields, malformed arrays/objects,
+  wrong root types, and trailing input invalidate the probe
+- JSON string decoding for escaped keys, valid UTF-8, surrogate pairs, invalid
+  UTF-8/surrogates, and explicit-length embedded NUL output
+- Advisory absence for missing executables, nonzero exits, signals, stream
+  overflow, empty output, malformed JSON, and parser/process allocation failure
+- Final selected-name allocation as the only propagated out-of-memory result
+- GLib-owned output length, trailing-NUL storage, replacement behavior, and
+  caller-local copy into existing Zig allocators
+- Mixed production integration through Explore, capture lifecycle, and overlay
+  selection using the direct C header without a Zig focused-output facade
+- Clean-`HEAD` differential matrix comparing timestamp-normalized Explore JSON,
+  stderr, and exit status for override, valid/invalid Niri, Unicode/NUL,
+  overflow/nonzero, valid/invalid Sway, and unsupported-compositor cases
 
 ### Preview helper-result contract (`tests/unit/preview_result_test.c`)
 

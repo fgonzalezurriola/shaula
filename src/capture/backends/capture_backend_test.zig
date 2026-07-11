@@ -1,7 +1,9 @@
 const std = @import("std");
 const capture_backend = @import("capture_backend.zig");
 const capture_types = @import("../types.zig");
-const runtime_capabilities = @import("../../capabilities/runtime.zig");
+const c = @cImport({
+    @cInclude("capabilities/runtime.h");
+});
 
 const EnvPair = struct {
     key: []const u8,
@@ -44,14 +46,23 @@ fn createExecutableHelper(io: std.Io, path: []const u8, script: []const u8) !voi
     try std.Io.Dir.cwd().setFilePermissions(io, path, .fromMode(0o755), .{});
 }
 
-fn resolved(backend: runtime_capabilities.BackendKind) capture_backend.ResolvedExecution {
+const TestBackendKind = enum(i32) {
+    niri_wayland_direct = c.SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT,
+    grim_wlroots = c.SHAULA_BACKEND_KIND_GRIM_WLROOTS,
+    portal_screenshot = c.SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT,
+    stub = c.SHAULA_BACKEND_KIND_STUB,
+};
+
+fn resolved(backend: TestBackendKind) capture_backend.ResolvedExecution {
     return .{
         .runtime = .{
-            .compositor_supported = true,
-            .overlay_supported = true,
-            .backend = backend,
-            .capture = .{ .area = true, .fullscreen = true, .all_screens = true, .window = false },
-            .compositor = .{ .kind = .niri, .label = "niri" },
+            .compositor_supported = 1,
+            .overlay_supported = 1,
+            .backend = @intFromEnum(backend),
+            .capture = .{ .area = 1, .fullscreen = 1, .all_screens = 1, .window = 0 },
+            .portal_available = 0,
+            .portal_window_capable = 0,
+            .compositor = .{ .kind = c.SHAULA_COMPOSITOR_KIND_NIRI, .label = .{ .data = "niri".ptr, .length = "niri".len } },
         },
         .focused_output_name = "test-output",
     };
@@ -60,11 +71,13 @@ fn resolved(backend: runtime_capabilities.BackendKind) capture_backend.ResolvedE
 fn unsupportedResolved() capture_backend.ResolvedExecution {
     return .{
         .runtime = .{
-            .compositor_supported = false,
-            .overlay_supported = false,
-            .backend = .portal_screenshot,
-            .capture = .{ .area = false, .fullscreen = false, .all_screens = false, .window = false },
-            .compositor = .{ .kind = .unsupported, .label = "unsupported" },
+            .compositor_supported = 0,
+            .overlay_supported = 0,
+            .backend = c.SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT,
+            .capture = .{ .area = 0, .fullscreen = 0, .all_screens = 0, .window = 0 },
+            .portal_available = 0,
+            .portal_window_capable = 0,
+            .compositor = .{ .kind = c.SHAULA_COMPOSITOR_KIND_UNSUPPORTED, .label = .{ .data = "unsupported".ptr, .length = "unsupported".len } },
         },
     };
 }

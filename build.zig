@@ -126,6 +126,22 @@ fn addRuntimeC(b: *std.Build, module: *std.Build.Module) void {
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });
     module.addCSourceFile(.{
+        .file = b.path("src/compositor/runtime.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/compositor/focused_output.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/capabilities/runtime.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/preflight/probe.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
         .file = b.path("src/cli/json.c"),
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });
@@ -135,6 +151,10 @@ fn addRuntimeC(b: *std.Build, module: *std.Build.Module) void {
     });
     module.addCSourceFile(.{
         .file = b.path("src/errors/taxonomy.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/notify/request.c"),
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });
     module.addCSourceFile(.{

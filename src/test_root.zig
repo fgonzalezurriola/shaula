@@ -1,6 +1,4 @@
 pub const capture_types_module = @import("capture/types.zig");
-pub const preflight_probe_module = @import("preflight/probe.zig");
-pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 
 const _capture_backend_test = @import("capture/backends/capture_backend_test.zig");
 const _capture_execution_plan = @import("capture/backends/capture_execution_plan.zig");
@@ -26,7 +24,7 @@ const _overlay_aspect_store = @import("overlay/aspect_store.zig");
 const _preview_service = @import("preview/service.zig");
 const _post_capture_json = @import("capture/post_capture_json.zig");
 const _post_capture_types = @import("capture/post_capture_types.zig");
-const _notify_request = @import("notify/request.zig");
+const _notify = @import("notify.zig");
 
 test {
     _ = _capture_backend_test;
@@ -53,5 +51,5 @@ test {
     _ = _preview_service;
     _ = _post_capture_json;
     _ = _post_capture_types;
-    _ = _notify_request;
+    _ = _notify;
 }

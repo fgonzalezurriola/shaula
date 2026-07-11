@@ -1,6 +1,6 @@
 const std = @import("std");
-const notify_request = @import("notify/request.zig");
 const c = @cImport({
+    @cInclude("notify/request.h");
     @cInclude("runtime/paths.h");
     @cInclude("runtime/process_exec.h");
 });
@@ -107,7 +107,92 @@ const process_exec = struct {
 const saved_screenshot_notification_timeout_ms: u32 = 6000;
 const saved_screenshot_notification_body = "Saved to screenshots folder.";
 
-pub const NotifyUrgency = notify_request.NotifyUrgency;
+pub const NotifyUrgency = enum(i32) {
+    low = c.SHAULA_NOTIFY_URGENCY_LOW,
+    normal = c.SHAULA_NOTIFY_URGENCY_NORMAL,
+    critical = c.SHAULA_NOTIFY_URGENCY_CRITICAL,
+};
+
+const NotifyAction = struct {
+    id: []const u8,
+    label: []const u8,
+};
+
+fn notifySpan(value: []const u8) c.ShaulaNotifySpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn notificationRequest(
+    summary: []const u8,
+    body: []const u8,
+    image_path: ?[]const u8,
+    urgency: NotifyUrgency,
+    timeout_ms: u32,
+    transient: bool,
+    action: ?NotifyAction,
+) c.ShaulaNotifyRequest {
+    var request: c.ShaulaNotifyRequest = undefined;
+    c.shaula_notify_request_init(&request);
+    request.summary = notifySpan(summary);
+    request.body = notifySpan(body);
+    request.urgency = @intFromEnum(urgency);
+    request.timeout_ms = timeout_ms;
+    request.transient = @intFromBool(transient);
+    if (image_path) |path| {
+        request.has_image_path = 1;
+        request.image_path = notifySpan(path);
+    }
+    if (action) |value| {
+        request.has_action = 1;
+        request.action_id = notifySpan(value.id);
+        request.action_label = notifySpan(value.label);
+    }
+    return request;
+}
+
+fn mapNotifyStatus(status: c.ShaulaNotifyStatus) !void {
+    return switch (status) {
+        c.SHAULA_NOTIFY_STATUS_OK => {},
+        c.SHAULA_NOTIFY_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        c.SHAULA_NOTIFY_STATUS_SIZE_OVERFLOW => error.Overflow,
+        c.SHAULA_NOTIFY_STATUS_INVALID_ARGUMENT,
+        c.SHAULA_NOTIFY_STATUS_INVALID_URGENCY,
+        c.SHAULA_NOTIFY_STATUS_INVALID_IMAGE_MODE,
+        => error.InvalidNotificationRequest,
+        else => error.Unexpected,
+    };
+}
+
+fn buildNotifySendArgs(
+    request: *const c.ShaulaNotifyRequest,
+    image_mode: c.ShaulaNotifyImageMode,
+) !c.ShaulaNotifySendArgs {
+    var args: c.ShaulaNotifySendArgs = std.mem.zeroes(c.ShaulaNotifySendArgs);
+    try mapNotifyStatus(c.shaula_notify_send_args_build(request, image_mode, &args));
+    return args;
+}
+
+fn notifyArgv(
+    args: *const c.ShaulaNotifySendArgs,
+    storage: *[c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8,
+) ![]const []const u8 {
+    const length: usize = @intCast(args.length);
+    if (length > storage.len) return error.InvalidNotificationRequest;
+    for (0..length) |index| {
+        const item = args.items[index];
+        if (item.data == null and item.length != 0) return error.InvalidNotificationRequest;
+        storage[index] = if (item.length == 0) "" else item.data[0..item.length];
+    }
+    return storage[0..length];
+}
+
+fn notifyFileUriAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    var output: c.ShaulaNotifyOwnedBytes = std.mem.zeroes(c.ShaulaNotifyOwnedBytes);
+    defer c.shaula_notify_owned_bytes_clear(&output);
+    try mapNotifyStatus(c.shaula_notify_file_uri_build(notifySpan(path), &output));
+    if (output.length == 0) return allocator.alloc(u8, 0);
+    return allocator.dupe(u8, output.data[0..output.length]);
+}
 
 pub fn notifyScreenshotSaved(allocator: std.mem.Allocator, io: std.Io, path: []const u8) !void {
     const absolute_path = try absolutePathForNotification(allocator, io, path);
@@ -156,16 +241,13 @@ pub fn notify(
     timeout_ms: u32,
     transient: bool,
 ) !void {
-    var args = try notify_request.buildNotifySendArgs(allocator, .{
-        .summary = summary,
-        .body = body,
-        .urgency = urgency,
-        .timeout_ms = timeout_ms,
-        .transient = transient,
-    }, .hint);
-    defer args.deinit(allocator);
+    var request = notificationRequest(summary, body, null, urgency, timeout_ms, transient, null);
+    var args = try buildNotifySendArgs(&request, c.SHAULA_NOTIFY_IMAGE_MODE_HINT);
+    defer c.shaula_notify_send_args_clear(&args);
+    var argv_storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &argv_storage);
 
-    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
 
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
@@ -181,19 +263,13 @@ pub fn notifyWithImage(
     timeout_ms: u32,
     transient: bool,
 ) !void {
-    const request = notify_request.NotificationRequest{
-        .summary = summary,
-        .body = body,
-        .image_path = image_path,
-        .urgency = urgency,
-        .timeout_ms = timeout_ms,
-        .transient = transient,
-    };
+    var request = notificationRequest(summary, body, image_path, urgency, timeout_ms, transient, null);
+    var args = try buildNotifySendArgs(&request, c.SHAULA_NOTIFY_IMAGE_MODE_HINT);
+    defer c.shaula_notify_send_args_clear(&args);
+    var argv_storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &argv_storage);
 
-    var args = try notify_request.buildNotifySendArgs(allocator, request, .hint);
-    defer args.deinit(allocator);
-
-    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return fallbackNotifyIcon(allocator, io, request);
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch return fallbackNotifyIcon(allocator, io, request);
     defer result.deinit(allocator);
 
     if (result.term == .exited and result.term.exited == 0) return;
@@ -203,12 +279,15 @@ pub fn notifyWithImage(
 fn fallbackNotifyIcon(
     allocator: std.mem.Allocator,
     io: std.Io,
-    request: notify_request.NotificationRequest,
+    request: c.ShaulaNotifyRequest,
 ) !void {
-    var args = try notify_request.buildNotifySendArgs(allocator, request, .icon);
-    defer args.deinit(allocator);
+    var request_copy = request;
+    var args = try buildNotifySendArgs(&request_copy, c.SHAULA_NOTIFY_IMAGE_MODE_ICON);
+    defer c.shaula_notify_send_args_clear(&args);
+    var argv_storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &argv_storage);
 
-    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
 }
@@ -266,20 +345,21 @@ fn notifySavedWithAction(
     timeout_ms: u32,
     transient: bool,
 ) ![]u8 {
-    const request = notify_request.NotificationRequest{
-        .summary = summary,
-        .body = body,
-        .image_path = image_path,
-        .urgency = urgency,
-        .timeout_ms = timeout_ms,
-        .transient = transient,
-        .action = .{ .id = "default", .label = "Show in folder" },
-    };
+    var request = notificationRequest(
+        summary,
+        body,
+        image_path,
+        urgency,
+        timeout_ms,
+        transient,
+        .{ .id = "default", .label = "Show in folder" },
+    );
+    var args = try buildNotifySendArgs(&request, c.SHAULA_NOTIFY_IMAGE_MODE_HINT);
+    defer c.shaula_notify_send_args_clear(&args);
+    var argv_storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &argv_storage);
 
-    var args = try notify_request.buildNotifySendArgs(allocator, request, .hint);
-    defer args.deinit(allocator);
-
-    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return fallbackSavedActionNotifyIcon(allocator, io, request);
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch return fallbackSavedActionNotifyIcon(allocator, io, request);
     defer result.deinit(allocator);
     if (result.term == .exited and result.term.exited == 0) {
         return trimActionOutput(allocator, result.stdout);
@@ -290,12 +370,15 @@ fn notifySavedWithAction(
 fn fallbackSavedActionNotifyIcon(
     allocator: std.mem.Allocator,
     io: std.Io,
-    request: notify_request.NotificationRequest,
+    request: c.ShaulaNotifyRequest,
 ) ![]u8 {
-    var args = try notify_request.buildNotifySendArgs(allocator, request, .icon);
-    defer args.deinit(allocator);
+    var request_copy = request;
+    var args = try buildNotifySendArgs(&request_copy, c.SHAULA_NOTIFY_IMAGE_MODE_ICON);
+    defer c.shaula_notify_send_args_clear(&args);
+    var argv_storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &argv_storage);
 
-    const result = process_exec.run(allocator, io, args.argv(), 1024, 1024) catch return error.NotificationUnavailable;
+    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch return error.NotificationUnavailable;
     defer result.deinit(allocator);
     if (result.term != .exited or result.term.exited != 0) return error.NotificationUnavailable;
     return trimActionOutput(allocator, result.stdout);
@@ -363,7 +446,7 @@ fn openParentDirectory(allocator: std.mem.Allocator, io: std.Io, path: []const u
 fn fileUriAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
     const absolute = try absolutePathForNotification(allocator, io, path);
     defer allocator.free(absolute);
-    return notify_request.fileUriFromPathAlloc(allocator, absolute);
+    return notifyFileUriAlloc(allocator, absolute);
 }
 
 fn absolutePathForNotification(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
@@ -382,4 +465,34 @@ fn trimActionOutput(allocator: std.mem.Allocator, stdout: []const u8) ![]u8 {
 
 fn logRevealFailure(method: []const u8, path: []const u8, err: anyerror) void {
     std.debug.print("shaula reveal-file failed path=\"{s}\" method=\"{s}\" error={s}\n", .{ path, method, @errorName(err) });
+}
+
+test "notification request caller uses direct C model" {
+    var request = notificationRequest(
+        "Screenshot captured",
+        "Saved.",
+        "/tmp/shaula/cap one.png",
+        .normal,
+        6000,
+        true,
+        .{ .id = "default", .label = "Show in folder" },
+    );
+    var args = try buildNotifySendArgs(&request, c.SHAULA_NOTIFY_IMAGE_MODE_HINT);
+    defer c.shaula_notify_send_args_clear(&args);
+    var storage: [c.SHAULA_NOTIFY_SEND_ARG_CAPACITY][]const u8 = undefined;
+    const argv = try notifyArgv(&args, &storage);
+
+    try std.testing.expectEqual(@as(usize, 12), argv.len);
+    try std.testing.expectEqualStrings("notify-send", argv[0]);
+    try std.testing.expectEqualStrings("normal", argv[3]);
+    try std.testing.expectEqualStrings("6000", argv[5]);
+    try std.testing.expectEqualStrings("--transient", argv[6]);
+    try std.testing.expectEqualStrings("--hint", argv[7]);
+    try std.testing.expectEqualStrings(
+        "string:image-path:file:///tmp/shaula/cap%20one.png",
+        argv[8],
+    );
+    try std.testing.expectEqualStrings("--action=default=Show in folder", argv[9]);
+    try std.testing.expectEqualStrings("Screenshot captured", argv[10]);
+    try std.testing.expectEqualStrings("Saved.", argv[11]);
 }

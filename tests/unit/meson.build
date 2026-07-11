@@ -41,6 +41,66 @@ test(
   suite: ['port', 'unit'],
 )
 
+compositor_runtime_test = executable(
+  'compositor-runtime-test',
+  'compositor_runtime_test.c',
+  dependencies: [shaula_compositor_runtime_dep, glib_dep],
+)
+
+test(
+  'compositor-runtime-c',
+  compositor_runtime_test,
+  suite: ['port', 'unit'],
+)
+
+compositor_focused_output_test = executable(
+  'compositor-focused-output-test',
+  'compositor_focused_output_test.c',
+  dependencies: [shaula_compositor_runtime_dep, glib_dep],
+)
+
+test(
+  'compositor-focused-output-c',
+  compositor_focused_output_test,
+  suite: ['port', 'unit'],
+)
+
+capabilities_runtime_test = executable(
+  'capabilities-runtime-test',
+  'capabilities_runtime_test.c',
+  dependencies: [shaula_capabilities_runtime_dep, glib_dep],
+)
+
+test(
+  'capabilities-runtime-c',
+  capabilities_runtime_test,
+  suite: ['port', 'unit'],
+)
+
+preflight_probe_test = executable(
+  'preflight-probe-test',
+  'preflight_probe_test.c',
+  dependencies: [shaula_preflight_probe_dep, glib_dep],
+)
+
+test(
+  'preflight-probe-c',
+  preflight_probe_test,
+  suite: ['port', 'unit'],
+)
+
+notify_request_test = executable(
+  'notify-request-test',
+  'notify_request_test.c',
+  dependencies: shaula_notify_request_dep,
+)
+
+test(
+  'notify-request-c',
+  notify_request_test,
+  suite: ['port', 'unit'],
+)
+
 preview_result_test = executable(
   'preview-result-test',
   'preview_result_test.c',

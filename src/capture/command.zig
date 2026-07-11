@@ -7,14 +7,38 @@ const recovery_policy = struct {
     }
 };
 const json = @import("command_json.zig");
-const runtime_capabilities = @import("../capabilities/runtime.zig");
 const c = @cImport({
+    @cInclude("capabilities/runtime.h");
     @cInclude("core/capture_mode.h");
     @cInclude("errors/taxonomy.h");
 });
 
 fn captureModeSpan(value: []const u8) c.ShaulaCaptureModeSpan {
     return .{ .data = value.ptr, .length = value.len };
+}
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn resolveRuntime(environ: std.process.Environ) c.ShaulaRuntimeDecision {
+    var environment: c.ShaulaCapabilitiesEnvironment = .{
+        .compositor = .{
+            .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+            .niri_socket = envValue(environ, "NIRI_SOCKET"),
+            .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+            .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+            .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+        },
+        .capture_backend = envValue(environ, "SHAULA_CAPTURE_BACKEND"),
+        .capture_force_portal = envValue(environ, "SHAULA_CAPTURE_FORCE_PORTAL"),
+        .portal_available = envValue(environ, "SHAULA_PORTAL_AVAILABLE"),
+        .portal_window_capable = envValue(environ, "SHAULA_PORTAL_WINDOW_CAPABLE"),
+    };
+    var runtime: c.ShaulaRuntimeDecision = std.mem.zeroes(c.ShaulaRuntimeDecision);
+    if (c.shaula_capabilities_resolve(&environment, &runtime) != c.SHAULA_CAPABILITIES_STATUS_OK) unreachable;
+    return runtime;
 }
 
 /// Entry point for the `capture` command family.
@@ -39,7 +63,7 @@ pub fn run(
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     }
 
-    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+    const runtime = resolveRuntime(environ);
 
     return switch (requested_mode) {
         c.SHAULA_CAPTURE_MODE_QUICK => lifecycle.runQuick(allocator, io, environ, runtime, argv),

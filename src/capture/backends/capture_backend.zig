@@ -6,8 +6,8 @@ const output_path = @import("capture_backend_output_path.zig");
 const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
 const capture_types = @import("../types.zig");
-const runtime_capabilities = @import("../../capabilities/runtime.zig");
 const c = @cImport({
+    @cInclude("capabilities/runtime.h");
     @cInclude("runtime/env.h");
 });
 
@@ -29,8 +29,17 @@ fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
     return c.shaula_env_value_flag(envValue(environ, key), &value) == c.SHAULA_ENV_STATUS_VALID and value != 0;
 }
 
-pub const BackendKind = runtime_capabilities.BackendKind;
-pub const RuntimeDecision = runtime_capabilities.RuntimeDecision;
+pub const BackendKind = c.ShaulaBackendKind;
+pub const RuntimeDecision = c.ShaulaRuntimeDecision;
+
+fn capabilitySpan(value: c.ShaulaEnvSpan) []const u8 {
+    if (value.length == 0) return "";
+    return value.data[0..value.length];
+}
+
+fn backendLabel(backend: BackendKind) []const u8 {
+    return capabilitySpan(c.shaula_capabilities_backend_label(backend));
+}
 
 pub const ResolvedExecution = struct {
     runtime: RuntimeDecision,
@@ -54,15 +63,15 @@ pub fn execute(
         return failure.unknown(capture_types, request.mode, null, "injected unknown failure");
     }
 
-    if (!resolved.runtime.compositor_supported) {
+    if (resolved.runtime.compositor_supported == 0) {
         return failure.outcome(capture_types, request.mode, "ERR_UNSUPPORTED_COMPOSITOR", "unsupported compositor for shaula v1", false, false, null);
     }
 
     const backend = resolved.runtime.backend;
-    const backend_used = resolved.runtime.backendUsedLabel();
-    const degraded_backend = resolved.runtime.degradedBackend();
+    const backend_used = backendLabel(resolved.runtime.backend);
+    const degraded_backend = c.shaula_capabilities_degraded_backend(resolved.runtime) == 1;
 
-    if (backend == .stub) {
+    if (backend == c.SHAULA_BACKEND_KIND_STUB) {
         return failure.backendUnavailable(capture_types, request.mode, backend_used);
     }
 

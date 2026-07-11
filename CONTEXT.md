@@ -52,7 +52,7 @@ contracts, active risks, and immediate work.
   caller now invokes those C ABIs directly through caller-local ownership/status
   conversion; repository-wide facade imports are zero, the obsolete facade
   bodies/tests have been removed, and the seven former facade paths have now
-  been physically deleted. Phase 4 has four completed pure-model/shared-policy
+  been physically deleted. Phase 4 has five completed pure-model/shared-policy
   cutovers.
   `core/capture_mode.{c,h}` owns exact CLI/region tokens, runtime and backend
   lane mapping, and interactive-selection policy. Capture, configuration, and
@@ -83,6 +83,52 @@ contracts, active risks, and immediate work.
   caller-local ABI/allocator adaptation plus their typed result/detail fields.
   `ipc/protocol.zig` now owns only `ipc_version`. The obsolete `cli/json.zig`
   path has been physically deleted.
+  `notify/request.{c,h}` now owns notification request defaults, fixed-width
+  urgency and image-mode values, exact `notify-send` argv ordering, decimal
+  timeout formatting, action spelling, and bytewise file-URI escaping.
+  `notify.zig` includes the C header directly and retains only caller-local
+  span/status/argv conversion plus notification execution, hint-to-icon fallback,
+  action listening, reveal behavior, and process error mapping. Request inputs
+  are borrowed explicit-length bytes; timeout, image-hint, and action output
+  buffers are GLib-owned until `shaula_notify_send_args_clear`. Maintained imports
+  of `notify/request.zig` are zero. The current DevSpace interface cannot unlink
+  that tracked path, so it remains only as a zero-byte placeholder.
+  Phase 5 now has three completed decision-boundary slices. `compositor/runtime.{c,h}`
+  owns fixed-width compositor kinds, exact
+  environment precedence, ASCII trimming/tokenization through `runtime/env.h`,
+  known Wayland and wlroots classification, stable kind tokens, and support/
+  overlay policy. Capabilities, preflight, explore, and focused-output callers
+  include the C header directly and retain only caller-local environment lookup,
+  span/enum conversion, JSON adaptation, or process probing. Empty
+  `NIRI_SOCKET` and `WAYLAND_DISPLAY` values remain present; Niri is canonicalized
+  to `niri`, other labels preserve their original bytes and case, and only the
+  lowercase substring `wayland` receives the historical substring match. The C
+  model allocates nothing and accepts explicit-length classification spans,
+  including embedded NUL bytes. Maintained imports of
+  `compositor/runtime.zig` are zero; it is another zero-byte placeholder because
+  the current DevSpace interface cannot unlink tracked files.
+  `compositor/focused_output.{c,h}` now owns the ASCII-trimmed
+  `SHAULA_OVERLAY_OUTPUT_NAME` override, exact Niri and Sway probe argv and output
+  limits, strict typed JSON result parsing, and advisory fallback behavior.
+  Spawn, exit, signal, limit, and malformed-result failures remain ordinary
+  absence rather than public `ERR_*` failures. Successful names are
+  explicit-length GLib-owned bytes and may include an embedded NUL decoded from
+  JSON. Explore, capture lifecycle, and overlay selection include the C header
+  directly, copy a present name into their existing Zig allocator, and retain
+  their prior caller-level fallback behavior. Maintained imports of
+  `compositor/focused_output.zig` are zero; that tracked path is also a zero-byte
+  placeholder pending physical deletion outside the current DevSpace interface.
+  `capabilities/runtime.{c,h}` now owns the fixed-width backend/runtime decision,
+  exact backend-override and force-portal precedence, compositor and portal
+  support aggregation, strict capture-mode matrix, fallback ordering, and the
+  advisory `gdbus` portal capability probe. Environment values and compositor
+  labels remain borrowed; backend labels are immutable process-lifetime spans;
+  the result owns no memory and needs no cleanup. Capture dispatch, lifecycle,
+  guards, backend execution, preflight, capabilities output, and doctor include
+  the C header directly. Their Zig code retains only caller-local environment,
+  ABI, JSON, or module-boundary conversion. Maintained imports of
+  `capabilities/runtime.zig` are zero; it remains a zero-byte tracked placeholder
+  because the current DevSpace interface cannot unlink it.
 - The preview toolbar and More menu are the active UI surfaces. Keep the
   headerbar compact, stable in natural width, and honest about available actions.
 - Settings must expose the public config contract without inventing a second
@@ -263,8 +309,19 @@ contracts, active risks, and immediate work.
   ordinal. Maintained capture, configuration, and overlay Zig callers include
   the C header directly, use the fixed-width C ABI values, and perform only
   immediate caller-local span/status conversion.
-- `capabilities/runtime.zig` owns backend selection. Call its typed decision
-  methods rather than comparing backend strings.
+- `capabilities/runtime.{c,h}` owns fixed-width backend selection, portal
+  capability probing, the aggregate runtime decision, capture-mode support,
+  fallback ordering, and decision-policy helpers. Maintained Zig callers include
+  the C header directly and perform only caller-local environment/ABI conversion.
+- `compositor/runtime.{c,h}` owns compositor environment detection,
+  classification, stable kind tokens, and support/overlay policy. Maintained
+  callers include the C header directly; backend selection remains outside this
+  pure model.
+- `compositor/focused_output.{c,h}` owns focused-output override selection,
+  exact Niri/Sway process probes, typed result parsing, and best-effort absence.
+  Returned present names are GLib-owned explicit-length bytes. Explore, capture,
+  and overlay callers include the header directly and copy only the optional
+  name into their existing allocator.
 - `runtime/env.{c,h}` owns environment trimming, boolean parsing, exact bounded
   unsigned parsing, and desktop-token extraction. It returns borrowed spans and
   allocates nothing. Zig callers perform only caller-supplied environment lookup
@@ -298,6 +355,17 @@ contracts, active risks, and immediate work.
   termination classification, and child cleanup. Callers still own explicit
   output limits, returned-buffer cleanup, and deterministic command-specific
   error mapping; no subprocess policy remains in a Zig facade.
+- `notify/request.{c,h}` owns normal/2500-ms/transient request defaults, exact
+  low/normal/critical tokens and fixed-width ABI values, deterministic
+  `notify-send` argv construction, `--action=id=label`, and file-URI byte
+  escaping. Inputs are borrowed explicit-length spans; present empty optionals
+  stay present; embedded NUL and arbitrary bytes are observed rather than
+  truncated. Successful output borrows literals/request bytes and owns only the
+  decimal timeout, optional image hint, and optional action bytes as
+  length-bearing GLib allocations. `notify.zig` includes the header directly,
+  retains inputs through synchronous execution, and clears C output afterward.
+  Actual process execution, retry/fallback decisions, action listening, reveal,
+  and notification command JSON remain Zig-owned.
 - Capture commands are not retried automatically because retries can create
   duplicate screenshots or repeated portal prompts.
 - `zig build -Dstrip` strips the main executable and every native helper. Helper
@@ -436,6 +504,8 @@ contracts, active risks, and immediate work.
   ```bash
   ./dev port-check
   ./dev port-check-asan
+  CC=clang ./dev port-check
+  CC=clang ./dev port-check-asan
   ```
 
 - After UI changes also run:
@@ -477,19 +547,24 @@ contracts, active risks, and immediate work.
   convert historical observations into stronger support claims.
 - QuickShell general integration and the static landing page are planned work,
   not part of the current capture/preview reliability scope.
-- `./dev check` is green in the current checkout. Host-dependent Wayland,
+- `./dev check`, GCC and Clang `./dev port-check`, GCC and Clang
+  `./dev port-check-asan`, `./dev qa`, and `git diff --check` are green in the
+  current checkout, with 22 Meson tests per lane. Host-dependent Wayland,
   compositor, and external-tool assumptions still require explicit fixtures or
   manual evidence before stronger portability claims are made.
-- The checkout was clean before this shared JSON slice. Historical Preview/UI
-  and unrelated orchestration work remain outside the migration; this slice
-  changed only JSON policy, direct caller adapters, build/tests, and ownership
-  documentation.
+- The checkout was clean before the notification-request slice. Historical
+  Preview/UI and unrelated orchestration work remain outside the migration. The
+  current uncommitted migration work contains only the notification-request,
+  compositor-detection, focused-output-resolution, and capability-runtime
+  slices, their direct caller adapters, build/tests, and ownership documentation.
+  Notification execution and command orchestration remain separate.
 
 ## Immediate next steps
 
-1. Continue Phase 4 with another explicitly selected pure-model or small-command
-   slice; the shared JSON-envelope boundary is complete and must not absorb
-   unrelated command orchestration.
+1. Continue Phase 5 with another explicitly selected pure model or bounded
+   command boundary, preferably the preflight probe or a similarly small
+   diagnostics slice. Compositor detection, focused-output resolution, and
+   capability/runtime selection are complete; none should absorb command JSON.
 2. Expand Phase 0 fixtures for CLI failures, config round trips, helper protocol
    outcomes, and remaining host-dependent tool assumptions.
 3. Keep `preview/preview_paths.{c,h}` aligned with the runtime capture-artifact

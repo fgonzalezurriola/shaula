@@ -6,6 +6,7 @@ const ui_state_store = @import("ui_state_store.zig");
 const aspect_store = @import("aspect_store.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
 const c = @cImport({
+    @cInclude("compositor/focused_output.h");
     @cInclude("core/capture_mode.h");
     @cInclude("runtime/paths.h");
     @cInclude("runtime/process_exec.h");
@@ -14,6 +15,36 @@ const c = @cImport({
 fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
     const value = environ.getPosix(key) orelse return null;
     return value.ptr;
+}
+
+fn resolveFocusedOutputName(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+) !?[]u8 {
+    var environment: c.ShaulaFocusedOutputEnvironment = .{
+        .overlay_output_name = envValue(environ, "SHAULA_OVERLAY_OUTPUT_NAME"),
+        .compositor = .{
+            .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+            .niri_socket = envValue(environ, "NIRI_SOCKET"),
+            .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+            .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+            .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+        },
+    };
+    var result: c.ShaulaFocusedOutputResult = std.mem.zeroes(c.ShaulaFocusedOutputResult);
+    defer c.shaula_focused_output_result_clear(&result);
+
+    const status = c.shaula_focused_output_resolve(&environment, &result);
+    switch (status) {
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_OK => {},
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_INVALID_ARGUMENT => return error.InvalidFocusedOutputArguments,
+        c.SHAULA_FOCUSED_OUTPUT_STATUS_OUT_OF_MEMORY => return error.OutOfMemory,
+        else => return error.FocusedOutputResolutionFailed,
+    }
+    if (result.present == 0) return null;
+    if (result.present != 1) return error.FocusedOutputResolutionFailed;
+    const data = result.name.data orelse return error.FocusedOutputResolutionFailed;
+    return try allocator.dupe(u8, data[0..result.name.length]);
 }
 
 fn pathSpan(value: []const u8) c.ShaulaRuntimePathSpan {
@@ -41,7 +72,6 @@ fn resolveRuntimePath(allocator: std.mem.Allocator, environ: std.process.Environ
     };
 }
 const overlay_runtime = @import("runtime.zig");
-const compositor_focused_output = @import("../compositor/focused_output.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
 pub const RegionCaptureMode = c.ShaulaRegionCaptureMode;
@@ -501,7 +531,8 @@ fn resolveOverlayOutputName(
     io: std.Io,
     environ: std.process.Environ,
 ) !?[]u8 {
-    return compositor_focused_output.resolveName(allocator, io, environ);
+    _ = io;
+    return resolveFocusedOutputName(allocator, environ);
 }
 
 fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {

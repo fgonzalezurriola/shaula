@@ -274,7 +274,7 @@ shaula capture area --panel-handshake=ipc
 **Implementation changes in Shaula:**
 
 1. `src/capture/precondition_guard.zig`: Add `ipcPanelHideHandshake()` path that uses `qs ipc call/prop get` instead of file-token polling.
-2. `src/compositor/runtime.zig`: Add `quickshellIpcAvailable()` detection — check if `qs ipc show` returns a `shaula` target.
+2. Add a separate QuickShell integration probe for `qs ipc show` and a `shaula` target. Do not place child-process execution in the pure `src/compositor/runtime.{c,h}` detector.
 3. Fallback chain: IPC handshake → file-token handshake → settle barrier → timeout.
 
 ### 4.3 Standalone Bar Widget
@@ -457,7 +457,7 @@ This subcommand provides:
 | # | Task | Files | Effort |
 |---|------|-------|--------|
 | 2.1 | Add `ipcPanelHideHandshake()` to `precondition_guard.zig` | Modified: `src/capture/precondition_guard.zig` | 3h |
-| 2.2 | Add QuickShell IPC availability detection to `compositor/runtime.zig` | Modified: `src/compositor/runtime.zig` | 1.5h |
+| 2.2 | Add QuickShell IPC availability detection in a separate integration probe | New integration probe; `src/compositor/runtime.{c,h}` remains process-free | 1.5h |
 | 2.3 | Implement fallback chain: IPC → file-token → settle barrier → timeout | Modified: `src/capture/precondition_guard.zig` | 2h |
 | 2.4 | Add `shaula ipc` subcommand (call, listen, prop, available, targets) | New: `src/ipc/command.zig`, `src/ipc/bridge.zig` | 4h |
 | 2.5 | Write contract tests for IPC handshake paths | New: `scripts/qa/assert-quickshell-ipc-handshake.sh` | 2h |
@@ -640,7 +640,7 @@ src/
 | Noctalia action adapter | `integrations/noctalia/noctalia-action-adapter.sh` |
 | Setup installer (Noctalia path) | `src/setup/command.zig:275-500` |
 | Panel-hide precondition guard | `src/capture/precondition_guard.zig` |
-| Compositor detection | `src/compositor/runtime.zig` |
+| Compositor detection | `src/compositor/runtime.{c,h}` |
 | Doctor diagnostics | `src/doctor/diagnostics.zig` |
 | Capture lifecycle | `src/capture/lifecycle.zig` |
 | Capture command grammar | `src/capture/command_grammar.zig` |

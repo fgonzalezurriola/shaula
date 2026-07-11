@@ -1,12 +1,9 @@
 const std = @import("std");
 
 pub const capture_types_module = @import("capture/types.zig");
-pub const preflight_probe_module = @import("preflight/probe.zig");
-pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 pub const protocol_module = @import("ipc/protocol.zig");
-pub const compositor_runtime_module = @import("compositor/runtime.zig");
 
-const preflight_probe = @import("preflight/probe.zig");
+const backend_contract = @import("capture/backends/capture_backend_contract.zig");
 const capabilities_probe = @import("capabilities/probe.zig");
 const capture_command = @import("capture/command.zig");
 const history_command = @import("history/command.zig");
@@ -23,6 +20,7 @@ const setup_command = @import("setup/command.zig");
 const c = @cImport({
     @cInclude("cli/json.h");
     @cInclude("errors/taxonomy.h");
+    @cInclude("preflight/probe.h");
 });
 
 const recovery_policy = struct {
@@ -30,6 +28,44 @@ const recovery_policy = struct {
         return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
     }
 };
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn runPreflight(io: std.Io, environ: std.process.Environ) !u8 {
+    var environment: c.ShaulaCapabilitiesEnvironment = .{
+        .compositor = .{
+            .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+            .niri_socket = envValue(environ, "NIRI_SOCKET"),
+            .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+            .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+            .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+        },
+        .capture_backend = envValue(environ, "SHAULA_CAPTURE_BACKEND"),
+        .capture_force_portal = envValue(environ, "SHAULA_CAPTURE_FORCE_PORTAL"),
+        .portal_available = envValue(environ, "SHAULA_PORTAL_AVAILABLE"),
+        .portal_window_capable = envValue(environ, "SHAULA_PORTAL_WINDOW_CAPABLE"),
+    };
+    var output: c.ShaulaPreflightOutput = std.mem.zeroes(c.ShaulaPreflightOutput);
+    defer c.shaula_preflight_output_clear(&output);
+
+    const warning = backend_contract.warning_portal_fallback;
+    const status = c.shaula_preflight_build(
+        &environment,
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+        .{ .data = warning.ptr, .length = warning.len },
+        &output,
+    );
+    if (status != c.SHAULA_PREFLIGHT_STATUS_OK) return error.JsonEncodingFailed;
+
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writer(io, &stdout_buffer);
+    try stdout.interface.writeAll(output.json.data[0..output.json.length]);
+    try stdout.interface.flush();
+    return output.exit_code;
+}
 
 pub fn main(init: std.process.Init) !u8 {
     const io = init.io;
@@ -49,7 +85,7 @@ pub fn main(init: std.process.Init) !u8 {
             try writeBasicError(io, "preflight", "ERR_CLI_USAGE", "--json is required", false);
             return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
         }
-        return preflight_probe.run(allocator, io, init.minimal.environ);
+        return runPreflight(io, init.minimal.environ);
     }
 
     if (std.mem.eql(u8, family, "capabilities")) {

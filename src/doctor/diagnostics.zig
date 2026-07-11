@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const loader = @import("../config/loader.zig");
-const runtime_capabilities = @import("../capabilities/runtime.zig");
 const c = @cImport({
+    @cInclude("capabilities/runtime.h");
     @cInclude("runtime/env.h");
     @cInclude("runtime/tool_lookup.h");
 });
@@ -10,6 +10,34 @@ const c = @cImport({
 fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
     const value = environ.getPosix(key) orelse return null;
     return value.ptr;
+}
+
+fn capabilitySpan(value: c.ShaulaEnvSpan) []const u8 {
+    if (value.length == 0) return "";
+    return value.data[0..value.length];
+}
+
+fn resolveRuntime(environ: std.process.Environ) c.ShaulaRuntimeDecision {
+    var environment: c.ShaulaCapabilitiesEnvironment = .{
+        .compositor = .{
+            .shaula_compositor = envValue(environ, "SHAULA_COMPOSITOR"),
+            .niri_socket = envValue(environ, "NIRI_SOCKET"),
+            .xdg_current_desktop = envValue(environ, "XDG_CURRENT_DESKTOP"),
+            .xdg_session_desktop = envValue(environ, "XDG_SESSION_DESKTOP"),
+            .wayland_display = envValue(environ, "WAYLAND_DISPLAY"),
+        },
+        .capture_backend = envValue(environ, "SHAULA_CAPTURE_BACKEND"),
+        .capture_force_portal = envValue(environ, "SHAULA_CAPTURE_FORCE_PORTAL"),
+        .portal_available = envValue(environ, "SHAULA_PORTAL_AVAILABLE"),
+        .portal_window_capable = envValue(environ, "SHAULA_PORTAL_WINDOW_CAPABLE"),
+    };
+    var runtime: c.ShaulaRuntimeDecision = std.mem.zeroes(c.ShaulaRuntimeDecision);
+    if (c.shaula_capabilities_resolve(&environment, &runtime) != c.SHAULA_CAPABILITIES_STATUS_OK) unreachable;
+    return runtime;
+}
+
+fn backendLabel(backend: c.ShaulaBackendKind) []const u8 {
+    return capabilitySpan(c.shaula_capabilities_backend_label(backend));
 }
 
 fn envSlice(environ: std.process.Environ, key: []const u8) ?[]const u8 {
@@ -120,7 +148,7 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     const niri_config_env = envSlice(environ, "NIRI_CONFIG");
     const wayland_display = envSlice(environ, "WAYLAND_DISPLAY");
     const xdg_session_type = envSlice(environ, "XDG_SESSION_TYPE");
-    const runtime = runtime_capabilities.resolve(allocator, io, environ);
+    const runtime = resolveRuntime(environ);
     const niri_user_config_path = try xdgConfigPath(allocator, xdg_config_dir, "niri/config.kdl");
     defer if (niri_user_config_path) |path| allocator.free(path);
     const niri_cfg_dir_path = try xdgConfigPath(allocator, xdg_config_dir, "niri/cfg");
@@ -142,7 +170,7 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
     if (!toolFound(tools, "wl-copy")) try warnings.append(allocator, "missing wl-copy");
     if (wayland_display == null or wayland_display.?.len == 0) try warnings.append(allocator, "missing WAYLAND_DISPLAY");
     if (xdg_session_type == null or !std.mem.eql(u8, xdg_session_type.?, "wayland")) try warnings.append(allocator, "XDG_SESSION_TYPE is not wayland");
-    if (!runtime.portal_available and runtime.compositor.kind == .wayland and !runtime.overlay_supported) try warnings.append(allocator, "portal unavailable for generic Wayland compositor");
+    if (runtime.portal_available == 0 and runtime.compositor.kind == c.SHAULA_COMPOSITOR_KIND_WAYLAND and runtime.overlay_supported == 0) try warnings.append(allocator, "portal unavailable for generic Wayland compositor");
 
     const niri_detected =
         toolFound(tools, "niri") or
@@ -172,11 +200,11 @@ pub fn collect(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
         .niri_snippet_exists = niri_snippet_exists,
         .xdg_session_type = xdg_session_type,
         .wayland_display = wayland_display,
-        .detected_compositor = runtime.compositor.label,
-        .backend_active = runtime_capabilities.backendLabel(runtime.backend),
-        .portal_available = runtime.portal_available,
-        .portal_window_capable = runtime.portal_window_capable,
-        .overlay_supported = runtime.overlay_supported,
+        .detected_compositor = capabilitySpan(runtime.compositor.label),
+        .backend_active = backendLabel(runtime.backend),
+        .portal_available = runtime.portal_available != 0,
+        .portal_window_capable = runtime.portal_window_capable != 0,
+        .overlay_supported = runtime.overlay_supported != 0,
         .niri_config_env = niri_config_env,
         .niri_config_env_exists = niri_config_env != null and niri_config_env.?.len > 0 and toolPathExists(niri_config_env.?),
         .niri_user_config_exists = niri_user_config_path != null and toolPathExists(niri_user_config_path.?),

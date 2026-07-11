@@ -61,7 +61,7 @@ pub const Plan = struct {
 ///
 /// Contract constraints: this Module owns helper/grim argv shape, all-output vs
 /// current-output command mapping from already-resolved inputs; compositor
-/// probing stays in `compositor/focused_output.zig` so deterministic `ERR_*`
+/// probing stays in `compositor/focused_output.{c,h}` so deterministic `ERR_*`
 /// mapping remains at the backend seam.
 pub fn resolve(
     allocator: std.mem.Allocator,

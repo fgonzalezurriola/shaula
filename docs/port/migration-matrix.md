@@ -14,6 +14,9 @@ Status vocabulary:
   obsolete Zig implementation has been deleted.
 - **C active / caller cleanup complete**: production and maintained tests use
   the C ABI directly; no maintained facade imports remain.
+- **C active / zero-byte placeholder**: production and maintained tests use C,
+  references to the obsolete Zig module are zero, but the current workspace
+  interface cannot unlink the tracked path physically.
 - **Removed migration support**: an unlinked bridge/helper source was deleted
   after repository-wide reference checks.
 - **Test-only Zig**: Zig test root or characterization module.
@@ -50,7 +53,8 @@ Status vocabulary:
 | `errors/taxonomy.{c,h}`, `errors/command.zig` / former taxonomy and recovery-policy Zig modules | all public error metadata, action/retry/exit mapping, and `errors list` | `tests/unit/error_taxonomy_test.c`; `tests/fixtures/port/errors-list.json`; mixed command tests | C active / Zig removed |
 | `cli/json.{c,h}` / former `cli/json.zig`; `ipc/protocol.zig` IPC-only | shared contract version, byte escaping, warning arrays, timestamps, and basic error envelopes for every command family | `tests/unit/cli_json_test.c`; mixed Zig integration; normalized old/new command differential matrix | C active / Zig removed |
 | `preview/preview_result.{c,h}` / former `preview_result.zig` | final Preview helper result parsing in `preview/service.zig`; action tokens consumed by Preview CLI and post-capture JSON | `tests/unit/preview_result_test.c`; direct caller tests in `preview/service.zig`; production mixed-build integration | C active / Zig removed |
-| `notify/request.zig`, `notify.zig`, `notify/command.zig` | notification model, runtime action, CLI | Inline request tests and post-capture tests | Zig active |
+| `notify/request.{c,h}` / former `notify/request.zig` | exact notification request defaults, urgency tokens, `notify-send` argv construction, and bytewise file-URI escaping used by `notify.zig` | `tests/unit/notify_request_test.c`; mixed direct-caller test in `notify.zig`; clean-HEAD command differential checks | C active / zero-byte placeholder |
+| `notify.zig`, `notify/command.zig` | notification execution, action listener, reveal fallback, and CLI orchestration | post-capture and command-level coverage | Zig active |
 | `capture/command_flags.zig`, `capture/command_grammar.zig`, `capture/command_guards.zig`, `capture/warnings.zig` | capture CLI parsing and deterministic usage outcomes | `command_flags_test.zig`, `command_test.zig`, inline grammar tests | Zig active |
 | `capture/post_capture_types.zig` | post-capture result and side-effect model | Imported by `test_root.zig` | Zig active |
 | `history/store.zig`, `history/command.zig` | history persistence and CLI | Inline/store command coverage | Zig active |
@@ -62,8 +66,9 @@ Status vocabulary:
 
 | Zig module(s) | Primary callers | Current characterization | Status |
 | --- | --- | --- | --- |
-| `capabilities/runtime.zig`, `capabilities/probe.zig` | backend selection, capture guards, `capabilities` CLI | Runtime module tests and command fixtures | Zig active |
-| `compositor/runtime.zig`, `compositor/focused_output.zig` | Niri detection and focused-output capture | Capture/backend tests; live Niri checks | Zig active |
+| `capabilities/runtime.{c,h}` / former `capabilities/runtime.zig`; `capabilities/probe.zig` | backend selection, portal capability probing, capture guards, and `capabilities` CLI serialization | `tests/unit/capabilities_runtime_test.c`; mixed capture/preflight/capabilities/doctor integration | C runtime active / zero-byte placeholder; command Zig active |
+| `compositor/runtime.{c,h}` / former `compositor/runtime.zig` | compositor environment precedence, classification, stable kind tokens, and support/overlay policy | `tests/unit/compositor_runtime_test.c`; mixed capabilities/preflight/explore/focused-output integration | C active / zero-byte placeholder |
+| `compositor/focused_output.{c,h}` / former `compositor/focused_output.zig` | focused-output override and exact Niri/Sway process/result probing | `tests/unit/compositor_focused_output_test.c`; mixed Explore/capture/overlay integration; clean-HEAD differential matrix | C active / zero-byte placeholder |
 | `preflight/probe.zig` | `preflight --json` | Imported by `test_root.zig`; host fixtures required | Zig active |
 | `doctor/diagnostics.zig`, `doctor/command.zig` | `doctor --json` | Diagnostics tests imported by `test_root.zig` | Zig active |
 | `explore/command.zig` | `explore --json` discovery | Tests imported by `test_root.zig` | Zig active |
@@ -175,14 +180,13 @@ Caller inventory:
 
 | Importing module | Functions used | Lifetime/default assumptions |
 | --- | --- | --- |
-| `capture/backends/portal_screenshot.zig` | `flag` | Immediate tri-state booleans; malformed/missing is null and window capability defaults false |
+| `capabilities/runtime.{c,h}` | direct `shaula_env_value_trimmed` and `shaula_env_value_flag` use | Backend tokens remain exact after ASCII trim; malformed/missing force-portal defaults false; portal override tri-state behavior is preserved |
 | `capture/backends/capture_execution_plan.zig` | `trimmed` | Borrowed helper path is stored in plan argv; caller environment must outlive plan execution |
 | `doctor/diagnostics.zig` | `slice` | Raw borrowed values may be stored in the report; derived config paths are allocator-owned |
 | `capture/backends/capture_backend.zig` | `trimmed`, `flagEnabled` | Borrowed window ID; missing/malformed flag defaults false |
-| `compositor/runtime.zig` | `trimmed`, `slice`, `firstDesktopToken` | Detection label may borrow environment storage; token case is preserved before downstream classification |
+| `compositor/runtime.{c,h}` | direct `shaula_env_value_trimmed`, `shaula_env_value_slice`, and `shaula_env_first_desktop_token` use | Detection labels borrow environment storage; token case is preserved before C-owned classification |
 | `capture/lifecycle.zig` | `flagEnabled`, `trimmed`, `unsignedOrDefault` | Immediate values; malformed flag defaults false and invalid/overflowing settle time defaults to 50 |
-| `compositor/focused_output.zig` | `trimmed` | Borrowed override is immediately duplicated with the caller allocator |
-| `capabilities/runtime.zig` | `trimmed`, `flagEnabled` | Backend tokens use exact comparisons; malformed/missing force-portal flag defaults false |
+| `compositor/focused_output.{c,h}` | direct `shaula_env_value_trimmed` use | Borrowed override is copied into an independent GLib-owned result only when nonempty |
 | indirect tests through these modules | all facade functions | Custom `std.process.Environ` maps must be honored; process-global `getenv` would violate the contract |
 
 The C tests freeze these rules:
@@ -274,7 +278,7 @@ Direct production caller inventory:
 | Importing module | Functions used | Ownership and behavior assumptions |
 | --- | --- | --- |
 | `capture/backends/capture_execution_plan.zig` | `grimPath` | Borrows the process-lifetime fixed candidate and stores it in plan argv; missing candidates map to `error.BackendUnavailable` |
-| `capabilities/runtime.zig` | `grimPath` | Converts immediate presence to a boolean used by backend selection; no ownership transfer |
+| `capabilities/runtime.{c,h}` | direct `shaula_runtime_tool_grim_path` use | Converts immediate fixed-candidate presence into backend selection; the borrowed path is not retained |
 | `doctor/diagnostics.zig` | `findInPathAlloc`, `fileExists` | PATH results are Zig-allocator-owned and released by `ToolStatus.deinit`; generic checks are immediate and treat any existing filesystem object as present |
 | mixed-build owner tests | direct C ABI integration | Caller-provided environment maps, borrowed candidates, and allocator ownership remain observable |
 
@@ -462,7 +466,7 @@ Direct caller inventory:
 | --- | --- | --- |
 | `explore/command.zig`, `notify.zig`, `directory/command.zig` | `run` | Callers own bounded output cleanup and command-specific failure mapping; argv is literal and never shell-interpreted |
 | `capture/backends/portal_screenshot.zig`, `capture/backends/capture_backend_runtime_exec.zig`, `capture/lifecycle.zig` | `run` | Backend spawn failures remain distinguishable, especially `FileNotFound`; stdout/stderr limits and backend exit mapping remain caller-owned |
-| `compositor/focused_output.zig`, `overlay/selection_session.zig` | `run` | Missing or failed probes degrade locally; returned buffers are freed with the original Zig allocator |
+| `compositor/focused_output.{c,h}`, `overlay/selection_session.zig` | `run` | C-owned focused probes degrade locally; direct Zig process callers retain their original buffer ownership |
 | `overlay/runtime.zig`, `preview/service.zig` | `runWithEnv` | Helper environments completely replace child variables while executable lookup still uses the parent PATH; helper output and deterministic unavailable mapping remain caller-owned |
 | `clipboard/service.zig` | `runWithPipeInput` | Binary PNG bytes are written directly to stdin; child stdout/stderr are ignored and success depends only on termination |
 | mixed-build owner tests | direct C ABI integration | Zig allocator ownership, replacement-environment transfer, binary stdin, and termination reconstruction remain observable |
@@ -714,3 +718,263 @@ serialization. Characterization, C implementation, tests, production cutover,
 and caller cleanup are complete. Repository-wide maintained imports of the old
 Zig implementation are zero, and the obsolete `src/preview_result.zig` path has
 been physically deleted.
+
+## Phase 4 notification-request characterization and cutover
+
+`src/notify/request.{c,h}` owns the pure notification request policy formerly in
+`src/notify/request.zig`: default request values, urgency tokens, exact
+`notify-send` argument ordering, decimal timeout formatting, image hint versus
+icon construction, optional action formatting, and bytewise file-URI escaping.
+Notification execution, fallback decisions, action listening, file-manager
+reveal behavior, and the public `notify` command remain in `notify.zig` and
+`notify/command.zig`.
+
+Direct caller inventory:
+
+| Importing module | C operations used | Ownership and behavior assumptions |
+| --- | --- | --- |
+| `notify.zig` | request initialization, send-argument construction and cleanup, file-URI construction and cleanup, urgency/image-mode/status constants | Request text spans borrow Zig storage through synchronous process execution; C-owned timeout, image-hint, and action bytes stay alive until argv consumption completes, then are released with the C clear function |
+| mixed Zig unit root | direct import of `notify.zig` | Caller-local span, fixed-width enum/status, and argv-slice conversion compile and execute without a shared Zig facade |
+
+The frozen contract is:
+
+- urgency ABI values are low `0`, normal `1`, and critical `2`; image modes are
+  hint `0` and icon `1`, and successful token spans borrow immutable
+  process-lifetime literals;
+- request initialization produces normal urgency, a 2500 millisecond timeout,
+  transient delivery, and absent image/action values, while summary and body are
+  valid empty borrowed spans;
+- argv order is exactly `notify-send`, `--app-name=Shaula`, `--urgency`, urgency,
+  `--expire-time`, decimal timeout, optional `--transient`, optional image
+  arguments, optional `--action=id=label`, summary, and body;
+- hint mode emits `--hint` plus `string:image-path:file://...`; icon mode emits
+  `-i` plus the original borrowed path. Present empty optionals remain present;
+- file-URI escaping preserves `/`, ASCII alphanumerics, `-`, `_`, `.`, and `~`;
+  every other byte uses uppercase `%XX`, including embedded NUL, invalid UTF-8,
+  and arbitrary non-ASCII bytes;
+- all inputs are explicit-length borrowed spans. NULL plus zero length is empty;
+  NULL plus nonzero length is invalid. The builder does not validate UTF-8,
+  normalize paths, inspect the filesystem, execute a shell, or silently truncate
+  at embedded NUL;
+- the output owns only the decimal timeout, optional image-hint, and optional
+  action argument as GLib allocations with authoritative lengths and trailing
+  NUL storage. Literal and request-derived argv spans remain borrowed. Output
+  replacement and repeated cleanup are safe;
+- checked additions and allocation sizes return deterministic overflow or
+  out-of-memory statuses, and the module has no mutable global state.
+
+`tests/unit/notify_request_test.c` covers default values, fixed-width ABI values,
+borrowed urgency tokens, exact argv order, zero and maximum timeouts, transient
+and non-transient requests, hint and icon modes, action formatting, present empty
+optionals, every escaping class, embedded NUL and arbitrary bytes, invalid spans,
+invalid flags/enums, overflow rejection, output replacement, and repeat-safe
+cleanup. A clean `HEAD` build and the migrated build produced byte-identical
+captured `notify-send` argv for copied, error, and saved-action-listener command
+paths; timestamp-normalized public JSON for copied and error also matched.
+
+Characterization, C implementation, C tests, authoritative Zig build wiring,
+Meson normal/sanitizer wiring, direct caller cutover, and maintained import
+cleanup are complete. Repository-wide maintained imports of
+`src/notify/request.zig` are zero. The current DevSpace interface cannot unlink
+tracked files, so that obsolete path is retained only as a zero-byte placeholder
+for later physical deletion in a workspace with unlink support.
+
+## Phase 5 compositor-runtime characterization and cutover
+
+`src/compositor/runtime.{c,h}` owns the pure compositor environment detector and
+classification policy formerly implemented in `src/compositor/runtime.zig`.
+The authoritative Zig build compiles the C module into production and the mixed
+unit root. Maintained callers include the C header directly and keep only local
+environment lookup, fixed-width enum/span conversion, JSON adaptation, aggregate
+backend decisions, or process probing.
+
+Direct caller inventory:
+
+| Importing module | C operations used | Ownership and behavior assumptions |
+| --- | --- | --- |
+| `capabilities/runtime.{c,h}` | detection, support/overlay policy, wlroots classification, and kind constants | Borrowed labels live in the caller-supplied environment and are embedded in the C-owned fixed-layout runtime decision without allocation |
+| `preflight/probe.zig` | detection and borrowed label | Existing unsupported/environment-not-ready errors, exit mapping, JSON fields, and caller-supplied environment remain unchanged |
+| `capabilities/probe.zig` | standalone detection fallback | Command JSON and runtime capability serialization remain outside the detector |
+| `explore/command.zig` | detection and stable kind tokens | Niri inventory process execution and public inventory JSON remain Zig-owned |
+| `compositor/focused_output.{c,h}` | detection and kind constants | The focused-output C boundary reuses borrowed detection immediately before its exact process probes |
+| mixed Zig unit root | direct maintained-caller integration | Production callers compile against the C header without a shared Zig facade |
+
+The frozen contract is:
+
+- compositor-kind ordinals are Niri `0`, Wayland `1`, and unsupported `2`; C
+  status values are fixed-width and deterministic;
+- detection precedence is nonempty ASCII-trimmed `SHAULA_COMPOSITOR`, presence
+  of `NIRI_SOCKET`, the first nonempty `XDG_CURRENT_DESKTOP` token split on `:`
+  or `;`, nonempty ASCII-trimmed `XDG_SESSION_DESKTOP`, presence of
+  `WAYLAND_DISPLAY`, then canonical `unsupported`;
+- empty `NIRI_SOCKET` and `WAYLAND_DISPLAY` values still count as present;
+  empty/ASCII-whitespace-only explicit and session values fall through;
+- the first desktop token is decisive even when unsupported, so later tokens are
+  not searched and session/display fallbacks are not consulted;
+- Niri comparison is ASCII case-insensitive and canonicalizes its label to the
+  process-lifetime literal `niri`; exact known Wayland and wlroots tokens are
+  ASCII case-insensitive while every non-Niri label preserves its original bytes
+  and case;
+- the generic substring compatibility rule remains case-sensitive and recognizes
+  only a literal lowercase `wayland` substring; `foo-wayland-bar` is Wayland but
+  `foo-WAYLAND-bar` is unsupported;
+- explicit-length classification accepts empty spans and observes embedded NUL,
+  invalid UTF-8, non-ASCII bytes, prefixes, and suffixes without truncation,
+  normalization, or locale-sensitive handling; NULL plus nonzero length is
+  invalid;
+- support remains true for Niri and wlroots, or for generic Wayland only when the
+  portal is available; overlay support remains limited to Niri and wlroots;
+- inputs and labels are borrowed, canonical fallback/kind tokens are immutable
+  process-lifetime literals, the module allocates nothing, and it performs no
+  filesystem, process, shell, or mutable-global-state work.
+
+`tests/unit/compositor_runtime_test.c` covers ABI values, stable kind tokens, the
+complete exact-token tables, lowercase substring asymmetry, arbitrary bytes and
+embedded NUL, invalid spans/kinds/booleans, complete precedence/fallback order,
+present-empty variables, first-token behavior, support/overlay policy, and
+borrowed-label behavior. Characterization, C implementation, tests, production
+and Meson wiring, direct caller cutover, and maintained import cleanup are
+complete. A clean-`HEAD` and migrated command matrix matched normalized JSON,
+stderr, and exit codes for fifteen precedence/classification cases. GCC and Clang
+normal plus ASan/UBSan lanes passed all twenty tests, and controlled preflight,
+capabilities, explore, and doctor checks passed without the host compositor.
+Repository-wide maintained imports of `src/compositor/runtime.zig` are zero. The
+current DevSpace interface cannot unlink tracked files, so the old path is
+retained only as a zero-byte placeholder for later physical deletion.
+
+## Phase 5 focused-output characterization and cutover
+
+`src/compositor/focused_output.{c,h}` owns the advisory focused-output resolver
+formerly implemented in `src/compositor/focused_output.zig`. It reuses the C
+compositor detector and process-execution boundary, owns the exact Niri/Sway
+probe protocols and typed JSON result parsing, and returns an optional
+independent name. It does not own backend selection, capture error mapping,
+Explore inventory, overlay orchestration, or public JSON.
+
+Direct caller inventory:
+
+| Importing module | C operations used | Ownership and behavior assumptions |
+| --- | --- | --- |
+| `explore/command.zig` | resolve and clear | Probe failure remains a null focused output; the optional name is copied into the caller allocator before inventory/public JSON construction |
+| `capture/lifecycle.zig` | resolve and clear | Resolution runs only for supported fullscreen/focused requests; advisory absence flows into the existing backend-unavailable seam, while result allocation errors retain the prior propagated behavior |
+| `overlay/selection_session.zig` | resolve and clear | The optional name scopes frozen-background capture and helper placement; absence preserves compositor-chosen placement and full-output fallback |
+| mixed Zig unit root | direct maintained-caller integration | Production callers compile against the direct C header without a Zig policy facade |
+
+The frozen contract is:
+
+- focused-output status values are fixed-width: success `0`, invalid argument
+  `1`, and final-result out of memory `2`;
+- a nonempty ASCII-trimmed `SHAULA_OVERLAY_OUTPUT_NAME` wins without compositor
+  classification or process execution; missing, empty, and whitespace-only
+  values fall through;
+- Niri runs exactly `niri msg -j focused-output` with stdout limited to 8192
+  bytes and stderr to 1024 bytes; Sway runs exactly
+  `swaymsg -t get_outputs -r` with stdout limited to 65536 bytes and stderr to
+  1024 bytes; every other compositor returns absence without probing;
+- spawn and executable lookup errors, stream-limit failures, nonzero exits,
+  signals, empty output, malformed JSON, and incomplete typed results are
+  best-effort absence and never synthesize a public `ERR_*` failure;
+- the Niri result must be one object with a required nonempty string `name`;
+  unknown fields are syntax-validated and ignored;
+- the Sway result must be one array of objects. Each object requires a string
+  `name`; `focused` is an optional boolean defaulting false. The first focused
+  nonempty name is selected, but every later element is still fully validated;
+- decoded known keys are unique, including escaped spellings. Duplicate unknown
+  keys remain accepted for parity with the former typed Zig parser. Wrong known
+  types, missing required fields, invalid UTF-8, raw control bytes, malformed
+  escapes/surrogates/numbers, invalid root types, and trailing data invalidate
+  the whole probe;
+- valid JSON strings decode escapes and surrogate pairs exactly. A selected
+  escaped `\\u0000` is preserved as an embedded NUL in the explicit-length
+  output rather than truncated;
+- process and parser allocation failures remain advisory absence, matching the
+  former catch-and-fallback boundary. Allocation of the final selected name is
+  the only out-of-memory status propagated to callers;
+- a successful present name is GLib-owned, has an authoritative byte length and
+  trailing-NUL storage, and is released only through
+  `shaula_focused_output_result_clear()`. Inputs are borrowed for the synchronous
+  call, replacement and repeated cleanup are safe, and there is no mutable
+  global state.
+
+`tests/unit/compositor_focused_output_test.c` covers ABI/init/clear behavior,
+override precedence and replacement, exact argv, unsupported-compositor
+avoidance, Niri/Sway typed parsing, defaults and first-match selection, unknown
+nested values, escaped keys, Unicode and embedded NUL, known duplicates,
+wrong/missing fields, malformed later array entries, trailing input, nonzero and
+signaled children, output overflow, and missing executables. A clean-`HEAD` and
+migrated Explore matrix matched timestamp-normalized JSON, stderr, and exit
+status for twelve representative cases. Characterization, C implementation,
+production and Meson wiring, direct caller cutover, and maintained import/build
+cleanup are complete. Meson now exposes twenty C tests plus the shell fixture,
+for 21 tests per normal or sanitizer lane. Repository-wide maintained imports of
+`src/compositor/focused_output.zig` are zero. The current DevSpace interface
+cannot unlink the tracked path, so it remains a zero-byte placeholder pending
+physical deletion elsewhere. Final combined validation passed the mixed Zig/C
+check, GCC and Clang normal plus ASan/UBSan Meson lanes, all 21 tests in every
+lane, the curated QA gate, and whitespace validation.
+
+## Phase 5 capability-runtime characterization and cutover
+
+`src/capabilities/runtime.{c,h}` owns the fixed-layout runtime decision formerly
+implemented in `src/capabilities/runtime.zig`. It composes the C compositor,
+environment, tool-lookup, process-execution, and capture-mode boundaries without
+owning command JSON, capture execution, configuration, or diagnostics rendering.
+The authoritative Zig build and Meson both compile the same production source.
+
+Direct caller inventory:
+
+| Importing module | C operations used | Ownership and behavior assumptions |
+| --- | --- | --- |
+| `capture/command.zig` | aggregate resolve | Caller-supplied environment pointers are borrowed for the synchronous call; the decision is passed to lifecycle through field-by-field C-ABI conversion |
+| `capture/lifecycle.zig` | decision helpers, backend label, portal-fallback mutation | Capture ordering and error mapping remain Zig-owned; conversion between independent `@cImport` namespaces copies only fixed fields and borrowed pointers |
+| `capture/command_guards.zig` | mode support and backend label | Stub and unsupported-mode JSON/exit behavior remains caller-owned and byte-stable |
+| `capture/backends/capture_backend.zig` | backend label and degraded-backend policy | Backend execution receives an already resolved decision and does not probe again |
+| `preflight/probe.zig` | aggregate resolve, portal policy, backend label | Existing unsupported and environment-not-ready errors plus JSON field order remain outside C |
+| `capabilities/probe.zig` | aggregate resolve, labels, fallbacks, portal policy | Public capability JSON and warning-array serialization remain Zig-owned |
+| `doctor/diagnostics.zig` | aggregate resolve and labels | Report allocation and filesystem/tool diagnostics remain Zig-owned |
+| `capture/backends/capture_backend_contract.zig` | canonical backend labels | Warning tokens and helper exit-code mapping remain Zig-owned; duplicate backend label literals are removed |
+| mixed Zig unit root | direct C-header integration | No maintained import of the retired Zig runtime module remains |
+
+The frozen contract is:
+
+- backend-kind ABI values are Niri direct `0`, grim/wlroots `1`, portal `2`, and
+  stub `3`; invalid is `-1`;
+- recognized ASCII-trimmed `SHAULA_CAPTURE_BACKEND` values win, followed by a
+  valid enabled force-portal flag, Niri direct, wlroots grim/portal selection,
+  generic Wayland portal selection, then the historical portal default;
+- wlroots selects grim when a fixed candidate exists, otherwise portal when
+  available, otherwise grim so execution preserves the existing unavailable
+  backend path;
+- compositor support and overlay support come from `compositor/runtime.{c,h}`;
+  the result embeds its borrowed label and allocates no memory;
+- valid portal environment overrides are authoritative. Without one, the module
+  runs the exact `gdbus` Properties.Get protocol for `version` and
+  `AvailableTargets` with 2048-byte stdout/stderr limits;
+- every portal probe failure remains advisory absence. The last unsigned decimal
+  value enables window capability for bits `2` or `8`;
+- supported non-stub backends expose area, fullscreen, and all-screens; window
+  remains false. Unsupported compositors and the stub expose no modes;
+- public and compatibility mode tokens remain exact and case-sensitive;
+  previous-area is not part of the runtime mode matrix;
+- Niri direct, grim, and stub advertise one portal fallback; portal advertises
+  none;
+- degraded backend, overlay bypass, portal selection, previous-area support, and
+  portal-fallback mutation remain deterministic C helpers;
+- all inputs and noncanonical compositor labels are borrowed. Backend labels are
+  immutable process-lifetime spans. The runtime decision owns no allocation and
+  has no cleanup function or mutable global state.
+
+`tests/unit/capabilities_runtime_test.c` covers ABI values and labels, invalid
+output reset, Niri and wlroots decisions, generic-Wayland portal gating, exact
+override precedence, forced portal and stub matrices, every mode and fallback,
+policy helpers and mutation validation, plus a fake `gdbus` executable that
+freezes argv ordering and target-bit parsing. Characterization, C implementation,
+production and Meson wiring, direct caller cutover, duplicate portal-probe
+removal, and maintained import cleanup are complete. Meson exposes twenty-one C
+tests plus the shell fixture, for 22 tests per normal or sanitizer lane.
+Repository-wide maintained imports and build references to
+`src/capabilities/runtime.zig` are zero. The current DevSpace interface cannot
+unlink the tracked path, so it remains a zero-byte placeholder pending physical
+deletion elsewhere. Final validation passed the mixed Zig/C check, GCC and Clang
+normal plus ASan/UBSan Meson lanes, all 22 tests in every lane, the curated QA
+gate, and whitespace validation.

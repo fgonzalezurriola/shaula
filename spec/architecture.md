@@ -355,40 +355,156 @@ string contracts across modules.
   `area`, `current_output`, `all_outputs`, and `window`.
 - `capture/backends/capture_backend_failure.zig` centralizes backend
   `CaptureOutcome` failures while preserving deterministic `ERR_*` attributes.
-- `capture/backends/capture_backend_contract.zig` owns public backend labels,
-  degraded warning tokens, and helper exit-code mapping.
+- `capabilities/runtime.{c,h}` owns canonical public backend labels.
+  `capture/backends/capture_backend_contract.zig` retains degraded warning tokens
+  and helper exit-code mapping.
 - `capture/warnings.zig` owns capture-specific warning tokens.
 
 ### Runtime and compositor decisions
 
-- `capabilities/runtime.zig` owns backend/runtime selection and exposes the
-  decision methods callers should use rather than comparing backend strings.
-- `compositor/runtime.zig` owns compositor detection.
-- `compositor/focused_output.zig` owns focused-output resolution.
-- `runtime/env.{c,h}` owns borrowed environment parsing through a temporary Zig
-  facade.
+- `capabilities/runtime.{c,h}` owns fixed-width backend/runtime selection,
+  portal capability probing, mode support, fallback ordering, canonical backend
+  labels, and decision-policy helpers. Maintained callers include the C header
+  directly.
+- `compositor/runtime.{c,h}` owns pure compositor environment detection,
+  classification, stable kind tokens, and support/overlay policy. Maintained
+  callers include the C header directly.
+- `compositor/focused_output.{c,h}` owns focused-output overrides, exact
+  Niri/Sway process probes, typed result parsing, and advisory fallback.
+- `runtime/env.{c,h}` owns borrowed environment parsing through direct C-header
+  callers and caller-local span conversion.
 - `runtime/paths.{c,h}` owns runtime-state path resolution, temporary capture
-  classification, and parent creation through a temporary Zig facade.
+  classification, and parent creation through direct C-header callers.
 - `runtime/tool_lookup.{c,h}` owns fixed `grim` candidates, first-existing
   absolute lookup, PATH-aware diagnostics, and generic existence checks through
-  a temporary Zig facade.
+  direct C-header callers.
 - `runtime/helper_resolution.{c,h}` owns helper resolution precedence and
-  existence-only sibling checks through a temporary Zig facade.
+  existence-only sibling checks through direct C-header callers.
 - `runtime/previous_area_store.{c,h}` owns previous-area serialization, parsing,
-  synchronous state-file I/O, and backend support gating through a temporary Zig
-  facade.
+  synchronous state-file I/O, and backend support gating through direct C-header
+  callers.
 - `runtime/capture_session_lock.{c,h}` owns exclusive acquisition, exact PID
   contents, bounded stale-owner detection, one-shot replacement, and best-effort
-  release through a temporary Zig facade. Capture lifecycle still owns releasing
+  release through direct C-header callers. Capture lifecycle still owns releasing
   the gate before post-capture Preview work.
-- `runtime/process_exec.{c,h}` owns shared process execution through a temporary
-  Zig facade: direct argv, parent-PATH lookup, replacement environments,
+- `runtime/process_exec.{c,h}` owns shared direct-argv process execution through
+  direct C-header callers: parent-PATH lookup, replacement environments,
   concurrent bounded stdout/stderr capture, binary stdin, termination mapping,
   and child cleanup. Callers still own explicit output limits, returned-buffer
   cleanup, and deterministic command-specific error mapping.
 
 Backend execution receives an already resolved runtime decision and optional
 focused output. It must not probe compositor/backend state again.
+
+### Compositor runtime boundary
+
+- Compositor kinds cross the C ABI as fixed 32-bit values: Niri `0`, Wayland
+  `1`, and unsupported `2`. Stable kind-token spans borrow immutable
+  process-lifetime literals.
+- Detection precedence is exact: nonempty ASCII-trimmed `SHAULA_COMPOSITOR`,
+  presence of `NIRI_SOCKET`, the first nonempty `XDG_CURRENT_DESKTOP` token
+  split on `:` or `;`, nonempty ASCII-trimmed `XDG_SESSION_DESKTOP`, presence
+  of `WAYLAND_DISPLAY`, then the canonical `unsupported` fallback.
+- Empty `NIRI_SOCKET` and `WAYLAND_DISPLAY` values remain present. Empty or
+  ASCII-whitespace-only explicit/session values fall through. The first desktop
+  token is decisive even when unsupported; later tokens and fallbacks are not
+  consulted.
+- Niri comparison is ASCII case-insensitive and canonicalizes the label to
+  `niri`. Exact known Wayland and wlroots tokens are ASCII case-insensitive, but
+  non-Niri labels preserve their original bytes and case. The historical
+  generic substring rule recognizes only a literal lowercase `wayland`
+  substring.
+- Explicit classification consumes borrowed `data + length` spans. NULL plus
+  zero length is an empty label; NULL plus nonzero length is invalid. Embedded
+  NUL, invalid UTF-8, non-ASCII bytes, prefixes, and suffixes are observed
+  byte-for-byte without normalization or locale-sensitive parsing.
+- Current-scope support remains Niri or wlroots, plus generic Wayland only when
+  the portal is available. Overlay support remains Niri or wlroots. Backend
+  selection remains typed and separate in `capabilities/runtime.{c,h}`.
+- The C module allocates nothing, performs no filesystem/process/shell work, and
+  has no mutable global state. Returned noncanonical labels borrow the caller's
+  environment or classification input; callers must not retain them after that
+  storage changes.
+- Capabilities, preflight, and explore perform caller-local environment lookup
+  and immediate span/enum conversion. The focused-output C boundary receives the
+  same borrowed environment values and reuses the detector synchronously. No
+  shared Zig compositor-policy facade remains.
+
+### Capability-runtime boundary
+
+- Backend kinds cross the C ABI as fixed 32-bit values: Niri direct `0`,
+  grim/wlroots `1`, portal `2`, and stub `3`. Canonical backend labels borrow
+  immutable process-lifetime storage.
+- `ShaulaCapabilitiesEnvironment` borrows the five compositor environment values
+  plus backend, force-portal, portal-available, and portal-window overrides for
+  one synchronous call. The C module does not read those variables from
+  process-global state.
+- Selection precedence is exact: recognized ASCII-trimmed backend override,
+  enabled force-portal flag, Niri direct, wlroots grim/portal policy, generic
+  Wayland with portal, then the historical portal default. Unknown backend
+  override values fall through.
+- Wlroots checks the fixed grim candidates. When grim is absent it selects portal
+  if available and otherwise retains grim so backend execution produces the
+  established unavailable-backend outcome rather than changing policy.
+- Valid portal availability overrides are authoritative. Otherwise the module
+  runs the exact `gdbus` Properties.Get calls for `version` and
+  `AvailableTargets`, with 2048-byte stdout and stderr limits. Spawn, lookup,
+  stream-limit, exit, signal, and parse failures are advisory portal absence and
+  never become public `ERR_*` failures.
+- The last unsigned decimal value from `AvailableTargets` enables window
+  capability for window bit `2` or active-window bit `8`. Portal availability
+  and window capability remain separate result fields.
+- Supported non-stub decisions expose area, fullscreen, and all-screens; window
+  remains false. Unsupported compositors and stub decisions expose no modes.
+  Mode parsing is exact and case-sensitive and shares the C capture-mode table.
+- Niri direct, grim, and stub expose portal as their only ordered fallback;
+  portal exposes none. Helper functions own degraded-backend, overlay-bypass,
+  portal-selection, previous-area, and portal-fallback policy.
+- `ShaulaRuntimeDecision` owns no allocations. Its compositor label borrows the
+  caller environment; backend labels are immutable. Independent Zig `@cImport`
+  namespaces exchange the fixed-layout decision only through caller-local
+  field-by-field ABI conversion, never through a shared Zig policy facade.
+
+### Focused-output boundary
+
+- Focused-output status values cross the ABI as fixed 32-bit integers: success
+  `0`, invalid argument `1`, and final-result out of memory `2`.
+- `ShaulaFocusedOutputEnvironment` borrows the caller-supplied
+  `SHAULA_OVERLAY_OUTPUT_NAME` value and the five compositor environment values
+  for one synchronous call. The module does not read or mutate process-global
+  environment state itself.
+- A nonempty ASCII-trimmed output override wins without compositor detection or
+  child-process execution. Missing, empty, and whitespace-only overrides fall
+  through to compositor-specific probing.
+- Niri executes exactly `niri msg -j focused-output`, with stdout limited to
+  8192 bytes and stderr to 1024 bytes. Sway executes exactly
+  `swaymsg -t get_outputs -r`, with stdout limited to 65536 bytes and stderr to
+  1024 bytes. Other compositors return no output without spawning a process.
+- Spawn and lookup errors, stream-limit failures, nonzero or signaled exits,
+  empty output, malformed JSON, and incomplete typed results are advisory
+  absence. Focused-output probing never creates a public `ERR_*` error and does
+  not own backend selection or command-level fallback decisions.
+- The Niri result is one object with required nonempty string `name`. The Sway
+  result is one array of objects with required string `name` and optional boolean
+  `focused`, defaulting false; the first focused nonempty name wins, but every
+  later item is still validated. Unknown fields are validated and ignored.
+- Decoded known keys are unique, including escaped spellings. Wrong known types,
+  missing required fields, invalid UTF-8, raw control bytes, malformed escapes,
+  unpaired surrogates, malformed numbers, wrong root types, and trailing input
+  invalidate the probe. Escaped NUL and valid surrogate pairs are decoded into
+  the explicit-length output exactly.
+- Probe-process and parser allocation failures remain advisory absence, matching
+  the former best-effort Zig boundary. Allocation of the final selected name is
+  the only out-of-memory status propagated to a caller.
+- A present result is an independent GLib-owned byte buffer with authoritative
+  length and trailing-NUL storage. It may contain an embedded NUL and must be
+  released through `shaula_focused_output_result_clear()`. Replacement and
+  repeated cleanup are safe.
+- Explore, capture lifecycle, and overlay selection include the C header
+  directly, pass their own environment maps, copy only a present result into
+  their established Zig allocator, and retain their existing advisory or
+  backend-level fallback behavior. No maintained Zig focused-output facade
+  remains.
 
 ### Overlay
 
@@ -403,7 +519,7 @@ focused output. It must not probe compositor/backend state again.
 ### Post-capture and JSON
 
 - `capture/post_capture.zig` owns post-capture side effects and typed outcomes
-  for history, clipboard, and preview.
+  for history, clipboard, preview, and notifications.
 - `capture/post_capture_types.zig` owns post-capture state types.
 - `capture/post_capture_json.zig` owns the stable capture result envelope,
   duplicated top-level/result fields, and partial/degraded rules.
@@ -411,6 +527,10 @@ focused output. It must not probe compositor/backend state again.
   escaping, warning-array serialization, UTC timestamp formatting, and complete
   basic-error envelope. Maintained Zig commands include the C header directly
   and keep only caller-local ABI/allocator/writer adaptation.
+- `notify/request.{c,h}` owns notification request defaults, urgency tokens,
+  exact `notify-send` argv construction, action spelling, and file-URI escaping.
+  `notify.zig` owns execution, fallback, action listening, reveal behavior, and
+  caller-local C span/status/argv adaptation.
 
 ### Public JSON boundary
 
@@ -453,6 +573,45 @@ focused output. It must not probe compositor/backend state again.
 - `preview/preview_result.{c,h}` owns the typed final-result parser at the Preview
   helper stdout boundary. `preview/service.zig` owns helper execution, stable
   error mapping, and caller-local transfer into the Preview/post-capture model.
+
+### Notification request boundary
+
+- Notification urgency values cross the ABI as fixed 32-bit integers: low `0`,
+  normal `1`, and critical `2`. Image construction modes are hint `0` and icon
+  `1`. Successful urgency-token spans borrow immutable process-lifetime literals.
+- `shaula_notify_request_init` preserves the historical defaults: normal
+  urgency, 2500 milliseconds, transient delivery, and absent image/action
+  optionals. Summary and body begin as valid empty borrowed spans.
+- `shaula_notify_send_args_build` preserves exact argument order:
+  `notify-send`, `--app-name=Shaula`, `--urgency`, urgency,
+  `--expire-time`, decimal timeout, optional `--transient`, optional image
+  arguments, optional `--action=id=label`, summary, and body.
+- Hint mode emits `--hint` and
+  `string:image-path:file://...`; icon mode emits `-i` and the original borrowed
+  image path. Present empty image and action values remain present rather than
+  collapsing to absence.
+- File-URI escaping is bytewise. `/`, ASCII alphanumerics, `-`, `_`, `.`, and
+  `~` remain literal; every other byte becomes uppercase `%XX`. Embedded NUL,
+  invalid UTF-8, and arbitrary non-ASCII bytes are observed through explicit
+  lengths and are never silently truncated.
+- Input spans are borrowed for the synchronous build and argv execution window.
+  NULL plus zero length is empty; NULL plus nonzero length is invalid. The C
+  module performs no UTF-8 validation, path normalization, filesystem access,
+  shell execution, locale classification, or mutable-global-state access.
+- Successful send-argument output owns only the decimal timeout, optional image
+  hint, and optional action argument as GLib-owned, length-bearing buffers with
+  trailing-NUL storage. Literals and request fields remain borrowed. Callers
+  clear output through `shaula_notify_send_args_clear`; replacement and repeated
+  cleanup are safe.
+- `notify.zig` includes `notify/request.h` directly, retains the request bytes
+  through process execution, converts only fixed-width statuses and spans, and
+  copies a standalone file URI into its existing Zig allocator only where its
+  public helper API requires owned bytes. No shared Zig notification-policy
+  facade remains.
+- `notify.zig` and `notify/command.zig` continue to own actual process execution,
+  hint-to-icon fallback decisions, action-output handling, file-manager reveal,
+  logging, and public command JSON. This model slice does not absorb those
+  command-family responsibilities.
 
 ### Public error-taxonomy boundary
 
