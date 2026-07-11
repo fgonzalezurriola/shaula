@@ -9,12 +9,12 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 CAPTURE_PATH="/tmp/shaula/task10-history-consistency.png"
 rm -f "${CAPTURE_PATH}"
 
-capture_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --save --output "${CAPTURE_PATH}")"
+capture_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture fullscreen --json --save --output "${CAPTURE_PATH}")"
 
 printf '%s\n' "${capture_json}" | jq -e '
   .ok == true and
@@ -25,7 +25,7 @@ printf '%s\n' "${capture_json}" | jq -e '
   exit 1
 }
 
-history_json="$(./zig-out/bin/shaula history list --json)"
+history_json="$(./build/shaula history list --json)"
 printf '%s\n' "${history_json}" | jq -e '
   .ok == true and
   .command == "history list" and

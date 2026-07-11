@@ -9,9 +9,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
-capabilities_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./zig-out/bin/shaula capabilities list --json)"
+capabilities_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./build/shaula capabilities list --json)"
 
 printf '%s\n' "${capabilities_json}" | jq -e '
   .ok == true and
@@ -36,7 +36,7 @@ capture_and_assert_mode() {
   local capture_rc=0
 
   set +e
-  capture_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture "${mode}" --json "$@" 2>&1)"
+  capture_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture "${mode}" --json "$@" 2>&1)"
   capture_rc=$?
   set -e
 

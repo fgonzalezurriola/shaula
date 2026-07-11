@@ -21,6 +21,15 @@ shaula_warning_args = cc.get_supported_arguments(
 )
 add_project_arguments(shaula_warning_args, language: 'c')
 
+# Existing GTK helpers predate the port's strict leaf-module warning policy.
+# Keep their historical warning surface while Meson assumes build ownership.
+shaula_existing_helper_warning_args = [
+  '-Wno-deprecated-declarations',
+  '-Wno-pedantic',
+  '-Wno-conversion',
+  '-Wno-sign-conversion',
+]
+
 glib_dep = dependency('glib-2.0')
 gio_dep = dependency('gio-2.0')
 gtk_dep = dependency('gtk4')
@@ -50,15 +59,47 @@ subdir('src/runtime')
 subdir('src/compositor')
 subdir('src/capabilities')
 subdir('src/preflight')
+subdir('src/config')
 subdir('src/settings')
+subdir('src/overlay')
+subdir('src/capture')
+
+executable(
+  'shaula',
+  'src/main.c',
+  dependencies: [
+    glib_dep,
+    gio_dep,
+    gdk_pixbuf_dep,
+    shaula_capabilities_runtime_dep,
+    shaula_cli_json_dep,
+    shaula_config_dep,
+    shaula_error_taxonomy_dep,
+    shaula_preflight_probe_dep,
+    shaula_preview_result_dep,
+    shaula_runtime_process_exec_dep,
+    shaula_capture_command_dep,
+  ],
+  install: true,
+)
+
+install_subdir(
+  'src/preview/icons/hicolor',
+  install_dir: get_option('datadir') / 'icons',
+)
+install_subdir(
+  'integrations/noctalia/shaula',
+  install_dir: get_option('datadir') / 'shaula' / 'integrations' / 'noctalia',
+)
 
 if get_option('port_tests')
   subdir('tests/unit')
+  subdir('scripts/qa')
 endif
 
 summary(
   {
-    'Authoritative production build': 'Zig during migration',
+    'Production helpers': 'Meson',
     'C port tests': get_option('port_tests'),
     'GLib': glib_dep.version(),
     'GIO': gio_dep.version(),

@@ -92,25 +92,24 @@ clipboard** is enabled for that capture mode in Settings.
 
 Requirements:
 
-* Zig 0.16.0
+* Meson and Ninja
+* A C11 compiler
 * `jq`
 * GTK4 / gtk4-layer-shell development packages
 * Wayland development packages
 
-The Zig version is pinned in `.tool-versions`, CI, and
-`scripts/qa/check-zig-version.sh`. Use exactly Zig 0.16.0 for release builds
-unless the pin is updated everywhere in one change.
-
 Build from source:
 
 ```bash
-zig build
+meson setup build --prefix=/usr
+meson compile -C build
 ```
 
 Release build:
 
 ```bash
-zig build -Doptimize=ReleaseSafe -Dstrip
+meson setup build-release --buildtype=release --prefix=/usr -Db_lto=true
+meson compile -C build-release
 ```
 
 Run checks:

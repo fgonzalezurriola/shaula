@@ -44,18 +44,20 @@ Deterministic failure token for non-ready environment:
 
 ### Current Gate (`./dev check`, C port checks, `git diff --check`, `./dev qa`)
 
-- `./dev check` builds the production mixed-language application and runs the
-  maintained Zig/C helper tests.
+- `./dev check` builds the production C application and runs the
+  maintained C helper tests.
 - `./dev port-check` configures Meson with warnings as errors and runs the
   isolated C migration tests.
 - `./dev port-check-asan` runs the same C tests under AddressSanitizer and
   UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
   matching the maintained CI compiler matrix.
-- The C lane currently contains twenty-two tests. It covers the shared public
-  JSON envelope/escaping policy; the public error taxonomy and recovery mapping;
-  the core capture-mode model; the compositor environment detector and support/
-  overlay policy; capability/runtime backend selection and portal probing;
-  focused-output override/process/result resolution; the notification
+- The C lane currently contains twenty-two C tests plus one shell fixture, for
+  23 Meson tests per lane. It covers the shared public JSON envelope/escaping
+  policy; the public error taxonomy and recovery mapping; the core capture-mode
+  model; the compositor environment detector and support/overlay policy;
+  capability/runtime backend selection and portal probing; exact preflight
+  decision, JSON, warning, and exit-code behavior; focused-output
+  override/process/result resolution; the notification
   request/argv and file-URI model; runtime
   environment
   strings, booleans, bounded unsigned values, and
@@ -87,7 +89,7 @@ Deterministic failure token for non-ready environment:
 - Process-lifetime borrowed record/token pointer stability with no allocation
 - Deterministic ordered comparison against
   `tests/fixtures/port/errors-list.json`
-- Mixed-build command coverage confirming `shaula errors list --json` matches the
+- Production command coverage confirming `shaula errors list --json` matches the
   fixture semantically and its compact canonical error array byte-for-byte after
   excluding the timestamp envelope
 
@@ -112,7 +114,7 @@ Deterministic failure token for non-ready environment:
   one-object-plus-one-newline framing, and no partial or doubled object
 - Explicit characterization that malformed raw details are not validated, matching
   the previous shared helper contract
-- Mixed Zig caller coverage through `capture/command_test.zig` and the full
+- Production caller coverage through the full
   `./dev check` command suite
 - Temporary clean-`HEAD` differential build: timestamp-only normalization followed
   by byte-for-byte comparison for errors-list, root/capture/config/Preview/history/
@@ -144,8 +146,8 @@ Deterministic failure token for non-ready environment:
   replacement safety, and repeated clear behavior
 - Invalid presence flags, urgency/image modes, spans, output pointers, and
   checked allocation-size overflow mapped to deterministic status values
-- Mixed Zig caller test confirming direct `notify/request.h` use and caller-local
-  fixed-width/span/argv adaptation without a shared Zig policy facade
+- Mixed C caller test confirming direct `notify/request.h` use and caller-local
+  fixed-width/span/argv adaptation without a shared language bridge
 - Clean-`HEAD` command differential checks for copied, error, and
   saved-action-listener paths, including byte-identical captured `notify-send`
   argv and timestamp-normalized public JSON where emitted
@@ -160,7 +162,7 @@ Deterministic failure token for non-ready environment:
   to the area backend lane
 - Case, whitespace, prefix, suffix, non-ASCII, and embedded-NUL rejection
 - Invalid spans and enum values without out-of-bounds table access
-- Process-lifetime borrowed literal spans and direct maintained-caller C ABI mapping without a Zig policy facade
+- Process-lifetime borrowed literal spans and direct maintained-caller C ABI mapping without a language bridge
 
 ### Compositor runtime contract (`tests/unit/compositor_runtime_test.c`)
 
@@ -183,9 +185,9 @@ Deterministic failure token for non-ready environment:
 - Invalid kinds and boolean ABI values returning deterministic invalid outcomes
 - Borrowed input labels, immutable process-lifetime canonical labels, no
   allocation/cleanup requirement, and no filesystem/process/global-state access
-- Mixed Zig caller coverage through capabilities, preflight, and explore using
+- Mixed C caller coverage through capabilities, preflight, and explore using
   the direct C header, plus focused-output boundary integration without a shared
-  Zig compositor facade
+  C compositor boundary
 
 ### Capability-runtime contract (`tests/unit/capabilities_runtime_test.c`)
 
@@ -219,6 +221,34 @@ Deterministic failure token for non-ready environment:
   preflight, capabilities output, and doctor using direct C headers and
   caller-local fixed-layout conversion across independent `@cImport` namespaces
 
+### Preflight probe contract (`tests/unit/preflight_probe_test.c`)
+
+- Fixed 32-bit success, invalid-argument, size-overflow, out-of-memory,
+  timestamp-range, and internal-error status values
+- Zero initialization, explicit initialization, GLib-owned result replacement,
+  trailing-NUL storage, authoritative length, and repeated clear behavior
+- Invalid environment, warning span, and output arguments leaving the result
+  empty and clearable
+- Exact guard precedence: unsupported compositor/runtime before Wayland
+  readiness, then `WAYLAND_DISPLAY` presence with a present empty value accepted
+- Exact `ERR_UNSUPPORTED_COMPOSITOR` envelope, retryability, escaped compositor
+  details, and exit code 10
+- Exact `ERR_PREFLIGHT_ENV_NOT_READY` envelope, retryability, compositor details,
+  and exit code 11
+- Exact Niri success envelope, canonical field order, duplicated compositor,
+  canonical backend label, portal availability, and empty warnings
+- Exact generic-Wayland portal success envelope and one borrowed
+  `portal_fallback` warning
+- Caller-supplied Unix timestamp behavior, including timestamp-range failure with
+  no partial JSON or stale exit code
+- Borrowed environment and warning inputs plus no process-global environment or
+  clock access inside the C boundary
+- Production integration through `src/main.c` using `preflight/probe.h` directly;
+  Zig retains only flag dispatch, environment adaptation, clock acquisition,
+  stdout writing, and return of the C-provided exit code
+- Repository-wide maintained imports and build references to the retired Zig
+  preflight module are zero
+
 ### Focused-output contract (`tests/unit/compositor_focused_output_test.c`)
 
 - Fixed 32-bit status ABI plus initialized, replaceable, and repeat-safe result
@@ -244,9 +274,9 @@ Deterministic failure token for non-ready environment:
   overflow, empty output, malformed JSON, and parser/process allocation failure
 - Final selected-name allocation as the only propagated out-of-memory result
 - GLib-owned output length, trailing-NUL storage, replacement behavior, and
-  caller-local copy into existing Zig allocators
+  caller-local copy into caller-owned storage
 - Mixed production integration through Explore, capture lifecycle, and overlay
-  selection using the direct C header without a Zig focused-output facade
+  selection using the direct C header through the C focused-output boundary
 - Clean-`HEAD` differential matrix comparing timestamp-normalized Explore JSON,
   stderr, and exit status for override, valid/invalid Niri, Unicode/NUL,
   overflow/nonzero, valid/invalid Sway, and unsupported-compositor cases
@@ -268,7 +298,7 @@ Deterministic failure token for non-ready environment:
 - GLib-owned length-bearing `saved_path` bytes with a trailing NUL, explicit
   allocation status, output replacement, invalid-span handling, and repeat-safe
   clear behavior
-- Mixed-build `preview/service.zig` tests for the caller-local allocator copy,
+- Production `src/main.c` and the Preview result tests tests for the caller-local allocator copy,
   embedded-NUL preservation, exact action serialization, and existing missing/
   save result mapping
 
@@ -294,8 +324,8 @@ Deterministic failure token for non-ready environment:
 - POSIX parent derivation, root/no-parent no-ops, recursive creation, repeated
   separators, non-canonicalized `..`, embedded-NUL rejection, and filesystem
   failures
-- Mixed-build caller integration for caller-supplied environments and Zig
-  allocator ownership without a shared facade
+- Production caller integration for caller-supplied environments and Zig
+  allocator ownership through the owning C module
 
 ### Runtime tool-lookup contract (`tests/unit/runtime_tool_lookup_test.c`)
 
@@ -310,8 +340,8 @@ Deterministic failure token for non-ready environment:
   relative components, `.`, `..`, whitespace, spaces, shell metacharacters,
   non-ASCII bytes, empty tools, and absolute-looking tool names
 - Checked size overflow, GLib-owned result length/NUL rules, and repeated cleanup
-- Mixed-build caller integration for caller-supplied PATH maps, borrowed fixed
-  results, and Zig allocator ownership without a shared facade
+- Production caller integration for caller-supplied PATH maps, borrowed fixed
+  results, and caller ownership through the owning C module
 
 ### Runtime helper-resolution contract (`tests/unit/runtime_helper_resolution_test.c`)
 
@@ -325,8 +355,8 @@ Deterministic failure token for non-ready environment:
 - Embedded-NUL bare-name preservation when sibling POSIX lookup cannot match
 - Checked size overflow, invalid spans, GLib-owned result length/NUL rules, and
   repeated cleanup
-- Mixed-build caller integration for caller-supplied environments,
-  executable-directory discovery, and Zig allocator ownership
+- Production caller integration for caller-supplied environments,
+  executable-directory discovery, and caller ownership
 
 ### Runtime previous-area contract (`tests/unit/runtime_previous_area_store_test.c`)
 
@@ -358,7 +388,7 @@ Deterministic failure token for non-ready environment:
 - Invalid spans, checked size overflow, embedded-NUL paths, and parent
   filesystem failures
 - Capture-lifecycle integration for caller-supplied lock paths, contention
-  mapping, Zig allocator ownership, release-before-Preview, and deinit idempotence
+  mapping, caller ownership, release-before-Preview, and deinit idempotence
 
 ### Runtime process-execution contract (`tests/unit/runtime_process_exec_test.c`)
 
@@ -376,9 +406,9 @@ Deterministic failure token for non-ready environment:
   classifications
 - Binary stdin publication, exact file contents, nonzero consumer exits, ignored
   child output, and early-close SIGPIPE containment
-- Mixed-build caller integration for allocator-owned output copies, replacement
+- Production caller integration for allocator-owned output copies, replacement
   environment conversion, common spawn error names, termination reconstruction,
-  and binary stdin behavior without a shared facade
+  and binary stdin behavior through the owning C module
 
 ### Unit / Contracts / Mocks (`scripts/qa/run-unit-tests.sh`)
 

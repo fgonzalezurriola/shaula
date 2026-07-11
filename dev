@@ -4,8 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
-SHAULA_BIN="${ROOT_DIR}/zig-out/bin/shaula"
-OVERLAY_BIN="${ROOT_DIR}/zig-out/bin/shaula-overlay"
+BUILD_DIR="${ROOT_DIR}/build"
+SHAULA_BIN="${BUILD_DIR}/shaula"
+OVERLAY_BIN="${BUILD_DIR}/src/overlay/shaula-overlay"
 QA_PROFILE="${SHAULA_QA_PROFILE:-fast}"
 ALLOW_INTRUSIVE_UI="${SHAULA_QA_ALLOW_INTRUSIVE_UI:-0}"
 
@@ -17,13 +18,13 @@ Usage:
   ./dev <command> [args...]
 
 Core:
- build Build shaula and overlay helper
-  release     Build shaula and overlay helper (ReleaseSafe, x86_64)
-  release-arm Build shaula and overlay helper (ReleaseSafe, aarch64)
-  test           Run Zig tests
+  build          Build Shaula and all helpers with Meson
+  release        Build an optimized native release
+  release-arm    Build with SHAULA_MESON_CROSS_FILE for aarch64
+  test           Run Meson tests
   check          Run build + tests
-  port-check     Build and run the isolated Meson C port tests
-  port-check-asan Build and run the C port tests with ASan/UBSan
+  port-check     Rebuild and run the Meson tests with strict warnings
+  port-check-asan Rebuild and run Meson tests with ASan/UBSan
   doctor         Check local toolchain/runtime dependencies
   clean          Remove build and QA scratch artifacts
 
@@ -50,7 +51,7 @@ QA:
   qa             Run non-intrusive QA suite
 
 Pass-through:
-  run <args...>  Build, then run ./zig-out/bin/shaula <args...>
+  run <args...>  Build, then run build/shaula <args...>
 
 Examples:
   ./dev dev-install --yes
@@ -78,15 +79,26 @@ shaula_env() {
 }
 
 build() {
-  zig build
+  if [[ ! -f "${BUILD_DIR}/build.ninja" ]]; then
+    meson setup "${BUILD_DIR}" --prefix=/usr
+  fi
+  meson compile -C "${BUILD_DIR}"
 }
 
 release() {
-zig build -Doptimize=ReleaseSafe -Dstrip -Dtarget=x86_64-linux-gnu
+  meson setup build-release --wipe --prefix=/usr --buildtype=release --strip \
+    -Db_lto=true
+  meson compile -C build-release
 }
 
 release-arm() {
-zig build -Doptimize=ReleaseSafe -Dstrip -Dtarget=aarch64-linux-gnu
+  if [[ -z "${SHAULA_MESON_CROSS_FILE:-}" ]]; then
+    echo "SHAULA_MESON_CROSS_FILE is required for release-arm" >&2
+    return 2
+  fi
+  meson setup build-release-arm --wipe --prefix=/usr --buildtype=release \
+    --cross-file "${SHAULA_MESON_CROSS_FILE}" -Db_lto=true
+  meson compile -C build-release-arm
 }
 
 run_shaula() {
@@ -99,21 +111,7 @@ doctor() {
   local fail=0
   echo "Shaula doctor"
 
-  if have zig; then
-    local actual expected
-    actual="$(zig version 2>/dev/null || true)"
-    expected="${SHAULA_EXPECTED_ZIG:-0.16.0}"
-    if [[ "${actual}" == "${expected}" ]]; then
-      echo "ok zig=${actual}"
-    else
-      echo "warn zig expected=${expected} actual=${actual}"
-    fi
-  else
-    echo "missing zig"
-    fail=1
-  fi
-
-  for tool in cc pkg-config jq grim wl-copy wl-paste niri; do
+  for tool in cc meson ninja pkg-config jq grim wl-copy wl-paste niri; do
     if have "${tool}"; then
       echo "ok ${tool}=$(command -v "${tool}")"
     else
@@ -156,7 +154,7 @@ port_check_asan() {
 }
 
 clean() {
-  rm -rf .zig-cache zig-out build-port build-asan build-c-port src/overlay/__pycache__ scripts/qa/__pycache__
+  rm -rf build build-release build-release-arm build-stage build-port build-asan build-c-port src/overlay/__pycache__ scripts/qa/__pycache__
   rm -f .qa/evidence/*.tmp .qa/evidence/*.log .qa/evidence/*.txt
   echo "ok clean"
 }
@@ -438,7 +436,9 @@ noctalia_load() {
   archive="${tmp_dir}/shaula-linux-x86_64.tar.gz"
   sums="${tmp_dir}/SHA256SUMS"
 
-  tar -C zig-out -czf "${archive}" .
+  rm -rf build-stage
+  DESTDIR="${ROOT_DIR}/build-stage" meson install -C "${BUILD_DIR}" >/dev/null
+  tar -C build-stage/usr -czf "${archive}" .
   (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
 
   SHAULA_RELEASE_ASSET_URL="file://${archive}" \
@@ -473,7 +473,9 @@ install_local() {
   archive="${tmp_dir}/shaula-linux-${arch}.tar.gz"
   sums="${tmp_dir}/SHA256SUMS"
 
-  tar -C zig-out -czf "${archive}" .
+  rm -rf build-stage
+  DESTDIR="${ROOT_DIR}/build-stage" meson install -C "${BUILD_DIR}" >/dev/null
+  tar -C build-stage/usr -czf "${archive}" .
   (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
 
   cat <<EOF
@@ -482,7 +484,7 @@ Shaula local dev install
 This command installs the current checkout build from:
   ${ROOT_DIR}
 
-It does not download a GitHub release. It packages ./zig-out into a temporary
+It does not download a GitHub release. It stages the Meson install into a temporary
 local archive and runs scripts/install.sh against file:// URLs.
 
 Installed files still go to the normal per-user locations used by Shaula:
@@ -525,11 +527,12 @@ release-arm)
     release-arm
     ;;
   test)
-    zig build test "$@"
+    build
+    meson test -C "${BUILD_DIR}" --print-errorlogs "$@"
     ;;
   check)
     build
-    zig build test
+    meson test -C "${BUILD_DIR}" --print-errorlogs
     ;;
   port-check)
     port_check build-port

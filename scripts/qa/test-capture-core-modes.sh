@@ -9,14 +9,14 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 AREA_PATH="/tmp/shaula/task9-area.png"
 FULL_PATH="/tmp/shaula/task9-fullscreen.png"
 
 rm -f "${AREA_PATH}" "${FULL_PATH}"
 
-area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --output "${AREA_PATH}")"
+area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture area --json --no-preview --output "${AREA_PATH}")"
 printf '%s\n' "${area_json}" | jq -e '
   .ok == true and
   .mode == "area" and
@@ -35,7 +35,7 @@ printf '%s\n' "${area_json}" | jq -e '
   exit 1
 }
 
-fullscreen_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json --output "${FULL_PATH}")"
+fullscreen_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture fullscreen --json --output "${FULL_PATH}")"
 printf '%s\n' "${fullscreen_json}" | jq -e '
   .ok == true and
   .mode == "fullscreen" and

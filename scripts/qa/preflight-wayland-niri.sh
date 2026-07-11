@@ -24,10 +24,10 @@ if [[ ! -S "${NIRI_SOCKET}" ]]; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 set +e
-preflight_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET="${NIRI_SOCKET}" WAYLAND_DISPLAY="${WAYLAND_DISPLAY}" ./zig-out/bin/shaula preflight --json 2>&1)"
+preflight_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET="${NIRI_SOCKET}" WAYLAND_DISPLAY="${WAYLAND_DISPLAY}" ./build/shaula preflight --json 2>&1)"
 preflight_rc=$?
 set -e
 

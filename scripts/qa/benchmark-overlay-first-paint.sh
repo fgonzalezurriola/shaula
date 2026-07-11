@@ -130,7 +130,7 @@ export SHAULA_COMPOSITOR="${SHAULA_COMPOSITOR:-niri}"
 export NIRI_SOCKET="${NIRI_SOCKET:-/tmp/niri.sock}"
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
 
-zig build >/dev/null
+./dev build >/dev/null
 
 python3 - "$SAMPLES" "$WARMUP" "$P95_MAX" "$P99_MAX" "$JSON_ONLY" "$REPORT_JSON" "$ERROR_LOG" <<'PY'
 import json
@@ -148,7 +148,7 @@ report_json = sys.argv[6]
 error_log = sys.argv[7]
 
 # Intentionally no --dry-run here: Task 12 requires real interactive/helper timing.
-base_cmd = ["./zig-out/bin/shaula", "capture", "area", "--json"]
+base_cmd = ["./build/shaula", "capture", "area", "--json"]
 
 def append_error(line: str) -> None:
     with open(error_log, "a", encoding="utf-8") as handle:

@@ -117,26 +117,26 @@ record_degraded_subcheck() {
 }
 
 run_subcheck "e2e.preflight.wayland_niri" "bash ./scripts/qa/preflight-wayland-niri.sh"
-run_subcheck "e2e.build.zig" "zig build >/dev/null"
+run_subcheck "e2e.build.meson" "./dev build >/dev/null"
 
 AREA_PATH="/tmp/shaula/task17-e2e-area.png"
 FULL_PATH="/tmp/shaula/task17-e2e-fullscreen.png"
 WIN_PATH="/tmp/shaula/task17-e2e-window.png"
 rm -f "${AREA_PATH}" "${FULL_PATH}" "${WIN_PATH}"
 
-run_subcheck "e2e.capture.area" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; rm -f \"\${AREA_PATH}\"; AREA_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${AREA_JSON}\" | jq -e '.ok==true and .mode==\"area\" and (.path|length>0)' >/dev/null"
+run_subcheck "e2e.capture.area" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; rm -f \"\${AREA_PATH}\"; AREA_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./build/shaula capture area --json --no-preview --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${AREA_JSON}\" | jq -e '.ok==true and .mode==\"area\" and (.path|length>0)' >/dev/null"
 
-run_subcheck "e2e.capture.fullscreen" "FULL_PATH=/tmp/shaula/task17-e2e-fullscreen.png; rm -f \"\${FULL_PATH}\"; FULL_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture fullscreen --json --output \"\${FULL_PATH}\"); printf '%s\\n' \"\${FULL_JSON}\" | jq -e '.ok==true and .mode==\"fullscreen\" and (.path|length>0)' >/dev/null"
+run_subcheck "e2e.capture.fullscreen" "FULL_PATH=/tmp/shaula/task17-e2e-fullscreen.png; rm -f \"\${FULL_PATH}\"; FULL_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./build/shaula capture fullscreen --json --output \"\${FULL_PATH}\"); printf '%s\\n' \"\${FULL_JSON}\" | jq -e '.ok==true and .mode==\"fullscreen\" and (.path|length>0)' >/dev/null"
 
-run_subcheck "e2e.capture.window" "WIN_PATH=/tmp/shaula/task17-e2e-window.png; rm -f \"\${WIN_PATH}\"; set +e; WIN_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture window --json --output \"\${WIN_PATH}\" 2>&1); WIN_RC=\$?; set -e; if [[ \${WIN_RC} -eq 0 ]]; then printf '%s\\n' \"\${WIN_JSON}\" | jq -e '.ok==true and .mode==\"window\"' >/dev/null; else printf '%s\\n' \"\${WIN_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_CAPTURE_MODE_UNSUPPORTED\"' >/dev/null; fi"
+run_subcheck "e2e.capture.window" "WIN_PATH=/tmp/shaula/task17-e2e-window.png; rm -f \"\${WIN_PATH}\"; set +e; WIN_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./build/shaula capture window --json --output \"\${WIN_PATH}\" 2>&1); WIN_RC=\$?; set -e; if [[ \${WIN_RC} -eq 0 ]]; then printf '%s\\n' \"\${WIN_JSON}\" | jq -e '.ok==true and .mode==\"window\"' >/dev/null; else printf '%s\\n' \"\${WIN_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_CAPTURE_MODE_UNSUPPORTED\"' >/dev/null; fi"
 
-run_subcheck "e2e.clipboard.path" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; CLIP_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${CLIP_JSON}\" | jq -e '.ok==true and .saved.ok==true and (.clipboard.ok|type==\"boolean\")' >/dev/null"
+run_subcheck "e2e.clipboard.path" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; CLIP_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./build/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${CLIP_JSON}\" | jq -e '.ok==true and .saved.ok==true and (.clipboard.ok|type==\"boolean\")' >/dev/null"
 
-run_subcheck "e2e.failure.unsupported_compositor" "set +e; UNSUPPORTED_JSON=\$(SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json 2>&1); UNSUPPORTED_RC=\$?; set -e; [[ \${UNSUPPORTED_RC} -ne 0 ]] && printf '%s\\n' \"\${UNSUPPORTED_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_UNSUPPORTED_COMPOSITOR\"' >/dev/null"
+run_subcheck "e2e.failure.unsupported_compositor" "set +e; UNSUPPORTED_JSON=\$(SHAULA_COMPOSITOR=x11 ./build/shaula preflight --json 2>&1); UNSUPPORTED_RC=\$?; set -e; [[ \${UNSUPPORTED_RC} -ne 0 ]] && printf '%s\\n' \"\${UNSUPPORTED_JSON}\" | jq -e '.ok==false and .error.code==\"ERR_UNSUPPORTED_COMPOSITOR\"' >/dev/null"
 
-run_subcheck "e2e.failure.permission_clipboard" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; DEGRADED_JSON=\$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./zig-out/bin/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${DEGRADED_JSON}\" | jq -e '.ok==true and .saved.ok==true and .clipboard.ok==false and .clipboard.error.code==\"ERR_CLIPBOARD_UNAVAILABLE\" and .partial==true' >/dev/null"
+run_subcheck "e2e.failure.permission_clipboard" "AREA_PATH=/tmp/shaula/task17-e2e-area.png; DEGRADED_JSON=\$(SHAULA_CLIPBOARD_AVAILABLE=0 SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" WAYLAND_DISPLAY=\"${WAYLAND_DISPLAY}\" ./build/shaula capture area --json --no-preview --save --copy --output \"\${AREA_PATH}\"); printf '%s\\n' \"\${DEGRADED_JSON}\" | jq -e '.ok==true and .saved.ok==true and .clipboard.ok==false and .clipboard.error.code==\"ERR_CLIPBOARD_UNAVAILABLE\" and .partial==true' >/dev/null"
 
-run_subcheck "e2e.capture.capabilities.strict_contract" "CAPS_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" ./zig-out/bin/shaula capabilities list --json); printf '%s\\n' \"\${CAPS_JSON}\" | jq -e '.ok==true and has(\"backend\") and has(\"fallbacks\") and (.capture|has(\"window\"))' >/dev/null && bash ./scripts/qa/assert-capabilities-consistency.sh"
+run_subcheck "e2e.capture.capabilities.strict_contract" "CAPS_JSON=\$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=\"${NIRI_SOCKET}\" ./build/shaula capabilities list --json); printf '%s\\n' \"\${CAPS_JSON}\" | jq -e '.ok==true and has(\"backend\") and has(\"fallbacks\") and (.capture|has(\"window\"))' >/dev/null && bash ./scripts/qa/assert-capabilities-consistency.sh"
 if [[ "${QA_PROFILE}" == "full" || "${QA_PROFILE}" == "debug" ]]; then
   if [[ "${ALLOW_INTRUSIVE_UI}" == "1" ]]; then
     run_subcheck "e2e.capture.shell_artifact_guard.panel_hide" "bash ./scripts/qa/assert-noctalia-capture-with-panel-hide.sh"

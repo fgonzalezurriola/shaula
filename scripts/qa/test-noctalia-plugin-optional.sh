@@ -43,7 +43,7 @@ if [[ "${MODE}" == "with-plugin" || "${MODE}" == "both" ]]; then
   fi
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 helper_script="${ROOT_DIR}/scripts/qa/fake_runtime_capture_helper.sh"
 if [[ ! -x "${helper_script}" ]]; then
@@ -89,7 +89,7 @@ if [[ "${MODE}" == "without-plugin" || "${MODE}" == "both" ]]; then
     SHAULA_COMPOSITOR=niri \
     NIRI_SOCKET=/tmp/niri.sock \
     WAYLAND_DISPLAY=wayland-1 \
-    ./zig-out/bin/shaula capture area --json --no-preview --output "${CAPTURE_PATH}"
+    ./build/shaula capture area --json --no-preview --output "${CAPTURE_PATH}"
   })"
   printf '%s\n' "${capture_json}" | jq -e '
     .ok == true and
@@ -115,7 +115,7 @@ if [[ "${MODE}" == "without-plugin" || "${MODE}" == "both" ]]; then
     NIRI_SOCKET=/tmp/niri.sock \
     WAYLAND_DISPLAY=wayland-1 \
     PATH="/usr/bin:/bin" \
-    ./zig-out/bin/shaula capture fullscreen --json 2>&1
+    ./build/shaula capture fullscreen --json 2>&1
   })"
   missing_plugin_rc=$?
   set -e

@@ -27,7 +27,7 @@ if [[ ! -f "${FRACTIONAL_FIXTURE}" ]]; then
   exit 1
 fi
 
-zig build test >/dev/null
+./dev check >/dev/null
 
 jq -e 'all(.[]; has("name") and has("local") and has("output") and has("expected") and has("expected_runtime_arg"))' "${MULTI_FIXTURE}" >/dev/null
 jq -e 'all(.[]; .expected.width > 0 and .expected.height > 0 and (.expected_runtime_arg | test("^-?[0-9]+,-?[0-9]+ [0-9]+x[0-9]+$")))' "${MULTI_FIXTURE}" >/dev/null
@@ -49,7 +49,7 @@ jq -n \
     checks: {
       fixture_shape_valid: true,
       runtime_arg_format_valid: true,
-      zig_build_test_pass: true,
+      build_test_pass: true,
       fixture_cases: $fixture_cases
     }
   }' > "${MULTI_EVIDENCE}"
@@ -66,7 +66,7 @@ jq -n \
     checks: {
       non_negative_dimensions: true,
       runtime_arg_format_valid: true,
-      zig_build_test_pass: true,
+      build_test_pass: true,
       fixture_cases: $fixture_cases
     }
   }' > "${FRACTIONAL_EVIDENCE}"

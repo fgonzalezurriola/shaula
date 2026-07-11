@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 echo "Testing overlay helper contract v1 (malformed payload)"
-OUTPUT=$(SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=malformed ./zig-out/bin/shaula capture area --dry-run --json || true)
+OUTPUT=$(SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=malformed ./build/shaula capture area --dry-run --json || true)
 
 if echo "$OUTPUT" | jq -e '.ok==false and .error.code=="ERR_OVERLAY_PROTOCOL_INVALID" and .error.details.mode=="area" and (.warnings|type=="array")' >/dev/null; then
   echo "PASS: Malformed helper payload mapped deterministically to overlay protocol invalid"

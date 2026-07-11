@@ -1,9 +1,10 @@
-name: C port
+name: C build
 
 on:
   push:
     branches:
       - port
+      - master
   pull_request:
 
 permissions:
@@ -59,7 +60,7 @@ jobs:
           sudo meson install -C /tmp/gtk4-layer-shell/build
           sudo ldconfig
 
-      - name: Configure C port tests
+      - name: Configure C build
         env:
           CC: ${{ matrix.compiler }}
           SHAULA_C_PORT_MODE: ${{ matrix.mode }}
@@ -78,8 +79,15 @@ jobs:
           fi
           meson setup build-c-port "${args[@]}"
 
-      - name: Compile C port tests
+      - name: Compile C build
         run: meson compile -C build-c-port
 
-      - name: Run C port tests
+      - name: Run C tests
         run: meson test -C build-c-port --print-errorlogs
+
+      - name: Verify install payload
+        run: |
+          DESTDIR="${PWD}/build-c-port/stage" meson install -C build-c-port
+          for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-crop-image shaula-portal-screenshot; do
+            test -x "build-c-port/stage/usr/local/bin/${binary}"
+          done

@@ -1,0 +1,15 @@
+{
+  "id": "shaula",
+  "name": "Shaula",
+  "version": "0.1.5",
+  "author": "Shaula contributors",
+  "description": "Minimal Noctalia bar widget for Shaula screenshots.",
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "metadata": {
+    "icon": "camera",
+    "iconPosition": "left",
+    "generalTooltipText": "Shaula screenshots"
+  }
+}

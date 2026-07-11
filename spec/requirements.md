@@ -1,6 +1,6 @@
 # Shaula Product Direction
 
-Shaula is a Wayland-first, Niri-first screenshot tool written in Zig. It should feel fast in the hand and small on the system. The hot path must stay inside the budgets in [spec/performance.md](performance.md), and the default footprint must remain modest enough that capture feels instant instead of heavy.
+Shaula is a Wayland-first, Niri-first screenshot tool written in C. It should feel fast in the hand and small on the system. The hot path must stay inside the budgets in [spec/performance.md](performance.md), and the default footprint must remain modest enough that capture feels instant instead of heavy.
 
 Shottr is the behavior benchmark, not the platform model. The goal is to copy the useful characteristics of Shottr that make a screenshot tool pleasant to use: precise selection, low-friction capture, a fast post-capture path, and practical tools for developers and documentation work. macOS-only APIs, Apple Silicon assumptions, and desktop-specific integrations do not belong in Shaula's core scope.
 

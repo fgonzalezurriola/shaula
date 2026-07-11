@@ -33,7 +33,7 @@ if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula
 
@@ -66,7 +66,7 @@ capture_json="$({
   SHAULA_CAPTURE_SETTLE_BARRIER_MS=30 \
   SHAULA_CAPTURE_INJECT_PANEL_MARKER="${INJECT_MARKER}" \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --no-preview --output "${capture_path}"
+  ./build/shaula capture area --json --no-preview --output "${capture_path}"
 } )"
 
 wait "${token_writer_pid}"

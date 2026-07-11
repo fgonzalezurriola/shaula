@@ -8,9 +8,9 @@ GitHub Releases are published by `.github/workflows/release.yml` on `v*` tag pus
 
 The release job:
 
-1. Builds the tagged commit with `zig build -Doptimize=ReleaseSafe -Dstrip`.
-2. Runs the existing tests under ReleaseSafe.
-3. Packages `zig-out/bin` and `zig-out/share` as `shaula-linux-x86_64.tar.gz`.
+1. Configures and builds the tagged commit with Meson in release mode.
+2. Runs the maintained Meson tests.
+3. Stages the Meson install and packages its `usr/bin` and `usr/share` payload as `shaula-linux-x86_64.tar.gz`.
 4. Writes and verifies `SHA256SUMS`.
 5. Verifies that the archive contains every helper binary, preview toolbar icon, and Noctalia widget file.
 6. Installs the local archive into fake XDG paths to validate desktop, icon, config, Niri, and Noctalia behavior.
@@ -59,7 +59,7 @@ Every prompt that changes integration state must explain the visible outcome, af
 
 ## Local Development Installation
 
-`./dev dev-install [scripts/install.sh args...]` builds the current checkout, packages `zig-out` into a temporary release archive with `SHA256SUMS`, and runs `scripts/install.sh` against `file://` URLs.
+`./dev dev-install [scripts/install.sh args...]` builds the current checkout, stages the Meson install into a temporary release archive with `SHA256SUMS`, and runs `scripts/install.sh` against `file://` URLs.
 
 Use:
 

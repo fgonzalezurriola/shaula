@@ -26,8 +26,8 @@ if ! command -v grim >/dev/null 2>&1 && [[ -z "${SHAULA_RUNTIME_CAPTURE_HELPER:-
   export SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}"
 fi
 
-if [[ ! -x "${ROOT_DIR}/zig-out/bin/shaula" ]]; then
-  zig build >/dev/null
+if [[ ! -x "${ROOT_DIR}/build/shaula" ]]; then
+  ./dev build >/dev/null
 fi
 
 checks_json='[]'
@@ -193,12 +193,12 @@ check_json_file \
 check_json_file \
   "evidence.task13.multioutput_geometry" \
   "${EVIDENCE_DIR}/task-13-multioutput-geometry.json" \
-  '.pass == true and .checks.fixture_shape_valid == true and .checks.runtime_arg_format_valid == true and .checks.zig_build_test_pass == true'
+  '.pass == true and .checks.fixture_shape_valid == true and .checks.runtime_arg_format_valid == true and .checks.build_test_pass == true'
 
 check_json_file \
   "evidence.task13.fractional_scaling" \
   "${EVIDENCE_DIR}/task-13-fractional-scaling.json" \
-  '.pass == true and .checks.non_negative_dimensions == true and .checks.runtime_arg_format_valid == true and .checks.zig_build_test_pass == true'
+  '.pass == true and .checks.non_negative_dimensions == true and .checks.runtime_arg_format_valid == true and .checks.build_test_pass == true'
 
 overlay_evidence="${EVIDENCE_DIR}/task-7-overlay-base.txt"
 check_json_file \
@@ -223,21 +223,21 @@ else
   append_check "guard.force_block" true "pass"
 fi
 
-capabilities_json="$(./zig-out/bin/shaula capabilities list --json 2>&1 || true)"
+capabilities_json="$(./build/shaula capabilities list --json 2>&1 || true)"
 if printf '%s\n' "${capabilities_json}" | jq -e '.ok == true and (.capture | has("area") and has("fullscreen") and has("all_screens") and has("window"))' >/dev/null 2>&1; then
   append_check "command_family.capabilities" true "pass"
 else
   append_check "command_family.capabilities" false "invalid_contract output=$(printf '%s' "${capabilities_json}" | tr '\n' ' ')"
 fi
 
-history_json="$(./zig-out/bin/shaula history list --json 2>&1 || true)"
+history_json="$(./build/shaula history list --json 2>&1 || true)"
 if printf '%s\n' "${history_json}" | jq -e '.ok == true and (.result.entries | type == "array")' >/dev/null 2>&1; then
   append_check "command_family.history" true "pass"
 else
   append_check "command_family.history" false "invalid_contract output=$(printf '%s' "${history_json}" | tr '\n' ' ')"
 fi
 
-capture_json="$(./zig-out/bin/shaula capture area --json --dry-run 2>&1 || true)"
+capture_json="$(./build/shaula capture area --json --dry-run 2>&1 || true)"
 if printf '%s\n' "${capture_json}" | jq -e '.ok == true and .command == "capture area" and .selection.cancelled == false' >/dev/null 2>&1; then
   append_check "command_family.capture" true "pass"
 else

@@ -18,8 +18,9 @@ depends=(
   'wl-clipboard'
 )
 makedepends=(
+  'meson'
+  'ninja'
   'pkgconf'
-  'zig'
 )
 optdepends=(
   'niri: primary supported compositor and setup integration'
@@ -35,12 +36,13 @@ sha256sums=('9bd5f0f2110b8cf028ad388ffee8985c9ad5f849c65169019a39a1fa6cf631cf')
 
 build() {
   cd "${srcdir}/${pkgname}-${pkgver}"
-  zig build -Doptimize=ReleaseSafe -Dstrip
+  meson setup build --prefix=/usr --buildtype=release --strip -Db_lto=true
+  meson compile -C build
 }
 
 package() {
   cd "${srcdir}/${pkgname}-${pkgver}"
-  zig build -Doptimize=ReleaseSafe -Dstrip --prefix "${pkgdir}/usr"
+  DESTDIR="${pkgdir}" meson install -C build
 
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/shaula.desktop" <<'EOF'

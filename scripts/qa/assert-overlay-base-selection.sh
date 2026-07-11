@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 echo "Testing deterministic base selection output"
-OUTPUT=$(./zig-out/bin/shaula capture area --dry-run --json)
+OUTPUT=$(./build/shaula capture area --dry-run --json)
 
 if echo "$OUTPUT" | jq -e '.ok==true and .selection.cancelled==false and (.selection.geometry | type == "object") and .selection.geometry.width > 0' >/dev/null; then
   echo "PASS: Selection output deterministic, not cancelled, and geometry is valid"

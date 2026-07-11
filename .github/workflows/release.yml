@@ -57,24 +57,22 @@ jobs:
           sudo ldconfig
           pkg-config --exists gtk4-layer-shell-0
 
-      - name: Install Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.16.0
-
       - name: Build release
-        run: zig build -Doptimize=ReleaseSafe -Dstrip
+        run: |
+          meson setup build-release --prefix=/usr --buildtype=release --strip -Db_lto=true -Dwerror=true
+          meson compile -C build-release
 
       - name: Run release checks
-        run: zig build test -Doptimize=ReleaseSafe
+        run: meson test -C build-release --print-errorlogs
 
       - name: Package release assets
         run: |
           set -euo pipefail
           mkdir -p dist
 
-          test -x zig-out/bin/shaula
-          tar -C zig-out -czf dist/shaula-linux-x86_64.tar.gz bin share
+          DESTDIR="${PWD}/dist/stage" meson install -C build-release
+          test -x dist/stage/usr/bin/shaula
+          tar -C dist/stage/usr -czf dist/shaula-linux-x86_64.tar.gz bin share
           tar -tzf dist/shaula-linux-x86_64.tar.gz > dist/TARCONTENTS
 
           required_paths=(

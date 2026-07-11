@@ -186,7 +186,7 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - Canonical machine-readable source is `shaula errors list --json`.
 - `errors/taxonomy.{c,h}` owns the current 28-entry inventory, exact ordering,
   messages, retryability, classes, recovery actions, exit codes, and retry
-  budgets. `errors/command.zig` owns only command parsing and enumeration of that
+  budgets. `src/main.c` owns only command parsing and enumeration of that
   table; shared contract-version, timestamp, escaping, and basic-error policy is
   provided by `cli/json.{c,h}`.
 - Every failure must map deterministically as `error.code -> recovery action -> exit code`.
@@ -337,28 +337,28 @@ string contracts across modules.
 
 - `core/capture_mode.{c,h}` owns exact public and region tokens, fixed-width ABI
   values, runtime/backend lane mapping, and interactive-selection policy.
-  Maintained Zig callers include the C header directly and keep only immediate
+  Maintained C callers include the header directly and keep only immediate
   caller-local span/status adaptation.
-- `capture/command_grammar.zig` owns capture flag membership and deterministic
+- `src/capture/command.c` owns capture flag membership and deterministic
   command-specific `ERR_CLI_USAGE` messages.
-- `capture/command_flags.zig` declares per-mode flag structs and delegates
+- `src/capture/command.c` declares per-mode flag structs and delegates
   parsing to the grammar.
-- `capture/invocation.zig` converts parsed flags and resolved geometry into the
+- `src/capture/command.c` converts parsed flags and resolved geometry into the
   lifecycle invocation contract: public token, backend operation, output/window
   fields, post-capture flags, previous-area persistence, and live-overlay settle
   behavior.
-- `capture/command.zig` is a strict dispatcher into `capture/lifecycle.zig`.
-- `capture/lifecycle.zig` owns capability enforcement, pre-capture guards,
+- `src/capture/command.c` is a strict dispatcher into `src/capture/command.c`.
+- `src/capture/command.c` owns capability enforcement, pre-capture guards,
   optional live-overlay settling, backend execution, previous-area persistence,
   and final success/error emission.
-- `capture/backends/capture_execution_plan.zig` owns typed backend operations:
+- `src/capture/command.c` owns typed backend operations:
   `area`, `current_output`, `all_outputs`, and `window`.
-- `capture/backends/capture_backend_failure.zig` centralizes backend
+- `src/capture/command.c` centralizes backend
   `CaptureOutcome` failures while preserving deterministic `ERR_*` attributes.
 - `capabilities/runtime.{c,h}` owns canonical public backend labels.
-  `capture/backends/capture_backend_contract.zig` retains degraded warning tokens
+  `src/capture/command.c` retains degraded warning tokens
   and helper exit-code mapping.
-- `capture/warnings.zig` owns capture-specific warning tokens.
+- `src/capture/command.c` owns capture-specific warning tokens.
 
 ### Runtime and compositor decisions
 
@@ -371,6 +371,9 @@ string contracts across modules.
   callers include the C header directly.
 - `compositor/focused_output.{c,h}` owns focused-output overrides, exact
   Niri/Sway process probes, typed result parsing, and advisory fallback.
+- `preflight/probe.{c,h}` owns aggregate preflight resolution, readiness guard
+  precedence, exact public success/error JSON, warnings, and exit-code mapping.
+  The top-level Zig dispatcher includes the header directly.
 - `runtime/env.{c,h}` owns borrowed environment parsing through direct C-header
   callers and caller-local span conversion.
 - `runtime/paths.{c,h}` owns runtime-state path resolution, temporary capture
@@ -428,7 +431,7 @@ focused output. It must not probe compositor/backend state again.
 - Capabilities, preflight, and explore perform caller-local environment lookup
   and immediate span/enum conversion. The focused-output C boundary receives the
   same borrowed environment values and reuses the detector synchronously. No
-  shared Zig compositor-policy facade remains.
+  C compositor-policy boundary remains.
 
 ### Capability-runtime boundary
 
@@ -463,7 +466,41 @@ focused output. It must not probe compositor/backend state again.
 - `ShaulaRuntimeDecision` owns no allocations. Its compositor label borrows the
   caller environment; backend labels are immutable. Independent Zig `@cImport`
   namespaces exchange the fixed-layout decision only through caller-local
-  field-by-field ABI conversion, never through a shared Zig policy facade.
+  field-by-field ABI conversion, never through a C policy boundary.
+
+### Preflight boundary
+
+- Preflight status values cross the C ABI as fixed 32-bit integers: success `0`,
+  invalid argument `1`, size overflow `2`, out of memory `3`, timestamp out of
+  range `4`, and internal dependency failure `5`.
+- `shaula_preflight_build()` borrows one `ShaulaCapabilitiesEnvironment`, one
+  caller-provided Unix timestamp, and one explicit-length portal-fallback warning
+  span for a synchronous call. It does not read process-global environment state
+  or acquire the clock itself.
+- Guard precedence is exact: an unsupported runtime decision emits
+  `ERR_UNSUPPORTED_COMPOSITOR` before Wayland readiness is considered. Supported
+  decisions then require presence of `WAYLAND_DISPLAY`; a present empty value is
+  ready, while absence emits `ERR_PREFLIGHT_ENV_NOT_READY`.
+- Unsupported and environment-not-ready results preserve their exact messages,
+  retryability, escaped `detected_compositor` details, empty warning array, and
+  taxonomy exit codes 10 and 11 respectively.
+- Success preserves canonical public field order and the historical duplicated
+  compositor value: `ok`, `contract_version`, `command`, `timestamp`,
+  `compositor`, `ready`, `result`, and `warnings`. The result includes
+  compositor, `wayland=true`, canonical backend label, and portal availability.
+- The borrowed portal-fallback warning is serialized only when the resolved
+  backend is portal. Preflight does not duplicate backend-selection or warning-
+  escaping policy.
+- The boundary reuses `cli/json.{c,h}` for contract version, timestamps,
+  byte-string escaping, warning arrays, and basic errors, and
+  `errors/taxonomy.{c,h}` for exit-code mapping.
+- A successful `ShaulaPreflightOutput` owns GLib-allocated, length-bearing JSON
+  with trailing-NUL storage plus the command exit code. It must be released with
+  `shaula_preflight_output_clear()`; replacement, partial failure, and repeated
+  cleanup leave the structure valid and empty.
+- `src/main.c` includes `preflight/probe.h` directly and retains only flag dispatch,
+  environment adaptation, testable clock acquisition, stdout writing, and
+  returning the C-provided exit code. No maintained C preflight boundary remains.
 
 ### Focused-output boundary
 
@@ -502,26 +539,26 @@ focused output. It must not probe compositor/backend state again.
   repeated cleanup are safe.
 - Explore, capture lifecycle, and overlay selection include the C header
   directly, pass their own environment maps, copy only a present result into
-  their established Zig allocator, and retain their existing advisory or
-  backend-level fallback behavior. No maintained Zig focused-output facade
+  their established caller allocation, and retain their existing advisory or
+  backend-level fallback behavior. No maintained C focused-output boundary
   remains.
 
 ### Overlay
 
-- `overlay/overlay.zig` is the public facade.
-- `overlay/selection_session.zig` owns helper environment preparation, optional
+- `src/capture/command.c` owns overlay orchestration; `src/overlay/` owns the native helper.
+- `src/capture/command.c` and `src/overlay/` owns helper environment preparation, optional
   frozen backgrounds, dry-run/test payloads, helper protocol mapping, and
   accepted-selection persistence.
-- `overlay/selection_draft_store.zig` owns persisted overlay draft state.
-- `overlay/runtime.zig` owns the helper stdio process boundary.
-- `overlay/helper_protocol.zig` owns parsing of the helper envelope.
+- `src/capture/command.c` and `src/overlay/` owns persisted overlay draft state.
+- `src/capture/command.c` and `src/overlay/` owns the helper stdio process boundary.
+- `src/capture/command.c` and `src/overlay/` owns parsing of the helper envelope.
 
 ### Post-capture and JSON
 
-- `capture/post_capture.zig` owns post-capture side effects and typed outcomes
+- `src/capture/command.c` owns post-capture side effects and typed outcomes
   for history, clipboard, preview, and notifications.
-- `capture/post_capture_types.zig` owns post-capture state types.
-- `capture/post_capture_json.zig` owns the stable capture result envelope,
+- `src/capture/command.c` owns post-capture state types.
+- `src/capture/command.c` owns the stable capture result envelope,
   duplicated top-level/result fields, and partial/degraded rules.
 - `cli/json.{c,h}` owns the shared contract-version literal, byte-string
   escaping, warning-array serialization, UTC timestamp formatting, and complete
@@ -529,13 +566,13 @@ focused output. It must not probe compositor/backend state again.
   and keep only caller-local ABI/allocator/writer adaptation.
 - `notify/request.{c,h}` owns notification request defaults, urgency tokens,
   exact `notify-send` argv construction, action spelling, and file-URI escaping.
-  `notify.zig` owns execution, fallback, action listening, reveal behavior, and
+  `src/main.c` owns execution, fallback, action listening, reveal behavior, and
   caller-local C span/status/argv adaptation.
 
 ### Public JSON boundary
 
 - `shaula_json_contract_version` returns borrowed immutable process-lifetime
-  bytes for public contract version `1.0.0`. `ipc/protocol.zig` owns only the
+  bytes for public contract version `1.0.0`. `src/cli/json.c` owns only the
   independent IPC version.
 - Every C JSON input is an explicit `data + length` span. NULL with zero length
   means an empty byte string; NULL with nonzero length is invalid. Arbitrary
@@ -571,7 +608,7 @@ focused output. It must not probe compositor/backend state again.
   path bytes raw, and changing pathological quote/control-byte behavior requires
   a separate public-contract decision.
 - `preview/preview_result.{c,h}` owns the typed final-result parser at the Preview
-  helper stdout boundary. `preview/service.zig` owns helper execution, stable
+  helper stdout boundary. `src/main.c` and `src/preview/` owns helper execution, stable
   error mapping, and caller-local transfer into the Preview/post-capture model.
 
 ### Notification request boundary
@@ -603,12 +640,12 @@ focused output. It must not probe compositor/backend state again.
   trailing-NUL storage. Literals and request fields remain borrowed. Callers
   clear output through `shaula_notify_send_args_clear`; replacement and repeated
   cleanup are safe.
-- `notify.zig` includes `notify/request.h` directly, retains the request bytes
+- `src/main.c` includes `notify/request.h` directly, retains the request bytes
   through process execution, converts only fixed-width statuses and spans, and
-  copies a standalone file URI into its existing Zig allocator only where its
+  copies a standalone file URI into its existing caller allocation only where its
   public helper API requires owned bytes. No shared Zig notification-policy
   facade remains.
-- `notify.zig` and `notify/command.zig` continue to own actual process execution,
+- `src/main.c` and `src/main.c` continue to own actual process execution,
   hint-to-icon fallback decisions, action-output handling, file-manager reveal,
   logging, and public command JSON. This model slice does not absorb those
   command-family responsibilities.
@@ -623,7 +660,7 @@ focused output. It must not probe compositor/backend state again.
   directory, doctor, errors, explore, history, notify, preview, settings, and
   setup commands. Each includes the C header directly and performs only
   immediate caller-local slice/span or record conversion.
-- `errors/command.zig` owns only argument validation and the typed compact
+- `src/main.c` owns only argument validation and the typed compact
   `errors list` result object. It enumerates the C table, obtains shared JSON
   policy through `cli/json.h`, and must not retain a second taxonomy.
 - Inputs are borrowed `data + length` spans. A NULL pointer with nonzero length
@@ -649,7 +686,7 @@ focused output. It must not probe compositor/backend state again.
   or overflowing unsigned values return the caller-provided default.
 - Maintained Zig owners preserve lookup against each caller's
   `std.process.Environ` and perform immediate ABI conversion and integer-width
-  bounding at the owning module. No shared Zig environment facade remains in
+  bounding at the owning module. No C environment boundary remains in
   maintained code.
 
 ### Runtime path boundary
@@ -670,8 +707,8 @@ focused output. It must not probe compositor/backend state again.
   call, outputs are independent, and the C implementation has no mutable global
   state.
 - Maintained Zig owners perform caller-provided environment lookup, pass spans
-  to C, and copy GLib-owned results into the existing Zig allocator only where
-  their public API requires owned bytes. No shared Zig path policy or facade
+  to C, and copy GLib-owned results into the existing caller allocation only where
+  their public API requires owned bytes. No C path boundary
   remains in maintained code.
 - This boundary owns runtime state and temporary capture artifacts only.
   Configuration, cache, data, history, durable screenshot placement, tool and
@@ -728,7 +765,7 @@ focused output. It must not probe compositor/backend state again.
   `shaula_runtime_helper_owned_path_clear()`.
 - Preview, Overlay, Settings, and portal capture perform caller-provided
   override lookup, executable-directory discovery, ABI conversion, and owned
-  result transfer in their owning module. No shared Zig resolution facade or
+  result transfer in their owning module. No C helper-resolution boundary or
   duplicate helper policy remains.
 - The C implementation has no mutable global state and checks all size additions.
   It does not spawn processes or absorb the similar crop-helper logic in capture
@@ -761,10 +798,10 @@ focused output. It must not probe compositor/backend state again.
 
 ### Diagnostics and configuration
 
-- `doctor/diagnostics.zig` owns installed/runtime discovery.
-- `config/save_args.zig` owns the `shaula config save` setting-flag grammar and
+- `src/main.c` owns installed/runtime discovery.
+- `src/config/config.c` and `src/main.c` owns the `shaula config save` setting-flag grammar and
   applies flags to the config draft.
-- `config/command.zig` owns command-level config flags, orchestration, and JSON
+- `src/config/config.c` and `src/main.c` owns command-level config flags, orchestration, and JSON
   envelopes.
 - `settings/settings_config.{c,h}` owns the C-facing Settings model,
   integrated defaults, config path resolution, preset mapping, and permissive
@@ -796,15 +833,15 @@ focused output. It must not probe compositor/backend state again.
   NUL. A nonempty result is GLib-owned, length-bearing, trailing-NUL storage that
   is released through `shaula_preview_result_clear()`; inputs and action-token
   spans are borrowed. Allocation failure is explicit and outputs remain
-  initialized and clearable on every outcome. `preview/service.zig` copies the
-  optional path into its existing Zig allocator before C cleanup and preserves
+  initialized and clearable on every outcome. `src/main.c` and `src/preview/` copies the
+  optional path into its existing caller allocation before C cleanup and preserves
   helper exit handling, `ERR_PREVIEW_RESULT_INVALID`, notifications, Preview CLI
   JSON, and post-capture result semantics.
 - `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
   tolerant INI loading, debounced dirty-key persistence, and cross-preview file
   locking. Inspector/widget state remains in `preview_properties_hud.*`.
 - Phase 2 strict cleanup removed the obsolete Zig Preview/Settings bridge
-  sources and `runtime/c_compat.zig`; the maintained build has one C owner for
+  sources and the former compatibility bridge; the maintained build has one C owner for
   each migrated bridge symbol.
 - `ShaulaPreviewDocument` owns output-affecting preview model state. GTK widgets,
   view state, tools, gestures, and rendering remain in the C preview surface.

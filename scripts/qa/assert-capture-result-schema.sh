@@ -9,7 +9,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 schema_expr='
   has("ok") and
@@ -26,20 +26,20 @@ schema_expr='
   has("warnings")
 '
 
-area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview)"
+area_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture area --json --no-preview)"
 printf '%s\n' "${area_json}" | jq -e "${schema_expr}" >/dev/null || {
   echo "ERR_CAPTURE_SCHEMA_INVALID reason=area_shape" >&2
   exit 1
 }
 
-fullscreen_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture fullscreen --json)"
+fullscreen_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture fullscreen --json)"
 printf '%s\n' "${fullscreen_json}" | jq -e "${schema_expr}" >/dev/null || {
   echo "ERR_CAPTURE_SCHEMA_INVALID reason=fullscreen_shape" >&2
   exit 1
 }
 
 set +e
-window_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture window --json 2>/dev/null)"
+window_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture window --json 2>/dev/null)"
 window_rc=$?
 set -e
 

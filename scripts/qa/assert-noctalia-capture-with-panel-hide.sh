@@ -19,7 +19,7 @@ if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula
 
@@ -54,7 +54,7 @@ handshake_json="$({
   SHAULA_CAPTURE_SETTLE_BARRIER_MS=30 \
   SHAULA_CAPTURE_INJECT_PANEL_MARKER=1 \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --no-preview --output "${capture_path}"
+  ./build/shaula capture area --json --no-preview --output "${capture_path}"
 } )"
 
 wait "${token_writer_pid}"
@@ -89,7 +89,7 @@ fallback_json="$({
   SHAULA_CAPTURE_INJECT_PANEL_MARKER=1 \
   SHAULA_PANEL_MARKER_VISIBLE_UNTIL_MS="$(( $(date +%s%3N) + 10 ))" \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --no-preview --output "${fallback_path}"
+  ./build/shaula capture area --json --no-preview --output "${fallback_path}"
 } )"
 
 printf '%s\n' "${fallback_json}" | jq -e --arg path "${fallback_path}" '
@@ -124,7 +124,7 @@ timeout_json="$({
   SHAULA_PANEL_HIDDEN_TOKEN_FILE=/tmp/shaula/nonexistent-timeout-token \
   SHAULA_CAPTURE_INJECT_PANEL_MARKER=1 \
   SHAULA_PANEL_HIDDEN=0 \
-  ./zig-out/bin/shaula capture area --json --output "${timeout_path}" 2>&1
+  ./build/shaula capture area --json --output "${timeout_path}" 2>&1
 } )"
 timeout_rc=$?
 set -e

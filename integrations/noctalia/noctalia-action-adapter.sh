@@ -7,7 +7,7 @@ REQUEST_ID="noctalia-req-001"
 MODE="menu"
 ACTION_ID=""
 EXECUTE=0
-SHAULA_BIN="${SHAULA_BIN:-${ROOT_DIR}/zig-out/bin/shaula}"
+SHAULA_BIN="${SHAULA_BIN:-${ROOT_DIR}/build/shaula}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

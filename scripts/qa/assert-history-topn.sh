@@ -44,7 +44,7 @@ if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 history_file="/tmp/shaula/history/latest.v1"
 rm -f "${history_file}"
@@ -55,7 +55,7 @@ mkdir -p "${capture_dir}"
 
 for ((i = 1; i <= SHOTS; i++)); do
   capture_path="${capture_dir}/capture-$(printf '%03d' "${i}").png"
-  capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --save --output "${capture_path}")"
+  capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture area --json --no-preview --save --output "${capture_path}")"
 
   printf '%s\n' "${capture_json}" | jq -e --arg p "${capture_path}" '
     .ok == true and
@@ -69,7 +69,7 @@ for ((i = 1; i <= SHOTS; i++)); do
   }
 done
 
-history_json="$(./zig-out/bin/shaula history list --json)"
+history_json="$(./build/shaula history list --json)"
 
 expected_len="${TOPN}"
 if [[ "${SHOTS}" -lt "${TOPN}" ]]; then

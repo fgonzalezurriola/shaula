@@ -72,7 +72,7 @@ The overlay parent/parser boundary uses a deterministic helper envelope on stdou
 }
 ```
 
-Deterministic parser mapping (`src/overlay/overlay.zig`) to `SelectionResult`:
+Deterministic parser mapping (`src/capture/command.c` and `src/overlay/`) to `SelectionResult`:
 
 - `status="ok"` requires `action="capture"` and valid non-zero `geometry`; maps to `cancelled=false` and forwards exact geometry.
 - `status="cancel"` maps to `cancelled=true`.

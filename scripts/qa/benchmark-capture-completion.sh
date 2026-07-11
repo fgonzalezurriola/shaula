@@ -41,7 +41,7 @@ if (( WARMUP < 0 )); then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 python3 - "$SAMPLES" "$WARMUP" "$AREA_P95_MAX" "$WINDOW_P95_MAX" "$JSON_ONLY" <<'PY'
 import json
@@ -77,8 +77,8 @@ def run_and_extract(command: list[str], bench_name: str) -> float:
         sys.exit(1)
     return float(latency)
 
-area_cmd = ["./zig-out/bin/shaula", "capture", "area", "--json", "--no-preview"]
-window_cmd = ["./zig-out/bin/shaula", "capture", "window", "--json", "--window-id", "bench-window"]
+area_cmd = ["./build/shaula", "capture", "area", "--json", "--no-preview"]
+window_cmd = ["./build/shaula", "capture", "window", "--json", "--window-id", "bench-window"]
 
 for _ in range(warmup):
     run_and_extract(area_cmd, "capture_completion_area")

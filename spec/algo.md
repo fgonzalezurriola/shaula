@@ -4,7 +4,7 @@ See [spec/requirements.md](requirements.md) for product direction and [spec/perf
 
 ## Executive Technical Summary
 
-Shaula is a machine-first, Niri-first screenshot tool written in Zig. The product direction lives in [spec/requirements.md](requirements.md); this file keeps the implementation contracts that make the product deterministic, low-latency, and easy to automate.
+Shaula is a machine-first, Niri-first screenshot tool written in C. The product direction lives in [spec/requirements.md](requirements.md); this file keeps the implementation contracts that make the product deterministic, low-latency, and easy to automate.
 
 ## Decision Register
 

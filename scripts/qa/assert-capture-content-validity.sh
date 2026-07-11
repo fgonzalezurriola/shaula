@@ -57,14 +57,14 @@ evidence_json="${evidence_dir}/task-3-capture-content-validity.json"
 
 mkdir -p "${evidence_dir}" /tmp/shaula
 
-zig build >/dev/null
+./dev build >/dev/null
 
 capture_path="/tmp/shaula/task3-capture-content-${mode}.png"
 stub_path="/tmp/shaula/task3-stub-signature-1x1.png"
 
 rm -f "${capture_path}" "${stub_path}"
 
-capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_CAPTURE_FIXTURE="${fixture}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture "${mode}" --json --output "${capture_path}")"
+capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_CAPTURE_FIXTURE="${fixture}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture "${mode}" --json --output "${capture_path}")"
 
 printf '%s\n' "${capture_json}" | jq -e --arg mode "${mode}" --arg capture_path "${capture_path}" '
   .ok == true and

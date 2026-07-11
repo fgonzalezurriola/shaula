@@ -15,7 +15,7 @@ Expand Shaula's shell integration beyond the Noctalia-specific plugin to a **gen
 - Noctalia is a QuickShell shell; the existing plugin already uses `Quickshell.execDetached()` to call `shaula capture ...`.
 - Other QuickShell configs (niri bars, Hyprland panels) could host a Shaula widget with minimal changes if we extract the integration layer.
 - QuickShell's `IpcHandler` system provides a bidirectional IPC channel that the current Noctalia plugin doesn't use — enabling real-time state sync (capture in progress, panel hide handshake) instead of fire-and-forget CLI calls.
-- The `precondition_guard.zig` panel-hide handshake already exists but is file-token based; IPC-based handshake would be cleaner and more reliable.
+- The `command.c` panel-hide handshake already exists but is file-token based; IPC-based handshake would be cleaner and more reliable.
 
 ---
 
@@ -29,9 +29,9 @@ Expand Shaula's shell integration beyond the Noctalia-specific plugin to a **gen
 | `BarWidget.qml` | `integrations/noctalia/shaula/BarWidget.qml` | QML bar widget: icon button → context menu → `Quickshell.execDetached(["sh","-lc","shaula capture ..."])` |
 | `noctalia-action-adapter.sh` | `integrations/noctalia/noctalia-action-adapter.sh` | Bash bridge: builds JSON action menu (8 actions), resolves action→shaula-argv, executes CLI, handles open targets |
 | `noctalia-plugin-poc.sh` | `integrations/noctalia/noctalia-plugin-poc.sh` | Outer CLI wrapper parsing `--menu`/`--action`/`--dry-run` |
-| `setup/command.zig` | `src/setup/command.zig` | Installer: copies plugin files to `~/.config/noctalia/plugins/shaula/`, edits `plugins.json` (v2) + `settings.json` |
-| `doctor/diagnostics.zig` | `src/doctor/diagnostics.zig` | Health checks: Noctalia paths, plugin dir, enabled state |
-| `precondition_guard.zig` | `src/capture/precondition_guard.zig` | Panel-hide handshake via `SHAULA_PANEL_HIDDEN_TOKEN_FILE` file token polling |
+| `setup/command.c` | `src/main.c and scripts/install.sh` | Installer: copies plugin files to `~/.config/noctalia/plugins/shaula/`, edits `plugins.json` (v2) + `settings.json` |
+| `doctor/diagnostics.c` | `src/main.c` | Health checks: Noctalia paths, plugin dir, enabled state |
+| `command.c` | `src/capture/command.c` | Panel-hide handshake via `SHAULA_PANEL_HIDDEN_TOKEN_FILE` file token polling |
 
 **Limitations of current approach:**
 
@@ -273,7 +273,7 @@ shaula capture area --panel-handshake=ipc
 
 **Implementation changes in Shaula:**
 
-1. `src/capture/precondition_guard.zig`: Add `ipcPanelHideHandshake()` path that uses `qs ipc call/prop get` instead of file-token polling.
+1. `src/capture/command.c`: Add `ipcPanelHideHandshake()` path that uses `qs ipc call/prop get` instead of file-token polling.
 2. Add a separate QuickShell integration probe for `qs ipc show` and a `shaula` target. Do not place child-process execution in the pure `src/compositor/runtime.{c,h}` detector.
 3. Fallback chain: IPC handshake → file-token handshake → settle barrier → timeout.
 
@@ -445,8 +445,8 @@ This subcommand provides:
 | 1.1 | Refactor `BarWidget.qml` to import and use `ShaulaService` for capture actions | Modified: `integrations/noctalia/shaula/BarWidget.qml` | 1h |
 | 1.2 | Update Noctalia `manifest.json` if import paths change | Modified: `integrations/noctalia/shaula/manifest.json` | 0.5h |
 | 1.3 | Verify Noctalia plugin loads correctly with the service import | Manual test | 1h |
-| 1.4 | Update `setup/command.zig` to also copy `shaula-core/` files when installing Noctalia plugin | Modified: `src/setup/command.zig` | 1.5h |
-| 1.5 | Update `doctor/diagnostics.zig` to check for `shaula-core/` presence | Modified: `src/doctor/diagnostics.zig` | 0.5h |
+| 1.4 | Update `setup/command.c` to also copy `shaula-core/` files when installing Noctalia plugin | Modified: `src/main.c and scripts/install.sh` | 1.5h |
+| 1.5 | Update `doctor/diagnostics.c` to check for `shaula-core/` presence | Modified: `src/main.c` | 0.5h |
 | 1.6 | Run existing Noctalia QA scripts, fix regressions | Modified: `scripts/qa/assert-noctalia-*.sh` | 1.5h |
 | | | **Phase total** | **~6h** |
 
@@ -456,10 +456,10 @@ This subcommand provides:
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.1 | Add `ipcPanelHideHandshake()` to `precondition_guard.zig` | Modified: `src/capture/precondition_guard.zig` | 3h |
+| 2.1 | Add `ipcPanelHideHandshake()` to `command.c` | Modified: `src/capture/command.c` | 3h |
 | 2.2 | Add QuickShell IPC availability detection in a separate integration probe | New integration probe; `src/compositor/runtime.{c,h}` remains process-free | 1.5h |
-| 2.3 | Implement fallback chain: IPC → file-token → settle barrier → timeout | Modified: `src/capture/precondition_guard.zig` | 2h |
-| 2.4 | Add `shaula ipc` subcommand (call, listen, prop, available, targets) | New: `src/ipc/command.zig`, `src/ipc/bridge.zig` | 4h |
+| 2.3 | Implement fallback chain: IPC → file-token → settle barrier → timeout | Modified: `src/capture/command.c` | 2h |
+| 2.4 | Add `shaula ipc` subcommand (call, listen, prop, available, targets) | New: `src/ipc/command.c`, `src/ipc/bridge.c` | 4h |
 | 2.5 | Write contract tests for IPC handshake paths | New: `scripts/qa/assert-quickshell-ipc-handshake.sh` | 2h |
 | 2.6 | Update `ShaulaService.qml` to handle `panelHide`/`panelShow` calls from Shaula | Modified: `integrations/quickshell/shaula-core/ShaulaService.qml` | 1h |
 | 2.7 | Update `preflight` and `capabilities` to report IPC availability | Modified: `src/capabilities/`, `src/preflight/` | 1.5h |
@@ -474,8 +474,8 @@ This subcommand provides:
 |---|------|-------|--------|
 | 3.1 | ShaulaService: parse capture `--json` output to extract result path, emit `captureCompleted` signal | Modified: `integrations/quickshell/shaula-core/ShaulaService.qml` | 2h |
 | 3.2 | Add capture-in-progress visual indicator to both Noctalia and Standalone widgets | Modified: both `BarWidget.qml` files | 1h |
-| 3.3 | Add `--panel-handshake=ipc\|file\|auto` CLI flag to `capture/command_grammar.zig` | Modified: `src/capture/command_grammar.zig` | 1h |
-| 3.4 | Shaula CLI: after capture, call `qs ipc call shaula panelShow` if IPC was used | Modified: `src/capture/lifecycle.zig` | 1.5h |
+| 3.3 | Add `--panel-handshake=ipc\|file\|auto` CLI flag to `capture/command.c` | Modified: `src/capture/command.c` | 1h |
+| 3.4 | Shaula CLI: after capture, call `qs ipc call shaula panelShow` if IPC was used | Modified: `src/capture/command.c` | 1.5h |
 | 3.5 | Add `captureStarted`/`captureCompleted`/`captureFailed` signal emission from ShaulaService | Modified: `integrations/quickshell/shaula-core/ShaulaService.qml` | 1h |
 | 3.6 | Write integration test: capture lifecycle → IPC signals → widget state changes | New: `scripts/qa/assert-quickshell-capture-lifecycle.sh` | 2h |
 | | | **Phase total** | **~8.5h** |
@@ -487,9 +487,9 @@ This subcommand provides:
 | # | Task | Files | Effort |
 |---|------|-------|--------|
 | 4.1 | Write `integrations/quickshell/shaula-standalone/setup-guide.md` | New | 1h |
-| 4.2 | Add `shaula setup --quickshell` option for standalone widget install | Modified: `src/setup/command.zig` | 2h |
-| 4.3 | Detect QuickShell configs (not just Noctalia) in setup wizard | Modified: `src/setup/command.zig` | 1.5h |
-| 4.4 | Add standalone widget doctor checks | Modified: `src/doctor/diagnostics.zig` | 1h |
+| 4.2 | Add `shaula setup --quickshell` option for standalone widget install | Modified: `src/main.c and scripts/install.sh` | 2h |
+| 4.3 | Detect QuickShell configs (not just Noctalia) in setup wizard | Modified: `src/main.c and scripts/install.sh` | 1.5h |
+| 4.4 | Add standalone widget doctor checks | Modified: `src/main.c` | 1h |
 | 4.5 | Create example `shell.qml` that includes Shaula standalone widget | New: `integrations/quickshell/examples/minimal-shell/` | 1h |
 | 4.6 | Update release workflow to package `integrations/quickshell/` | Modified: `.github/workflows/release.yml` | 1h |
 | 4.7 | Remove Bash adapter scripts (replaced by ShaulaService QML) | Deleted: `integrations/noctalia/noctalia-action-adapter.sh`, `noctalia-plugin-poc.sh` | 0.5h |
@@ -525,22 +525,22 @@ integrations/
 │
 src/
 ├── ipc/
-│   ├── command.zig                # `shaula ipc` subcommand dispatcher
-│   └── bridge.zig                 # QS IPC bridge (call/listen/prop/available)
+│   ├── command.c                # `shaula ipc` subcommand dispatcher
+│   └── bridge.c                 # QS IPC bridge (call/listen/prop/available)
 │
 ├── capture/
-│   ├── precondition_guard.zig     # Extended: IPC handshake path
-│   ├── command_grammar.zig        # Extended: --panel-handshake flag
-│   └── lifecycle.zig              # Extended: panelShow IPC call after capture
+│   ├── command.c     # Extended: IPC handshake path
+│   ├── command.c        # Extended: --panel-handshake flag
+│   └── command.c              # Extended: panelShow IPC call after capture
 │
 ├── compositor/
-│   └── runtime.zig                # Extended: quickshellIpcAvailable()
+│   └── runtime.c                # Extended: quickshellIpcAvailable()
 │
 ├── setup/
-│   └── command.zig                # Extended: --quickshell, QS detection
+│   └── command.c                # Extended: --quickshell, QS detection
 │
 ├── doctor/
-│   └── diagnostics.zig            # Extended: QS IPC readiness checks
+│   └── diagnostics.c            # Extended: QS IPC readiness checks
 │
 └── capabilities/                   # Extended: report IPC availability
 ```
@@ -638,12 +638,12 @@ src/
 |----------|------|
 | Existing Noctalia plugin | `integrations/noctalia/shaula/` |
 | Noctalia action adapter | `integrations/noctalia/noctalia-action-adapter.sh` |
-| Setup installer (Noctalia path) | `src/setup/command.zig:275-500` |
-| Panel-hide precondition guard | `src/capture/precondition_guard.zig` |
+| Setup installer (Noctalia path) | `src/main.c and scripts/install.sh:275-500` |
+| Panel-hide precondition guard | `src/capture/command.c` |
 | Compositor detection | `src/compositor/runtime.{c,h}` |
-| Doctor diagnostics | `src/doctor/diagnostics.zig` |
-| Capture lifecycle | `src/capture/lifecycle.zig` |
-| Capture command grammar | `src/capture/command_grammar.zig` |
+| Doctor diagnostics | `src/main.c` |
+| Capture lifecycle | `src/capture/command.c` |
+| Capture command grammar | `src/capture/command.c` |
 | Architecture spec | `spec/architecture.md` |
 | Wayland/Niri integration spec | `spec/wayland-niri-integration.md` |
 | CONTEXT.md | `CONTEXT.md` |

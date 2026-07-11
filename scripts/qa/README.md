@@ -37,7 +37,7 @@ and is not a valid unsupported-compositor fixture.
 These can be useful when touching the named contract, but they are not part of
 the default gate unless explicitly invoked:
 
-- `scripts/qa/check-zig-version.sh`
+- `./dev check` validates the Meson build and test suite.
 - `scripts/qa/assert-default-output-path.sh`
 - `scripts/qa/assert-overlay-geometry-fixtures.sh`
 - `scripts/qa/assert-no-runtime-stub.sh`

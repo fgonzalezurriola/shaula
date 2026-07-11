@@ -864,6 +864,13 @@ install_release() {
   warn_runtime_tools
 
   section "Running user setup"
+  if [ "$INSTALL_INTEGRATIONS" -eq 1 ] && detect_noctalia >/dev/null 2>&1; then
+    if confirm_noctalia_widget; then
+      install_noctalia_widget || warn "Noctalia widget setup was incomplete."
+    else
+      info "skipped Noctalia Bar Widget"
+    fi
+  fi
   run_shaula_setup
 
   log "Shaula install complete."

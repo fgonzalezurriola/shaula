@@ -19,14 +19,14 @@ if [[ ! -x "${helper_script}" ]]; then
   chmod +x "${helper_script}"
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 capture_path="/tmp/shaula/qa-runtime-capture.png"
 forced_stub_path="/tmp/shaula/qa-forced-stub-should-not-exist.png"
 
 rm -f "${capture_path}" "${forced_stub_path}"
 
-capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --no-preview --output "${capture_path}")"
+capture_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture area --json --no-preview --output "${capture_path}")"
 
 printf '%s\n' "${capture_json}" | jq -e --arg capture_path "${capture_path}" '
   .ok == true and
@@ -47,7 +47,7 @@ printf '%s\n' "${capture_json}" | jq -e --arg capture_path "${capture_path}" '
 bash scripts/qa/assert_png_not_stub_signature.sh "${capture_path}" >/dev/null
 
 set +e
-forced_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_CAPTURE_BACKEND=__stub__ SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula capture area --json --output "${forced_stub_path}" 2>/tmp/shaula-qa-runtime-stub.err)"
+forced_json="$(SHAULA_RUNTIME_CAPTURE_HELPER="${helper_script}" SHAULA_CAPTURE_BACKEND=__stub__ SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula capture area --json --output "${forced_stub_path}" 2>/tmp/shaula-qa-runtime-stub.err)"
 forced_rc=$?
 set -e
 

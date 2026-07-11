@@ -63,7 +63,7 @@ if [[ ! -x "${HELPER_SCRIPT}" ]]; then
   chmod +x "${HELPER_SCRIPT}"
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
 mkdir -p "${ROOT_DIR}/.qa/evidence" /tmp/shaula /tmp/shaula-task9-home
 
@@ -218,7 +218,7 @@ history_seed_json="$({
   SHAULA_COMPOSITOR=niri \
   NIRI_SOCKET=/tmp/niri.sock \
   WAYLAND_DISPLAY=wayland-1 \
-  ./zig-out/bin/shaula capture area --json --no-preview --save --output "${history_seed_path}"
+  ./build/shaula capture area --json --no-preview --save --output "${history_seed_path}"
 })"
 
 printf '%s\n' "${history_seed_json}" | jq -e --arg path "${history_seed_path}" '

@@ -25,3 +25,13 @@ shaula_settings_process_dep = declare_dependency(
   include_directories: shaula_settings_include,
   dependencies: [glib_dep, shaula_settings_config_dep],
 )
+
+executable(
+  'shaula-settings',
+  'native_gtk_settings.c',
+  'settings_config.c',
+  'settings_process.c',
+  dependencies: gtk_dep,
+  c_args: shaula_existing_helper_warning_args,
+  install: true,
+)

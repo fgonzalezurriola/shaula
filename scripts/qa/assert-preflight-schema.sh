@@ -9,9 +9,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-zig build >/dev/null
+./dev build >/dev/null
 
-preflight_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./zig-out/bin/shaula preflight --json)"
+preflight_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock WAYLAND_DISPLAY=wayland-1 ./build/shaula preflight --json)"
 printf '%s\n' "${preflight_json}" | jq -e '
   .ok == true and
   .command == "preflight" and
@@ -23,7 +23,7 @@ printf '%s\n' "${preflight_json}" | jq -e '
   exit 1
 }
 
-capabilities_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./zig-out/bin/shaula capabilities list --json)"
+capabilities_json="$(SHAULA_COMPOSITOR=niri NIRI_SOCKET=/tmp/niri.sock ./build/shaula capabilities list --json)"
 printf '%s\n' "${capabilities_json}" | jq -e '
   .ok == true and
   .command == "capabilities list" and
@@ -39,7 +39,7 @@ printf '%s\n' "${capabilities_json}" | jq -e '
   exit 1
 }
 
-unsupported_json="$(SHAULA_COMPOSITOR=x11 ./zig-out/bin/shaula preflight --json || true)"
+unsupported_json="$(SHAULA_COMPOSITOR=x11 ./build/shaula preflight --json || true)"
 printf '%s\n' "${unsupported_json}" | jq -e '.ok == false and .error.code == "ERR_UNSUPPORTED_COMPOSITOR"' >/dev/null || {
   echo "ERR_PREFLIGHT_SCHEMA_INVALID reason=unsupported_token" >&2
   exit 1
