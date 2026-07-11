@@ -4,7 +4,15 @@ const cli_json = @import("../cli/json.zig");
 const command_json = @import("../capture/command_json.zig");
 const diagnostics = @import("diagnostics.zig");
 const protocol = @import("../ipc/protocol.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 
 /// Report install and runtime diagnostics without modifying user files.
 ///

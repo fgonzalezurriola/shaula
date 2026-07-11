@@ -1,7 +1,15 @@
 const std = @import("std");
 
 const cli_json = @import("../cli/json.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 const config_manager = @import("../config/manager.zig");
 const config_loader = @import("../config/loader.zig");
 const niri_rule = @import("../config/niri_rule.zig");

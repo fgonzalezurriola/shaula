@@ -7,7 +7,27 @@ const png_meta = @import("capture_backend_png_meta.zig");
 const failure = @import("capture_backend_failure.zig");
 const capture_types = @import("../types.zig");
 const runtime_capabilities = @import("../../capabilities/runtime.zig");
-const env = @import("../../runtime/env.zig");
+const c = @cImport({
+    @cInclude("runtime/env.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn envTrimmed(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_env_value_trimmed(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return result.data[0..result.length];
+}
+
+fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
+    var value: i32 = 0;
+    return c.shaula_env_value_flag(envValue(environ, key), &value) == c.SHAULA_ENV_STATUS_VALID and value != 0;
+}
 
 pub const BackendKind = runtime_capabilities.BackendKind;
 pub const RuntimeDecision = runtime_capabilities.RuntimeDecision;
@@ -148,11 +168,11 @@ fn resolveWindowTarget(request: capture_types.CaptureRequest, environ: std.proce
         if (window_id.len > 0) return window_id;
     }
 
-    if (env.trimmed(environ, "SHAULA_WINDOW_ID")) |window_id| {
+    if (envTrimmed(environ, "SHAULA_WINDOW_ID")) |window_id| {
         return window_id;
     }
 
-    if (env.flagEnabled(environ, "SHAULA_WINDOW_TARGET_RESOLVED")) {
+    if (envFlagEnabled(environ, "SHAULA_WINDOW_TARGET_RESOLVED")) {
         return "active-window";
     }
 

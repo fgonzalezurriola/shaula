@@ -31,17 +31,23 @@ or replace production binaries until the final cutover gates are met.
 
 ## Source inventory
 
-After Phase 2 strict cleanup and the first Phase 3 slice, the repository
-contains:
+After Phase 2 strict cleanup, all seven Phase 3 production cutovers, and three
+Phase 4 pure-model cutovers, the repository contains:
 
-- 79 Zig source/test files under `src`;
-- 34 C source files under `src`, including the runtime environment, Preview, and
-  Settings port slices;
-- seven C unit-test sources and one shell fixture test under `tests/unit`;
-- C-owned Preview, Overlay, Settings, crop, portal, and runtime environment
-  surfaces;
-- Zig-owned CLI, capture lifecycle, configuration, capability, and diagnostics
-  modules, plus a temporary Zig facade over the C environment parser.
+- 71 Zig source/test paths under `src`, including four zero-byte obsolete
+  placeholders pending physical unlink;
+- 43 C source files under `src`, including the runtime environment, path,
+  tool-lookup, helper-resolution, previous-area, capture-session lock,
+  process-execution, core capture-mode, Preview result, and error-taxonomy slices
+  plus the prior Preview and Settings ports;
+- sixteen C unit-test sources and one shell fixture test under `tests/unit`;
+- C-owned Preview, Overlay, Settings, crop, portal, runtime primitives, core
+  capture-mode, and Preview helper-result parsing behavior;
+- Zig-owned CLI, capture lifecycle, configuration, capability, diagnostics, and
+  most remaining pure-model modules. Maintained runtime, capture-mode, and
+  Preview-service callers use C headers directly. The seven Phase 3 and one core
+  capture-mode obsolete Zig paths have been physically deleted; only
+  `src/preview_result.zig` remains as a zero-byte tracked placeholder.
 
 The complete grouped migration inventory is maintained in
 `docs/port/migration-matrix.md`.
@@ -65,22 +71,9 @@ claims.
 
 ## Automated baseline
 
-`./dev check` on 2026-07-10 produced:
-
-- Zig tests: 99 passed, 1 failed;
-- Preview document C test: passed;
-- production build: passed.
-
-The single failing Zig test is:
-
-```text
-capture.backends.capture_backend_test.test.real backend without helper requires grim binary
-```
-
-The failure occurs at `src/capture/backends/capture_backend_test.zig:516` and is
-host-dependent: the test expects a usable `grim` binary/runtime path. It predates
-the C port slice and must be isolated or given an explicit fixture before the
-baseline can be called fully green.
+`./dev check` on 2026-07-10 passed with no test, Preview document, or
+production-build failure. The previously recorded host-dependent `grim`
+expectation is no longer a failing gate in the current checkout.
 
 ## Contract fixtures
 
@@ -169,10 +162,12 @@ marker were deleted during Phase 2 strict cleanup.
 - suppressed child stdout and stderr.
 
 Both `./dev port-check` and `./dev port-check-asan` pass on the baseline host.
-The maintained Meson lane now covers runtime environment parsing, Preview
-geometry, image I/O, clipboard, notification, Settings configuration, Settings
-argv/process execution, and fixture-driven Noctalia restart readiness under
-AddressSanitizer and UndefinedBehaviorSanitizer where applicable.
+The maintained Meson lane now covers runtime environment parsing, runtime path
+resolution and parent creation, runtime tool lookup, runtime helper resolution,
+previous-area persistence, core capture modes, Preview helper-result parsing,
+Preview geometry, image I/O, clipboard, notification, Settings configuration,
+Settings argv/process execution, and fixture-driven Noctalia restart readiness
+under AddressSanitizer and UndefinedBehaviorSanitizer where applicable.
 `.github/workflows/c-port.yml`
 runs the C sanitizer lane with GCC and Clang on pushes to `port` and on pull
 requests.
@@ -223,16 +218,328 @@ non-ASCII, borrowed-lifetime, boolean case/default, signed and underscored
 unsigned, exact maximum/overflow, and colon/semicolon desktop-token behavior.
 
 The production `shaula` executable and Zig unit-test root compile `env.c`
-directly. Remaining Zig callers keep their existing `std.process.Environ`
-lookup semantics through a temporary mechanical `runtime/env.zig` facade. That
-facade performs only environment lookup, pointer/span ABI conversion, and
-integer-width bounds; it contains no independent parsing implementation. Phase 3
-characterization, C implementation, and production cutover are complete for
-this slice. Facade deletion remains pending until its Zig callers migrate.
+directly. Maintained Zig owners now preserve their caller-provided
+`std.process.Environ` lookup and perform only immediate pointer/span conversion
+at the call site. Characterization, C implementation, production cutover, and
+caller cleanup are complete; the obsolete Zig path has been physically deleted.
+
+## Phase 3 runtime path slice
+
+`src/runtime/paths.{c,h}` now owns runtime-state path override selection,
+`XDG_RUNTIME_DIR` fallback, byte-exact joining, temporary-capture recognition,
+and parent-directory creation. Resolution trims only ASCII space, tab, carriage
+return, and newline by reusing `runtime/env.c`; it does not canonicalize,
+normalize, require absolute paths, or resolve the filesystem. Missing, empty,
+and whitespace-only values fall back to `/tmp/shaula/<relative>`.
+
+The resolver returns GLib-owned byte strings with an authoritative length and a
+trailing NUL. Callers release them through
+`shaula_runtime_owned_path_clear()`. Relative path spans preserve repeated
+separators, trailing slashes, `.`, `..`, non-ASCII bytes, and embedded NUL bytes;
+filesystem creation rejects embedded NUL because POSIX paths cannot represent
+it. All joined-size additions are overflow-checked before allocation.
+
+`tests/unit/runtime_paths_test.c` freezes override and runtime fallback order,
+empty and whitespace-only values, absolute-looking and relative inputs,
+repeated separators, `.`, `..`, root and parent behavior, non-ASCII and embedded
+NUL bytes, exact allocation overflow, temporary-capture matching, recursive
+parent creation, and filesystem failures.
+
+The production `shaula` executable and Zig unit-test root compile `paths.c`
+directly and link GLib. Existing callers retain caller-supplied environments,
+Zig allocator ownership, slice types, and their public `std.Io` signatures while
+calling the C ABI at the owning module. Characterization, C implementation,
+tests, production cutover, and caller cleanup are complete; the obsolete Zig
+path has been physically deleted.
+
+## Phase 3 runtime tool-lookup slice
+
+`src/runtime/tool_lookup.{c,h}` now owns the fixed grim candidate list,
+first-existing absolute lookup, PATH splitting and byte-exact candidate joins,
+and generic filesystem existence checks. The implementation uses no shell,
+normalization, locale-sensitive classification, or mutable global state.
+
+The preserved contract is intentionally existence-only rather than executable
+permission checking: non-executable regular files and directories count as
+present. Absolute candidate lookup skips relative and empty values, checks
+`/usr/bin/grim`, `/bin/grim`, then `/usr/local/bin/grim`, and returns borrowed
+storage. PATH lookup distinguishes a missing or empty PATH only internally—both
+produce not found—skips every empty component instead of treating it as the
+current directory, preserves whitespace, repeated separators, relative
+components, `.`, `..`, absolute-looking tool names, spaces, shell
+metacharacters, and non-ASCII bytes, and returns the first matching candidate.
+
+`tests/unit/runtime_tool_lookup_test.c` freezes ordering, relative-versus-absolute
+candidate behavior, existence-only checks, missing and empty PATH, skipped empty
+components, relative components, repeated separators, empty and absolute-looking
+tool names, whitespace, shell metacharacters, non-ASCII bytes, embedded-NUL
+rejection, size overflow, and repeated GLib-owned cleanup.
+
+The production `shaula` executable and Zig unit-test root compile
+`tool_lookup.c` directly and link GLib. Capture planning, capabilities, and
+diagnostics call the C ABI directly while preserving caller-supplied PATH,
+borrowed fixed candidates, and Zig-owned PATH results. Characterization, C
+implementation, tests, production cutover, and caller cleanup are complete; the
+obsolete Zig path has been physically deleted.
+
+## Phase 3 runtime helper-resolution slice
+
+`src/runtime/helper_resolution.{c,h}` now owns the helper precedence used by
+Preview, Overlay, Settings, and portal capture: a nonempty ASCII-trimmed
+explicit override wins without filesystem validation; otherwise an existing
+sibling at `<executable-dir>/<binary-name>` wins; otherwise the resolver returns
+an owned copy of the bare binary name.
+
+The final step is intentionally not an eager PATH search. The later process
+spawn receives the bare name and performs PATH lookup under the process runtime,
+matching the former Zig implementation. Sibling checks are existence-only, so a
+non-executable regular file or directory counts as present. Joining is
+byte-exact and performs no normalization, canonicalization, shell parsing, or
+locale-sensitive classification. Override, sibling, and fallback results are
+all independently owned.
+
+`tests/unit/runtime_helper_resolution_test.c` freezes missing, empty,
+whitespace-only, relative, absolute, shell-metacharacter, and non-ASCII
+overrides; non-executable file and directory siblings; missing executable-dir
+and sibling fallbacks; trailing and repeated separators; empty and
+absolute-looking binary names; embedded-NUL bare-name preservation; checked
+size overflow; invalid spans; and repeated GLib-owned cleanup.
+
+The production `shaula` executable and Zig unit-test root compile
+`helper_resolution.c` directly. Preview, Overlay, Settings, and portal capture
+call the C ABI directly with caller-supplied overrides and executable-directory
+spans, copying only the owned argv result. Characterization, C implementation,
+tests, production cutover, and caller cleanup are complete; the obsolete Zig
+path has been physically deleted.
+
+## Phase 3 runtime previous-area slice
+
+`src/runtime/previous_area_store.{c,h}` now owns previous-area serialization,
+parsing, parent creation, synchronous file I/O, and backend support gating. The
+persisted format remains exactly one decimal
+`x|y|width|height\n` line. Stores create/truncate the target after using the
+runtime-path parent contract, write all bytes without shell or temporary files,
+and intentionally do not fsync. Zero dimensions are stored verbatim because the
+historical validation point is load time.
+
+Loads remain fail closed. Missing, unreadable, allocation-failed, empty,
+malformed, embedded-NUL, or numerically overflowing records produce no geometry.
+Only ASCII space, tab, carriage return, and newline are trimmed around the whole
+file. Fields are not individually trimmed. Parsing preserves Zig `parseInt`
+behavior for optional signs and internal underscores, requires exact signed
+32-bit x/y and unsigned 32-bit nonzero width/height, and rejects extra fields or
+trailing content. Previous-area remains unsupported only for the exact
+`portal-screenshot` backend label.
+
+`tests/unit/runtime_previous_area_store_test.c` freezes exact serialization,
+truncation, extreme integer values, zero-dimension store/load behavior, relative
+paths and recursive parent creation, signs and underscores, malformed and
+boundary numeric inputs, missing/unreadable files, embedded NUL data and paths,
+size-overflow handling, invalid ABI spans, and exact backend-label matching.
+
+The production `shaula` executable and Zig unit-test root compile
+`previous_area_store.c` directly. `capture/lifecycle.zig` now resolves the state
+path and converts the 16-byte geometry/status ABI at its owning boundary. Store
+failures remain best-effort at the lifecycle call site, while load failures
+remain unavailable. Characterization, C implementation, tests, production
+cutover, and caller cleanup are complete; the obsolete Zig path has been
+physically deleted.
+
+## Phase 3 runtime capture-session lock slice
+
+`src/runtime/capture_session_lock.{c,h}` now owns cross-process capture locking.
+It creates parent directories through the runtime-path contract, creates the lock
+file exclusively with mode `0666` subject to umask, and writes exactly the
+current decimal PID followed by a newline. Lock scope remains selection and
+backend capture only; `capture/lifecycle.zig` releases it before post-capture
+Preview work.
+
+Existing files are read with a 64-byte limit. The implementation trims only
+ASCII space, tab, carriage return, and newline around the whole file and parses a
+signed Linux `pid_t` with optional signs and Zig-compatible internal
+underscores. Only `kill(pid, 0)` returning `ESRCH` classifies the owner as stale.
+A stale file is unlinked and exclusive creation is retried once. Live,
+permission-hidden, malformed, oversized, unreadable, or concurrently replaced
+locks deterministically report contention. Release remains best-effort and
+idempotence remains owned by the capture-lifecycle lock object.
+
+`tests/unit/runtime_capture_session_lock_test.c` freezes exact PID contents,
+recursive parent creation, contention, release/reacquire behavior, malformed and
+oversized lock handling, current-process detection, signed/underscored stale PID
+parsing, stale replacement, invalid spans, embedded-NUL paths, checked size
+overflow, and parent-filesystem failures.
+
+The production `shaula` executable and Zig unit-test root compile
+`capture_session_lock.c` directly. `capture/lifecycle.zig` now resolves and
+retains the caller-owned lock path, maps C status values, and preserves the
+existing release/deinit behavior locally. Characterization, C implementation,
+tests, production cutover, and caller cleanup are complete; the obsolete Zig
+path has been physically deleted.
+
+## Phase 3 runtime process-execution slice
+
+`src/runtime/process_exec.{c,h}` now owns synchronous child execution for all
+existing runtime callers. It executes argv directly without a shell, captures
+the parent `PATH` before `fork`, uses Zig's exact default path when missing,
+skips empty path components, and performs direct `execve` calls without libc's
+text-file shell fallback. Replacement environments completely replace the child
+environment while executable discovery still uses the captured parent path.
+
+The captured-output path redirects stdin from `/dev/null`, concurrently drains
+stdout and stderr with `poll`, and enforces independent exact byte limits. Binary
+output, including embedded NUL bytes, remains length-bearing. Every failure
+after `fork`, including output overflow or pipe errors, terminates and reaps the
+child before returning. Successful output uses GLib ownership at the C boundary
+and is copied into the caller's Zig allocator by the facade.
+
+The stdin path writes all binary input through an explicit pipe, ignores child
+stdout/stderr, closes stdin before waiting, and contains `SIGPIPE` to the calling
+thread when a child closes early. Termination preserves exited, signaled,
+stopped, and unknown classifications. Common spawn errors retain the Zig error
+names relied on by existing callers, including `FileNotFound`, `AccessDenied`,
+`PermissionDenied`, `InvalidExe`, descriptor quotas, system resources, and
+`StreamTooLong`.
+
+`tests/unit/runtime_process_exec_test.c` freezes binary stdout/stderr, literal
+argv with shell metacharacters, nonzero and signal termination, 256 KiB
+simultaneous stdout/stderr drainage, exact per-stream limits, replacement
+environments with parent-PATH lookup, skipped empty PATH components, direct
+non-shebang rejection, PATH length overflow, missing and non-executable
+commands, invalid ABI spans, binary stdin, nonzero stdin-consumer exits, early
+stdin closure, and parent-safe broken-pipe handling.
+
+The production `shaula` executable and Zig unit-test root compile
+`process_exec.c` directly. Maintained Zig owners now construct C argv and
+environment spans locally while preserving their existing output limits,
+allocator ownership, termination handling, binary stdin, and command-specific
+error mappings. Characterization, C implementation, tests, production cutover,
+and all caller migrations are complete. The seven obsolete Zig paths have been
+physically deleted, so Phase 3 strict cleanup is complete.
+
+## Phase 4 core capture-mode slice
+
+`src/core/capture_mode.{c,h}` now owns every public capture-mode table: exact CLI
+parsing, canonical CLI tokens, runtime-lane mapping, runtime tokens, backend
+labels, interactive-selection requirements, and live/frozen region-mode parsing.
+The implementation is allocation-free, byte-exact, case-sensitive,
+locale-independent, and returns only process-lifetime literal spans.
+
+The canonical model preserves `quick`, `area`, `fullscreen`, `all-screens`,
+`focused`, `window`, `previous-area`, and `all-in-one`. `focused` remains a
+compatibility alias for the current-output runtime lane; `previous-area` and
+`all-in-one` still execute through the area backend lane; only `quick`, `area`,
+and `all-in-one` require interactive selection.
+
+`tests/unit/core_capture_mode_test.c` exhaustively freezes enum ABI values, every
+CLI/runtime/backend mapping, all interaction flags, region-mode round trips,
+case and whitespace rejection, prefix/suffix rejection, non-ASCII and embedded
+NUL behavior, invalid spans, invalid enum values, and borrowed-literal lifetime.
+
+The production `shaula` executable and Zig unit-test root compile
+`capture_mode.c` directly. Capture command dispatch and grammar, lifecycle and
+invocation mapping, configuration parsing/serialization, and overlay selection
+include `core/capture_mode.h` directly. Their Zig code performs only immediate
+span conversion and fixed-width status/value handling; no caller owns duplicate
+token tables or mapping policy. Characterization, C implementation, tests,
+production cutover, and caller cleanup are complete. The obsolete facade body
+and its Zig tests are removed, and its former path has now been physically
+removed.
+
+## Phase 4 Preview result slice
+
+`src/preview/preview_result.{c,h}` now owns the final JSON object emitted by the
+native Preview helper and the exact `close`, `copy`, `save`, `discard`, and
+`unknown` action tokens. The parser consumes a borrowed byte span with an
+explicit length, trims only outer ASCII space, tab, carriage return, and newline,
+and requires one complete JSON object.
+
+Compatibility remains deliberately asymmetric. Missing fields and wrong-typed
+known fields retain the historical defaults; unknown fields and unknown action
+strings are accepted. Empty, whitespace-only, malformed, non-object, duplicate-
+key, invalid-UTF-8, unpaired-surrogate, embedded raw-NUL, and trailing-data
+payloads are rejected. Escaped strings are decoded, including a valid embedded
+NUL in `saved_path`. Allocation failure is returned explicitly rather than
+terminating the process.
+
+A nonempty decoded `saved_path` is an independent GLib allocation with an
+authoritative length and a trailing NUL. Callers release it through
+`shaula_preview_result_clear()`. `preview/service.zig` includes the C header
+directly, maps fixed-width action/status values locally, copies the optional path
+into its existing Zig allocator, and preserves the established
+`ERR_PREVIEW_RESULT_INVALID`, notification, CLI JSON, and post-capture behavior.
+
+`tests/unit/preview_result_test.c` freezes:
+
+- action enum ordinals, exact tokens, and invalid enum handling;
+- close, copy, save, discard, and unknown helper payloads;
+- missing versus malformed output and non-object roots;
+- optional fields, wrong types, unknown nested values, and complete JSON number
+  grammar;
+- duplicate decoded keys at the root and nested levels;
+- escaped field names, Unicode, surrogate pairs, invalid UTF-8, and embedded NUL
+  path bytes;
+- null/empty path handling, trailing input, invalid strings, raw NUL input,
+  invalid spans, owned-output replacement, and repeated clear safety.
+
+The authoritative Zig build compiles the C module for production and the mixed
+unit root. Existing Preview service tests retain caller-level action-token and
+length-bearing ownership coverage. Repository-wide maintained imports of the
+old Zig implementation are zero. `src/preview_result.zig` is a zero-byte tracked
+placeholder because this DevSpace interface cannot unlink it.
+
+## Phase 4 public error-taxonomy and recovery-policy slice
+
+`src/errors/taxonomy.{c,h}` now owns the canonical 28-entry public error table,
+including exact ordering, code and message literals, retryability, failure
+class, recovery action, exit code, and bounded retry budget. Failure classes and
+recovery actions cross Zig/C as asserted 32-bit values. The table and all token
+spans borrow immutable process-lifetime literals; the module performs no
+allocation and has no mutable global state.
+
+Lookup consumes explicit-length borrowed spans and is byte-exact. It performs no
+trimming, case folding, prefix or suffix matching, Unicode normalization, locale
+classification, or embedded-NUL truncation. Invalid spans and unknown values do
+not match. `shaula_error_taxonomy_spec_for`, exit-code lookup, and retry-budget
+lookup collapse every unmapped value to the final `ERR_UNKNOWN_UNMAPPED` record,
+exit code 99, and retry budget 0.
+
+The maintained caller inventory is `main.zig`, capabilities and preflight probes,
+capture command/guards/lifecycle, clipboard, config, directory, doctor, errors,
+explore, history, notify, preview, settings, and setup commands. Each caller
+includes `errors/taxonomy.h` directly and keeps only immediate slice/span or
+record conversion. `errors/command.zig` remains the owner of timestamped JSON
+emission and canonical field ordering; it enumerates the C table rather than
+retaining duplicate policy.
+
+`ERR_PREVIEW_RESULT_INVALID` remains an emitted Preview-service error but was not
+present in the pre-migration canonical list or fixture. Compatibility preserves
+that state: exact lookup rejects it and command exit mapping uses the established
+unknown fallback, exit code 99. The architecture-only
+`ERR_CAPABILITIES_PROBE_FAILED` token is likewise not added without an observable
+runtime contract.
+
+`tests/unit/error_taxonomy_test.c` freezes enum ABI values, every record and its
+canonical position, duplicate-code absence, exact lookup, class/action tokens,
+retry budgets, exit codes, invalid enum values, unknown and malformed spans,
+case/whitespace/prefix/suffix/non-ASCII/embedded-NUL rejection, borrowed pointer
+stability, and deterministic consistency with
+`tests/fixtures/port/errors-list.json`. The production `shaula errors list
+--json` output matches the fixture semantically and its canonical compact error
+array byte-for-byte after excluding the timestamp envelope.
+
+The authoritative Zig build compiles `taxonomy.c` into production and the mixed
+unit root. Meson now contains seventeen tests under normal and sanitizer lanes.
+Repository-wide maintained imports of the old Zig taxonomy and policy are zero.
+Because this DevSpace interface cannot unlink files, `src/errors/taxonomy.zig`,
+`src/recovery/policy.zig`, and `src/recovery/policy_test.zig` remain zero-byte
+tracked placeholders alongside the prior `src/preview_result.zig` placeholder.
+Strict physical module removal therefore remains pending.
 
 ## Existing unrelated work
 
-The branch already contained uncommitted Preview/UI changes before the migration
-implementation began. Those paths must not be folded accidentally into port
-commits. Review and separate them before creating migration commits, as required
-by the accepted port specification.
+The checkout already contained the uncommitted runtime-path migration at the
+start of this continuation. That work was preserved and extended in place.
+Preview/UI work mentioned by the accepted port specification is already
+represented in branch history and remains outside this model migration. This
+slice changed only the Preview service's helper-result boundary; no GTK Preview
+UI, action, notification, capture, or rendering implementation was migrated.

@@ -263,7 +263,7 @@ fn canonicalConfigText(allocator: std.mem.Allocator, config: config_types.Config
         \\{s}relative_to = "{s}"
         \\
     , .{
-        config.capture.region_capture_mode.asString(),
+        config_types.regionCaptureModeString(config.capture.region_capture_mode),
         config.capture.after.save_folder.value(),
         boolText(config.capture.after.quick.skip_preview),
         boolText(config.capture.after.quick.copy_to_clipboard),
@@ -448,7 +448,7 @@ fn appendMissingFields(allocator: std.mem.Allocator, out: *std.ArrayList(u8), se
     switch (section) {
         .capture => {
             if (!seen.region_mode) {
-                try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config.capture.region_capture_mode.asString()});
+                try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config_types.regionCaptureModeString(config.capture.region_capture_mode)});
                 seen.region_mode = true;
             }
         },
@@ -552,7 +552,7 @@ fn maybeAppendPatchedField(
     switch (section) {
         .capture => {
             if (std.mem.eql(u8, key, "region_capture_mode")) {
-                try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config.capture.region_capture_mode.asString()});
+                try out.print(allocator, "region_capture_mode = \"{s}\"\n", .{config_types.regionCaptureModeString(config.capture.region_capture_mode)});
                 seen.region_mode = true;
                 return true;
             }

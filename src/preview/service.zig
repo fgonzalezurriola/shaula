@@ -2,11 +2,74 @@ const std = @import("std");
 
 const config_loader = @import("../config/loader.zig");
 const notify = @import("../notify.zig");
-const preview_result = @import("../preview_result.zig");
-const helper_resolution = @import("../runtime/helper_resolution.zig");
-const process_exec = @import("../runtime/process_exec.zig");
+const c = @cImport({
+    @cInclude("preview/preview_result.h");
+    @cInclude("runtime/helper_resolution.h");
+    @cInclude("runtime/process_exec.h");
+});
 
-pub const PreviewAction = preview_result.PreviewAction;
+fn helperSpan(value: []const u8) c.ShaulaRuntimeHelperSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn processSpan(value: []const u8) c.ShaulaProcessSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn resolveSiblingHelper(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    env_var: []const u8,
+    binary_name: []const u8,
+) ![]u8 {
+    const executable_dir = std.process.executableDirPathAlloc(io, allocator) catch null;
+    defer if (executable_dir) |path| allocator.free(path);
+
+    var owned: c.ShaulaRuntimeHelperOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_helper_owned_path_clear(&owned);
+    const status = c.shaula_runtime_helper_resolve(
+        envValue(environ, env_var),
+        if (executable_dir) |path| helperSpan(path) else .{ .data = null, .length = 0 },
+        helperSpan(binary_name),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_HELPER_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.HelperResolutionFailed,
+    };
+}
+
+pub const PreviewAction = enum(i32) {
+    close = c.SHAULA_PREVIEW_ACTION_CLOSE,
+    copy = c.SHAULA_PREVIEW_ACTION_COPY,
+    save = c.SHAULA_PREVIEW_ACTION_SAVE,
+    discard = c.SHAULA_PREVIEW_ACTION_DISCARD,
+    unknown = c.SHAULA_PREVIEW_ACTION_UNKNOWN,
+
+    pub fn asString(action: PreviewAction) []const u8 {
+        const token = c.shaula_preview_action_token(@intFromEnum(action));
+        return token.data[0..token.length];
+    }
+};
+
+fn previewActionFromC(action: c.ShaulaPreviewAction) PreviewAction {
+    return switch (action) {
+        c.SHAULA_PREVIEW_ACTION_CLOSE => .close,
+        c.SHAULA_PREVIEW_ACTION_COPY => .copy,
+        c.SHAULA_PREVIEW_ACTION_SAVE => .save,
+        c.SHAULA_PREVIEW_ACTION_DISCARD => .discard,
+        c.SHAULA_PREVIEW_ACTION_UNKNOWN => .unknown,
+        else => .unknown,
+    };
+}
 
 pub const PreviewRunResult = struct {
     path: []const u8,
@@ -88,42 +151,58 @@ pub fn runPreview(
         try helper_env.put("SHAULA_NOTIFY_THUMBNAILS", if (loaded.config.notifications.thumbnails) "1" else "0");
     }
 
-    const result = process_exec.runWithEnv(allocator, io, &.{ helper_bin, path }, 4096, 4096, &helper_env) catch {
+    const argv = [_]c.ShaulaProcessSpan{ processSpan(helper_bin), processSpan(path) };
+    const environment = helper_env.createPosixBlock(allocator, .{}) catch {
         return .{ .failure = .{
             .code = "ERR_PREVIEW_UNAVAILABLE",
             .message = "preview helper is unavailable",
             .retryable = true,
         } };
     };
-    defer result.deinit(allocator);
+    defer environment.deinit(allocator);
 
-    switch (result.term) {
-        .exited => |code| {
-            if (code == 43) {
-                return .{ .failure = .{
-                    .code = "ERR_PREVIEW_INPUT_INVALID",
-                    .message = "preview input image is invalid",
-                    .retryable = false,
-                } };
-            }
-            if (code != 0) {
-                return .{ .failure = .{
-                    .code = "ERR_PREVIEW_UNAVAILABLE",
-                    .message = "preview helper exited unsuccessfully",
-                    .retryable = true,
-                } };
-            }
-        },
-        else => {
-            return .{ .failure = .{
-                .code = "ERR_PREVIEW_UNAVAILABLE",
-                .message = "preview helper terminated unexpectedly",
-                .retryable = true,
-            } };
-        },
+    var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+    defer c.shaula_process_output_clear(&output);
+    const process_status = c.shaula_process_run(
+        .{ .items = &argv, .length = argv.len },
+        @ptrCast(environment.slice.ptr),
+        4096,
+        4096,
+        &output,
+    );
+    if (process_status != c.SHAULA_PROCESS_STATUS_OK) {
+        return .{ .failure = .{
+            .code = "ERR_PREVIEW_UNAVAILABLE",
+            .message = "preview helper is unavailable",
+            .retryable = true,
+        } };
     }
 
-    const helper_result = parseHelperResult(allocator, path, result.stdout) catch {
+    if (output.term_kind == c.SHAULA_PROCESS_TERM_EXITED) {
+        if (output.term_value == 43) {
+            return .{ .failure = .{
+                .code = "ERR_PREVIEW_INPUT_INVALID",
+                .message = "preview input image is invalid",
+                .retryable = false,
+            } };
+        }
+        if (output.term_value != 0) {
+            return .{ .failure = .{
+                .code = "ERR_PREVIEW_UNAVAILABLE",
+                .message = "preview helper exited unsuccessfully",
+                .retryable = true,
+            } };
+        }
+    } else {
+        return .{ .failure = .{
+            .code = "ERR_PREVIEW_UNAVAILABLE",
+            .message = "preview helper terminated unexpectedly",
+            .retryable = true,
+        } };
+    }
+
+    const stdout = output.stdout_bytes.data[0..output.stdout_bytes.length];
+    const helper_result = parseHelperResult(allocator, path, stdout) catch {
         return .{ .failure = .{
             .code = "ERR_PREVIEW_RESULT_INVALID",
             .message = "preview helper did not emit valid result JSON",
@@ -143,17 +222,38 @@ pub fn runPreview(
 }
 
 fn parseHelperResult(allocator: std.mem.Allocator, path: []const u8, stdout: []const u8) !PreviewRunResult {
-    var parsed = try preview_result.parse(allocator, stdout);
-    errdefer parsed.deinit(allocator);
+    var parsed: c.ShaulaPreviewResult = undefined;
+    c.shaula_preview_result_init(&parsed);
+    defer c.shaula_preview_result_clear(&parsed);
+
+    const status = c.shaula_preview_result_parse(
+        .{ .data = stdout.ptr, .length = stdout.len },
+        &parsed,
+    );
+    switch (status) {
+        c.SHAULA_PREVIEW_RESULT_STATUS_OK => {},
+        c.SHAULA_PREVIEW_RESULT_STATUS_MISSING => return error.PreviewResultMissing,
+        c.SHAULA_PREVIEW_RESULT_STATUS_OUT_OF_MEMORY => return error.OutOfMemory,
+        c.SHAULA_PREVIEW_RESULT_STATUS_INVALID_JSON,
+        c.SHAULA_PREVIEW_RESULT_STATUS_INVALID_ARGUMENT,
+        => return error.PreviewResultInvalidJson,
+        else => return error.PreviewResultInvalidJson,
+    }
+
+    const saved_path = if (parsed.saved_path.data != null)
+        try allocator.dupe(u8, parsed.saved_path.data[0..parsed.saved_path.length])
+    else
+        null;
+    errdefer if (saved_path) |value| allocator.free(value);
 
     return .{
         .path = path,
-        .closed = parsed.closed,
-        .action = parsed.action,
-        .copied = parsed.copied,
-        .saved = parsed.saved,
-        .notified = parsed.notified,
-        .saved_path = parsed.saved_path,
+        .closed = parsed.closed != 0,
+        .action = previewActionFromC(parsed.action),
+        .copied = parsed.copied != 0,
+        .saved = parsed.saved != 0,
+        .notified = parsed.notified != 0,
+        .saved_path = saved_path,
     };
 }
 
@@ -178,7 +278,7 @@ fn notifyForPreviewResult(allocator: std.mem.Allocator, io: std.Io, result: Prev
 }
 
 fn resolvePreviewBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    return helper_resolution.resolveSiblingHelper(allocator, io, environ, "SHAULA_PREVIEW_HELPER_BIN", "shaula-preview");
+    return resolveSiblingHelper(allocator, io, environ, "SHAULA_PREVIEW_HELPER_BIN", "shaula-preview");
 }
 
 test "preview helper result rejects empty stdout" {
@@ -191,4 +291,23 @@ test "preview helper result parses save action" {
     try std.testing.expectEqual(PreviewAction.save, result.action);
     try std.testing.expect(result.saved);
     try std.testing.expectEqualStrings("/tmp/b.png", result.saved_path.?);
+}
+
+test "preview action tokens remain CLI compatible" {
+    try std.testing.expectEqualStrings("close", PreviewAction.close.asString());
+    try std.testing.expectEqualStrings("copy", PreviewAction.copy.asString());
+    try std.testing.expectEqualStrings("save", PreviewAction.save.asString());
+    try std.testing.expectEqualStrings("discard", PreviewAction.discard.asString());
+    try std.testing.expectEqualStrings("unknown", PreviewAction.unknown.asString());
+}
+
+test "preview helper result preserves length-bearing saved path" {
+    var result = try parseHelperResult(
+        std.testing.allocator,
+        "/tmp/a.png",
+        "{\"action\":\"save\",\"saved_path\":\"a\\u0000b\"}",
+    );
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(PreviewAction.save, result.action);
+    try std.testing.expectEqualSlices(u8, "a\x00b", result.saved_path.?);
 }

@@ -37,9 +37,42 @@ contracts, active risks, and immediate work.
   synchronous subprocess behavior. Phase 2 strict cleanup is complete: the five
   obsolete implementation sources, the unlinked Preview bridge marker, and
   `runtime/c_compat.zig` have been deleted after repository-wide reference
-  checks. Phase 3 has started with `runtime/env.{c,h}`. Production Zig callers
-  use the C parser through a temporary mechanical `runtime/env.zig` facade; the
-  facade remains until those callers migrate to C.
+  checks. All seven Phase 3 runtime primitives now have production C cutovers:
+  `runtime/env.{c,h}` owns environment parsing, `runtime/paths.{c,h}` owns
+  runtime-state path resolution, temporary-capture classification, and parent
+  creation, `runtime/tool_lookup.{c,h}` owns fixed grim candidates, PATH
+  splitting, and filesystem existence checks, `runtime/helper_resolution.{c,h}`
+  owns override/sibling/bare-name helper precedence,
+  `runtime/previous_area_store.{c,h}` owns previous-area serialization, parsing,
+  file I/O, and backend gating, `runtime/capture_session_lock.{c,h}` owns
+  exclusive acquisition, PID contents, stale-owner replacement, and best-effort
+  release, and `runtime/process_exec.{c,h}` owns direct argv execution, exact
+  parent-PATH lookup, bounded dual-stream capture, replacement environments,
+  binary stdin, termination mapping, and child cleanup. Every maintained Zig
+  caller now invokes those C ABIs directly through caller-local ownership/status
+  conversion; repository-wide facade imports are zero, the obsolete facade
+  bodies/tests have been removed, and the seven former facade paths have now
+  been physically deleted. Phase 4 has three completed pure-model cutovers.
+  `core/capture_mode.{c,h}` owns exact CLI/region tokens, runtime and backend
+  lane mapping, and interactive-selection policy. Capture, configuration, and
+  overlay callers include the C header directly and keep only caller-local
+  span/status adaptation; its obsolete Zig path has also been physically
+  deleted. `preview/preview_result.{c,h}` owns the length-aware final helper JSON
+  parser and exact action tokens. `preview/service.zig` includes that header
+  directly, maps fixed-width statuses/actions locally, and copies an optional
+  GLib-owned saved path into its existing Zig allocator before clearing the C
+  result. The obsolete `preview_result.zig` implementation and tests are gone;
+  its former path remains only as a zero-byte tracked placeholder because this
+  DevSpace interface cannot unlink files. `errors/taxonomy.{c,h}` now owns the
+  canonical 28-entry public error table, class and recovery-action tokens, exact
+  lookup, retry budgets, and exit-code fallback. Every maintained command caller
+  includes the C header directly; `errors/command.zig` retains only command-level
+  JSON emission. Static records and tokens are borrowed process-lifetime
+  literals, enums cross the ABI as asserted 32-bit values, and unknown or invalid
+  spans collapse to `ERR_UNKNOWN_UNMAPPED` with exit code 99. The currently
+  emitted but unlisted `ERR_PREVIEW_RESULT_INVALID` intentionally preserves that
+  fallback behavior. The three obsolete taxonomy/policy Zig paths are zero-byte
+  placeholders because this DevSpace interface cannot unlink them.
 - The preview toolbar and More menu are the active UI surfaces. Keep the
   headerbar compact, stable in natural width, and honest about available actions.
 - Settings must expose the public config contract without inventing a second
@@ -188,19 +221,60 @@ contracts, active risks, and immediate work.
   degraded warning tokens, and helper exit mapping. Do not duplicate those
   strings in callers.
 
-### Runtime and helpers
+### Core, runtime, and helpers
 
+- `errors/taxonomy.{c,h}` owns the canonical public `ERR_*` inventory and
+  ordering, exact messages, retryability, failure classes, recovery actions,
+  retry budgets, and exit codes. Failure-class and recovery-action values are
+  fixed 32-bit ABI integers. Records and text spans borrow immutable
+  process-lifetime literals; lookup is byte-exact and rejects case changes,
+  whitespace, prefixes, suffixes, non-ASCII substitutions, embedded NUL bytes,
+  and invalid spans. Unknown or unmapped inputs return the final
+  `ERR_UNKNOWN_UNMAPPED` record, exit code 99, and retry budget 0. Maintained Zig
+  callers include the header directly and perform only immediate slice/span
+  conversion. `errors/command.zig` still owns timestamped JSON serialization and
+  field ordering until the shared JSON-envelope slice.
+- `core/capture_mode.{c,h}` owns capture-mode enum tables, exact CLI and region
+  parsing, canonical tokens, runtime/backend lane mapping, and interactive
+  selection requirements. Header assertions and the C unit test pin every enum
+  ordinal. Maintained capture, configuration, and overlay Zig callers include
+  the C header directly, use the fixed-width C ABI values, and perform only
+  immediate caller-local span/status conversion.
 - `capabilities/runtime.zig` owns backend selection. Call its typed decision
   methods rather than comparing backend strings.
 - `runtime/env.{c,h}` owns environment trimming, boolean parsing, exact bounded
   unsigned parsing, and desktop-token extraction. It returns borrowed spans and
-  allocates nothing. `runtime/env.zig` is a temporary lookup/ABI facade for the
-  remaining Zig callers and contains no independent parsing logic.
-- `runtime/tool_lookup.zig` owns fixed tool candidates and PATH-aware diagnostics.
-- `runtime/process_exec.zig` owns shared process execution. Callers still own
-  output limits, cleanup, and deterministic error mapping.
-- `runtime/helper_resolution.zig` owns helper lookup order: explicit environment
-  override, sibling binary, then PATH.
+  allocates nothing. Zig callers perform only caller-supplied environment lookup
+  and immediate ABI conversion at their owning module.
+- `runtime/paths.{c,h}` owns override/runtime/tmp fallback ordering, byte-exact
+  joins, checked GLib-owned output allocation, runtime-capture markers, and
+  parent creation. It performs no normalization or canonicalization. Zig owners
+  copy GLib-owned results into their existing allocator only where their public
+  API still requires Zig-owned bytes.
+- `runtime/tool_lookup.{c,h}` owns fixed grim candidates, first-existing
+  absolute lookup, byte-exact PATH splitting/joining, and existence-only
+  diagnostics. It intentionally does not require executable permission and
+  skips empty PATH components.
+- `runtime/helper_resolution.{c,h}` owns helper lookup order: nonempty
+  ASCII-trimmed environment override, existing sibling binary, then an owned
+  bare binary name. The bare name deliberately defers PATH lookup to later
+  process spawning. Sibling checks are existence-only.
+- `runtime/previous_area_store.{c,h}` owns the exact
+  `x|y|width|height\n` format, whole-file ASCII trimming, Zig-compatible numeric
+  parsing, parent creation, synchronous file I/O, fail-closed loads, and exact
+  portal-backend exclusion. Capture lifecycle resolves the caller-supplied path
+  and converts only geometry/status values.
+- `runtime/capture_session_lock.{c,h}` owns recursive parent creation, exclusive
+  lock-file creation, exact PID serialization, bounded stale-owner detection,
+  one-shot stale replacement, and best-effort release. Capture lifecycle retains
+  only the resolved path and active flag needed to preserve release-before-
+  Preview scope and idempotent cleanup.
+- `runtime/process_exec.{c,h}` owns shared process execution: literal argv,
+  Zig-compatible parent-PATH search, direct `execve`, replacement environments,
+  concurrent bounded stdout/stderr drainage, binary stdin, SIGPIPE containment,
+  termination classification, and child cleanup. Callers still own explicit
+  output limits, returned-buffer cleanup, and deterministic command-specific
+  error mapping; no subprocess policy remains in a Zig facade.
 - Capture commands are not retried automatically because retries can create
   duplicate screenshots or repeated portal prompts.
 - `zig build -Dstrip` strips the main executable and every native helper. Helper
@@ -262,6 +336,18 @@ contracts, active risks, and immediate work.
   suppresses stdout/stderr, uses a bytewise escaped freedesktop image-path hint,
   retries with `-i` only when an image was supplied, and reports every build,
   spawn, nonzero-exit, or signal failure only as `FALSE` without `GError`.
+- `preview/preview_result.{c,h}` owns parsing of the final JSON object emitted by
+  the native Preview helper and the exact `close`, `copy`, `save`, `discard`, and
+  `unknown` action tokens. Input is a borrowed length-bearing byte span; only
+  outer ASCII space, tab, carriage return, and newline are trimmed. A JSON object
+  is required, duplicate keys at any depth and malformed/trailing input are
+  rejected, while unknown fields, unknown action strings, missing fields, and
+  wrong-typed known fields retain compatibility defaults. A nonempty decoded
+  `saved_path` is GLib-owned, may contain embedded NUL bytes, carries an
+  authoritative length plus a trailing NUL, and is released through the public
+  clear function. `preview/service.zig` copies it into the caller allocator and
+  preserves existing `ERR_PREVIEW_RESULT_INVALID` mapping and CLI/post-capture
+  JSON behavior.
 - `preview/preview_actions.{c,h}` owns save/copy/window runtime actions and is
   called only by Commands.
 - `preview/preview_action_callbacks.{c,h}` is the GTK callback adapter.
@@ -277,8 +363,8 @@ contracts, active risks, and immediate work.
 - `preview/preview_system_clipboard.{c,h}` owns async desktop clipboard reads,
   cancellation, weak-window recovery, payload preference, and insertion calls.
 - `ShaulaPreviewDocument` owns output-affecting model state and history.
-- `preview/preview_paths.{c,h}` owns temporary capture-path recognition and must
-  stay aligned with `runtime/paths.zig`.
+- `preview/preview_paths.{c,h}` owns helper-side temporary capture-path
+  recognition and must stay aligned with `runtime/paths.{c,h}`.
 
 ## Important runtime contracts
 
@@ -368,22 +454,25 @@ contracts, active risks, and immediate work.
   convert historical observations into stronger support claims.
 - QuickShell general integration and the static landing page are planned work,
   not part of the current capture/preview reliability scope.
-- The initial baseline is 99/100 Zig tests: the remaining failure is the
-  host-dependent `grim` expectation in `capture_backend_test.zig`. Do not report
-  it as a C-port regression until the environmental assumption is isolated.
-- Uncommitted Preview/UI changes predate the port implementation. They must be
-  reviewed and separated before migration commits are created.
+- `./dev check` is green in the current checkout. Host-dependent Wayland,
+  compositor, and external-tool assumptions still require explicit fixtures or
+  manual evidence before stronger portability claims are made.
+- The checkout was clean before the runtime-path slice. Historical Preview/UI
+  work remains outside this migration scope and no Preview/UI file was changed
+  by the slice.
 
 ## Immediate next steps
 
-1. Review and separate the pre-existing Preview/UI working changes from the port
-   specification and implementation so migration commits remain bisectable.
-2. Move a narrow set of `runtime/env.zig` callers to C and delete the temporary
-   facade once no maintained Zig caller imports it.
-3. Expand Phase 0 fixtures for CLI failures, config round trips, and helper
-   protocol outcomes; isolate the host-dependent `grim` test assumption.
-4. Continue Phase 3 with another narrow primitive, preferably
-   `runtime/paths.zig`, without pulling in tool or helper resolution.
+1. Continue Phase 4 with another explicitly selected pure-model or small-command
+   slice; do not fold the shared JSON-envelope migration into unrelated work.
+2. Physically delete the zero-byte `preview_result.zig`, `errors/taxonomy.zig`,
+   `recovery/policy.zig`, and `recovery/policy_test.zig` placeholders once a
+   workspace with unlink support is available; maintained imports are already
+   zero.
+3. Expand Phase 0 fixtures for CLI failures, config round trips, helper protocol
+   outcomes, and remaining host-dependent tool assumptions.
+4. Keep `preview/preview_paths.{c,h}` aligned with the runtime capture-artifact
+   contract until the Preview boundary is consolidated.
 5. Run `./dev check`, `./dev port-check`, `./dev port-check-asan`, and
    `git diff --check` after C migration changes.
 

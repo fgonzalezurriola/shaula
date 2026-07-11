@@ -10,7 +10,7 @@ extern "C" {
 
 /*
  * Status values are part of the temporary Zig/C ABI. Keep their exact numeric
- * values stable until the Zig facade is removed.
+ * values stable for all direct C ABI callers.
  */
 typedef int32_t ShaulaEnvStatus;
 enum {

@@ -10,7 +10,6 @@ const compositor_focused_output = @import("../compositor/focused_output.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
 const config_loader = @import("../config/loader.zig");
 const config_types = @import("../config/config.zig");
-const core_capture_mode = @import("../core/capture_mode.zig");
 const flags = @import("command_flags.zig");
 const guards = @import("command_guards.zig");
 const invocation = @import("invocation.zig");
@@ -18,11 +17,237 @@ const json = @import("command_json.zig");
 const overlay_session = @import("../overlay/selection_session.zig");
 const overlay_draft_store = @import("../overlay/selection_draft_store.zig");
 const post_capture_pipeline = @import("post_capture.zig");
-const capture_session_lock = @import("../runtime/capture_session_lock.zig");
-const env = @import("../runtime/env.zig");
-const previous_area_store = @import("../runtime/previous_area_store.zig");
-const process_exec = @import("../runtime/process_exec.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+    @cInclude("errors/taxonomy.h");
+    @cInclude("runtime/env.h");
+    @cInclude("runtime/paths.h");
+    @cInclude("runtime/previous_area_store.h");
+    @cInclude("runtime/capture_session_lock.h");
+    @cInclude("runtime/process_exec.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn pathSpan(value: []const u8) c.ShaulaRuntimePathSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn captureModeSpan(value: []const u8) c.ShaulaCaptureModeSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn requiredCaptureModeSpan(value: c.ShaulaCaptureModeSpan) []const u8 {
+    if (value.data == null) unreachable;
+    return value.data[0..value.length];
+}
+
+fn optionalCaptureModeSpan(value: c.ShaulaCaptureModeSpan) ?[]const u8 {
+    if (value.data == null) return null;
+    return value.data[0..value.length];
+}
+
+fn captureModeToken(mode: c.ShaulaCaptureMode) []const u8 {
+    return requiredCaptureModeSpan(c.shaula_capture_mode_cli_token(mode));
+}
+
+fn captureModeBackendToken(mode: c.ShaulaCaptureMode) ?[]const u8 {
+    return optionalCaptureModeSpan(c.shaula_capture_mode_backend_token(mode));
+}
+
+fn parseRegionCaptureMode(token: []const u8) ?c.ShaulaRegionCaptureMode {
+    const mode = c.shaula_region_capture_mode_parse(captureModeSpan(token));
+    return if (mode == c.SHAULA_REGION_CAPTURE_MODE_INVALID) null else mode;
+}
+
+fn resolveRuntimePath(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    override_key: []const u8,
+    relative_path: []const u8,
+) ![]u8 {
+    var owned: c.ShaulaRuntimeOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_owned_path_clear(&owned);
+    const status = c.shaula_runtime_path_resolve(
+        envValue(environ, override_key),
+        envValue(environ, "XDG_RUNTIME_DIR"),
+        pathSpan(relative_path),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_PATH_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_PATH_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_PATH_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.PathResolutionFailed,
+    };
+}
+
+const env = struct {
+    fn trimmed(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+        var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+        if (c.shaula_env_value_trimmed(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) return null;
+        return result.data[0..result.length];
+    }
+
+    fn flagEnabled(environ: std.process.Environ, key: []const u8) bool {
+        var value: i32 = 0;
+        return c.shaula_env_value_flag(envValue(environ, key), &value) == c.SHAULA_ENV_STATUS_VALID and value != 0;
+    }
+
+    fn unsignedOrDefault(comptime Int: type, environ: std.process.Environ, key: []const u8, default_value: Int) Int {
+        const info = switch (@typeInfo(Int)) {
+            .int => |value| value,
+            else => @compileError("unsignedOrDefault requires an unsigned integer type"),
+        };
+        comptime {
+            if (info.signedness != .unsigned or info.bits > 64) @compileError("unsupported unsigned integer type");
+        }
+        return @intCast(c.shaula_env_value_unsigned_or_default(
+            envValue(environ, key),
+            @intCast(std.math.maxInt(Int)),
+            @intCast(default_value),
+        ));
+    }
+};
+
+const previous_area_store = struct {
+    fn span(value: []const u8) c.ShaulaPreviousAreaSpan {
+        return .{ .data = value.ptr, .length = value.len };
+    }
+
+    fn geometry(value: capture_types.AreaGeometry) c.ShaulaPreviousAreaGeometry {
+        return .{ .x = value.x, .y = value.y, .width = value.width, .height = value.height };
+    }
+
+    fn store(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        environ: std.process.Environ,
+        value: capture_types.AreaGeometry,
+    ) !void {
+        _ = io;
+        const path = try resolveRuntimePath(allocator, environ, "SHAULA_PREVIOUS_AREA_FILE", "selection/previous-area.v1");
+        defer allocator.free(path);
+        return switch (c.shaula_previous_area_store(span(path), geometry(value))) {
+            c.SHAULA_PREVIOUS_AREA_STATUS_OK => {},
+            c.SHAULA_PREVIOUS_AREA_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+            c.SHAULA_PREVIOUS_AREA_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+            else => error.PreviousAreaStoreFailed,
+        };
+    }
+
+    fn load(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        environ: std.process.Environ,
+    ) !?capture_types.AreaGeometry {
+        _ = io;
+        const path = try resolveRuntimePath(allocator, environ, "SHAULA_PREVIOUS_AREA_FILE", "selection/previous-area.v1");
+        defer allocator.free(path);
+        var present: i32 = 0;
+        var value: c.ShaulaPreviousAreaGeometry = .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+        return switch (c.shaula_previous_area_load(span(path), &present, &value)) {
+            c.SHAULA_PREVIOUS_AREA_STATUS_OK => if (present != 0) capture_types.AreaGeometry{
+                .x = value.x,
+                .y = value.y,
+                .width = value.width,
+                .height = value.height,
+            } else null,
+            c.SHAULA_PREVIOUS_AREA_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+            else => null,
+        };
+    }
+
+    fn supportedForBackendLabel(label: []const u8) bool {
+        return c.shaula_previous_area_supported_for_backend(span(label)) != 0;
+    }
+};
+
+const capture_session_lock = struct {
+    const CaptureSessionLock = struct {
+        allocator: std.mem.Allocator,
+        path: []u8,
+        active: bool = true,
+
+        fn release(self: *CaptureSessionLock) void {
+            if (!self.active) return;
+            const span: c.ShaulaCaptureSessionSpan = .{ .data = self.path.ptr, .length = self.path.len };
+            c.shaula_capture_session_lock_release(span);
+            self.active = false;
+        }
+
+        fn deinit(self: *CaptureSessionLock) void {
+            self.release();
+            self.allocator.free(self.path);
+        }
+    };
+
+    fn acquire(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        environ: std.process.Environ,
+    ) !CaptureSessionLock {
+        _ = io;
+        const path = try resolveRuntimePath(allocator, environ, "SHAULA_CAPTURE_SESSION_LOCK_FILE", "capture/session.lock");
+        errdefer allocator.free(path);
+        const span: c.ShaulaCaptureSessionSpan = .{ .data = path.ptr, .length = path.len };
+        switch (c.shaula_capture_session_lock_acquire(span)) {
+            c.SHAULA_CAPTURE_SESSION_STATUS_OK => {},
+            c.SHAULA_CAPTURE_SESSION_STATUS_BUSY => return error.CaptureInProgress,
+            c.SHAULA_CAPTURE_SESSION_STATUS_INVALID_ARGUMENT => return error.InvalidPath,
+            c.SHAULA_CAPTURE_SESSION_STATUS_OUT_OF_MEMORY => return error.OutOfMemory,
+            else => return error.CaptureSessionLockFailed,
+        }
+        return .{ .allocator = allocator, .path = path };
+    }
+};
+
+const process_exec = struct {
+    const ProcessOutput = struct {
+        output: c.ShaulaProcessOutput,
+
+        fn deinit(self: ProcessOutput, allocator: std.mem.Allocator) void {
+            _ = allocator;
+            var output = self.output;
+            c.shaula_process_output_clear(&output);
+        }
+
+        fn exitedZero(self: ProcessOutput) bool {
+            return self.output.term_kind == c.SHAULA_PROCESS_TERM_EXITED and self.output.term_value == 0;
+        }
+    };
+
+    fn run(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        argv: []const []const u8,
+        stdout_limit: usize,
+        stderr_limit: usize,
+    ) !ProcessOutput {
+        _ = io;
+        const spans = try allocator.alloc(c.ShaulaProcessSpan, argv.len);
+        defer allocator.free(spans);
+        for (argv, spans) |value, *span| span.* = .{ .data = value.ptr, .length = value.len };
+        var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+        errdefer c.shaula_process_output_clear(&output);
+        if (c.shaula_process_run(
+            .{ .items = spans.ptr, .length = spans.len },
+            null,
+            stdout_limit,
+            stderr_limit,
+            &output,
+        ) != c.SHAULA_PROCESS_STATUS_OK) return error.ProcessFailed;
+        return .{ .output = output };
+    }
+};
 const selection = @import("../selection/selection.zig");
 const warning_tokens = @import("warnings.zig");
 
@@ -308,39 +533,39 @@ fn resolveFocusedOutputForCapture(
 /// Execute `capture all-in-one` through the shared capture lifecycle.
 pub fn runAllInOne(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAllInOneFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, runtime, .all_in_one, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_ALL_IN_ONE, parsed);
 }
 
 /// Execute `capture quick` through the capture-on-release overlay lifecycle.
 pub fn runQuick(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseQuickFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, runtime, .quick, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_QUICK, parsed);
 }
 
 /// Execute `capture area` through the shared capture lifecycle.
 pub fn runArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runOverlayMode(allocator, io, environ, runtime, .area, parsed);
+    return runOverlayMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_AREA, parsed);
 }
 
 pub fn runFullscreen(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseFullscreenFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, runtime, .fullscreen, parsed);
+    return runDirectMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_FULLSCREEN, parsed);
 }
 
 pub fn runAllScreens(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseAllScreensFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, runtime, .all_screens, parsed);
+    return runDirectMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_ALL_SCREENS, parsed);
 }
 
 pub fn runFocused(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseFocusedFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, runtime, .focused, parsed);
+    return runDirectMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_FOCUSED, parsed);
 }
 
 pub fn runWindow(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
     const parsed = flags.parseWindowFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    return runDirectMode(allocator, io, environ, runtime, .window, parsed);
+    return runDirectMode(allocator, io, environ, runtime, c.SHAULA_CAPTURE_MODE_WINDOW, parsed);
 }
 
 fn runOverlayMode(
@@ -348,11 +573,11 @@ fn runOverlayMode(
     io: std.Io,
     environ: std.process.Environ,
     runtime_arg: runtime_capabilities.RuntimeDecision,
-    comptime mode: core_capture_mode.CaptureMode,
+    comptime mode: c.ShaulaCaptureMode,
     parsed: anytype,
 ) !u8 {
     var runtime = runtime_arg;
-    const reported_mode = core_capture_mode.cliToken(mode);
+    const reported_mode = captureModeToken(mode);
     const command = commandForMode(mode);
 
     const capture_session = try beginJsonCaptureSession(allocator, io, environ, command, reported_mode, parsed.json_mode);
@@ -362,15 +587,15 @@ fn runOverlayMode(
 
     const region_capture_mode = resolveRegionCaptureMode(allocator, io, environ, parsed.region_capture_mode);
     if (!parsed.dry_run) {
-        const backend_mode = core_capture_mode.backendModeToken(mode) orelse reported_mode;
+        const backend_mode = captureModeBackendToken(mode) orelse reported_mode;
         const unsupported_rc = try guards.enforceModeSupported(runtime, io, command, backend_mode);
         if (unsupported_rc) |code| return code;
 
         if (runtime.shouldBypassOverlaySelection()) {
             const options = switch (mode) {
-                .quick => invocation.quick(parsed, region_capture_mode, null),
-                .area => invocation.area(parsed, region_capture_mode, null),
-                .all_in_one => invocation.allInOne(parsed, region_capture_mode, null),
+                c.SHAULA_CAPTURE_MODE_QUICK => invocation.quick(parsed, region_capture_mode, null),
+                c.SHAULA_CAPTURE_MODE_AREA => invocation.area(parsed, region_capture_mode, null),
+                c.SHAULA_CAPTURE_MODE_ALL_IN_ONE => invocation.allInOne(parsed, region_capture_mode, null),
                 else => unreachable,
             };
             return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, warning_tokens.selection_portal);
@@ -379,7 +604,7 @@ fn runOverlayMode(
 
     var prepared_frozen_source: ?overlay_session.PreparedFrozenSource = null;
     defer if (prepared_frozen_source) |source| source.deinit(allocator, io);
-    if (region_capture_mode == .frozen and !parsed.dry_run) {
+    if (region_capture_mode == c.SHAULA_REGION_CAPTURE_MODE_FROZEN and !parsed.dry_run) {
         prepared_frozen_source = try overlay_session.prepareFrozenSourceForOverlay(allocator, io, environ);
     }
 
@@ -408,7 +633,7 @@ fn runOverlayMode(
     }
 
     if (parsed.dry_run) {
-        if (mode == .area) {
+        if (mode == c.SHAULA_CAPTURE_MODE_AREA) {
             try json.writeAreaDryRunJson(allocator, io, selected);
         } else {
             try json.writeSelectionDryRunJson(allocator, io, command, selected);
@@ -416,7 +641,7 @@ fn runOverlayMode(
         return 0;
     }
 
-    if (region_capture_mode == .frozen and selection_result.frozen_source == null and selection_result.selection_warning == null) {
+    if (region_capture_mode == c.SHAULA_REGION_CAPTURE_MODE_FROZEN and selection_result.frozen_source == null and selection_result.selection_warning == null) {
         try json.writeErrorJson(
             io,
             command,
@@ -433,9 +658,9 @@ fn runOverlayMode(
 
     const geometry = capture_types.areaGeometryFromSelection(selected.geometry);
     const options = switch (mode) {
-        .quick => invocation.quick(parsed, region_capture_mode, geometry),
-        .area => invocation.area(parsed, region_capture_mode, geometry),
-        .all_in_one => invocation.allInOne(parsed, region_capture_mode, geometry),
+        c.SHAULA_CAPTURE_MODE_QUICK => invocation.quick(parsed, region_capture_mode, geometry),
+        c.SHAULA_CAPTURE_MODE_AREA => invocation.area(parsed, region_capture_mode, geometry),
+        c.SHAULA_CAPTURE_MODE_ALL_IN_ONE => invocation.allInOne(parsed, region_capture_mode, geometry),
         else => unreachable,
     };
     var resolved_options = options;
@@ -448,10 +673,10 @@ fn runDirectMode(
     io: std.Io,
     environ: std.process.Environ,
     runtime: runtime_capabilities.RuntimeDecision,
-    comptime mode: core_capture_mode.CaptureMode,
+    comptime mode: c.ShaulaCaptureMode,
     parsed: anytype,
 ) !u8 {
-    const reported_mode = core_capture_mode.cliToken(mode);
+    const reported_mode = captureModeToken(mode);
     const command = commandForMode(mode);
 
     const capture_session = try beginJsonCaptureSession(allocator, io, environ, command, reported_mode, parsed.json_mode);
@@ -460,10 +685,10 @@ fn runDirectMode(
     defer session_lock.deinit();
 
     const options = switch (mode) {
-        .fullscreen => invocation.fullscreen(parsed),
-        .all_screens => invocation.allScreens(parsed),
-        .focused => invocation.focused(parsed),
-        .window => invocation.window(parsed),
+        c.SHAULA_CAPTURE_MODE_FULLSCREEN => invocation.fullscreen(parsed),
+        c.SHAULA_CAPTURE_MODE_ALL_SCREENS => invocation.allScreens(parsed),
+        c.SHAULA_CAPTURE_MODE_FOCUSED => invocation.focused(parsed),
+        c.SHAULA_CAPTURE_MODE_WINDOW => invocation.window(parsed),
         else => unreachable,
     };
     return executeLifecycle(runtime, allocator, io, environ, options, &session_lock, null, null);
@@ -471,8 +696,8 @@ fn runDirectMode(
 
 /// Execute `capture previous-area` without fabricating missing geometry.
 pub fn runPreviousArea(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, runtime: runtime_capabilities.RuntimeDecision, argv: []const [*:0]const u8) !u8 {
-    const reported_mode = core_capture_mode.cliToken(.previous_area);
-    const backend_mode = core_capture_mode.backendModeToken(.previous_area) orelse reported_mode;
+    const reported_mode = captureModeToken(c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA);
+    const backend_mode = captureModeBackendToken(c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA) orelse reported_mode;
     const parsed = flags.parsePreviousAreaFlags(io, argv) catch return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
     if (try validateJsonMode(io, "capture previous-area", reported_mode, parsed.json_mode)) |code| return code;
 
@@ -565,24 +790,25 @@ fn validateJsonMode(io: std.Io, command: []const u8, reported_mode: []const u8, 
     return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
 }
 
-fn commandForMode(comptime mode: core_capture_mode.CaptureMode) []const u8 {
+fn commandForMode(comptime mode: c.ShaulaCaptureMode) []const u8 {
     return switch (mode) {
-        .quick => "capture quick",
-        .area => "capture area",
-        .fullscreen => "capture fullscreen",
-        .all_screens => "capture all-screens",
-        .focused => "capture focused",
-        .window => "capture window",
-        .previous_area => "capture previous-area",
-        .all_in_one => "capture all-in-one",
+        c.SHAULA_CAPTURE_MODE_QUICK => "capture quick",
+        c.SHAULA_CAPTURE_MODE_AREA => "capture area",
+        c.SHAULA_CAPTURE_MODE_FULLSCREEN => "capture fullscreen",
+        c.SHAULA_CAPTURE_MODE_ALL_SCREENS => "capture all-screens",
+        c.SHAULA_CAPTURE_MODE_FOCUSED => "capture focused",
+        c.SHAULA_CAPTURE_MODE_WINDOW => "capture window",
+        c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA => "capture previous-area",
+        c.SHAULA_CAPTURE_MODE_ALL_IN_ONE => "capture all-in-one",
+        else => unreachable,
     };
 }
 
-fn overlaySpecForMode(comptime mode: core_capture_mode.CaptureMode) OverlayModeSpec {
+fn overlaySpecForMode(comptime mode: c.ShaulaCaptureMode) OverlayModeSpec {
     return switch (mode) {
-        .quick => .{ .interaction_mode = .quick, .draft_mode = .quick },
-        .area => .{ .interaction_mode = .area, .draft_mode = .area },
-        .all_in_one => .{ .interaction_mode = .quick, .draft_mode = .capture },
+        c.SHAULA_CAPTURE_MODE_QUICK => .{ .interaction_mode = .quick, .draft_mode = .quick },
+        c.SHAULA_CAPTURE_MODE_AREA => .{ .interaction_mode = .area, .draft_mode = .area },
+        c.SHAULA_CAPTURE_MODE_ALL_IN_ONE => .{ .interaction_mode = .quick, .draft_mode = .capture },
         else => unreachable,
     };
 }
@@ -610,7 +836,7 @@ fn resolveOverlaySelection(
     interaction_mode: overlay_session.InteractionMode,
     draft_mode: overlay_draft_store.DraftMode,
     aspect: ?[]const u8,
-    region_capture_mode: core_capture_mode.RegionCaptureMode,
+    region_capture_mode: c.ShaulaRegionCaptureMode,
     prepared_frozen_source: *?overlay_session.PreparedFrozenSource,
     dry_run: bool,
     simulate_cancel: bool,
@@ -646,9 +872,13 @@ fn resolveOverlaySelection(
 
     const overlay_code = overlay_session.deterministicFailureCode(environ, simulate_cancel, true);
     if (overlay_code) |code| {
-        const spec = recovery_policy.specFor(code);
-        try json.writeErrorJson(io, command, spec.code, spec.message, spec.retryable, reported_mode, null, false, &.{});
-        return .{ .selection = result.result, .exit_code = recovery_policy.exitCodeFor(spec.code) };
+        const spec_pointer = c.shaula_error_taxonomy_spec_for(.{ .data = code.ptr, .length = code.len });
+        if (spec_pointer == null) unreachable;
+        const spec = spec_pointer[0];
+        const spec_code = spec.code.data[0..spec.code.length];
+        const spec_message = spec.message.data[0..spec.message.length];
+        try json.writeErrorJson(io, command, spec_code, spec_message, spec.retryable != 0, reported_mode, null, false, &.{});
+        return .{ .selection = result.result, .exit_code = recovery_policy.exitCodeFor(spec_code) };
     }
 
     try json.writeErrorJson(io, command, "ERR_SELECTION_CANCELLED", "selection was cancelled by user", false, reported_mode, null, false, &.{});
@@ -769,15 +999,15 @@ fn resolveRegionCaptureMode(
     io: std.Io,
     environ: std.process.Environ,
     explicit: ?[]const u8,
-) core_capture_mode.RegionCaptureMode {
+) c.ShaulaRegionCaptureMode {
     if (explicit) |token| {
-        return core_capture_mode.parseRegionCaptureMode(token) orelse .live;
+        return parseRegionCaptureMode(token) orelse c.SHAULA_REGION_CAPTURE_MODE_LIVE;
     }
     if (env.trimmed(environ, "SHAULA_REGION_CAPTURE_MODE")) |raw| {
-        if (core_capture_mode.parseRegionCaptureMode(raw)) |mode| return mode;
+        if (parseRegionCaptureMode(raw)) |mode| return mode;
     }
 
-    var loaded = config_loader.load(allocator, io, environ) catch return .live;
+    var loaded = config_loader.load(allocator, io, environ) catch return c.SHAULA_REGION_CAPTURE_MODE_LIVE;
     defer loaded.deinit(allocator);
     return loaded.config.capture.region_capture_mode;
 }
@@ -786,9 +1016,9 @@ fn resolveRegionCaptureMode(
 fn settleAfterLiveOverlay(
     io: std.Io,
     environ: std.process.Environ,
-    region_capture_mode: core_capture_mode.RegionCaptureMode,
+    region_capture_mode: c.ShaulaRegionCaptureMode,
 ) void {
-    if (region_capture_mode != .live) return;
+    if (region_capture_mode != c.SHAULA_REGION_CAPTURE_MODE_LIVE) return;
 
     const settle_ms = env.unsignedOrDefault(u64, environ, "SHAULA_LIVE_REGION_SETTLE_MS", 50);
     if (settle_ms == 0) return;

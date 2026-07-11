@@ -26,9 +26,6 @@ const _overlay_aspect_store = @import("overlay/aspect_store.zig");
 const _preview_service = @import("preview/service.zig");
 const _post_capture_json = @import("capture/post_capture_json.zig");
 const _post_capture_types = @import("capture/post_capture_types.zig");
-const _recovery_policy_test = @import("recovery/policy_test.zig");
-const _runtime_process_exec = @import("runtime/process_exec.zig");
-const _runtime_paths = @import("runtime/paths.zig");
 const _notify_request = @import("notify/request.zig");
 
 test {
@@ -56,8 +53,5 @@ test {
     _ = _preview_service;
     _ = _post_capture_json;
     _ = _post_capture_types;
-    _ = _recovery_policy_test;
-    _ = _runtime_process_exec;
-    _ = _runtime_paths;
     _ = _notify_request;
 }

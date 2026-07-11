@@ -184,9 +184,25 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 #### Error Taxonomy
 
 - Canonical machine-readable source is `shaula errors list --json`.
+- `errors/taxonomy.{c,h}` owns the current 28-entry inventory, exact ordering,
+  messages, retryability, classes, recovery actions, exit codes, and retry
+  budgets. Command-level JSON emission remains in `errors/command.zig` until the
+  shared envelope migration.
 - Every failure must map deterministically as `error.code -> recovery action -> exit code`.
-- Unknown classes must resolve to `ERR_UNKNOWN_UNMAPPED` with stable exit code (`99`).
-- Retry policy is bounded and non-infinite: retryable classes map to a finite budget.
+- Unknown, malformed, or otherwise unmapped codes resolve to the exact
+  `ERR_UNKNOWN_UNMAPPED` record with stable exit code `99` and retry budget `0`.
+- Retry policy is bounded and non-infinite: retry-limited records use budget `3`,
+  degrade-to-portal uses budget `1`, and all others use `0`.
+- Taxonomy lookup is explicit-length and byte-exact. It does not trim, fold case,
+  accept prefixes/suffixes, normalize Unicode, or truncate at embedded NUL.
+- Static taxonomy records and class/action tokens are borrowed immutable
+  process-lifetime literals. Failure-class and recovery-action values cross the
+  Zig/C boundary as asserted 32-bit integers.
+- `ERR_PREVIEW_RESULT_INVALID` is emitted by Preview service but is intentionally
+  absent from the current compatibility fixture, so it preserves the existing
+  unknown fallback and exit code `99`. `ERR_CAPABILITIES_PROBE_FAILED` remains a
+  reserved architecture token rather than an invented table row until a runtime
+  caller and compatibility contract exist.
 - Degraded behavior is explicit and class-scoped (e.g. clipboard/history failures degrade pipeline output instead of crashing capture).
 
 #### Capture `ERR_*`
@@ -318,6 +334,10 @@ string contracts across modules.
 
 ### Capture command and lifecycle
 
+- `core/capture_mode.{c,h}` owns exact public and region tokens, fixed-width ABI
+  values, runtime/backend lane mapping, and interactive-selection policy.
+  Maintained Zig callers include the C header directly and keep only immediate
+  caller-local span/status adaptation.
 - `capture/command_grammar.zig` owns capture flag membership and deterministic
   command-specific `ERR_CLI_USAGE` messages.
 - `capture/command_flags.zig` declares per-mode flag structs and delegates
@@ -344,14 +364,27 @@ string contracts across modules.
   decision methods callers should use rather than comparing backend strings.
 - `compositor/runtime.zig` owns compositor detection.
 - `compositor/focused_output.zig` owns focused-output resolution.
-- `runtime/env.zig` owns borrowed environment parsing.
-- `runtime/tool_lookup.zig` owns fixed `grim` candidates and PATH-aware tool
-  diagnostics.
-- `runtime/process_exec.zig` owns shared process execution, including stdin-pipe
-  execution. Callers still own output limits, cleanup, and deterministic error
-  mapping.
-- `runtime/helper_resolution.zig` owns helper lookup order: environment override,
-  sibling binary, then PATH.
+- `runtime/env.{c,h}` owns borrowed environment parsing through a temporary Zig
+  facade.
+- `runtime/paths.{c,h}` owns runtime-state path resolution, temporary capture
+  classification, and parent creation through a temporary Zig facade.
+- `runtime/tool_lookup.{c,h}` owns fixed `grim` candidates, first-existing
+  absolute lookup, PATH-aware diagnostics, and generic existence checks through
+  a temporary Zig facade.
+- `runtime/helper_resolution.{c,h}` owns helper resolution precedence and
+  existence-only sibling checks through a temporary Zig facade.
+- `runtime/previous_area_store.{c,h}` owns previous-area serialization, parsing,
+  synchronous state-file I/O, and backend support gating through a temporary Zig
+  facade.
+- `runtime/capture_session_lock.{c,h}` owns exclusive acquisition, exact PID
+  contents, bounded stale-owner detection, one-shot replacement, and best-effort
+  release through a temporary Zig facade. Capture lifecycle still owns releasing
+  the gate before post-capture Preview work.
+- `runtime/process_exec.{c,h}` owns shared process execution through a temporary
+  Zig facade: direct argv, parent-PATH lookup, replacement environments,
+  concurrent bounded stdout/stderr capture, binary stdin, termination mapping,
+  and child cleanup. Callers still own explicit output limits, returned-buffer
+  cleanup, and deterministic command-specific error mapping.
 
 Backend execution receives an already resolved runtime decision and optional
 focused output. It must not probe compositor/backend state again.
@@ -375,6 +408,31 @@ focused output. It must not probe compositor/backend state again.
   duplicated top-level/result fields, and partial/degraded rules.
 - `cli/json.zig` owns shared timestamps, escaping, and deterministic JSON
   envelopes used by preview, history, errors, doctor, and notify commands.
+- `preview/preview_result.{c,h}` owns the typed final-result parser at the Preview
+  helper stdout boundary. `preview/service.zig` owns helper execution, stable
+  error mapping, and caller-local transfer into the Preview/post-capture model.
+
+### Public error-taxonomy boundary
+
+- `errors/taxonomy.{c,h}` is the sole owner of public error records, canonical
+  ordering, class/action tokens, exit-code mapping, and retry budgets. Callers
+  must not duplicate those tables or mappings.
+- The maintained callers are the top-level dispatcher, capabilities and
+  preflight probes, capture command/guards/lifecycle, clipboard, config,
+  directory, doctor, errors, explore, history, notify, preview, settings, and
+  setup commands. Each includes the C header directly and performs only
+  immediate caller-local slice/span or record conversion.
+- `errors/command.zig` owns only argument validation, timestamped JSON envelope
+  emission, and canonical field order. It enumerates the C table and must not
+  retain a second taxonomy.
+- Inputs are borrowed `data + length` spans. A NULL pointer with nonzero length
+  is invalid; empty, malformed, unknown, case-changed, whitespace-padded,
+  prefixed, suffixed, non-ASCII-substituted, and embedded-NUL values do not match.
+- Successful records and text tokens are borrowed immutable process-lifetime
+  storage. No caller frees them, and the C module performs no allocation or
+  mutable-global-state access.
+- Invalid class/action values return an invalid empty span. Full-spec, exit-code,
+  and retry-budget lookups use `ERR_UNKNOWN_UNMAPPED` for every nonmatch.
 
 ### Runtime environment boundary
 
@@ -388,10 +446,117 @@ focused output. It must not probe compositor/backend state again.
 - The C functions have no mutable global state and are thread-safe while callers
   keep each input buffer stable. Malformed booleans return `INVALID`; malformed
   or overflowing unsigned values return the caller-provided default.
-- `runtime/env.zig` is a temporary production facade for existing Zig callers.
-  It preserves lookup against each caller's `std.process.Environ` and performs
-  only ABI conversion and integer-width bounding. Delete it when no maintained
-  Zig source imports it.
+- Maintained Zig owners preserve lookup against each caller's
+  `std.process.Environ` and perform immediate ABI conversion and integer-width
+  bounding at the owning module. No shared Zig environment facade remains in
+  maintained code.
+
+### Runtime path boundary
+
+- `runtime/paths.{c,h}` owns ASCII-trimmed override selection, the
+  `XDG_RUNTIME_DIR` then `/tmp` fallback order, byte-exact joining, temporary
+  capture-path classification, checked allocation sizes, and POSIX parent
+  creation.
+- Resolution does not validate absolute paths, normalize separators,
+  canonicalize `.` or `..`, inspect the filesystem, or interpret bytes through
+  the locale. Repeated and trailing separators, relative or root-looking input,
+  and non-ASCII bytes are preserved. Relative input spans may contain embedded
+  NUL for resolution and classification; filesystem creation rejects embedded
+  NUL because POSIX paths cannot represent it.
+- Successful resolution returns a GLib-owned length-bearing buffer with a
+  trailing NUL. Callers release it through
+  `shaula_runtime_owned_path_clear()`. Inputs are borrowed for the synchronous
+  call, outputs are independent, and the C implementation has no mutable global
+  state.
+- Maintained Zig owners perform caller-provided environment lookup, pass spans
+  to C, and copy GLib-owned results into the existing Zig allocator only where
+  their public API requires owned bytes. No shared Zig path policy or facade
+  remains in maintained code.
+- This boundary owns runtime state and temporary capture artifacts only.
+  Configuration, cache, data, history, durable screenshot placement, tool and
+  helper lookup, and process execution remain separate responsibilities.
+
+### Runtime tool-lookup boundary
+
+- `runtime/tool_lookup.{c,h}` owns the exact fixed grim candidate order,
+  first-existing absolute lookup, colon-delimited PATH splitting, byte-exact
+  candidate joining, and generic filesystem existence checks.
+- The preserved contract checks existence only and does not require executable
+  permission. Non-executable files and directories count as present. Absolute
+  lookup skips empty and relative candidates; generic existence checks accept
+  relative and absolute paths.
+- Missing and empty PATH values return not found. Leading, repeated, and trailing
+  empty PATH components are skipped rather than interpreted as the current
+  directory. Nonempty components are not trimmed or normalized and are joined
+  exactly as `<component>/<tool>`.
+- Relative components, whitespace, repeated separators, `.`, `..`, spaces,
+  shell metacharacters, non-ASCII bytes, and empty or absolute-looking tool names
+  retain byte-level behavior. Embedded NUL cannot cross the POSIX filesystem
+  boundary and is treated as inaccessible.
+- Successful fixed-candidate results are borrowed from candidate or immutable
+  process-lifetime storage. Successful PATH results are GLib-owned,
+  length-bearing, trailing-NUL buffers cleared through
+  `shaula_runtime_tool_owned_path_clear()`.
+- Capture planning, capabilities, and diagnostics retrieve caller-provided PATH
+  and invoke the C API directly, preserving borrowed fixed results and copying
+  GLib-owned PATH results only for existing allocator-owned APIs.
+- The C implementation has no mutable global state, performs checked size
+  arithmetic, uses no shell or locale-sensitive classification, and collapses
+  generic existence-check failures to false as the former Zig helper did.
+
+### Runtime helper-resolution boundary
+
+- `runtime/helper_resolution.{c,h}` owns the exact precedence: a nonempty
+  ASCII-trimmed override, an existing byte-exact sibling path, then an owned bare
+  binary name.
+- Overrides are returned without existence or executable-permission validation.
+  Missing, empty, and whitespace-only overrides continue to sibling lookup.
+- The sibling path is joined exactly as `<executable-dir>/<binary-name>` without
+  normalization, canonicalization, shell interpretation, or locale-sensitive
+  processing. Existing directories and non-executable files count as present.
+- When executable-directory discovery is unavailable or the sibling is missing,
+  the resolver returns the bare binary name. This is not eager PATH lookup;
+  later process spawning owns PATH resolution and failure mapping.
+- Relative and absolute overrides, trailing/repeated separators, empty and
+  absolute-looking binary names, `.`, `..`, spaces, shell metacharacters, and
+  non-ASCII bytes preserve their byte-level behavior. Embedded NUL cannot match
+  a sibling POSIX path but remains representable in the length-bearing bare-name
+  fallback.
+- Successful results are independent GLib-owned, length-bearing buffers with a
+  trailing NUL and are released through
+  `shaula_runtime_helper_owned_path_clear()`.
+- Preview, Overlay, Settings, and portal capture perform caller-provided
+  override lookup, executable-directory discovery, ABI conversion, and owned
+  result transfer in their owning module. No shared Zig resolution facade or
+  duplicate helper policy remains.
+- The C implementation has no mutable global state and checks all size additions.
+  It does not spawn processes or absorb the similar crop-helper logic in capture
+  lifecycle.
+
+### Runtime previous-area boundary
+
+- `runtime/previous_area_store.{c,h}` owns the deterministic
+  `x|y|width|height\n` state format, whole-file ASCII trimming, numeric parsing,
+  parent creation, synchronous file I/O, and exact portal-backend exclusion.
+- Stores use caller-resolved bytewise paths, create parents through the runtime
+  path boundary, create/truncate the target with mode `0666` subject to umask,
+  write all bytes, and do not fsync or perform atomic replacement. Zero
+  dimensions are serialized verbatim because validity is checked on load.
+- Loads fail closed for missing, unreadable, allocation-failed, empty, malformed,
+  embedded-NUL, and numerically overflowing state. They require exactly four
+  fields, signed 32-bit x/y, and unsigned 32-bit nonzero width/height.
+- Parsing trims only ASCII space, tab, carriage return, and newline around the
+  entire file. Fields are not individually trimmed. Optional signs and internal
+  underscores follow Zig `parseInt` behavior, including unsigned negative zero.
+- Backend support is false only for the exact byte string `portal-screenshot`.
+  No normalization, case folding, shell interpretation, or locale-sensitive
+  processing occurs.
+- Geometry uses an asserted 16-byte fixed-width C ABI. The implementation has no
+  mutable global state and is safe for concurrent calls targeting distinct
+  state files.
+- Capture lifecycle resolves the caller-provided state path through the C runtime
+  path ABI and converts geometry/status values locally. The state format,
+  parser, filesystem behavior, and backend policy remain exclusively C-owned.
 
 ### Diagnostics and configuration
 
@@ -409,7 +574,8 @@ focused output. It must not probe compositor/backend state again.
 ### Preview boundaries
 
 - `preview/preview_paths.{c,h}` owns the helper-side temporary capture-path
-  contract and must stay aligned with `runtime/paths.zig`.
+  contract and must stay aligned with `runtime/paths.{c,h}` while the Preview
+  helper remains a separate C boundary.
 - `preview/preview_geometry.{c,h}` owns Preview geometry and color conversion.
 - `preview/preview_image_io.{c,h}` and `preview/preview_clipboard.{c,h}` own
   Preview image and clipboard runtime calls. The clipboard C port intentionally
@@ -417,6 +583,22 @@ focused output. It must not probe compositor/backend state again.
   child stdout so nested `--json` output cannot escape the helper boundary.
 - `preview/preview_notify.{c,h}` owns best-effort Preview notification argv,
   image-hint fallback, timeout normalization, and silent failure behavior.
+- `preview/preview_result.{c,h}` owns exact Preview action values/tokens and the
+  complete final helper JSON parser. The parser receives a borrowed byte span
+  with an explicit length and trims only outer ASCII space, tab, carriage return,
+  and newline. It requires one JSON object and rejects malformed or trailing
+  input, non-object roots, duplicate decoded keys at any depth, invalid UTF-8,
+  unpaired surrogates, and raw embedded NUL. Known fields remain optional;
+  missing or wrong-typed fields use defaults, unknown fields are validated then
+  ignored, and unknown action strings map to `unknown` for forward compatibility.
+  Escaped `saved_path` strings are decoded byte-exactly and may contain embedded
+  NUL. A nonempty result is GLib-owned, length-bearing, trailing-NUL storage that
+  is released through `shaula_preview_result_clear()`; inputs and action-token
+  spans are borrowed. Allocation failure is explicit and outputs remain
+  initialized and clearable on every outcome. `preview/service.zig` copies the
+  optional path into its existing Zig allocator before C cleanup and preserves
+  helper exit handling, `ERR_PREVIEW_RESULT_INVALID`, notifications, Preview CLI
+  JSON, and post-capture result semantics.
 - `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
   tolerant INI loading, debounced dirty-key persistence, and cross-preview file
   locking. Inspector/widget state remains in `preview_properties_hud.*`.

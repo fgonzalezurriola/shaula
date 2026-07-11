@@ -1,5 +1,47 @@
 const std = @import("std");
-const runtime_paths = @import("../runtime/paths.zig");
+const c = @cImport({
+    @cInclude("runtime/paths.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn pathSpan(value: []const u8) c.ShaulaRuntimePathSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn resolveRuntimePath(
+    allocator: std.mem.Allocator,
+    environ: std.process.Environ,
+    env_override_key: ?[]const u8,
+    relative_path: []const u8,
+) ![]u8 {
+    var owned: c.ShaulaRuntimeOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_owned_path_clear(&owned);
+    const status = c.shaula_runtime_path_resolve(
+        if (env_override_key) |key| envValue(environ, key) else null,
+        envValue(environ, "XDG_RUNTIME_DIR"),
+        pathSpan(relative_path),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_PATH_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_PATH_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_PATH_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.PathResolutionFailed,
+    };
+}
+
+fn ensureParent(path: []const u8) !void {
+    return switch (c.shaula_runtime_path_ensure_parent(pathSpan(path))) {
+        c.SHAULA_RUNTIME_PATH_STATUS_OK => {},
+        c.SHAULA_RUNTIME_PATH_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_PATH_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.PathResolutionFailed,
+    };
+}
 
 /// Persists the last confirmed interactive Capture Area aspect.
 ///
@@ -15,7 +57,7 @@ pub fn store(
     const path = try resolvePath(allocator, environ);
     defer allocator.free(path);
 
-    try runtime_paths.ensureParent(io, path);
+    try ensureParent(path);
 
     var file = try std.Io.Dir.createFileAbsolute(io, path, .{ .truncate = true });
     defer file.close(io);
@@ -58,7 +100,7 @@ fn validAspect(raw: []const u8) bool {
 }
 
 fn resolvePath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-    return runtime_paths.resolve(allocator, environ, "SHAULA_OVERLAY_AREA_ASPECT_FILE", "overlay/area-aspect.v1");
+    return resolveRuntimePath(allocator, environ, "SHAULA_OVERLAY_AREA_ASPECT_FILE", "overlay/area-aspect.v1");
 }
 
 test "aspect store roundtrips fixed and free values" {

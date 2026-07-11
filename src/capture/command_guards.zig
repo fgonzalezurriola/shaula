@@ -2,7 +2,15 @@ const std = @import("std");
 
 const precondition_guard = @import("precondition_guard.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 const command_json = @import("command_json.zig");
 const warnings = @import("warnings.zig");
 

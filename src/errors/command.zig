@@ -1,8 +1,19 @@
 const std = @import("std");
 const cli_json = @import("../cli/json.zig");
 const protocol = @import("../ipc/protocol.zig");
-const taxonomy = @import("taxonomy.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
+
+fn requiredSpan(value: c.ShaulaErrorSpan) []const u8 {
+    return value.data[0..value.length];
+}
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, argv: []const [*:0]const u8) !u8 {
     if (argv.len < 3) {
@@ -44,17 +55,23 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, argv: []const [*:0]const u8
         .{ protocol.contract_version, ts },
     );
 
-    const specs = taxonomy.list();
-    for (specs, 0..) |spec, index| {
-        if (index != 0) try stdout.interface.writeAll(",");
+    const spec_count = c.shaula_error_taxonomy_count();
+    var spec_index: usize = 0;
+    while (spec_index < spec_count) : (spec_index += 1) {
+        const spec_pointer = c.shaula_error_taxonomy_at(spec_index);
+        if (spec_pointer == null) unreachable;
+        const spec = spec_pointer[0];
+        const class_token = c.shaula_failure_class_token(spec.failure_class);
+        const action_token = c.shaula_recovery_action_token(spec.action);
+        if (spec_index != 0) try stdout.interface.writeAll(",");
         try stdout.interface.print(
             "{{\"code\":\"{s}\",\"message\":\"{s}\",\"retryable\":{s},\"class\":\"{s}\",\"action\":\"{s}\",\"exit_code\":{d}}}",
             .{
-                spec.code,
-                spec.message,
-                if (spec.retryable) "true" else "false",
-                spec.class.asString(),
-                spec.action.asString(),
+                requiredSpan(spec.code),
+                requiredSpan(spec.message),
+                if (spec.retryable != 0) "true" else "false",
+                requiredSpan(class_token),
+                requiredSpan(action_token),
                 spec.exit_code,
             },
         );

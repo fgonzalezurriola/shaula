@@ -1,3 +1,17 @@
+shaula_preview_result_c = static_library(
+  'shaula-preview-result-c',
+  'preview_result.c',
+  include_directories: shaula_preview_include,
+  dependencies: glib_dep,
+  install: false,
+)
+
+shaula_preview_result_dep = declare_dependency(
+  link_with: shaula_preview_result_c,
+  include_directories: shaula_preview_include,
+  dependencies: glib_dep,
+)
+
 shaula_preview_geometry_c = static_library(
   'shaula-preview-geometry-c',
   'preview_geometry.c',

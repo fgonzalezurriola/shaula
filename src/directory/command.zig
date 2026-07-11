@@ -3,9 +3,29 @@ const std = @import("std");
 const output_path = @import("../capture/backends/capture_backend_output_path.zig");
 const cli_json = @import("../cli/json.zig");
 const config_loader = @import("../config/loader.zig");
-const process_exec = @import("../runtime/process_exec.zig");
 const protocol = @import("../ipc/protocol.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+    @cInclude("runtime/process_exec.h");
+});
+
+fn processSpan(value: []const u8) c.ShaulaProcessSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn runProcessSucceeded(argv: []const c.ShaulaProcessSpan, stdout_limit: usize, stderr_limit: usize) bool {
+    var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+    defer c.shaula_process_output_clear(&output);
+    if (c.shaula_process_run(.{ .items = argv.ptr, .length = argv.len }, null, stdout_limit, stderr_limit, &output) != c.SHAULA_PROCESS_STATUS_OK) {
+        return false;
+    }
+    return output.term_kind == c.SHAULA_PROCESS_TERM_EXITED and output.term_value == 0;
+}
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 
 /// Resolve and optionally open user-facing Shaula directories.
 ///
@@ -51,12 +71,8 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
     defer allocator.free(dir);
 
     if (open) {
-        const result = process_exec.run(allocator, io, &.{ "xdg-open", dir }, 4096, 4096) catch {
-            try cli_json.writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "could not open screenshot directory", false);
-            return recovery_policy.exitCodeFor("ERR_OUTPUT_PATH_INVALID");
-        };
-        defer result.deinit(allocator);
-        if (!result.exitedZero()) {
+        const process_argv = [_]c.ShaulaProcessSpan{ processSpan("xdg-open"), processSpan(dir) };
+        if (!runProcessSucceeded(&process_argv, 4096, 4096)) {
             try cli_json.writeBasicError(io, "directory screenshots", "ERR_OUTPUT_PATH_INVALID", "could not open screenshot directory", false);
             return recovery_policy.exitCodeFor("ERR_OUTPUT_PATH_INVALID");
         }

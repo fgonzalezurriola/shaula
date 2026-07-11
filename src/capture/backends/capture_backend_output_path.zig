@@ -1,5 +1,33 @@
 const std = @import("std");
-const runtime_paths = @import("../../runtime/paths.zig");
+const c = @cImport({
+    @cInclude("runtime/paths.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn pathSpan(value: []const u8) c.ShaulaRuntimePathSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn captureArtifactDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
+    var owned: c.ShaulaRuntimeOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_owned_path_clear(&owned);
+    const status = c.shaula_runtime_path_resolve(
+        null,
+        envValue(environ, "XDG_RUNTIME_DIR"),
+        pathSpan("captures"),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_PATH_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_PATH_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_PATH_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.PathResolutionFailed,
+    };
+}
 
 pub fn resolveOutputPath(
     allocator: std.mem.Allocator,
@@ -80,7 +108,7 @@ fn resolveTemporaryOutputPath(
 ) ![]u8 {
     _ = mode_string;
 
-    const base_dir = try runtime_paths.captureArtifactDir(allocator, environ);
+    const base_dir = try captureArtifactDir(allocator, environ);
     defer allocator.free(base_dir);
 
     ensureDirectoryWritable(allocator, io, base_dir) catch return error.OutputPathInvalid;

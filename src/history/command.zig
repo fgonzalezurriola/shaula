@@ -3,7 +3,15 @@ const std = @import("std");
 const cli_json = @import("../cli/json.zig");
 const protocol = @import("../ipc/protocol.zig");
 const history_store = @import("store.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, argv: []const [*:0]const u8) !u8 {
     if (argv.len < 3) {

@@ -1,7 +1,13 @@
 const std = @import("std");
 
-const core_capture_mode = @import("../core/capture_mode.zig");
 const command_json = @import("command_json.zig");
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+});
+
+fn captureModeSpan(value: []const u8) c.ShaulaCaptureModeSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
 pub const CommandSpec = struct {
     command: []const u8,
@@ -56,7 +62,7 @@ pub fn parse(comptime Flags: type, io: std.Io, argv: []const [*:0]const u8, spec
                 }
                 i += 1;
                 flags.region_capture_mode = argToSlice(argv[i]);
-                if (core_capture_mode.parseRegionCaptureMode(flags.region_capture_mode.?) == null) {
+                if (c.shaula_region_capture_mode_parse(captureModeSpan(flags.region_capture_mode.?)) == c.SHAULA_REGION_CAPTURE_MODE_INVALID) {
                     try usage(io, spec, "--region-mode requires live or frozen");
                     return error.CliUsage;
                 }

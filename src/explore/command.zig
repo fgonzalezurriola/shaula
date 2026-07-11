@@ -4,8 +4,19 @@ const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
 const focused_output = @import("../compositor/focused_output.zig");
 const protocol = @import("../ipc/protocol.zig");
-const process_exec = @import("../runtime/process_exec.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+    @cInclude("runtime/process_exec.h");
+});
+
+fn processSpan(value: []const u8) c.ShaulaProcessSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
 const warning_inventory_unavailable = "explore_inventory_unavailable";
 
@@ -191,10 +202,21 @@ fn emptyInventory(allocator: std.mem.Allocator, focused_output_name: ?[]const u8
 }
 
 fn runNiriJson(allocator: std.mem.Allocator, io: std.Io, command: []const u8) ![]u8 {
-    const result = try process_exec.run(allocator, io, &.{ "niri", "msg", "-j", command }, 1024 * 1024, 16 * 1024);
-    defer result.deinit(allocator);
-    if (!result.exitedZero()) return error.NiriInventoryUnavailable;
-    return try allocator.dupe(u8, std.mem.trim(u8, result.stdout, " \t\r\n"));
+    _ = io;
+    const argv = [_]c.ShaulaProcessSpan{
+        processSpan("niri"),
+        processSpan("msg"),
+        processSpan("-j"),
+        processSpan(command),
+    };
+    var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+    defer c.shaula_process_output_clear(&output);
+    if (c.shaula_process_run(.{ .items = &argv, .length = argv.len }, null, 1024 * 1024, 16 * 1024, &output) != c.SHAULA_PROCESS_STATUS_OK) {
+        return error.NiriInventoryUnavailable;
+    }
+    if (output.term_kind != c.SHAULA_PROCESS_TERM_EXITED or output.term_value != 0) return error.NiriInventoryUnavailable;
+    const stdout = output.stdout_bytes.data[0..output.stdout_bytes.length];
+    return try allocator.dupe(u8, std.mem.trim(u8, stdout, " \t\r\n"));
 }
 
 fn inventoryFromValues(

@@ -11,7 +11,7 @@ static gboolean path_has_prefix_dir(const char *path, const char *dir) {
          (path[len] == '\0' || path[len] == G_DIR_SEPARATOR);
 }
 
-/* Mirrors runtime/paths.zig capture artifact detection on the C helper side.
+/* Mirrors the runtime/paths.{c,h} capture-artifact contract on the C helper side.
  * This contract decides whether preview owns cleanup of a helper artifact.
  */
 gboolean shaula_preview_path_is_temporary_capture(const char *path) {

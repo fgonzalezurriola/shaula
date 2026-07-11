@@ -1,10 +1,21 @@
 const std = @import("std");
 
-const core_capture_mode = @import("../core/capture_mode.zig");
 const lifecycle = @import("lifecycle.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 const json = @import("command_json.zig");
 const runtime_capabilities = @import("../capabilities/runtime.zig");
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+    @cInclude("errors/taxonomy.h");
+});
+
+fn captureModeSpan(value: []const u8) c.ShaulaCaptureModeSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
 /// Entry point for the `capture` command family.
 ///
@@ -22,22 +33,24 @@ pub fn run(
     }
 
     const subcommand = argToSlice(argv[2]);
-    const requested_mode = core_capture_mode.parseCliToken(subcommand) orelse {
+    const requested_mode = c.shaula_capture_mode_parse_cli_token(captureModeSpan(subcommand));
+    if (requested_mode == c.SHAULA_CAPTURE_MODE_INVALID) {
         try json.writeErrorJson(io, "capture", "ERR_CLI_USAGE", "unsupported capture subcommand", false, null, null, false, &.{});
         return recovery_policy.exitCodeFor("ERR_CLI_USAGE");
-    };
+    }
 
     const runtime = runtime_capabilities.resolve(allocator, io, environ);
 
     return switch (requested_mode) {
-        .quick => lifecycle.runQuick(allocator, io, environ, runtime, argv),
-        .area => lifecycle.runArea(allocator, io, environ, runtime, argv),
-        .fullscreen => lifecycle.runFullscreen(allocator, io, environ, runtime, argv),
-        .all_screens => lifecycle.runAllScreens(allocator, io, environ, runtime, argv),
-        .focused => lifecycle.runFocused(allocator, io, environ, runtime, argv),
-        .window => lifecycle.runWindow(allocator, io, environ, runtime, argv),
-        .previous_area => lifecycle.runPreviousArea(allocator, io, environ, runtime, argv),
-        .all_in_one => lifecycle.runAllInOne(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_QUICK => lifecycle.runQuick(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_AREA => lifecycle.runArea(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_FULLSCREEN => lifecycle.runFullscreen(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_ALL_SCREENS => lifecycle.runAllScreens(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_FOCUSED => lifecycle.runFocused(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_WINDOW => lifecycle.runWindow(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA => lifecycle.runPreviousArea(allocator, io, environ, runtime, argv),
+        c.SHAULA_CAPTURE_MODE_ALL_IN_ONE => lifecycle.runAllInOne(allocator, io, environ, runtime, argv),
+        else => unreachable,
     };
 }
 

@@ -1,15 +1,36 @@
 const std = @import("std");
 
 const capture_types = @import("types.zig");
-const core_capture_mode = @import("../core/capture_mode.zig");
 const flags = @import("command_flags.zig");
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+});
 
-fn backendRequestMode(mode: core_capture_mode.CaptureMode) capture_types.CaptureMode {
-    return switch (core_capture_mode.runtimeMode(mode)) {
-        .area => .area,
-        .current_output => .focused,
-        .all_outputs => .all_screens,
-        .window => .window,
+fn requiredSpan(value: c.ShaulaCaptureModeSpan) []const u8 {
+    if (value.data == null) unreachable;
+    return value.data[0..value.length];
+}
+
+fn optionalSpan(value: c.ShaulaCaptureModeSpan) ?[]const u8 {
+    if (value.data == null) return null;
+    return value.data[0..value.length];
+}
+
+fn cliToken(mode: c.ShaulaCaptureMode) []const u8 {
+    return requiredSpan(c.shaula_capture_mode_cli_token(mode));
+}
+
+fn backendModeToken(mode: c.ShaulaCaptureMode) ?[]const u8 {
+    return optionalSpan(c.shaula_capture_mode_backend_token(mode));
+}
+
+fn backendRequestMode(mode: c.ShaulaCaptureMode) capture_types.CaptureMode {
+    return switch (c.shaula_capture_mode_runtime_mode(mode)) {
+        c.SHAULA_RUNTIME_CAPTURE_MODE_AREA => .area,
+        c.SHAULA_RUNTIME_CAPTURE_MODE_CURRENT_OUTPUT => .focused,
+        c.SHAULA_RUNTIME_CAPTURE_MODE_ALL_OUTPUTS => .all_screens,
+        c.SHAULA_RUNTIME_CAPTURE_MODE_WINDOW => .window,
+        else => unreachable,
     };
 }
 
@@ -35,15 +56,15 @@ pub const Invocation = struct {
     area_geometry: ?capture_types.AreaGeometry = null,
     post_flags: PostCaptureFlags,
     persist_previous_area: ?capture_types.AreaGeometry = null,
-    settle_region_mode: ?core_capture_mode.RegionCaptureMode = null,
+    settle_region_mode: ?c.ShaulaRegionCaptureMode = null,
 };
 
 /// Build the shared lifecycle invocation for one resolved capture command.
 ///
 /// Contract constraint: public CLI mode tokens stay separate from backend modes
 /// so `previous-area` and `all-in-one` can continue executing on the area lane.
-pub fn area(parsed: flags.AreaFlags, region_capture_mode: core_capture_mode.RegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
-    const mode = core_capture_mode.cliToken(.area);
+pub fn area(parsed: flags.AreaFlags, region_capture_mode: c.ShaulaRegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
+    const mode = cliToken(c.SHAULA_CAPTURE_MODE_AREA);
     return .{
         .command = "capture area",
         .reported_mode = mode,
@@ -57,12 +78,12 @@ pub fn area(parsed: flags.AreaFlags, region_capture_mode: core_capture_mode.Regi
     };
 }
 
-pub fn quick(parsed: flags.QuickFlags, region_capture_mode: core_capture_mode.RegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
-    const mode = core_capture_mode.cliToken(.quick);
+pub fn quick(parsed: flags.QuickFlags, region_capture_mode: c.ShaulaRegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
+    const mode = cliToken(c.SHAULA_CAPTURE_MODE_QUICK);
     return .{
         .command = "capture quick",
         .reported_mode = mode,
-        .backend_mode = core_capture_mode.backendModeToken(.quick) orelse mode,
+        .backend_mode = backendModeToken(c.SHAULA_CAPTURE_MODE_QUICK) orelse mode,
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
@@ -72,12 +93,12 @@ pub fn quick(parsed: flags.QuickFlags, region_capture_mode: core_capture_mode.Re
     };
 }
 
-pub fn allInOne(parsed: flags.AllInOneFlags, region_capture_mode: core_capture_mode.RegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
-    const reported_mode = core_capture_mode.cliToken(.all_in_one);
+pub fn allInOne(parsed: flags.AllInOneFlags, region_capture_mode: c.ShaulaRegionCaptureMode, geometry: ?capture_types.AreaGeometry) Invocation {
+    const reported_mode = cliToken(c.SHAULA_CAPTURE_MODE_ALL_IN_ONE);
     return .{
         .command = "capture all-in-one",
         .reported_mode = reported_mode,
-        .backend_mode = core_capture_mode.backendModeToken(.all_in_one) orelse reported_mode,
+        .backend_mode = backendModeToken(c.SHAULA_CAPTURE_MODE_ALL_IN_ONE) orelse reported_mode,
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,
@@ -88,43 +109,43 @@ pub fn allInOne(parsed: flags.AllInOneFlags, region_capture_mode: core_capture_m
 }
 
 pub fn fullscreen(parsed: flags.FullscreenFlags) Invocation {
-    const mode = core_capture_mode.cliToken(.fullscreen);
+    const mode = cliToken(c.SHAULA_CAPTURE_MODE_FULLSCREEN);
     return .{
         .command = "capture fullscreen",
         .reported_mode = mode,
-        .backend_mode = core_capture_mode.backendModeToken(.fullscreen) orelse mode,
-        .request_mode = backendRequestMode(.fullscreen),
+        .backend_mode = backendModeToken(c.SHAULA_CAPTURE_MODE_FULLSCREEN) orelse mode,
+        .request_mode = backendRequestMode(c.SHAULA_CAPTURE_MODE_FULLSCREEN),
         .output_path = parsed.output,
         .post_flags = postFlags(mode, parsed),
     };
 }
 
 pub fn allScreens(parsed: flags.AllScreensFlags) Invocation {
-    const reported_mode = core_capture_mode.cliToken(.all_screens);
+    const reported_mode = cliToken(c.SHAULA_CAPTURE_MODE_ALL_SCREENS);
     return .{
         .command = "capture all-screens",
         .reported_mode = reported_mode,
-        .backend_mode = core_capture_mode.backendModeToken(.all_screens) orelse reported_mode,
-        .request_mode = backendRequestMode(.all_screens),
+        .backend_mode = backendModeToken(c.SHAULA_CAPTURE_MODE_ALL_SCREENS) orelse reported_mode,
+        .request_mode = backendRequestMode(c.SHAULA_CAPTURE_MODE_ALL_SCREENS),
         .output_path = parsed.output,
         .post_flags = postFlags(reported_mode, parsed),
     };
 }
 
 pub fn focused(parsed: flags.FocusedFlags) Invocation {
-    const mode = core_capture_mode.cliToken(.focused);
+    const mode = cliToken(c.SHAULA_CAPTURE_MODE_FOCUSED);
     return .{
         .command = "capture focused",
         .reported_mode = mode,
         .backend_mode = mode,
-        .request_mode = backendRequestMode(.focused),
+        .request_mode = backendRequestMode(c.SHAULA_CAPTURE_MODE_FOCUSED),
         .output_path = parsed.output,
         .post_flags = postFlags(mode, parsed),
     };
 }
 
 pub fn window(parsed: flags.WindowFlags) Invocation {
-    const mode = core_capture_mode.cliToken(.window);
+    const mode = cliToken(c.SHAULA_CAPTURE_MODE_WINDOW);
     return .{
         .command = "capture window",
         .reported_mode = mode,
@@ -137,11 +158,11 @@ pub fn window(parsed: flags.WindowFlags) Invocation {
 }
 
 pub fn previousArea(parsed: flags.PreviousAreaFlags, geometry: capture_types.AreaGeometry) Invocation {
-    const reported_mode = core_capture_mode.cliToken(.previous_area);
+    const reported_mode = cliToken(c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA);
     return .{
         .command = "capture previous-area",
         .reported_mode = reported_mode,
-        .backend_mode = core_capture_mode.backendModeToken(.previous_area) orelse reported_mode,
+        .backend_mode = backendModeToken(c.SHAULA_CAPTURE_MODE_PREVIOUS_AREA) orelse reported_mode,
         .request_mode = .area,
         .output_path = parsed.output,
         .area_geometry = geometry,

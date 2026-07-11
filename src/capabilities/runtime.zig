@@ -1,9 +1,37 @@
 const std = @import("std");
 const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
-const env = @import("../runtime/env.zig");
 const portal_screenshot = @import("../capture/backends/portal_screenshot.zig");
-const tool_lookup = @import("../runtime/tool_lookup.zig");
+const c = @cImport({
+    @cInclude("runtime/env.h");
+    @cInclude("runtime/tool_lookup.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn envTrimmed(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_env_value_trimmed(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return result.data[0..result.length];
+}
+
+fn envFlagEnabled(environ: std.process.Environ, key: []const u8) bool {
+    var value: i32 = 0;
+    return c.shaula_env_value_flag(envValue(environ, key), &value) == c.SHAULA_ENV_STATUS_VALID and value != 0;
+}
+
+fn grimPath() ?[]const u8 {
+    var result: c.ShaulaRuntimeToolSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_runtime_tool_grim_path(&result) != c.SHAULA_RUNTIME_TOOL_LOOKUP_STATUS_OK) {
+        return null;
+    }
+    return result.data[0..result.length];
+}
 
 pub const BackendKind = enum {
     niri_wayland_direct,
@@ -99,7 +127,7 @@ pub fn resolve(allocator: std.mem.Allocator, io: std.Io, environ: std.process.En
 /// 4. wlroots probe -> `grim_wlroots`
 /// 5. generic Wayland with portal -> `portal_screenshot`
 pub fn resolveBackend(environ: std.process.Environ, compositor: compositor_runtime.Detection, portal_available: bool, grim_available: bool) BackendKind {
-    if (env.trimmed(environ, "SHAULA_CAPTURE_BACKEND")) |token| {
+    if (envTrimmed(environ, "SHAULA_CAPTURE_BACKEND")) |token| {
         if (std.mem.eql(u8, token, backend_contract.backend_stub)) {
             return .stub;
         }
@@ -108,7 +136,7 @@ pub fn resolveBackend(environ: std.process.Environ, compositor: compositor_runti
         if (std.mem.eql(u8, token, backend_contract.backend_niri_wayland_direct)) return .niri_wayland_direct;
     }
 
-    if (env.flagEnabled(environ, "SHAULA_CAPTURE_FORCE_PORTAL")) {
+    if (envFlagEnabled(environ, "SHAULA_CAPTURE_FORCE_PORTAL")) {
         return .portal_screenshot;
     }
 
@@ -128,7 +156,8 @@ pub fn resolveBackend(environ: std.process.Environ, compositor: compositor_runti
 }
 
 fn grimAvailable(io: std.Io) bool {
-    return tool_lookup.grimPath(io) != null;
+    _ = io;
+    return grimPath() != null;
 }
 
 /// Stable backend label used in JSON responses and QA assertions.

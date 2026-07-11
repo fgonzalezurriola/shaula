@@ -3,6 +3,9 @@ const root = @import("root");
 const backend_contract = @import("../capture/backends/capture_backend_contract.zig");
 const cli_json = @import("../cli/json.zig");
 const compositor_runtime = @import("../compositor/runtime.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
 
 const standalone_protocol = struct {
     pub const contract_version = "1.0.0";
@@ -15,10 +18,9 @@ const standalone_preflight = struct {
     }
 };
 
-const standalone_recovery_policy = struct {
+const recovery_policy = struct {
     pub fn exitCodeFor(code: []const u8) u8 {
-        if (std.mem.eql(u8, code, "ERR_UNSUPPORTED_COMPOSITOR")) return 10;
-        return 99;
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
     }
 };
 
@@ -36,11 +38,6 @@ const runtime_capabilities = if (@hasDecl(root, "runtime_capabilities_module"))
     root.runtime_capabilities_module
 else
     @import("runtime.zig");
-
-const recovery_policy = if (@hasDecl(root, "recovery_policy_module"))
-    root.recovery_policy_module
-else
-    standalone_recovery_policy;
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !u8 {
     const runtime = runtime_capabilities.resolve(allocator, io, environ);

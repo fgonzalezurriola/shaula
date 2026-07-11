@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    addRuntimeEnvC(b, main_module);
+    addRuntimeC(b, main_module);
 
     const strip = b.option(bool, "strip", "Strip debug symbols from the binary") orelse false;
     const exe = b.addExecutable(.{
@@ -78,7 +78,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    addRuntimeEnvC(b, unit_test_module);
+    addRuntimeC(b, unit_test_module);
 
     const unit_tests = b.addTest(.{
         .root_module = unit_test_module,
@@ -93,10 +93,48 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&preview_document_test.step);
 }
 
-fn addRuntimeEnvC(b: *std.Build, module: *std.Build.Module) void {
+fn addRuntimeC(b: *std.Build, module: *std.Build.Module) void {
+    module.addIncludePath(b.path("src"));
     module.link_libc = true;
+    module.linkSystemLibrary("glib-2.0", .{ .use_pkg_config = .force });
     module.addCSourceFile(.{
         .file = b.path("src/runtime/env.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/paths.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/tool_lookup.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/helper_resolution.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/previous_area_store.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/capture_session_lock.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/runtime/process_exec.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/core/capture_mode.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/errors/taxonomy.c"),
+        .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
+    });
+    module.addCSourceFile(.{
+        .file = b.path("src/preview/preview_result.c"),
         .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Wpedantic" },
     });
 }

@@ -1,7 +1,108 @@
 const std = @import("std");
 const notify_request = @import("notify/request.zig");
-const process_exec = @import("runtime/process_exec.zig");
-const runtime_paths = @import("runtime/paths.zig");
+const c = @cImport({
+    @cInclude("runtime/paths.h");
+    @cInclude("runtime/process_exec.h");
+});
+
+const runtime_paths = struct {
+    fn isRuntimeCaptureArtifact(path: []const u8) bool {
+        const span: c.ShaulaRuntimePathSpan = .{ .data = path.ptr, .length = path.len };
+        return c.shaula_runtime_path_is_capture_artifact(span) != 0;
+    }
+};
+
+const process_exec = struct {
+    const ProcessOutput = struct {
+        stdout: []u8,
+        stderr: []u8,
+        term: std.process.Child.Term,
+
+        fn deinit(self: ProcessOutput, allocator: std.mem.Allocator) void {
+            allocator.free(self.stdout);
+            allocator.free(self.stderr);
+        }
+
+        fn exitedZero(self: ProcessOutput) bool {
+            return switch (self.term) {
+                .exited => |code| code == 0,
+                else => false,
+            };
+        }
+    };
+
+    fn span(value: []const u8) c.ShaulaProcessSpan {
+        return .{ .data = value.ptr, .length = value.len };
+    }
+
+    fn mapStatus(status: c.ShaulaProcessStatus) !void {
+        return switch (status) {
+            c.SHAULA_PROCESS_STATUS_OK => {},
+            c.SHAULA_PROCESS_STATUS_INVALID_ARGUMENT => error.InvalidName,
+            c.SHAULA_PROCESS_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+            c.SHAULA_PROCESS_STATUS_FILE_NOT_FOUND => error.FileNotFound,
+            c.SHAULA_PROCESS_STATUS_ACCESS_DENIED => error.AccessDenied,
+            c.SHAULA_PROCESS_STATUS_PERMISSION_DENIED => error.PermissionDenied,
+            c.SHAULA_PROCESS_STATUS_INVALID_EXECUTABLE => error.InvalidExe,
+            c.SHAULA_PROCESS_STATUS_IS_DIRECTORY => error.IsDir,
+            c.SHAULA_PROCESS_STATUS_NOT_DIRECTORY => error.NotDir,
+            c.SHAULA_PROCESS_STATUS_FILE_BUSY => error.FileBusy,
+            c.SHAULA_PROCESS_STATUS_SYMLINK_LOOP => error.SymLinkLoop,
+            c.SHAULA_PROCESS_STATUS_FD_QUOTA => error.SystemFdQuotaExceeded,
+            c.SHAULA_PROCESS_STATUS_PROCESS_FD_QUOTA => error.ProcessFdQuotaExceeded,
+            c.SHAULA_PROCESS_STATUS_RESOURCE_LIMIT => error.ResourceLimitReached,
+            c.SHAULA_PROCESS_STATUS_SYSTEM_RESOURCES => error.SystemResources,
+            c.SHAULA_PROCESS_STATUS_NAME_TOO_LONG => error.NameTooLong,
+            c.SHAULA_PROCESS_STATUS_FILESYSTEM_ERROR => error.FileSystem,
+            c.SHAULA_PROCESS_STATUS_STREAM_TOO_LONG => error.StreamTooLong,
+            else => error.Unexpected,
+        };
+    }
+
+    fn term(kind: c.ShaulaProcessTermKind, value: u32) !std.process.Child.Term {
+        return switch (kind) {
+            c.SHAULA_PROCESS_TERM_EXITED => .{ .exited = @intCast(value) },
+            c.SHAULA_PROCESS_TERM_SIGNAL => .{ .signal = @enumFromInt(value) },
+            c.SHAULA_PROCESS_TERM_STOPPED => .{ .stopped = @enumFromInt(value) },
+            c.SHAULA_PROCESS_TERM_UNKNOWN => .{ .unknown = value },
+            else => error.Unexpected,
+        };
+    }
+
+    fn copyBytes(allocator: std.mem.Allocator, bytes: c.ShaulaProcessOwnedBytes) ![]u8 {
+        if (bytes.length == 0) return allocator.alloc(u8, 0);
+        return allocator.dupe(u8, bytes.data[0..bytes.length]);
+    }
+
+    fn run(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        argv: []const []const u8,
+        stdout_limit: usize,
+        stderr_limit: usize,
+    ) !ProcessOutput {
+        _ = io;
+        const spans = try allocator.alloc(c.ShaulaProcessSpan, argv.len);
+        defer allocator.free(spans);
+        for (argv, spans) |value, *item| item.* = span(value);
+
+        var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+        defer c.shaula_process_output_clear(&output);
+        try mapStatus(c.shaula_process_run(
+            .{ .items = spans.ptr, .length = spans.len },
+            null,
+            stdout_limit,
+            stderr_limit,
+            &output,
+        ));
+
+        const stdout = try copyBytes(allocator, output.stdout_bytes);
+        errdefer allocator.free(stdout);
+        const stderr = try copyBytes(allocator, output.stderr_bytes);
+        errdefer allocator.free(stderr);
+        return .{ .stdout = stdout, .stderr = stderr, .term = try term(output.term_kind, output.term_value) };
+    }
+};
 
 const saved_screenshot_notification_timeout_ms: u32 = 6000;
 const saved_screenshot_notification_body = "Saved to screenshots folder.";

@@ -2,7 +2,15 @@ const std = @import("std");
 
 const cli_json = @import("../cli/json.zig");
 const protocol = @import("../ipc/protocol.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const error_c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return error_c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 const config_types = @import("config.zig");
 const loader = @import("loader.zig");
 const niri_rule = @import("niri_rule.zig");
@@ -685,7 +693,7 @@ fn configJson(allocator: std.mem.Allocator, config: config_types.Config) ![]u8 {
     defer allocator.free(app_id_json);
     const title_json = try jsonStringAlloc(allocator, config_types.preview_title);
     defer allocator.free(title_json);
-    const region_capture_mode_json = try jsonStringAlloc(allocator, config.capture.region_capture_mode.asString());
+    const region_capture_mode_json = try jsonStringAlloc(allocator, config_types.regionCaptureModeString(config.capture.region_capture_mode));
     defer allocator.free(region_capture_mode_json);
     const mode_json = try jsonStringAlloc(allocator, config.preview.window.mode.asString());
     defer allocator.free(mode_json);

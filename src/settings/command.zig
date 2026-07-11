@@ -1,9 +1,51 @@
 const std = @import("std");
 
 const cli_json = @import("../cli/json.zig");
-const helper_resolution = @import("../runtime/helper_resolution.zig");
 const protocol = @import("../ipc/protocol.zig");
-const recovery_policy = @import("../recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+    @cInclude("runtime/helper_resolution.h");
+});
+
+fn helperSpan(value: []const u8) c.ShaulaRuntimeHelperSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn helperOverride(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn resolveSiblingHelper(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    environ: std.process.Environ,
+    env_var: []const u8,
+    binary_name: []const u8,
+) ![]u8 {
+    const executable_dir = std.process.executableDirPathAlloc(io, allocator) catch null;
+    defer if (executable_dir) |path| allocator.free(path);
+
+    var owned: c.ShaulaRuntimeHelperOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_helper_owned_path_clear(&owned);
+    const status = c.shaula_runtime_helper_resolve(
+        helperOverride(environ, env_var),
+        if (executable_dir) |path| helperSpan(path) else .{ .data = null, .length = 0 },
+        helperSpan(binary_name),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_HELPER_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.HelperResolutionFailed,
+    };
+}
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 
 /// Launches the native GTK settings helper.
 ///
@@ -59,7 +101,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Enviro
 }
 
 fn resolveSettingsBinary(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) ![]u8 {
-    return helper_resolution.resolveSiblingHelper(allocator, io, environ, "SHAULA_SETTINGS_HELPER_BIN", "shaula-settings");
+    return resolveSiblingHelper(allocator, io, environ, "SHAULA_SETTINGS_HELPER_BIN", "shaula-settings");
 }
 
 fn writeDiscoveryJson(allocator: std.mem.Allocator, io: std.Io) !void {

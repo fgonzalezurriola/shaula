@@ -4,14 +4,47 @@ const capture_session = @import("capture_session.zig");
 const helper_protocol = @import("helper_protocol.zig");
 const ui_state_store = @import("ui_state_store.zig");
 const aspect_store = @import("aspect_store.zig");
-const process_exec = @import("../runtime/process_exec.zig");
-const runtime_paths = @import("../runtime/paths.zig");
 const selection_draft_store = @import("selection_draft_store.zig");
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+    @cInclude("runtime/paths.h");
+    @cInclude("runtime/process_exec.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn pathSpan(value: []const u8) c.ShaulaRuntimePathSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn processSpan(value: []const u8) c.ShaulaProcessSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
+
+fn resolveRuntimePath(allocator: std.mem.Allocator, environ: std.process.Environ, relative_path: []const u8) ![]u8 {
+    var owned: c.ShaulaRuntimeOwnedPath = .{ .data = null, .length = 0 };
+    defer c.shaula_runtime_owned_path_clear(&owned);
+    const status = c.shaula_runtime_path_resolve(
+        null,
+        envValue(environ, "XDG_RUNTIME_DIR"),
+        pathSpan(relative_path),
+        &owned,
+    );
+    return switch (status) {
+        c.SHAULA_RUNTIME_PATH_STATUS_OK => allocator.dupe(u8, owned.data[0..owned.length]),
+        c.SHAULA_RUNTIME_PATH_STATUS_INVALID_ARGUMENT => error.InvalidPath,
+        c.SHAULA_RUNTIME_PATH_STATUS_OUT_OF_MEMORY => error.OutOfMemory,
+        else => error.PathResolutionFailed,
+    };
+}
 const overlay_runtime = @import("runtime.zig");
 const compositor_focused_output = @import("../compositor/focused_output.zig");
 
 pub const DraftMode = selection_draft_store.DraftMode;
-pub const RegionCaptureMode = @import("../core/capture_mode.zig").RegionCaptureMode;
+pub const RegionCaptureMode = c.ShaulaRegionCaptureMode;
 pub const ConfirmAction = helper_protocol.ConfirmAction;
 pub const deterministicFailureCode = helper_protocol.deterministicFailureCode;
 
@@ -273,7 +306,7 @@ fn runHelperSelectionAttempt(
     region_capture_mode: RegionCaptureMode,
     prepared_frozen_source: *?PreparedFrozenSource,
 ) !HelperSelectionAttempt {
-    const live_output_name = if (region_capture_mode == .live)
+    const live_output_name = if (region_capture_mode == c.SHAULA_REGION_CAPTURE_MODE_LIVE)
         try resolveOverlayOutputName(allocator, io, environ)
     else
         null;
@@ -293,7 +326,7 @@ fn runHelperSelectionAttempt(
     if (helper_aspect) |aspect| {
         try helper_env.put("SHAULA_OVERLAY_ASPECT", aspect);
     }
-    if (region_capture_mode == .frozen) {
+    if (region_capture_mode == c.SHAULA_REGION_CAPTURE_MODE_FROZEN) {
         if (prepared_frozen_source.*) |prepared| {
             try helper_env.put("SHAULA_OVERLAY_BACKGROUND_PATH", prepared.path);
         }
@@ -442,12 +475,15 @@ fn prepareOverlayBackground(
     else
         &.{ "grim", path };
 
-    const result = process_exec.run(allocator, io, argv, 1024, 1024) catch {
-        return null;
-    };
-    defer result.deinit(allocator);
+    const spans = try allocator.alloc(c.ShaulaProcessSpan, argv.len);
+    defer allocator.free(spans);
+    for (argv, spans) |value, *span| span.* = processSpan(value);
 
-    if (!result.exitedZero()) {
+    var output: c.ShaulaProcessOutput = std.mem.zeroes(c.ShaulaProcessOutput);
+    defer c.shaula_process_output_clear(&output);
+    if (c.shaula_process_run(.{ .items = spans.ptr, .length = spans.len }, null, 1024, 1024, &output) != c.SHAULA_PROCESS_STATUS_OK or
+        output.term_kind != c.SHAULA_PROCESS_TERM_EXITED or output.term_value != 0)
+    {
         std.Io.Dir.deleteFileAbsolute(io, path) catch {};
         allocator.free(path);
         return null;
@@ -469,7 +505,7 @@ fn resolveOverlayOutputName(
 }
 
 fn overlayRuntimeDir(allocator: std.mem.Allocator, environ: std.process.Environ) ![]u8 {
-    return runtime_paths.resolve(allocator, environ, null, "overlay");
+    return resolveRuntimePath(allocator, environ, "overlay");
 }
 
 fn captureAreaGeometryFromSelection(geometry: ?selection.Geometry) ?@import("../capture/types.zig").AreaGeometry {
@@ -634,7 +670,7 @@ test "runSelection maps helper deterministic ok payload before runtime lanes" {
         .area,
         .area,
         .{ .aspect = null },
-        .live,
+        c.SHAULA_REGION_CAPTURE_MODE_LIVE,
         &prepared_source,
         false,
         false,
@@ -667,7 +703,7 @@ test "helper runner marks unavailable when helper process is unavailable" {
         .area,
         .area,
         .{ .aspect = null },
-        .live,
+        c.SHAULA_REGION_CAPTURE_MODE_LIVE,
         &prepared_source,
     );
     try std.testing.expect(attempt == .unavailable);

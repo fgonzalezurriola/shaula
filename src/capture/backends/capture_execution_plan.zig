@@ -1,8 +1,31 @@
 const std = @import("std");
 const backend_contract = @import("capture_backend_contract.zig");
 const portal_screenshot = @import("portal_screenshot.zig");
-const env = @import("../../runtime/env.zig");
-const tool_lookup = @import("../../runtime/tool_lookup.zig");
+const c = @cImport({
+    @cInclude("runtime/env.h");
+    @cInclude("runtime/tool_lookup.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn envTrimmed(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_env_value_trimmed(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return result.data[0..result.length];
+}
+
+fn grimPath() ?[]const u8 {
+    var result: c.ShaulaRuntimeToolSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_runtime_tool_grim_path(&result) != c.SHAULA_RUNTIME_TOOL_LOOKUP_STATUS_OK) {
+        return null;
+    }
+    return result.data[0..result.length];
+}
 
 pub const Options = struct {
     backend_label: []const u8,
@@ -65,7 +88,7 @@ pub fn resolve(
         return plan;
     }
 
-    const grim_path = tool_lookup.grimPath(io) orelse return error.BackendUnavailable;
+    const grim_path = grimPath() orelse return error.BackendUnavailable;
     return switch (options.operation) {
         .area => blk: {
             const geometry = options.area_geometry orelse return error.BackendUnavailable;
@@ -117,7 +140,7 @@ fn staticPlan(argv: []const []const u8) Plan {
 }
 
 fn configuredRuntimeCaptureHelper(environ: std.process.Environ) ?[]const u8 {
-    if (env.trimmed(environ, "SHAULA_RUNTIME_CAPTURE_HELPER")) |helper_path| {
+    if (envTrimmed(environ, "SHAULA_RUNTIME_CAPTURE_HELPER")) |helper_path| {
         return helper_path;
     }
 

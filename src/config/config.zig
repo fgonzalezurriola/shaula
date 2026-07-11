@@ -1,5 +1,13 @@
 const std = @import("std");
-const core_capture_mode = @import("../core/capture_mode.zig");
+const c = @cImport({
+    @cInclude("core/capture_mode.h");
+});
+
+pub const RegionCaptureMode = c.ShaulaRegionCaptureMode;
+
+fn captureModeSpan(value: []const u8) c.ShaulaCaptureModeSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
 pub const preview_app_id = "dev.shaula.preview";
 pub const preview_title = "Shaula Preview";
@@ -11,7 +19,7 @@ pub const Config = struct {
 };
 
 pub const CaptureConfig = struct {
-    region_capture_mode: core_capture_mode.RegionCaptureMode = .frozen,
+    region_capture_mode: RegionCaptureMode = c.SHAULA_REGION_CAPTURE_MODE_FROZEN,
     after: CaptureAfterConfig = .{},
 };
 
@@ -132,8 +140,15 @@ pub fn parsePreviewWindowMode(value: []const u8) ?PreviewWindowMode {
     return null;
 }
 
-pub fn parseRegionCaptureMode(value: []const u8) ?core_capture_mode.RegionCaptureMode {
-    return core_capture_mode.parseRegionCaptureMode(value);
+pub fn parseRegionCaptureMode(value: []const u8) ?RegionCaptureMode {
+    const mode = c.shaula_region_capture_mode_parse(captureModeSpan(value));
+    return if (mode == c.SHAULA_REGION_CAPTURE_MODE_INVALID) null else mode;
+}
+
+pub fn regionCaptureModeString(mode: RegionCaptureMode) []const u8 {
+    const value = c.shaula_region_capture_mode_token(mode);
+    if (value.data == null) unreachable;
+    return value.data[0..value.length];
 }
 
 pub fn parseColumnDisplay(value: []const u8) ?ColumnDisplay {

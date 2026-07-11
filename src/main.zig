@@ -4,7 +4,6 @@ pub const capture_types_module = @import("capture/types.zig");
 pub const preflight_probe_module = @import("preflight/probe.zig");
 pub const runtime_capabilities_module = @import("capabilities/runtime.zig");
 pub const protocol_module = @import("ipc/protocol.zig");
-pub const recovery_policy_module = @import("recovery/policy.zig");
 pub const compositor_runtime_module = @import("compositor/runtime.zig");
 
 const cli_json = @import("cli/json.zig");
@@ -22,7 +21,15 @@ const explore_command = @import("explore/command.zig");
 const settings_command = @import("settings/command.zig");
 const directory_command = @import("directory/command.zig");
 const setup_command = @import("setup/command.zig");
-const recovery_policy = @import("recovery/policy.zig");
+const c = @cImport({
+    @cInclude("errors/taxonomy.h");
+});
+
+const recovery_policy = struct {
+    fn exitCodeFor(code: []const u8) u8 {
+        return c.shaula_error_exit_code_for(.{ .data = code.ptr, .length = code.len });
+    }
+};
 
 pub fn main(init: std.process.Init) !u8 {
     const io = init.io;

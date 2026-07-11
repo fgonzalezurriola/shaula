@@ -1,5 +1,11 @@
 const std = @import("std");
-const process_exec = @import("../runtime/process_exec.zig");
+const c = @cImport({
+    @cInclude("runtime/process_exec.h");
+});
+
+fn processSpan(value: []const u8) c.ShaulaProcessSpan {
+    return .{ .data = value.ptr, .length = value.len };
+}
 
 const clipboard_dir = "/tmp/shaula/clipboard";
 const clipboard_state_file = "/tmp/shaula/clipboard/current-image.path";
@@ -52,11 +58,21 @@ fn publishWaylandImage(io: std.Io, path: []const u8) !bool {
     const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, std.heap.smp_allocator, .unlimited) catch return false;
     defer std.heap.smp_allocator.free(bytes);
 
-    const term = process_exec.runWithPipeInput(io, &.{ "wl-copy", "--type", "image/png" }, bytes) catch return false;
-    return switch (term) {
-        .exited => |code| code == 0,
-        else => false,
+    const argv = [_]c.ShaulaProcessSpan{
+        processSpan("wl-copy"),
+        processSpan("--type"),
+        processSpan("image/png"),
     };
+    var term_kind: c.ShaulaProcessTermKind = c.SHAULA_PROCESS_TERM_EXITED;
+    var term_value: u32 = 0;
+    const status = c.shaula_process_run_with_input(
+        .{ .items = &argv, .length = argv.len },
+        processSpan(bytes),
+        &term_kind,
+        &term_value,
+    );
+    if (status != c.SHAULA_PROCESS_STATUS_OK) return false;
+    return term_kind == c.SHAULA_PROCESS_TERM_EXITED and term_value == 0;
 }
 
 pub fn importImage(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, output_path: ?[]const u8) ![]u8 {

@@ -1,5 +1,41 @@
 const std = @import("std");
-const env = @import("../runtime/env.zig");
+const c = @cImport({
+    @cInclude("runtime/env.h");
+});
+
+fn envValue(environ: std.process.Environ, key: []const u8) ?[*:0]const u8 {
+    const value = environ.getPosix(key) orelse return null;
+    return value.ptr;
+}
+
+fn spanSlice(span: c.ShaulaEnvSpan) []const u8 {
+    return span.data[0..span.length];
+}
+
+fn envSlice(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_env_value_slice(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return spanSlice(result);
+}
+
+fn envTrimmed(environ: std.process.Environ, key: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    if (c.shaula_env_value_trimmed(envValue(environ, key), &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return spanSlice(result);
+}
+
+fn firstDesktopToken(value: []const u8) ?[]const u8 {
+    var result: c.ShaulaEnvSpan = .{ .data = null, .length = 0 };
+    const input: c.ShaulaEnvSpan = .{ .data = value.ptr, .length = value.len };
+    if (c.shaula_env_first_desktop_token(input, &result) != c.SHAULA_ENV_STATUS_VALID) {
+        return null;
+    }
+    return spanSlice(result);
+}
 
 pub const Kind = enum {
     niri,
@@ -19,7 +55,7 @@ pub const Detection = struct {
 /// - generic Wayland support is gated by portal availability in runtime
 ///   capabilities, while overlay remains limited to Niri/wlroots tokens.
 pub fn detect(environ: std.process.Environ) Detection {
-    if (env.trimmed(environ, "SHAULA_COMPOSITOR")) |explicit| {
+    if (envTrimmed(environ, "SHAULA_COMPOSITOR")) |explicit| {
         return classifyLabel(explicit);
     }
 
@@ -27,13 +63,13 @@ pub fn detect(environ: std.process.Environ) Detection {
         return .{ .kind = .niri, .label = "niri" };
     }
 
-    if (env.slice(environ, "XDG_CURRENT_DESKTOP")) |value| {
-        if (env.firstDesktopToken(value)) |token| {
+    if (envSlice(environ, "XDG_CURRENT_DESKTOP")) |value| {
+        if (firstDesktopToken(value)) |token| {
             return classifyLabel(token);
         }
     }
 
-    if (env.trimmed(environ, "XDG_SESSION_DESKTOP")) |token| {
+    if (envTrimmed(environ, "XDG_SESSION_DESKTOP")) |token| {
         return classifyLabel(token);
     }
 
