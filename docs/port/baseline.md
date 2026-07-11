@@ -17,8 +17,9 @@ runtime/backend decisions, helper protocols, configuration behavior, and
 Wayland/Niri manual gates.
 
 The initial host used Meson 1.11.1, Ninja 1.13.2, GCC 16.1.1, Clang 22.1.8,
-GLib 2.88.2, GTK 4.22.4, GDK Pixbuf 2.44.7, Cairo 1.18.4, Pango 1.58.0, and GTK4
-layer shell 1.3.0. These observations are not minimum-version claims.
+GLib 2.88.2, JSON-GLib 1.10.8, GTK 4.22.4, GDK Pixbuf 2.44.7, Cairo 1.18.4,
+Pango 1.58.0, and GTK4 layer shell 1.3.0. These observations are not
+minimum-version claims.
 
 ## Final state
 
@@ -28,11 +29,13 @@ layer shell 1.3.0. These observations are not minimum-version claims.
 - The installed inventory remains `shaula`, `shaula-overlay`, `shaula-preview`,
   `shaula-settings`, `shaula-crop-image`, and `shaula-portal-screenshot`, plus
   icons and the Noctalia integration.
-- `./dev check` runs the complete maintained Meson suite.
+- `./dev check` runs the complete maintained Meson suite, including a
+  non-intrusive top-level command compatibility fixture.
 - `./dev qa` runs deterministic non-intrusive command/schema/failure checks.
 - `./dev port-check` and `./dev port-check-asan` provide strict warning and
   sanitizer lanes.
-- Release staging and the AUR source package use Meson/Ninja.
+- Release staging and the AUR source package use Meson/Ninja. `build-stage/` is
+  generated on demand, ignored, and not a version-controlled payload.
 
 ## Preserved contract fixtures
 

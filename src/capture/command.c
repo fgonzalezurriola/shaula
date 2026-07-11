@@ -560,7 +560,8 @@ static SelectionStatus select_area(const CaptureOptions *options,
     *action = g_strdup("capture");
     return SELECTION_OK;
   }
-  if (options->dry_run) {
+  if (options->dry_run ||
+      env_flag("SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION")) {
     *geometry = (CaptureGeometry){.x = 100, .y = 100, .width = 400, .height = 300};
     frozen->local_geometry = *geometry;
     frozen->surface_width = 1920;
@@ -796,21 +797,23 @@ int shaula_capture_command_run(int argc, char **argv) {
     SelectionStatus status =
         select_area(&options, &frozen, &geometry, &confirm_action);
     if (status != SELECTION_OK) {
+      g_autofree char *details =
+          g_strdup_printf("{\"mode\":\"%s\"}", options.mode);
       shaula_capture_session_lock_release(
           (ShaulaCaptureSessionSpan){.data = lock_path,
                                      .length = strlen(lock_path)});
       if (status == SELECTION_TIMEOUT)
         return capture_error(command, "ERR_OVERLAY_TIMEOUT",
-                             "overlay helper timed out", "{}");
+                             "overlay helper timed out", details);
       if (status == SELECTION_UNAVAILABLE)
         return capture_error(command, "ERR_OVERLAY_UNAVAILABLE",
-                             "overlay helper is unavailable", "{}");
+                             "overlay helper is unavailable", details);
       if (status == SELECTION_PROTOCOL_INVALID)
         return capture_error(command, "ERR_OVERLAY_PROTOCOL_INVALID",
                              "overlay helper produced invalid protocol payload",
-                             "{}");
+                             details);
       return capture_error(command, "ERR_SELECTION_CANCELLED",
-                           "selection was cancelled by user", "{}");
+                           "selection was cancelled by user", details);
     }
   } else if (previous_mode) {
     g_autofree char *previous_path = runtime_path("previous-area.v1");

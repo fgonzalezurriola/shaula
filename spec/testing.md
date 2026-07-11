@@ -51,8 +51,8 @@ Deterministic failure token for non-ready environment:
 - `./dev port-check-asan` runs the same C tests under AddressSanitizer and
   UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
   matching the maintained CI compiler matrix.
-- The C lane currently contains twenty-two C tests plus one shell fixture, for
-  23 Meson tests per lane. It covers the shared public JSON envelope/escaping
+- The C lane currently contains twenty-two C tests plus two shell fixtures, for
+  24 Meson tests per lane. It covers the shared public JSON envelope/escaping
   policy; the public error taxonomy and recovery mapping; the core capture-mode
   model; the compositor environment detector and support/overlay policy;
   capability/runtime backend selection and portal probing; exact preflight
@@ -66,11 +66,28 @@ Deterministic failure token for non-ready environment:
   persistence, capture-session locking, and process execution; Preview helper-
   result parsing, geometry, image I/O, clipboard, and notifications; Settings
   config parsing/ABI and exact process argv/spawn behavior; plus fixture-driven
-  Noctalia restart readiness.
+  Noctalia restart readiness; plus top-level capture, config, clipboard,
+  history, Explore, notification, and overlay-error compatibility.
 - `git diff --check` rejects whitespace errors.
 - `./dev qa` runs the curated non-intrusive contract lane:
   `run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
   matrix, and exit-code mapping.
+
+### Top-level port command compatibility (`scripts/qa/assert-port-command-compatibility.sh`)
+
+- Forced non-interactive Area capture bypasses a deliberately missing overlay
+  helper and completes through the deterministic C fake capture backend.
+- Clipboard forced-unavailable mapping remains `ERR_CLIPBOARD_UNAVAILABLE`, and
+  copy/import preserves the Shaula clipboard-state round trip.
+- `history show --id latest` resolves the newest retained entry.
+- `config save` changes only the requested semantic value while preserving
+  surrounding comments, inline comments, formatting, and unrelated custom
+  values.
+- Fake-Niri outputs/workspaces/windows normalize into focused IDs and output
+  capture advice without touching the real desktop.
+- `notify test --kind saved` retains the public grammar using a fake
+  `notify-send`, and malformed overlay protocol output includes the required
+  capture mode detail.
 
 ### Public error-taxonomy contract (`tests/unit/error_taxonomy_test.c`)
 

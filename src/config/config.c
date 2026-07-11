@@ -403,6 +403,346 @@ char *shaula_config_serialize(const ShaulaConfig *config) {
       config->floating_relative_to);
 }
 
+typedef guint64 ConfigFieldMask;
+
+typedef struct {
+  const char *key;
+  ConfigFieldMask bit;
+} ConfigFieldSpec;
+
+enum {
+  FIELD_REGION_MODE = G_GUINT64_CONSTANT(1) << 0,
+  FIELD_SAVE_FOLDER = G_GUINT64_CONSTANT(1) << 1,
+  FIELD_SKIP_PREVIEW = G_GUINT64_CONSTANT(1) << 2,
+  FIELD_COPY_TO_CLIPBOARD = G_GUINT64_CONSTANT(1) << 3,
+  FIELD_SAVE_TO_FOLDER = G_GUINT64_CONSTANT(1) << 4,
+  FIELD_NOTIFY_SUCCESS = G_GUINT64_CONSTANT(1) << 5,
+  FIELD_NOTIFY_ERRORS = G_GUINT64_CONSTANT(1) << 6,
+  FIELD_NOTIFY_THUMBNAILS = G_GUINT64_CONSTANT(1) << 7,
+  FIELD_PREVIEW_MODE = G_GUINT64_CONSTANT(1) << 8,
+  FIELD_PREVIEW_FOCUSED = G_GUINT64_CONSTANT(1) << 9,
+  FIELD_CLOSE_ON_SAVE = G_GUINT64_CONSTANT(1) << 10,
+  FIELD_PREVIEW_WIDTH = G_GUINT64_CONSTANT(1) << 11,
+  FIELD_PREVIEW_HEIGHT = G_GUINT64_CONSTANT(1) << 12,
+  FIELD_COLUMN_DISPLAY = G_GUINT64_CONSTANT(1) << 13,
+  FIELD_FLOATING_X = G_GUINT64_CONSTANT(1) << 14,
+  FIELD_FLOATING_Y = G_GUINT64_CONSTANT(1) << 15,
+  FIELD_FLOATING_RELATIVE = G_GUINT64_CONSTANT(1) << 16,
+};
+
+static const ConfigFieldSpec capture_fields[] = {
+    {"region_capture_mode", FIELD_REGION_MODE},
+};
+static const ConfigFieldSpec capture_after_fields[] = {
+    {"save_folder", FIELD_SAVE_FOLDER},
+};
+static const ConfigFieldSpec mode_fields[] = {
+    {"skip_preview", FIELD_SKIP_PREVIEW},
+    {"copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
+    {"save_to_folder", FIELD_SAVE_TO_FOLDER},
+};
+static const ConfigFieldSpec notification_fields[] = {
+    {"success", FIELD_NOTIFY_SUCCESS},
+    {"errors", FIELD_NOTIFY_ERRORS},
+    {"thumbnails", FIELD_NOTIFY_THUMBNAILS},
+};
+static const ConfigFieldSpec preview_fields[] = {
+    {"mode", FIELD_PREVIEW_MODE},
+    {"focused", FIELD_PREVIEW_FOCUSED},
+    {"close_preview_on_save", FIELD_CLOSE_ON_SAVE},
+    {"width", FIELD_PREVIEW_WIDTH},
+    {"height", FIELD_PREVIEW_HEIGHT},
+    {"default_column_display", FIELD_COLUMN_DISPLAY},
+};
+static const ConfigFieldSpec floating_fields[] = {
+    {"x", FIELD_FLOATING_X},
+    {"y", FIELD_FLOATING_Y},
+    {"relative_to", FIELD_FLOATING_RELATIVE},
+};
+
+static const ConfigFieldSpec *fields_for_section(ConfigSection section,
+                                                  gsize *count) {
+  switch (section) {
+  case SECTION_CAPTURE:
+    *count = G_N_ELEMENTS(capture_fields);
+    return capture_fields;
+  case SECTION_CAPTURE_AFTER:
+    *count = G_N_ELEMENTS(capture_after_fields);
+    return capture_after_fields;
+  case SECTION_QUICK:
+  case SECTION_AREA:
+  case SECTION_FULLSCREEN:
+  case SECTION_ALL_SCREENS:
+    *count = G_N_ELEMENTS(mode_fields);
+    return mode_fields;
+  case SECTION_NOTIFICATIONS:
+    *count = G_N_ELEMENTS(notification_fields);
+    return notification_fields;
+  case SECTION_PREVIEW_WINDOW:
+    *count = G_N_ELEMENTS(preview_fields);
+    return preview_fields;
+  case SECTION_FLOATING_POSITION:
+    *count = G_N_ELEMENTS(floating_fields);
+    return floating_fields;
+  case SECTION_ROOT:
+    break;
+  }
+  *count = 0;
+  return NULL;
+}
+
+static const char *section_name(ConfigSection section) {
+  switch (section) {
+  case SECTION_CAPTURE:
+    return "capture";
+  case SECTION_CAPTURE_AFTER:
+    return "capture.after";
+  case SECTION_QUICK:
+    return "capture.after.quick";
+  case SECTION_AREA:
+    return "capture.after.area";
+  case SECTION_FULLSCREEN:
+    return "capture.after.fullscreen";
+  case SECTION_ALL_SCREENS:
+    return "capture.after.all_screens";
+  case SECTION_NOTIFICATIONS:
+    return "notifications";
+  case SECTION_PREVIEW_WINDOW:
+    return "preview.window";
+  case SECTION_FLOATING_POSITION:
+    return "preview.window.floating_position";
+  case SECTION_ROOT:
+    return NULL;
+  }
+  return NULL;
+}
+
+static const ShaulaAfterModeConfig *const_mode_for_section(
+    const ShaulaConfig *config, ConfigSection section) {
+  switch (section) {
+  case SECTION_QUICK:
+    return &config->quick;
+  case SECTION_AREA:
+    return &config->area;
+  case SECTION_FULLSCREEN:
+    return &config->fullscreen;
+  case SECTION_ALL_SCREENS:
+    return &config->all_screens;
+  default:
+    return NULL;
+  }
+}
+
+static char *field_value_new(const ShaulaConfig *config, ConfigSection section,
+                             const char *key) {
+  const ShaulaAfterModeConfig *mode =
+      const_mode_for_section(config, section);
+  if (mode != NULL) {
+    if (g_str_equal(key, "skip_preview"))
+      return g_strdup(mode->skip_preview ? "true" : "false");
+    if (g_str_equal(key, "copy_to_clipboard"))
+      return g_strdup(mode->copy_to_clipboard ? "true" : "false");
+    if (g_str_equal(key, "save_to_folder"))
+      return g_strdup(mode->save_to_folder ? "true" : "false");
+  }
+  if (section == SECTION_CAPTURE &&
+      g_str_equal(key, "region_capture_mode"))
+    return g_strdup_printf("\"%s\"", config->region_capture_mode);
+  if (section == SECTION_CAPTURE_AFTER && g_str_equal(key, "save_folder"))
+    return g_strdup_printf("\"%s\"", config->save_folder);
+  if (section == SECTION_NOTIFICATIONS) {
+    if (g_str_equal(key, "success"))
+      return g_strdup(config->notifications_success ? "true" : "false");
+    if (g_str_equal(key, "errors"))
+      return g_strdup(config->notifications_errors ? "true" : "false");
+    if (g_str_equal(key, "thumbnails"))
+      return g_strdup(config->notifications_thumbnails ? "true" : "false");
+  }
+  if (section == SECTION_PREVIEW_WINDOW) {
+    if (g_str_equal(key, "mode"))
+      return g_strdup_printf("\"%s\"", config->preview_mode);
+    if (g_str_equal(key, "focused"))
+      return g_strdup(config->preview_focused ? "true" : "false");
+    if (g_str_equal(key, "close_preview_on_save"))
+      return g_strdup(config->close_preview_on_save ? "true" : "false");
+    if (g_str_equal(key, "width"))
+      return g_strdup_printf("%u", config->preview_width);
+    if (g_str_equal(key, "height"))
+      return g_strdup_printf("%u", config->preview_height);
+    if (g_str_equal(key, "default_column_display"))
+      return g_strdup_printf("\"%s\"", config->column_display);
+  }
+  if (section == SECTION_FLOATING_POSITION) {
+    if (g_str_equal(key, "x"))
+      return config->floating_x_set ? g_strdup_printf("%d", config->floating_x)
+                                    : NULL;
+    if (g_str_equal(key, "y"))
+      return config->floating_y_set ? g_strdup_printf("%d", config->floating_y)
+                                    : NULL;
+    if (g_str_equal(key, "relative_to"))
+      return g_strdup_printf("\"%s\"", config->floating_relative_to);
+  }
+  return NULL;
+}
+
+static ConfigFieldMask field_bit(ConfigSection section, const char *key) {
+  gsize count = 0;
+  const ConfigFieldSpec *fields = fields_for_section(section, &count);
+  for (gsize i = 0; i < count; i++) {
+    if (g_str_equal(fields[i].key, key))
+      return fields[i].bit;
+  }
+  return 0;
+}
+
+static void ensure_line_boundary(GString *output) {
+  if (output->len > 0 && output->str[output->len - 1] != '\n')
+    g_string_append_c(output, '\n');
+}
+
+static void append_missing_fields(GString *output, const ShaulaConfig *config,
+                                  ConfigSection section,
+                                  ConfigFieldMask seen_fields) {
+  gsize count = 0;
+  const ConfigFieldSpec *fields = fields_for_section(section, &count);
+  if (fields == NULL)
+    return;
+  for (gsize i = 0; i < count; i++) {
+    if ((seen_fields & fields[i].bit) != 0)
+      continue;
+    g_autofree char *value =
+        field_value_new(config, section, fields[i].key);
+    if (value == NULL)
+      continue;
+    ensure_line_boundary(output);
+    g_string_append_printf(output, "%s = %s\n", fields[i].key, value);
+  }
+}
+
+static gboolean section_from_line(const char *line, ConfigSection *section) {
+  g_autofree char *copy = g_strdup(line);
+  char *trimmed = strip_comment(copy);
+  gsize length = strlen(trimmed);
+  if (length < 3 || trimmed[0] != '[' || trimmed[length - 1] != ']')
+    return FALSE;
+  trimmed[length - 1] = '\0';
+  return section_from_name(g_strstrip(trimmed + 1), section);
+}
+
+static const char *inline_comment_start(const char *value) {
+  gboolean in_string = FALSE;
+  gboolean escaped = FALSE;
+  for (const char *cursor = value; *cursor != '\0'; cursor++) {
+    if (escaped) {
+      escaped = FALSE;
+      continue;
+    }
+    if (*cursor == '\\' && in_string) {
+      escaped = TRUE;
+      continue;
+    }
+    if (*cursor == '"') {
+      in_string = !in_string;
+      continue;
+    }
+    if (*cursor == '#' && !in_string)
+      return cursor;
+  }
+  return NULL;
+}
+
+static char *patch_config_text(const char *current,
+                               const ShaulaConfig *config) {
+  static const ConfigSection section_order[] = {
+      SECTION_CAPTURE,     SECTION_CAPTURE_AFTER, SECTION_QUICK,
+      SECTION_AREA,        SECTION_FULLSCREEN,    SECTION_ALL_SCREENS,
+      SECTION_NOTIFICATIONS, SECTION_PREVIEW_WINDOW,
+      SECTION_FLOATING_POSITION,
+  };
+  const gboolean had_trailing_newline = g_str_has_suffix(current, "\n");
+  g_auto(GStrv) lines = g_strsplit(current, "\n", -1);
+  gsize line_count = g_strv_length(lines);
+  GString *output = g_string_new(NULL);
+  ConfigSection section = SECTION_ROOT;
+  ConfigFieldMask seen_fields = 0;
+  ConfigFieldMask seen_sections = 0;
+
+  for (gsize i = 0; i < line_count; i++) {
+    if (i + 1 == line_count && had_trailing_newline && lines[i][0] == '\0')
+      break;
+    ConfigSection next_section = SECTION_ROOT;
+    if (section_from_line(lines[i], &next_section)) {
+      append_missing_fields(output, config, section, seen_fields);
+      section = next_section;
+      seen_fields = 0;
+      seen_sections |= G_GUINT64_CONSTANT(1) << (guint)section;
+      g_string_append(output, lines[i]);
+    } else {
+      const char *equals = strchr(lines[i], '=');
+      gboolean replaced = FALSE;
+      if (equals != NULL && section != SECTION_ROOT) {
+        g_autofree char *key_text = g_strndup(lines[i], (gsize)(equals - lines[i]));
+        char *key = g_strstrip(key_text);
+        ConfigFieldMask bit = field_bit(section, key);
+        if (bit != 0) {
+          g_autofree char *value = field_value_new(config, section, key);
+          seen_fields |= bit;
+          if (value == NULL) {
+            replaced = TRUE;
+          } else {
+            const char *value_start = equals + 1;
+            while (*value_start == ' ' || *value_start == '\t')
+              value_start++;
+            const char *comment = inline_comment_start(value_start);
+            const char *value_end =
+                comment != NULL ? comment : lines[i] + strlen(lines[i]);
+            while (value_end > value_start &&
+                   g_ascii_isspace((guchar)value_end[-1]))
+              value_end--;
+            g_string_append_len(output, lines[i],
+                                (gssize)(value_start - lines[i]));
+            g_string_append(output, value);
+            g_string_append(output, value_end);
+            replaced = TRUE;
+          }
+        }
+      }
+      if (!replaced)
+        g_string_append(output, lines[i]);
+    }
+    if (i + 1 < line_count || had_trailing_newline)
+      g_string_append_c(output, '\n');
+  }
+  append_missing_fields(output, config, section, seen_fields);
+
+  for (gsize i = 0; i < G_N_ELEMENTS(section_order); i++) {
+    ConfigSection missing = section_order[i];
+    if ((seen_sections & (G_GUINT64_CONSTANT(1) << (guint)missing)) != 0)
+      continue;
+    ensure_line_boundary(output);
+    if (output->len > 1 && output->str[output->len - 2] != '\n')
+      g_string_append_c(output, '\n');
+    g_string_append_printf(output, "[%s]\n", section_name(missing));
+    append_missing_fields(output, config, missing, 0);
+  }
+  return g_string_free(output, FALSE);
+}
+
+static char *backup_path_new(const char *path) {
+  const gint64 timestamp = (gint64)time(NULL);
+  for (guint attempt = 0; attempt < 100; attempt++) {
+    g_autofree char *suffix =
+        attempt == 0 ? g_strdup("") : g_strdup_printf("-%u", attempt);
+    char *candidate =
+        g_strdup_printf("%s.shaula-backup-%" G_GINT64_FORMAT "%s", path,
+                        timestamp, suffix);
+    if (!g_file_test(candidate, G_FILE_TEST_EXISTS))
+      return candidate;
+    g_free(candidate);
+  }
+  return NULL;
+}
+
 ShaulaConfigStatus shaula_config_save(const char *path,
                                       const ShaulaConfig *config) {
   if (path == NULL || config == NULL || !shaula_config_validate(config))
@@ -410,16 +750,24 @@ ShaulaConfigStatus shaula_config_save(const char *path,
   g_autofree char *parent = g_path_get_dirname(path);
   if (g_mkdir_with_parents(parent, 0700) != 0)
     return SHAULA_CONFIG_STATUS_UNREADABLE;
-  g_autofree char *contents = shaula_config_serialize(config);
+
+  const gboolean exists = g_file_test(path, G_FILE_TEST_EXISTS);
+  g_autofree char *old = NULL;
+  gsize old_length = 0;
+  if (exists && !g_file_get_contents(path, &old, &old_length, NULL))
+    return SHAULA_CONFIG_STATUS_UNREADABLE;
+  g_autofree char *contents =
+      exists ? patch_config_text(old, config) : shaula_config_serialize(config);
   if (contents == NULL)
     return SHAULA_CONFIG_STATUS_UNREADABLE;
+  if (exists && g_str_equal(old, contents))
+    return SHAULA_CONFIG_STATUS_OK;
 
-  if (g_file_test(path, G_FILE_TEST_EXISTS)) {
-    g_autofree char *backup = g_strconcat(path, ".bak", NULL);
-    g_autofree char *old = NULL;
-    gsize old_length = 0;
-    if (g_file_get_contents(path, &old, &old_length, NULL))
-      (void)g_file_set_contents(backup, old, (gssize)old_length, NULL);
+  if (exists) {
+    g_autofree char *backup = backup_path_new(path);
+    if (backup == NULL ||
+        !g_file_set_contents(backup, old, (gssize)old_length, NULL))
+      return SHAULA_CONFIG_STATUS_UNREADABLE;
   }
 
   g_autofree char *temporary =

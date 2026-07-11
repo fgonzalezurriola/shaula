@@ -37,7 +37,9 @@ and is not a valid unsupported-compositor fixture.
 These can be useful when touching the named contract, but they are not part of
 the default gate unless explicitly invoked:
 
-- `./dev check` validates the Meson build and test suite.
+- `./dev check` validates the Meson build and test suite, including
+  `assert-port-command-compatibility.sh` with fake capture, Niri, clipboard, and
+  notification processes.
 - `scripts/qa/assert-default-output-path.sh`
 - `scripts/qa/assert-overlay-geometry-fixtures.sh`
 - `scripts/qa/assert-no-runtime-stub.sh`

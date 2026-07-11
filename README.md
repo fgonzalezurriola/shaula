@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scri
 Runtime dependencies:
 
 ```bash
-sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell
+sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell json-glib
 ```
 
 Optional fonts:
@@ -96,6 +96,7 @@ Requirements:
 * A C11 compiler
 * `jq`
 * GTK4 / gtk4-layer-shell development packages
+* JSON-GLib development package
 * Wayland development packages
 
 Build from source:

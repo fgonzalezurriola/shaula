@@ -12,11 +12,12 @@ retained only in migration specifications and Git history.
 | Area | Current C ownership | Maintained verification |
 | --- | --- | --- |
 | Production build/install | `meson.build`, component `meson.build` files | `./dev build`, staged Meson install, release workflow |
-| CLI and orchestration | `src/main.c` | QA schemas/failure matrix, command smoke checks |
+| CLI and orchestration | `src/main.c` | QA schemas/failure matrix plus `port-command-compatibility` contract fixture |
 | Capture lifecycle/backends | `src/capture/command.c`, capture helpers | QA capture content/schema/mode checks, manual Wayland/Niri gates |
-| Config and Niri integration | `src/config/config.c`, managed-block logic in `src/main.c` | config/Niri smoke checks, Settings process tests |
+| Config and Niri integration | `src/config/config.c`, managed-block logic in `src/main.c` | comment/layout preservation fixture, config/Niri smoke checks, Settings process tests |
 | Runtime primitives | `src/runtime/*.c` | runtime env/path/tool/helper/process/state/lock unit tests |
 | Compositor and capabilities | `src/compositor/*.c`, `src/capabilities/*.c` | compositor, focused-output, capabilities unit tests |
+| Explore inventory | `src/explore/inventory.c`, dispatch in `src/main.c` | fake-Niri normalized inventory and focused-target contract fixture |
 | Preflight | `src/preflight/probe.c` | preflight unit and QA schema checks |
 | Error and JSON policy | `src/errors/taxonomy.c`, `src/cli/json.c` | taxonomy/JSON unit tests and canonical fixture |
 | Notification request model | `src/notify/request.c` | notification request unit tests |
@@ -32,6 +33,7 @@ retained only in migration specifications and Git history.
 - Production and QA scripts do not invoke `zig` or reference `zig-out`.
 - `./dev check` passes the maintained Meson tests.
 - `./dev qa` passes the non-intrusive product matrix.
-- A staged Meson install contains all six executables and integration assets.
+- A staged Meson install contains all six executables and integration assets;
+  `build-stage/` remains generated, ignored, and absent from version control.
 - Strict warning, sanitizer, and live Wayland/Niri checks remain release gates
   appropriate to the changed behavior.

@@ -1,9 +1,12 @@
 #include "capabilities/runtime.h"
 #include "capture/command.h"
 #include "cli/json.h"
+#include "compositor/focused_output.h"
 #include "compositor/runtime.h"
 #include "config/config.h"
 #include "errors/taxonomy.h"
+#include "explore/inventory.h"
+#include "notify/request.h"
 #include "preflight/probe.h"
 #include "preview/preview_result.h"
 #include "runtime/process_exec.h"
@@ -1128,45 +1131,146 @@ static int command_directory(int argc, char **argv) {
   return write_success("directory screenshots", result, "[]");
 }
 
-static int command_history(int argc, char **argv) {
-  if (argc != 4 || !g_str_equal(argv[2], "list") ||
-      !g_str_equal(argv[3], "--json"))
-    return write_error("history", "ERR_CLI_USAGE",
-                       "usage: shaula history list --json", "{}");
+typedef struct {
+  char *path;
+  char *mime;
+  guint width;
+  guint height;
+  char *backend;
+  char *timestamp;
+} HistoryEntry;
+
+static void history_entry_free(gpointer data) {
+  HistoryEntry *entry = data;
+  if (entry == NULL)
+    return;
+  g_free(entry->path);
+  g_free(entry->mime);
+  g_free(entry->backend);
+  g_free(entry->timestamp);
+  g_free(entry);
+}
+
+static GPtrArray *history_entries_load(void) {
+  GPtrArray *entries = g_ptr_array_new_with_free_func(history_entry_free);
   g_autofree char *contents = NULL;
-  gsize length = 0;
-  if (!g_file_get_contents("/tmp/shaula/history/latest.v1", &contents, &length,
+  if (!g_file_get_contents("/tmp/shaula/history/latest.v1", &contents, NULL,
                            NULL))
-    return write_success("history list", "{\"entries\":[]}", "[]");
-  GString *entries = g_string_new("{\"entries\":[");
+    return entries;
+
   g_auto(GStrv) lines = g_strsplit(contents, "\n", -1);
-  gboolean first = TRUE;
-  for (gsize i = 0; lines[i] != NULL && i < 20; i++) {
+  for (gsize i = 0; lines[i] != NULL && entries->len < 20; i++) {
     if (lines[i][0] == '\0')
       continue;
     g_auto(GStrv) fields = g_strsplit(lines[i], "|", 6);
     if (g_strv_length(fields) != 6)
       continue;
-    g_autofree char *path = json_string(fields[0]);
-    g_autofree char *mime = json_string(fields[1]);
-    g_autofree char *backend = json_string(fields[4]);
-    g_autofree char *timestamp = json_string(fields[5]);
-    if (!first)
-      g_string_append_c(entries, ',');
-    first = FALSE;
-    g_string_append_printf(
-        entries,
-        "{\"path\":%s,\"mime\":%s,\"dimensions\":{\"width\":%s,"
-        "\"height\":%s},\"backend_used\":%s,\"timestamp\":%s}",
-        path, mime, fields[2], fields[3], backend, timestamp);
+    char *width_end = NULL;
+    char *height_end = NULL;
+    guint64 width = g_ascii_strtoull(fields[2], &width_end, 10);
+    guint64 height = g_ascii_strtoull(fields[3], &height_end, 10);
+    if (width_end == fields[2] || *width_end != '\0' ||
+        height_end == fields[3] || *height_end != '\0' || width > G_MAXUINT ||
+        height > G_MAXUINT)
+      continue;
+    HistoryEntry *entry = g_new0(HistoryEntry, 1);
+    entry->path = g_strdup(fields[0]);
+    entry->mime = g_strdup(fields[1]);
+    entry->width = (guint)width;
+    entry->height = (guint)height;
+    entry->backend = g_strdup(fields[4]);
+    entry->timestamp = g_strdup(fields[5]);
+    g_ptr_array_add(entries, entry);
   }
-  g_string_append(entries, "]}");
-  int result = write_success("history list", entries->str, "[]");
-  g_string_free(entries, TRUE);
-  return result;
+  return entries;
+}
+
+static void history_entry_append_json(GString *output,
+                                      const HistoryEntry *entry) {
+  g_autofree char *path = json_string(entry->path);
+  g_autofree char *mime = json_string(entry->mime);
+  g_autofree char *backend = json_string(entry->backend);
+  g_autofree char *timestamp = json_string(entry->timestamp);
+  g_string_append_printf(
+      output,
+      "{\"path\":%s,\"mime\":%s,\"dimensions\":{\"width\":%u,"
+      "\"height\":%u},\"backend_used\":%s,\"timestamp\":%s}",
+      path, mime, entry->width, entry->height, backend, timestamp);
+}
+
+static int command_history(int argc, char **argv) {
+  if (argc < 4)
+    return write_error("history", "ERR_CLI_USAGE",
+                       "usage: shaula history <list|show> --json", "{}");
+  const char *subcommand = argv[2];
+  if (!g_str_equal(subcommand, "list") && !g_str_equal(subcommand, "show"))
+    return write_error("history", "ERR_CLI_USAGE",
+                       "unsupported history subcommand", "{}");
+
+  gboolean json = FALSE;
+  const char *id = NULL;
+  for (int i = 3; i < argc; i++) {
+    if (g_str_equal(argv[i], "--json")) {
+      json = TRUE;
+      continue;
+    }
+    if (g_str_equal(subcommand, "show") && g_str_equal(argv[i], "--id")) {
+      if (i + 1 >= argc)
+        return write_error("history show", "ERR_CLI_USAGE",
+                           "--id requires an entry id", "{}");
+      id = argv[++i];
+      continue;
+    }
+    return write_error(g_str_equal(subcommand, "show") ? "history show"
+                                                        : "history list",
+                       "ERR_CLI_USAGE", "unsupported flag", "{}");
+  }
+  if (!json)
+    return write_error(g_str_equal(subcommand, "show") ? "history show"
+                                                        : "history list",
+                       "ERR_CLI_USAGE", "--json is required", "{}");
+
+  g_autoptr(GPtrArray) entries = history_entries_load();
+  if (g_str_equal(subcommand, "show")) {
+    if (id == NULL)
+      return write_error("history show", "ERR_CLI_USAGE", "--id is required",
+                         "{}");
+    if (!g_str_equal(id, "latest") || entries->len == 0)
+      return write_error("history show", "ERR_HISTORY_ENTRY_NOT_FOUND",
+                         "history entry was not found", "{}");
+    GString *result = g_string_new("{\"id\":\"latest\",\"entry\":");
+    history_entry_append_json(result, g_ptr_array_index(entries, 0));
+    g_string_append_c(result, '}');
+    int status = write_success("history show", result->str, "[]");
+    g_string_free(result, TRUE);
+    return status;
+  }
+
+  GString *result = g_string_new("{\"entries\":[");
+  for (guint i = 0; i < entries->len; i++) {
+    if (i > 0)
+      g_string_append_c(result, ',');
+    history_entry_append_json(result, g_ptr_array_index(entries, i));
+  }
+  g_string_append(result, "]}");
+  int status = write_success("history list", result->str, "[]");
+  g_string_free(result, TRUE);
+  return status;
+}
+
+static gboolean clipboard_available(void) {
+  const char *value = g_getenv("SHAULA_CLIPBOARD_AVAILABLE");
+  if (value == NULL)
+    return TRUE;
+  return g_ascii_strcasecmp(value, "0") != 0 &&
+         g_ascii_strcasecmp(value, "false") != 0;
 }
 
 static int command_clipboard(int argc, char **argv) {
+  static const char *clipboard_dir = "/tmp/shaula/clipboard";
+  static const char *clipboard_state =
+      "/tmp/shaula/clipboard/current-image.path";
+
   if (argc < 4)
     return write_error("clipboard", "ERR_CLI_USAGE",
                        "usage: shaula clipboard <copy-image|import-image> --json",
@@ -1189,6 +1293,17 @@ static int command_clipboard(int argc, char **argv) {
   if (!json)
     return write_error("clipboard", "ERR_CLI_USAGE", "--json is required",
                        "{}");
+  if (!g_str_equal(subcommand, "copy-image") &&
+      !g_str_equal(subcommand, "import-image"))
+    return write_error("clipboard", "ERR_CLI_USAGE",
+                       "unsupported clipboard subcommand", "{}");
+  if (!clipboard_available())
+    return write_error(g_str_equal(subcommand, "copy-image")
+                           ? "clipboard copy-image"
+                           : "clipboard import-image",
+                       "ERR_CLIPBOARD_UNAVAILABLE",
+                       "clipboard backend is unavailable", "{}");
+
   if (g_str_equal(subcommand, "copy-image")) {
     if (input == NULL)
       return write_error("clipboard copy-image", "ERR_CLI_USAGE",
@@ -1198,6 +1313,15 @@ static int command_clipboard(int argc, char **argv) {
     if (!g_file_get_contents(input, &bytes, &length, NULL))
       return write_error("clipboard copy-image", "ERR_CLIPBOARD_COPY_FAILED",
                          "clipboard image copy failed", "{}");
+    if (g_mkdir_with_parents(clipboard_dir, 0755) != 0) {
+      return write_error("clipboard copy-image", "ERR_CLIPBOARD_COPY_FAILED",
+                         "clipboard image copy failed", "{}");
+    }
+    g_autofree char *state_contents = g_strconcat(input, "\n", NULL);
+    if (!g_file_set_contents(clipboard_state, state_contents, -1, NULL))
+      return write_error("clipboard copy-image", "ERR_CLIPBOARD_COPY_FAILED",
+                         "clipboard image copy failed", "{}");
+
     ShaulaProcessSpan arguments[] = {{.data = "wl-copy", .length = 7},
                                      {.data = "--type", .length = 6},
                                      {.data = "image/png", .length = 9}};
@@ -1216,30 +1340,28 @@ static int command_clipboard(int argc, char **argv) {
         "{\"input\":%s,\"copied\":true}", input_json);
     return write_success("clipboard copy-image", result, "[]");
   }
-  if (!g_str_equal(subcommand, "import-image"))
-    return write_error("clipboard", "ERR_CLI_USAGE",
-                       "unsupported clipboard subcommand", "{}");
-  ShaulaProcessSpan arguments[] = {{.data = "wl-paste", .length = 8},
-                                   {.data = "--no-newline", .length = 12},
-                                   {.data = "--type", .length = 6},
-                                   {.data = "image/png", .length = 9}};
-  ShaulaProcessOutput process = {0};
-  if (shaula_process_run(
-          (ShaulaProcessArgv){.items = arguments,
-                              .length = G_N_ELEMENTS(arguments)},
-          NULL, 64 * 1024 * 1024, 4096, &process) != SHAULA_PROCESS_STATUS_OK ||
-      process.term_kind != SHAULA_PROCESS_TERM_EXITED || process.term_value != 0)
-    return write_error("clipboard import-image", "ERR_CLIPBOARD_UNAVAILABLE",
-                       "clipboard backend is unavailable", "{}");
-  g_autofree char *resolved = output != NULL
-                                  ? g_strdup(output)
-                                  : g_strdup("/tmp/shaula/clipboard-import.png");
+  g_autofree char *state_contents = NULL;
+  if (!g_file_get_contents(clipboard_state, &state_contents, NULL, NULL))
+    return write_error("clipboard import-image",
+                       "ERR_CLIPBOARD_IMPORT_INVALID",
+                       "clipboard image import failed", "{}");
+  g_strstrip(state_contents);
+  if (state_contents[0] == '\0')
+    return write_error("clipboard import-image",
+                       "ERR_CLIPBOARD_IMPORT_INVALID",
+                       "clipboard image import failed", "{}");
+  g_autofree char *source = g_strdup(state_contents);
+  g_autofree char *resolved =
+      output != NULL
+          ? g_strdup(output)
+          : g_strdup_printf("/tmp/shaula/imported-%" G_GINT64_FORMAT ".png",
+                            (gint64)time(NULL));
+  g_autofree char *bytes = NULL;
+  gsize length = 0;
   g_autofree char *parent = g_path_get_dirname(resolved);
-  (void)g_mkdir_with_parents(parent, 0755);
-  gboolean wrote = g_file_set_contents(resolved, process.stdout_bytes.data,
-                                       (gssize)process.stdout_bytes.length, NULL);
-  shaula_process_output_clear(&process);
-  if (!wrote)
+  if (!g_file_get_contents(source, &bytes, &length, NULL) ||
+      g_mkdir_with_parents(parent, 0755) != 0 ||
+      !g_file_set_contents(resolved, bytes, (gssize)length, NULL))
     return write_error("clipboard import-image",
                        "ERR_CLIPBOARD_IMPORT_INVALID",
                        "clipboard image import failed", "{}");
@@ -1250,28 +1372,64 @@ static int command_clipboard(int argc, char **argv) {
 
 static int command_explore(int argc, char **argv) {
   gboolean json = FALSE;
+  gboolean brief = FALSE;
   for (int i = 2; i < argc; i++) {
     if (g_str_equal(argv[i], "--json"))
       json = TRUE;
-    else if (!g_str_equal(argv[i], "--brief"))
+    else if (g_str_equal(argv[i], "--brief"))
+      brief = TRUE;
+    else
       return write_error("explore", "ERR_CLI_USAGE", "unsupported flag", "{}");
   }
   if (!json)
     return write_error("explore", "ERR_CLI_USAGE", "--json is required", "{}");
+
   ShaulaCapabilitiesEnvironment environment = capabilities_environment();
   ShaulaRuntimeDecision runtime = {0};
-  (void)shaula_capabilities_resolve(&environment, &runtime);
-  g_autofree char *label = env_span_json(runtime.compositor.label);
+  if (shaula_capabilities_resolve(&environment, &runtime) !=
+      SHAULA_CAPABILITIES_STATUS_OK)
+    return write_error("explore", "ERR_UNKNOWN_UNMAPPED",
+                       "desktop inventory resolution failed", "{}");
+
   ShaulaEnvSpan kind_span = shaula_compositor_kind_token(runtime.compositor.kind);
-  g_autofree char *kind_text = g_strndup(kind_span.data, kind_span.length);
-  g_autofree char *kind = json_string(kind_text);
-  g_autofree char *result = g_strdup_printf(
-      "{\"compositor\":{\"kind\":%s,\"label\":%s},\"focused\":{"
-      "\"output_id\":null,\"workspace_id\":null,\"window_id\":null},"
-      "\"recommended_capture\":{\"mode\":\"fullscreen\",\"id\":null,"
-      "\"reason\":\"focused_output_unavailable\"}}",
-      kind, label);
-  return write_success("explore", result, "[\"explore_inventory_unavailable\"]");
+  g_autofree char *kind = g_strndup(kind_span.data, kind_span.length);
+  g_autofree char *label =
+      g_strndup(runtime.compositor.label.data, runtime.compositor.label.length);
+
+  ShaulaFocusedOutputResult focused;
+  shaula_focused_output_result_init(&focused);
+  ShaulaFocusedOutputEnvironment focused_environment = {
+      .overlay_output_name = g_getenv("SHAULA_OVERLAY_OUTPUT_NAME"),
+      .compositor = environment.compositor,
+  };
+  ShaulaFocusedOutputStatus focused_status =
+      shaula_focused_output_resolve(&focused_environment, &focused);
+  if (focused_status == SHAULA_FOCUSED_OUTPUT_STATUS_OUT_OF_MEMORY) {
+    shaula_focused_output_result_clear(&focused);
+    return write_error("explore", "ERR_UNKNOWN_UNMAPPED",
+                       "focused output resolution failed", "{}");
+  }
+  g_autofree char *focused_name =
+      focused.present
+          ? g_strndup((const char *)focused.name.data, focused.name.length)
+          : NULL;
+
+  ShaulaExploreInventory inventory;
+  shaula_explore_inventory_init(&inventory);
+  gboolean built = shaula_explore_inventory_build(
+      kind, label, focused_name, brief, &inventory);
+  shaula_focused_output_result_clear(&focused);
+  if (!built) {
+    shaula_explore_inventory_clear(&inventory);
+    return write_error("explore", "ERR_UNKNOWN_UNMAPPED",
+                       "desktop inventory response could not be built", "{}");
+  }
+  int status = write_success(
+      "explore", inventory.result_json,
+      inventory.inventory_available ? "[]"
+                                    : "[\"explore_inventory_unavailable\"]");
+  shaula_explore_inventory_clear(&inventory);
+  return status;
 }
 
 static int command_doctor(int argc, char **argv) {
@@ -1428,26 +1586,172 @@ static int command_setup(int argc, char **argv) {
   return 0;
 }
 
-static int command_notify(int argc, char **argv) {
-  if (argc < 4)
-    return write_error("notify", "ERR_CLI_USAGE",
-                       "usage: shaula notify <success|error> --json", "{}");
-  gboolean json = FALSE;
-  for (int i = 3; i < argc; i++) {
-    if (g_str_equal(argv[i], "--json"))
-      json = TRUE;
+static ShaulaNotifySpan notify_span(const char *value) {
+  return (ShaulaNotifySpan){.data = (const guint8 *)value,
+                            .length = value != NULL ? strlen(value) : 0};
+}
+
+static char **notify_argv_new(const ShaulaNotifySendArgs *args) {
+  char **argv = g_new0(char *, args->length + 1);
+  for (gsize i = 0; i < args->length; i++)
+    argv[i] = g_strndup((const char *)args->items[i].data,
+                        args->items[i].length);
+  return argv;
+}
+
+static gboolean notify_request_run(const char *summary, const char *body,
+                                   const char *image_path, guint timeout_ms,
+                                   gboolean transient, gboolean with_action,
+                                   char **action_output) {
+  ShaulaNotifyRequest request;
+  shaula_notify_request_init(&request);
+  request.summary = notify_span(summary);
+  request.body = notify_span(body);
+  request.urgency = SHAULA_NOTIFY_URGENCY_NORMAL;
+  request.timeout_ms = timeout_ms;
+  request.transient = transient ? 1 : 0;
+  if (image_path != NULL) {
+    request.has_image_path = 1;
+    request.image_path = notify_span(image_path);
   }
-  if (!json)
-    return write_error("notify", "ERR_CLI_USAGE", "--json is required", "{}");
-  const char *summary = g_str_equal(argv[2], "error") ? "Shaula error"
-                                                       : "Screenshot ready";
-  char *notify_argv[] = {"notify-send", (char *)summary, NULL};
+  if (with_action) {
+    request.has_action = 1;
+    request.action_id = notify_span("default");
+    request.action_label = notify_span("Show in folder");
+  }
+
+  for (guint attempt = 0; attempt < (image_path != NULL ? 2U : 1U);
+       attempt++) {
+    ShaulaNotifySendArgs args;
+    shaula_notify_send_args_init(&args);
+    ShaulaNotifyImageMode image_mode =
+        attempt == 0 ? SHAULA_NOTIFY_IMAGE_MODE_HINT
+                     : SHAULA_NOTIFY_IMAGE_MODE_ICON;
+    if (shaula_notify_send_args_build(&request, image_mode, &args) !=
+        SHAULA_NOTIFY_STATUS_OK) {
+      shaula_notify_send_args_clear(&args);
+      return FALSE;
+    }
+    g_auto(GStrv) argv = notify_argv_new(&args);
+    g_autofree char *stdout_text = NULL;
+    int exit_code = 0;
+    gboolean spawned =
+        run_sync(argv, NULL, action_output != NULL ? &stdout_text : NULL, NULL,
+                 &exit_code);
+    shaula_notify_send_args_clear(&args);
+    if (spawned && exit_code == 0) {
+      if (action_output != NULL) {
+        g_strstrip(stdout_text);
+        *action_output = g_steal_pointer(&stdout_text);
+      }
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static gboolean reveal_file(const char *path) {
+  g_autofree char *absolute = g_canonicalize_filename(path, NULL);
+  ShaulaNotifyOwnedBytes uri = {0};
+  if (shaula_notify_file_uri_build(notify_span(absolute), &uri) !=
+      SHAULA_NOTIFY_STATUS_OK)
+    return FALSE;
+  g_autofree char *uri_text =
+      g_strndup((const char *)uri.data, uri.length);
+  shaula_notify_owned_bytes_clear(&uri);
+  g_autofree char *items = g_strdup_printf("['%s']", uri_text);
+  char *gdbus_argv[] = {
+      "gdbus",
+      "call",
+      "--session",
+      "--dest",
+      "org.freedesktop.FileManager1",
+      "--object-path",
+      "/org/freedesktop/FileManager1",
+      "--method",
+      "org.freedesktop.FileManager1.ShowItems",
+      items,
+      "",
+      NULL,
+  };
   int exit_code = 0;
-  gboolean sent = run_sync(notify_argv, NULL, NULL, NULL, &exit_code) &&
-                  exit_code == 0;
+  if (run_sync(gdbus_argv, NULL, NULL, NULL, &exit_code) && exit_code == 0)
+    return TRUE;
+
+  g_autofree char *parent = g_path_get_dirname(absolute);
+  char *open_argv[] = {"xdg-open", parent, NULL};
+  return run_sync(open_argv, NULL, NULL, NULL, &exit_code) && exit_code == 0;
+}
+
+static int notify_test(const char *kind) {
+  const char *summary = "Screenshot captured";
+  const char *body = "You can paste the image from the clipboard.";
+  const char *image_path = NULL;
+  guint timeout_ms = 2500;
+  gboolean transient = TRUE;
+  if (g_str_equal(kind, "saved")) {
+    body = "Saved to screenshots folder.";
+    image_path = "/tmp/shaula-notify-test.png";
+    timeout_ms = 6000;
+  } else if (g_str_equal(kind, "error")) {
+    summary = "Could not copy screenshot";
+    body = "Copy failed";
+    timeout_ms = 5000;
+    transient = FALSE;
+  }
+  gboolean delivered = notify_request_run(summary, body, image_path, timeout_ms,
+                                           transient, FALSE, NULL);
+  g_autofree char *kind_json = json_string(kind);
   g_autofree char *result =
-      g_strdup_printf("{\"sent\":%s}", json_bool(sent));
-  return write_success("notify", result, sent ? "[]" : "[\"notify_failed\"]");
+      g_strdup_printf("{\"kind\":%s,\"delivered\":%s}", kind_json,
+                      json_bool(delivered));
+  g_autofree char *timestamp = json_timestamp();
+  g_print("{\"ok\":%s,\"contract_version\":\"1.0.0\","
+          "\"command\":\"notify test\",\"timestamp\":\"%s\","
+          "\"result\":%s,\"warnings\":[]}\n",
+          json_bool(delivered), timestamp, result);
+  return 0;
+}
+
+static int command_notify(int argc, char **argv) {
+  if (argc >= 4 && g_str_equal(argv[2], "__saved-action-listener")) {
+    g_autofree char *absolute = g_canonicalize_filename(argv[3], NULL);
+    const char *image_path = argc >= 5 ? argv[4] : NULL;
+    g_autofree char *action = NULL;
+    if (notify_request_run("Screenshot captured",
+                           "Saved to screenshots folder.", image_path, 6000,
+                           TRUE, TRUE, &action) &&
+        action != NULL &&
+        (g_str_equal(action, "default") ||
+         g_str_equal(action, "show-in-folder") ||
+         g_str_equal(action, "reveal-file")))
+      (void)reveal_file(absolute);
+    return 0;
+  }
+  if (argc >= 4 && g_str_equal(argv[2], "reveal-file")) {
+    (void)reveal_file(argv[3]);
+    return 0;
+  }
+  if (argc < 3 || !g_str_equal(argv[2], "test"))
+    return write_error("notify test", "ERR_CLI_USAGE",
+                       "usage: shaula notify test [--kind copied|saved|error]",
+                       "{}");
+
+  const char *kind = "copied";
+  for (int i = 3; i < argc; i++) {
+    if (!g_str_equal(argv[i], "--kind"))
+      return write_error("notify test", "ERR_CLI_USAGE", "unsupported flag",
+                         "{}");
+    if (i + 1 >= argc)
+      return write_error("notify test", "ERR_CLI_USAGE",
+                         "--kind requires copied, saved, or error", "{}");
+    kind = argv[++i];
+    if (!g_str_equal(kind, "copied") && !g_str_equal(kind, "saved") &&
+        !g_str_equal(kind, "error"))
+      return write_error("notify test", "ERR_CLI_USAGE",
+                         "--kind must be copied, saved, or error", "{}");
+  }
+  return notify_test(kind);
 }
 
 int main(int argc, char **argv) {

@@ -12,7 +12,7 @@ history; this document records current behavior and ownership.
   use Meson and C; the repository has no maintained Zig source or Zig build
   metadata.
 - The port specification and decision record remain in
-  `spec/zig-to-c-port.md` and `docs/adr/0002-zig-to-c-port.md`. They describe
+  `spec/zig-to-c-port.md` and `docs/adr/0002-port-zig-core-to-c.md`. They describe
   migration constraints and history, not current mixed-language ownership.
 - Interactive Wayland/Niri validation is still required whenever capture,
   overlay, clipboard, GTK, or compositor behavior changes.
@@ -29,7 +29,8 @@ history; this document records current behavior and ownership.
 - `./dev dev-install --yes` stages the Meson install, makes a local release
   archive, invokes `scripts/install.sh`, and reloads Noctalia when applicable.
 - GitHub release and C-port workflows build, test, stage, and inspect the Meson
-  payload. AUR source packaging uses Meson/Ninja.
+  payload. AUR source packaging uses Meson/Ninja. JSON-GLib is the maintained
+  runtime/build dependency for normalized Niri Explore inventory.
 
 ## Runtime ownership
 
@@ -39,7 +40,8 @@ history; this document records current behavior and ownership.
   locking, overlay selection, backend invocation, artifact validation, history,
   clipboard, Preview launch, and capture result JSON.
 - `src/config/config.c` owns defaults, the supported TOML subset, config path
-  resolution, validation, canonical serialization, backup, and atomic save.
+  resolution, validation, comment/layout-preserving field updates, timestamped
+  backup, and atomic save. Canonical serialization is used for new files.
 - `src/main.c` also owns managed Niri preview/keybind block rendering and
   installation. Managed writes preserve surrounding user KDL, reject malformed
   markers with deterministic `ERR_CONFIG_INVALID`, back up changed files, and
@@ -48,10 +50,13 @@ history; this document records current behavior and ownership.
   process execution, previous-area state, and capture-session locking.
 - `src/compositor/`, `src/capabilities/`, and `src/preflight/` own compositor
   classification, focused-output discovery, runtime/backend decisions, and the
-  complete preflight response.
+  complete preflight response. `src/explore/inventory.c` queries Niri and
+  normalizes outputs, workspaces, windows, focused IDs, and capture advice.
 - `src/errors/taxonomy.c` is the canonical `ERR_*` table and exit mapping.
   `src/cli/json.c` owns shared JSON escaping, timestamps, warnings, and basic
   error envelopes.
+- `src/main.c` preserves the history list/show, clipboard state import/copy,
+  notification test/action-listener, and file-reveal command contracts.
 - `src/preview/`, `src/settings/`, and `src/overlay/` contain the native GTK
   helpers and their C support modules.
 
@@ -101,6 +106,10 @@ history; this document records current behavior and ownership.
   buffers must be cleared by their documented clear functions.
 
 ## Verification
+
+`./dev check` also runs the non-intrusive top-level port command compatibility
+fixture covering capture selection, config preservation, clipboard/history,
+Explore inventory, notification grammar, and overlay error details.
 
 Every code change must run:
 

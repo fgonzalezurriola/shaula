@@ -711,7 +711,7 @@ missing_arch_runtime_packages() {
     return 0
   fi
   missing=""
-  for package in grim wl-clipboard gtk4 gtk4-layer-shell xdg-desktop-portal xdg-desktop-portal-gtk; do
+  for package in grim wl-clipboard gtk4 gtk4-layer-shell json-glib xdg-desktop-portal xdg-desktop-portal-gtk; do
     if ! pacman -Q "$package" >/dev/null 2>&1; then
       missing="${missing} ${package}"
     fi

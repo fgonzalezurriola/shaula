@@ -1,8 +1,19 @@
+# Zig (legacy local artifacts; no maintained Zig sources)
 .zig-cache/
 zig-out/
-/build-port/
-/build-asan/
-/build-c-port/
+
+# Meson / Ninja build trees (default, release, port, sanitizer, migration)
+/build/
+/build-*/
+/build-stage/
+
+# Web site generated output and dependencies
+web/node_modules/
+web/.astro/
+web/dist/
+web/.output/
+
+# Local tooling and QA evidence
 .pi/
 .qa/evidence/
 

@@ -34,6 +34,7 @@ glib_dep = dependency('glib-2.0')
 gio_dep = dependency('gio-2.0')
 gtk_dep = dependency('gtk4')
 gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0')
+json_glib_dep = dependency('json-glib-1.0')
 cairo_dep = dependency('cairo')
 pango_cairo_dep = dependency('pangocairo')
 layer_shell_dep = dependency('gtk4-layer-shell-0')
@@ -44,6 +45,7 @@ shaula_cli_include = include_directories('src')
 shaula_compositor_include = include_directories('src')
 shaula_core_include = include_directories('src/core')
 shaula_errors_include = include_directories('src')
+shaula_explore_include = include_directories('src')
 shaula_notify_include = include_directories('src')
 shaula_preflight_include = include_directories('src')
 shaula_preview_include = include_directories('src/preview')
@@ -56,6 +58,7 @@ subdir('src/errors')
 subdir('src/notify')
 subdir('src/preview')
 subdir('src/runtime')
+subdir('src/explore')
 subdir('src/compositor')
 subdir('src/capabilities')
 subdir('src/preflight')
@@ -64,7 +67,7 @@ subdir('src/settings')
 subdir('src/overlay')
 subdir('src/capture')
 
-executable(
+shaula_exe = executable(
   'shaula',
   'src/main.c',
   dependencies: [
@@ -73,8 +76,11 @@ executable(
     gdk_pixbuf_dep,
     shaula_capabilities_runtime_dep,
     shaula_cli_json_dep,
+    shaula_compositor_runtime_dep,
     shaula_config_dep,
     shaula_error_taxonomy_dep,
+    shaula_explore_inventory_dep,
+    shaula_notify_request_dep,
     shaula_preflight_probe_dep,
     shaula_preview_result_dep,
     shaula_runtime_process_exec_dep,
@@ -105,6 +111,7 @@ summary(
     'GIO': gio_dep.version(),
     'GTK': gtk_dep.version(),
     'GDK Pixbuf': gdk_pixbuf_dep.version(),
+    'JSON-GLib': json_glib_dep.version(),
     'Cairo': cairo_dep.version(),
     'Pango/Cairo': pango_cairo_dep.version(),
     'GTK4 layer shell': layer_shell_dep.version(),

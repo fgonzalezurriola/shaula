@@ -41,6 +41,7 @@ jobs:
             pkg-config \
             libgtk-4-dev \
             libgdk-pixbuf-2.0-dev \
+            libjson-glib-dev \
             libcairo2-dev \
             libwayland-dev \
             wayland-protocols

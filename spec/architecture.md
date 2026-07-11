@@ -540,8 +540,25 @@ focused output. It must not probe compositor/backend state again.
 - Explore, capture lifecycle, and overlay selection include the C header
   directly, pass their own environment maps, copy only a present result into
   their established caller allocation, and retain their existing advisory or
-  backend-level fallback behavior. No maintained C focused-output boundary
+  backend-level fallback behavior. No maintained Zig focused-output boundary
   remains.
+
+### Explore inventory boundary
+
+- `explore/inventory.{c,h}` owns Niri inventory process calls and normalized
+  output/workspace/window JSON. It executes exact `niri msg -j outputs`,
+  `workspaces`, and `windows` argv through the bounded C process executor and
+  parses responses with JSON-GLib.
+- Full mode returns normalized outputs, workspaces, windows, focused IDs, and a
+  recommended capture target. Brief mode queries only outputs and omits the
+  three inventory arrays while retaining focused-output capture advice.
+- Process, exit, size-limit, and JSON failures remain advisory absence. The
+  command still succeeds with `explore_inventory_unavailable`; it does not
+  invent partial inventory or turn desktop discovery into a public error.
+- `src/main.c` resolves compositor and focused output, passes borrowed values to
+  the inventory module, owns the public envelope, and releases the GLib-owned
+  result string. JSON-GLib is therefore a maintained runtime and build
+  dependency.
 
 ### Overlay
 
@@ -799,10 +816,20 @@ focused output. It must not probe compositor/backend state again.
 ### Diagnostics and configuration
 
 - `src/main.c` owns installed/runtime discovery.
-- `src/config/config.c` and `src/main.c` owns the `shaula config save` setting-flag grammar and
-  applies flags to the config draft.
-- `src/config/config.c` and `src/main.c` owns command-level config flags, orchestration, and JSON
+- `src/config/config.c` and `src/main.c` own the `shaula config save`
+  setting-flag grammar and apply flags to the config draft.
+- Existing valid files are patched by known section/key so comments, section
+  order, inline comments, whitespace, and unrelated custom values survive an
+  unrelated Settings save. Missing known fields/sections are appended;
+  intentionally cleared nullable floating coordinates are removed.
+- New files use canonical serialization. Changed existing files receive a
+  unique timestamped backup before atomic temporary-file replacement.
+- `src/main.c` owns command-level config flags, orchestration, and JSON
   envelopes.
+- `src/main.c` also retains the public `history list/show`, clipboard
+  state-backed copy/import, notification test/action-listener, and file-reveal
+  command contracts. These paths use direct argv/process APIs and do not invoke
+  a shell for user-controlled values.
 - `settings/settings_config.{c,h}` owns the C-facing Settings model,
   integrated defaults, config path resolution, preset mapping, and permissive
   `config show --json` field extraction. `settings/settings_process.{c,h}` owns
