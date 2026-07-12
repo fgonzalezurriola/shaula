@@ -1,6 +1,6 @@
 executable(
   'shaula-overlay',
-  'native_gtk_overlay.c',
+  ['native_gtk_overlay.c', 'overlay_selection.c'],
   dependencies: [gtk_dep, layer_shell_dep, math_dep],
   c_args: [
     '-DSHAULA_OVERLAY_STANDALONE',

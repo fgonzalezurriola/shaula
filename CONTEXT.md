@@ -39,11 +39,15 @@ history; this document records current behavior and ownership.
 - `src/capture/command.c` owns capture grammar, capability guards, session
   locking, overlay selection, backend invocation, artifact validation, history,
   clipboard, Preview launch, and capture result JSON.
+- Capture session ownership is lifecycle-scoped: every early outcome releases
+  automatically, while the success path explicitly releases before Preview.
 - `src/config/config.c` owns defaults, the supported TOML subset, config path
   resolution, validation, comment/layout-preserving field updates, timestamped
   backup, and atomic save. Canonical serialization is used for new files.
-- `src/main.c` also owns managed Niri preview/keybind block rendering and
-  installation. Managed writes preserve surrounding user KDL, reject malformed
+- `src/config/niri_managed.c` owns managed Niri preview/keybind path resolution,
+  marker validation, preservation, backups, atomic replacement, removal, and
+  conflict scanning; `src/main.c` owns rendering and public JSON presentation.
+  Managed writes preserve surrounding user KDL, reject malformed
   markers with deterministic `ERR_CONFIG_INVALID`, back up changed files, and
   are idempotent.
 - `src/runtime/` owns environment parsing, runtime paths, tool/helper lookup,
@@ -59,6 +63,11 @@ history; this document records current behavior and ownership.
   notification test/action-listener, and file-reveal command contracts.
 - `src/preview/`, `src/settings/`, and `src/overlay/` contain the native GTK
   helpers and their C support modules.
+- `src/overlay/overlay_selection.c` owns bounded create/move/resize/aspect
+  geometry; GTK callbacks adapt pointer events to that selection interface.
+- `src/preview/preview_annotation_behavior.c` is the Preview edit-query seam
+  for ranked hit testing, region selection, and eraser intersection. Annotation
+  variant rules and ADR-0001 Image ownership remain in `preview_annotations.c`.
 
 ## Public capture behavior
 
@@ -104,6 +113,10 @@ history; this document records current behavior and ownership.
   malformed helper payloads map to deterministic `ERR_*` outcomes.
 - Environment spans and static taxonomy records are borrowed. GLib-owned result
   buffers must be cleared by their documented clear functions.
+- An empty persisted `capture.after.save_folder` retains the historical default
+  `~/Pictures/shaula`; forced-save shortcuts must not treat it as an invalid path.
+- Direct save captures emit detached success notifications, gated by
+  `notifications.success`; thumbnail inclusion is gated by `notifications.thumbnails`.
 
 ## Verification
 

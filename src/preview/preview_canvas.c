@@ -1,5 +1,6 @@
 #include "preview_canvas.h"
 
+#include "preview_annotation_behavior.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -1036,8 +1037,12 @@ static gboolean eraser_mark_segment(ShaulaPreviewState *state,
     if (annotation == NULL ||
         shaula_preview_is_annotation_pending_erase(state, annotation))
       continue;
-    if (shaula_annotation_intersects_eraser_segment(annotation, image_start,
-                                                   image_end, radius)) {
+    if (shaula_annotation_behavior_matches(
+            annotation, (ShaulaAnnotationQuery){
+                            .kind = SHAULA_ANNOTATION_QUERY_ERASER,
+                            .start = image_start,
+                            .end = image_end,
+                            .tolerance = radius})) {
       int id = annotation->id;
       g_array_append_val(state->eraser_pending_annotation_ids, id);
     }

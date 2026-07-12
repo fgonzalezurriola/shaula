@@ -48,6 +48,23 @@ static void frozen_source_clear(FrozenSource *source) {
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(FrozenSource, frozen_source_clear)
 
 typedef struct {
+  char *path;
+  gboolean acquired;
+} CaptureSession;
+
+/* Owns the capture lock across every lifecycle exit and permits the explicit
+ * release-before-Preview contract without duplicating cleanup branches. */
+static void capture_session_clear(CaptureSession *session) {
+  if (session->acquired)
+    shaula_capture_session_lock_release(
+        (ShaulaCaptureSessionSpan){.data = session->path,
+                                   .length = strlen(session->path)});
+  g_clear_pointer(&session->path, g_free);
+  session->acquired = FALSE;
+}
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(CaptureSession, capture_session_clear)
+
+typedef struct {
   const char *mode;
   gboolean json;
   gboolean copy;
@@ -286,12 +303,17 @@ static char *saved_directory(const ShaulaConfig *config) {
   const char *home = g_getenv("HOME");
   if (home == NULL || home[0] == '\0')
     return NULL;
-  if (g_str_equal(config->save_folder, "~"))
+
+  // Empty persisted values retain the historical default-folder contract.
+  const char *folder = config->save_folder[0] != '\0'
+                           ? config->save_folder
+                           : "~/Pictures/shaula";
+  if (g_str_equal(folder, "~"))
     return g_strdup(home);
-  if (g_str_has_prefix(config->save_folder, "~/"))
-    return g_build_filename(home, config->save_folder + 2, NULL);
-  if (g_path_is_absolute(config->save_folder))
-    return g_strdup(config->save_folder);
+  if (g_str_has_prefix(folder, "~/"))
+    return g_build_filename(home, folder + 2, NULL);
+  if (g_path_is_absolute(folder))
+    return g_strdup(folder);
   return NULL;
 }
 
@@ -310,6 +332,19 @@ static char *resolve_output(const CaptureOptions *options,
   if (directory == NULL || g_mkdir_with_parents(directory, 0755) != 0)
     return NULL;
   return timestamp_path(directory);
+}
+
+// Success notifications are detached so action handling cannot delay capture JSON.
+static gboolean spawn_saved_notification(const char *path,
+                                         gboolean include_thumbnail) {
+  g_autofree char *self = executable_path();
+  if (self == NULL)
+    return FALSE;
+  char *argv[] = {self, "notify", "__saved-action-listener", (char *)path,
+                  include_thumbnail ? (char *)path : NULL, NULL};
+  g_autoptr(GError) error = NULL;
+  return g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT, NULL, NULL, NULL,
+                       &error);
 }
 
 static char *focused_output(void) {
@@ -768,16 +803,17 @@ int shaula_capture_command_run(int argc, char **argv) {
                          "window target could not be resolved",
                          "{\"mode\":\"window\"}");
 
-  g_autofree char *lock_path = runtime_path("capture.lock");
-  if (lock_path == NULL)
+  g_auto(CaptureSession) session = {.path = runtime_path("capture.lock")};
+  if (session.path == NULL)
     return capture_error(command, "ERR_OUTPUT_PATH_INVALID",
                          "capture lock path is unavailable", "{}");
   if (shaula_capture_session_lock_acquire(
-          (ShaulaCaptureSessionSpan){.data = lock_path,
-                                     .length = strlen(lock_path)}) !=
+          (ShaulaCaptureSessionSpan){.data = session.path,
+                                     .length = strlen(session.path)}) !=
       SHAULA_CAPTURE_SESSION_STATUS_OK)
     return capture_error(command, "ERR_CAPTURE_IN_PROGRESS",
                          "another capture is already in progress", "{}");
+  session.acquired = TRUE;
 
   CaptureGeometry geometry = {0};
   g_auto(FrozenSource) frozen = {0};
@@ -788,9 +824,6 @@ int shaula_capture_command_run(int argc, char **argv) {
         (g_getenv("SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE") == NULL ||
          g_getenv("SHAULA_OVERLAY_BACKGROUND_PATH") != NULL) &&
         !prepare_frozen_source(&frozen)) {
-      shaula_capture_session_lock_release(
-          (ShaulaCaptureSessionSpan){.data = lock_path,
-                                     .length = strlen(lock_path)});
       return capture_error(command, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
                            "frozen capture source unavailable", "{}");
     }
@@ -799,9 +832,6 @@ int shaula_capture_command_run(int argc, char **argv) {
     if (status != SELECTION_OK) {
       g_autofree char *details =
           g_strdup_printf("{\"mode\":\"%s\"}", options.mode);
-      shaula_capture_session_lock_release(
-          (ShaulaCaptureSessionSpan){.data = lock_path,
-                                     .length = strlen(lock_path)});
       if (status == SELECTION_TIMEOUT)
         return capture_error(command, "ERR_OVERLAY_TIMEOUT",
                              "overlay helper timed out", details);
@@ -825,9 +855,6 @@ int shaula_capture_command_run(int argc, char **argv) {
                                      .length = strlen(previous_path)},
             &present, &previous) != SHAULA_PREVIOUS_AREA_STATUS_OK ||
         !present) {
-      shaula_capture_session_lock_release(
-          (ShaulaCaptureSessionSpan){.data = lock_path,
-                                     .length = strlen(lock_path)});
       return capture_error(command, "ERR_PREVIOUS_AREA_UNAVAILABLE",
                            "previous area is unavailable", "{}");
     }
@@ -838,9 +865,6 @@ int shaula_capture_command_run(int argc, char **argv) {
   }
 
   if (options.dry_run && (area_mode || previous_mode)) {
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = lock_path,
-                                   .length = strlen(lock_path)});
     return write_dry_run(&options, &geometry);
   }
 
@@ -856,16 +880,10 @@ int shaula_capture_command_run(int argc, char **argv) {
   if (output == NULL ||
       shaula_runtime_path_ensure_parent(path_span(output)) !=
           SHAULA_RUNTIME_PATH_STATUS_OK) {
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = lock_path,
-                                   .length = strlen(lock_path)});
     return capture_error(command, "ERR_OUTPUT_PATH_INVALID",
                          "output path is not writable", "{}");
   }
   if (env_flag("SHAULA_INJECT_UNKNOWN_FAILURE")) {
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = lock_path,
-                                   .length = strlen(lock_path)});
     return capture_error(command, "ERR_UNKNOWN_UNMAPPED",
                          "injected unknown failure", "{}");
   }
@@ -878,9 +896,6 @@ int shaula_capture_command_run(int argc, char **argv) {
                             area_mode || previous_mode ? &geometry : NULL,
                             output);
   if (!backend_ok) {
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = lock_path,
-                                   .length = strlen(lock_path)});
     return capture_error(command, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
                          "capture backend unavailable", "{}");
   }
@@ -888,9 +903,6 @@ int shaula_capture_command_run(int argc, char **argv) {
   g_autoptr(GError) image_error = NULL;
   g_autoptr(GdkPixbuf) image = gdk_pixbuf_new_from_file(output, &image_error);
   if (image == NULL) {
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = lock_path,
-                                   .length = strlen(lock_path)});
     return capture_error(command, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
                          "capture backend did not produce a valid PNG", "{}");
   }
@@ -918,9 +930,7 @@ int shaula_capture_command_run(int argc, char **argv) {
   gboolean history_ok = append_history(output, width, height, backend,
                                        capture_timestamp);
 
-  shaula_capture_session_lock_release(
-      (ShaulaCaptureSessionSpan){.data = lock_path,
-                                 .length = strlen(lock_path)});
+  capture_session_clear(&session);
 
   gboolean preview_attempted = options.preview;
   gboolean preview_ok = FALSE;
@@ -928,6 +938,9 @@ int shaula_capture_command_run(int argc, char **argv) {
   gboolean preview_saved = FALSE;
   g_autofree char *preview_action = NULL;
   g_autofree char *preview_saved_path = NULL;
+  if (options.save && config.notifications_success)
+    (void)spawn_saved_notification(output,
+                                   config.notifications_thumbnails);
   if (options.preview)
     preview_ok = run_preview(output, &config, &preview_action, &preview_copied,
                              &preview_saved, &preview_saved_path);

@@ -1,6 +1,6 @@
 shaula_config_c = static_library(
   'shaula-config-c',
-  'config.c',
+  ['config.c', 'niri_managed.c'],
   include_directories: include_directories('..'),
   dependencies: glib_dep,
 )
