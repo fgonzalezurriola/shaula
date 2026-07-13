@@ -58,14 +58,14 @@ shaula_preview_notify_c = static_library(
   'shaula-preview-notify-c',
   'preview_notify.c',
   include_directories: shaula_preview_include,
-  dependencies: glib_dep,
+  dependencies: [glib_dep, shaula_runtime_dep],
   install: false,
 )
 
 shaula_preview_notify_dep = declare_dependency(
   link_with: shaula_preview_notify_c,
   include_directories: shaula_preview_include,
-  dependencies: glib_dep,
+  dependencies: [glib_dep, shaula_runtime_dep],
 )
 
 shaula_preview_sources = files(
@@ -101,7 +101,7 @@ shaula_preview_sources = files(
 executable(
   'shaula-preview',
   shaula_preview_sources,
-  dependencies: [gtk_dep, math_dep],
+  dependencies: [gtk_dep, math_dep, shaula_runtime_dep],
   c_args: shaula_existing_helper_warning_args,
   install: true,
 )

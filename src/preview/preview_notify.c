@@ -1,7 +1,8 @@
 #include "preview_notify.h"
 
+#include "process_exec.h"
+
 #include <string.h>
-#include <sys/wait.h>
 
 static gboolean uri_byte_is_unescaped(guchar byte) {
   return byte == '/' || g_ascii_isalnum(byte) || byte == '-' || byte == '_' ||
@@ -81,13 +82,10 @@ static gboolean spawn_notify(const char *summary, const char *body,
   argv[argc++] = (char *)body;
   argv[argc] = NULL;
 
-  gint wait_status = 1;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, NULL,
-                   G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
-                       G_SPAWN_STDERR_TO_DEV_NULL,
-                   NULL, NULL, NULL, NULL, &wait_status, NULL);
-  return spawned && WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
+  int exit_code = 127;
+  return shaula_process_run_sync((const char *const *)argv, NULL, NULL, NULL,
+                                 &exit_code) == SHAULA_PROCESS_STATUS_OK &&
+         exit_code == 0;
 }
 
 gboolean shaula_preview_notify(const char *summary, const char *body,

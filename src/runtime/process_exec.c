@@ -32,10 +32,6 @@ extern char **environ;
 
 static const char default_path[] = "/usr/local/bin:/bin/:/usr/bin";
 
-static int span_is_valid(ShaulaProcessSpan span) {
-  return span.data != NULL || span.length == 0;
-}
-
 static int checked_add_size(size_t left, size_t right, size_t *out) {
   if (left > SIZE_MAX - right) {
     return 0;
@@ -44,8 +40,15 @@ static int checked_add_size(size_t left, size_t right, size_t *out) {
   return 1;
 }
 
-static int span_has_nul(ShaulaProcessSpan span) {
-  return span.length > 0 && memchr(span.data, '\0', span.length) != NULL;
+static char *try_strdup(const char *value) {
+  size_t length = strlen(value);
+  char *copy = g_try_malloc(length + 1U);
+
+  if (copy == NULL) {
+    return NULL;
+  }
+  memcpy(copy, value, length + 1U);
+  return copy;
 }
 
 static void owned_argv_clear(OwnedArgv *argv) {
@@ -62,17 +65,24 @@ static void owned_argv_clear(OwnedArgv *argv) {
   argv->length = 0;
 }
 
-static ShaulaProcessStatus owned_argv_init(ShaulaProcessArgv input,
+static ShaulaProcessStatus owned_argv_init(const char *const *input,
                                            OwnedArgv *out_argv) {
+  size_t length = 0;
   size_t pointer_count;
   size_t index;
 
   out_argv->items = NULL;
   out_argv->length = 0;
-  if (input.items == NULL || input.length == 0) {
+  if (input == NULL || input[0] == NULL || input[0][0] == '\0') {
     return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
   }
-  if (!checked_add_size(input.length, (size_t)1, &pointer_count) ||
+  while (input[length] != NULL) {
+    if (length == SIZE_MAX - 1) {
+      return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
+    }
+    length += 1;
+  }
+  if (!checked_add_size(length, (size_t)1, &pointer_count) ||
       pointer_count > SIZE_MAX / sizeof(char *)) {
     return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
   }
@@ -82,32 +92,12 @@ static ShaulaProcessStatus owned_argv_init(ShaulaProcessArgv input,
     return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
   }
 
-  for (index = 0; index < input.length; index += 1) {
-    ShaulaProcessSpan item = input.items[index];
-    size_t allocation_size;
-
-    if (!span_is_valid(item) || (index == 0 && item.length == 0)) {
-      owned_argv_clear(out_argv);
-      return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
-    }
-    if (!checked_add_size(item.length, (size_t)1, &allocation_size)) {
-      owned_argv_clear(out_argv);
-      return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
-    }
-    if (span_has_nul(item)) {
-      owned_argv_clear(out_argv);
-      return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
-    }
-
-    out_argv->items[index] = g_try_malloc(allocation_size);
+  for (index = 0; index < length; index += 1) {
+    out_argv->items[index] = try_strdup(input[index]);
     if (out_argv->items[index] == NULL) {
       owned_argv_clear(out_argv);
       return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
     }
-    if (item.length > 0) {
-      memcpy(out_argv->items[index], item.data, item.length);
-    }
-    out_argv->items[index][item.length] = '\0';
     out_argv->length += 1;
   }
 
@@ -484,7 +474,7 @@ static ShaulaProcessStatus collect_streams(int stdout_fd, int stderr_fd,
 }
 
 ShaulaProcessStatus shaula_process_run(
-    ShaulaProcessArgv argv, const char *const *replacement_environment,
+    const char *const *argv, const char *const *replacement_environment,
     size_t stdout_limit, size_t stderr_limit, ShaulaProcessOutput *out_output) {
   OwnedArgv owned_argv = {0};
   ByteBuffer stdout_buffer = {0};
@@ -599,6 +589,73 @@ fail_before_fork:
   return status;
 }
 
+ShaulaProcessStatus shaula_process_run_sync(
+    const char *const *argv, const char *const *replacement_environment,
+    char **out_stdout_text, char **out_stderr_text, int *out_exit_code) {
+  static const size_t stdout_limit = 4U * 1024U * 1024U;
+  static const size_t stderr_limit = 1024U * 1024U;
+  ShaulaProcessOutput output = {0};
+  ShaulaProcessStatus status;
+  char *stdout_text = NULL;
+  char *stderr_text = NULL;
+
+  if (out_stdout_text != NULL) {
+    g_clear_pointer(out_stdout_text, g_free);
+  }
+  if (out_stderr_text != NULL) {
+    g_clear_pointer(out_stderr_text, g_free);
+  }
+  if (out_exit_code != NULL) {
+    *out_exit_code = 127;
+  }
+
+  status = shaula_process_run(argv, replacement_environment, stdout_limit,
+                              stderr_limit, &output);
+  if (status != SHAULA_PROCESS_STATUS_OK) {
+    return status;
+  }
+
+  if (out_stdout_text != NULL) {
+    stdout_text = g_try_malloc(output.stdout_bytes.length + 1U);
+    if (stdout_text == NULL) {
+      shaula_process_output_clear(&output);
+      return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
+    }
+    if (output.stdout_bytes.length > 0) {
+      memcpy(stdout_text, output.stdout_bytes.data, output.stdout_bytes.length);
+    }
+    stdout_text[output.stdout_bytes.length] = '\0';
+    *out_stdout_text = stdout_text;
+  }
+  if (out_stderr_text != NULL) {
+    stderr_text = g_try_malloc(output.stderr_bytes.length + 1U);
+    if (stderr_text == NULL) {
+      if (out_stdout_text != NULL) {
+        g_clear_pointer(out_stdout_text, g_free);
+      }
+      shaula_process_output_clear(&output);
+      return SHAULA_PROCESS_STATUS_OUT_OF_MEMORY;
+    }
+    if (output.stderr_bytes.length > 0) {
+      memcpy(stderr_text, output.stderr_bytes.data, output.stderr_bytes.length);
+    }
+    stderr_text[output.stderr_bytes.length] = '\0';
+    *out_stderr_text = stderr_text;
+  }
+  if (out_exit_code != NULL) {
+    if (output.term_kind == SHAULA_PROCESS_TERM_EXITED) {
+      *out_exit_code = (int)output.term_value;
+    } else if (output.term_kind == SHAULA_PROCESS_TERM_SIGNAL) {
+      *out_exit_code = 128 + (int)output.term_value;
+    } else {
+      *out_exit_code = 1;
+    }
+  }
+
+  shaula_process_output_clear(&output);
+  return SHAULA_PROCESS_STATUS_OK;
+}
+
 static int write_all_without_sigpipe(int fd, const char *data, size_t length) {
   sigset_t blocked;
   sigset_t previous;
@@ -641,7 +698,7 @@ static int write_all_without_sigpipe(int fd, const char *data, size_t length) {
 }
 
 ShaulaProcessStatus shaula_process_run_with_input(
-    ShaulaProcessArgv argv, ShaulaProcessSpan input,
+    const char *const *argv, const void *input, size_t input_length,
     ShaulaProcessTermKind *out_term_kind, uint32_t *out_term_value) {
   OwnedArgv owned_argv = {0};
   ShaulaProcessStatus status;
@@ -653,7 +710,7 @@ ShaulaProcessStatus shaula_process_run_with_input(
   pid_t pid;
 
   if (out_term_kind == NULL || out_term_value == NULL ||
-      !span_is_valid(input)) {
+      (input == NULL && input_length > 0)) {
     return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
   }
   *out_term_kind = SHAULA_PROCESS_TERM_EXITED;
@@ -709,8 +766,8 @@ ShaulaProcessStatus shaula_process_run_with_input(
     return status;
   }
 
-  if (input.length > 0 &&
-      !write_all_without_sigpipe(stdin_pipe[1], input.data, input.length)) {
+  if (input_length > 0 &&
+      !write_all_without_sigpipe(stdin_pipe[1], input, input_length)) {
     close_fd(&stdin_pipe[1]);
     terminate_and_reap(pid);
     owned_argv_clear(&owned_argv);

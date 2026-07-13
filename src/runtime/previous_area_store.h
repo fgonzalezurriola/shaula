@@ -66,7 +66,7 @@ _Static_assert(offsetof(ShaulaPreviousAreaGeometry, height) == 12,
  * numeric-overflowing, allocation-failed, or embedded-NUL path/content cases
  * report OK with *out_present set to zero. Valid geometry requires exactly four
  * fields, signed 32-bit x/y, unsigned 32-bit nonzero width/height, optional
- * leading signs, and Zig-compatible internal underscore handling. Only ASCII
+ * leading signs, and internal underscores between digits. Only ASCII
  * space, tab, carriage return, and newline are trimmed around the whole file.
  */
 

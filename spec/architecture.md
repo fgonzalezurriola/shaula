@@ -373,28 +373,28 @@ string contracts across modules.
   Niri/Sway process probes, typed result parsing, and advisory fallback.
 - `preflight/probe.{c,h}` owns aggregate preflight resolution, readiness guard
   precedence, exact public success/error JSON, warnings, and exit-code mapping.
-  The top-level Zig dispatcher includes the header directly.
-- `runtime/env.{c,h}` owns borrowed environment parsing through direct C-header
-  callers and caller-local span conversion.
-- `runtime/paths.{c,h}` owns runtime-state path resolution, temporary capture
-  classification, and parent creation through direct C-header callers.
-- `runtime/tool_lookup.{c,h}` owns fixed `grim` candidates, first-existing
-  absolute lookup, PATH-aware diagnostics, and generic existence checks through
-  direct C-header callers.
-- `runtime/helper_resolution.{c,h}` owns helper resolution precedence and
-  existence-only sibling checks through direct C-header callers.
-- `runtime/previous_area_store.{c,h}` owns previous-area serialization, parsing,
-  synchronous state-file I/O, and backend support gating through direct C-header
-  callers.
-- `runtime/capture_session_lock.{c,h}` owns exclusive acquisition, exact PID
-  contents, bounded stale-owner detection, one-shot replacement, and best-effort
-  release through direct C-header callers. Capture lifecycle still owns releasing
-  the gate before post-capture Preview work.
-- `runtime/process_exec.{c,h}` owns shared direct-argv process execution through
-  direct C-header callers: parent-PATH lookup, replacement environments,
-  concurrent bounded stdout/stderr capture, binary stdin, termination mapping,
-  and child cleanup. Callers still own explicit output limits, returned-buffer
-  cleanup, and deterministic command-specific error mapping.
+  The top-level C dispatcher includes the header directly.
+- `runtime/env.{c,h}` owns borrowed environment parsing; maintained callers use
+  its C interface directly.
+- `runtime/paths.{c,h}` owns generic runtime-path resolution, temporary capture
+  classification, and parent creation. Capture-specific names are not exposed
+  through this interface.
+- `runtime/helper_resolution.{c,h}` is the executable-discovery interface. It
+  owns current-binary discovery, helper override/sibling/bare-name precedence,
+  fixed absolute candidates, and parent-`PATH` lookup. `tool_lookup.{c,h}` is
+  its low-level existence and path-splitting implementation.
+- `runtime/capture_state.{c,h}` is the capture runtime-state interface. It owns
+  the exclusive capture session, capture and overlay runtime locations, and
+  previous-area load/store. `capture_session_lock`, `previous_area_store`, and
+  their exact filenames are implementation details. Capture lifecycle still
+  owns releasing the session before post-capture Preview work.
+- `runtime/process_exec.{c,h}` is the sole synchronous direct-argv process
+  interface. It owns parent-`PATH` lookup, replacement environments, concurrent
+  bounded stdout/stderr capture, text adaptation, binary stdin, termination
+  mapping, and child cleanup. Callers own only command-specific output limits
+  and deterministic `ERR_*` or exit-code mapping.
+- `src/runtime/meson.build` exposes one runtime dependency rather than one
+  static library per primitive.
 
 Backend execution receives an already resolved runtime decision and optional
 focused output. It must not probe compositor/backend state again.
@@ -464,7 +464,7 @@ focused output. It must not probe compositor/backend state again.
   portal exposes none. Helper functions own degraded-backend, overlay-bypass,
   portal-selection, previous-area, and portal-fallback policy.
 - `ShaulaRuntimeDecision` owns no allocations. Its compositor label borrows the
-  caller environment; backend labels are immutable. Independent Zig `@cImport`
+  caller environment; backend labels are immutable. Independent C callers
   namespaces exchange the fixed-layout decision only through caller-local
   field-by-field ABI conversion, never through a C policy boundary.
 
@@ -579,7 +579,7 @@ focused output. It must not probe compositor/backend state again.
   duplicated top-level/result fields, and partial/degraded rules.
 - `cli/json.{c,h}` owns the shared contract-version literal, byte-string
   escaping, warning-array serialization, UTC timestamp formatting, and complete
-  basic-error envelope. Maintained Zig commands include the C header directly
+  basic-error envelope. Maintained C commands include the header directly
   and keep only caller-local ABI/allocator/writer adaptation.
 - `notify/request.{c,h}` owns notification request defaults, urgency tokens,
   exact `notify-send` argv construction, action spelling, and file-URI escaping.
@@ -608,7 +608,7 @@ focused output. It must not probe compositor/backend state again.
 - Successful C builders return GLib-owned length-bearing bytes with a trailing
   NUL for convenience. The authoritative length may include escaped source NULs;
   callers clear outputs with `shaula_json_owned_bytes_clear`. Repeated clear and
-  replacement are safe. Callers that retain bytes in Zig copy them into their
+  replacement are safe. Callers that retain bytes copy them into their
   existing allocator before C cleanup.
 - The shared basic error preserves canonical order
   `ok, contract_version, command, timestamp, error, warnings`, writes one complete
@@ -658,14 +658,11 @@ focused output. It must not probe compositor/backend state again.
   clear output through `shaula_notify_send_args_clear`; replacement and repeated
   cleanup are safe.
 - `src/main.c` includes `notify/request.h` directly, retains the request bytes
-  through process execution, converts only fixed-width statuses and spans, and
-  copies a standalone file URI into its existing caller allocation only where its
-  public helper API requires owned bytes. No shared Zig notification-policy
-  facade remains.
-- `src/main.c` and `src/main.c` continue to own actual process execution,
-  hint-to-icon fallback decisions, action-output handling, file-manager reveal,
-  logging, and public command JSON. This model slice does not absorb those
-  command-family responsibilities.
+  through execution, and copies a standalone file URI only where its command
+  interface requires owned bytes.
+- The top-level and Preview notification owners retain hint-to-icon fallback,
+  action-output handling, file-manager reveal, logging, and public command JSON;
+  synchronous child execution is delegated to `runtime/process_exec`.
 
 ### Public error-taxonomy boundary
 
@@ -701,10 +698,8 @@ focused output. It must not probe compositor/backend state again.
 - The C functions have no mutable global state and are thread-safe while callers
   keep each input buffer stable. Malformed booleans return `INVALID`; malformed
   or overflowing unsigned values return the caller-provided default.
-- Maintained Zig owners preserve lookup against each caller's
-  `std.process.Environ` and perform immediate ABI conversion and integer-width
-  bounding at the owning module. No C environment boundary remains in
-  maintained code.
+- Maintained callers pass process-environment values directly and retain no
+  second parsing policy.
 
 ### Runtime path boundary
 
@@ -723,95 +718,69 @@ focused output. It must not probe compositor/backend state again.
   `shaula_runtime_owned_path_clear()`. Inputs are borrowed for the synchronous
   call, outputs are independent, and the C implementation has no mutable global
   state.
-- Maintained Zig owners perform caller-provided environment lookup, pass spans
-  to C, and copy GLib-owned results into the existing caller allocation only where
-  their public API requires owned bytes. No C path boundary
-  remains in maintained code.
+- Maintained callers use this interface for generic runtime paths. The capture
+  lifecycle receives semantic capture locations from `runtime/capture_state`
+  instead of naming state files itself.
 - This boundary owns runtime state and temporary capture artifacts only.
   Configuration, cache, data, history, durable screenshot placement, tool and
   helper lookup, and process execution remain separate responsibilities.
 
-### Runtime tool-lookup boundary
+### Runtime executable-discovery boundary
 
-- `runtime/tool_lookup.{c,h}` owns the exact fixed grim candidate order,
-  first-existing absolute lookup, colon-delimited PATH splitting, byte-exact
-  candidate joining, and generic filesystem existence checks.
-- The preserved contract checks existence only and does not require executable
-  permission. Non-executable files and directories count as present. Absolute
-  lookup skips empty and relative candidates; generic existence checks accept
-  relative and absolute paths.
-- Missing and empty PATH values return not found. Leading, repeated, and trailing
-  empty PATH components are skipped rather than interpreted as the current
-  directory. Nonempty components are not trimmed or normalized and are joined
-  exactly as `<component>/<tool>`.
-- Relative components, whitespace, repeated separators, `.`, `..`, spaces,
-  shell metacharacters, non-ASCII bytes, and empty or absolute-looking tool names
-  retain byte-level behavior. Embedded NUL cannot cross the POSIX filesystem
-  boundary and is treated as inaccessible.
-- Successful fixed-candidate results are borrowed from candidate or immutable
-  process-lifetime storage. Successful PATH results are GLib-owned,
-  length-bearing, trailing-NUL buffers cleared through
-  `shaula_runtime_tool_owned_path_clear()`.
-- Capture planning, capabilities, and diagnostics retrieve caller-provided PATH
-  and invoke the C API directly, preserving borrowed fixed results and copying
-  GLib-owned PATH results only for existing allocator-owned APIs.
-- The C implementation has no mutable global state, performs checked size
-  arithmetic, uses no shell or locale-sensitive classification, and collapses
-  generic existence-check failures to false as the former Zig helper did.
+- `runtime/helper_resolution.{c,h}` is the only maintained executable-discovery
+  interface. It exposes current-binary discovery, helper discovery, generic tool
+  discovery, and the canonical `grim` discovery policy.
+- Helper precedence is exact: a nonempty ASCII-trimmed environment override, an
+  existing sibling of `/proc/self/exe`, then an owned bare binary name. The bare
+  name intentionally defers `PATH` lookup and spawn failure mapping to process
+  execution.
+- Tool precedence is exact: the first existing absolute candidate, then the
+  parent process `PATH`. `grim` uses `/usr/bin/grim`, `/bin/grim`, and
+  `/usr/local/bin/grim` before `PATH`; capture, capabilities, and diagnostics all
+  call the same interface.
+- Discovery preserves existence-only behavior and does not require executable
+  permission. It performs no shell interpretation, normalization,
+  canonicalization, or locale-sensitive classification.
+- Every successful public result is an independent GLib-owned NUL-terminated
+  string released with `g_free()`. `runtime/tool_lookup.{c,h}` remains a private
+  implementation seam for existence checks and colon-delimited `PATH` walking.
 
-### Runtime helper-resolution boundary
+### Runtime capture-state boundary
 
-- `runtime/helper_resolution.{c,h}` owns the exact precedence: a nonempty
-  ASCII-trimmed override, an existing byte-exact sibling path, then an owned bare
-  binary name.
-- Overrides are returned without existence or executable-permission validation.
-  Missing, empty, and whitespace-only overrides continue to sibling lookup.
-- The sibling path is joined exactly as `<executable-dir>/<binary-name>` without
-  normalization, canonicalization, shell interpretation, or locale-sensitive
-  processing. Existing directories and non-executable files count as present.
-- When executable-directory discovery is unavailable or the sibling is missing,
-  the resolver returns the bare binary name. This is not eager PATH lookup;
-  later process spawning owns PATH resolution and failure mapping.
-- Relative and absolute overrides, trailing/repeated separators, empty and
-  absolute-looking binary names, `.`, `..`, spaces, shell metacharacters, and
-  non-ASCII bytes preserve their byte-level behavior. Embedded NUL cannot match
-  a sibling POSIX path but remains representable in the length-bearing bare-name
-  fallback.
-- Successful results are independent GLib-owned, length-bearing buffers with a
-  trailing NUL and are released through
-  `shaula_runtime_helper_owned_path_clear()`.
-- Preview, Overlay, Settings, and portal capture perform caller-provided
-  override lookup, executable-directory discovery, ABI conversion, and owned
-  result transfer in their owning module. No C helper-resolution boundary or
-  duplicate helper policy remains.
-- The C implementation has no mutable global state and checks all size additions.
-  It does not spawn processes or absorb the similar crop-helper logic in capture
-  lifecycle.
+- `runtime/capture_state.{c,h}` is the only capture-state interface used by the
+  lifecycle. It owns the semantic capture directory, overlay-background path,
+  exclusive capture session, and previous-area load/store operations.
+- The filenames `capture.lock` and `previous-area.v1`, and the `captures` and
+  `overlay` directory names, are private to the runtime module. Capture
+  orchestration does not construct or retain them.
+- Session acquisition creates the runtime parent, records the current PID,
+  rejects a live owner, removes a provably stale owner once, and returns a typed
+  busy outcome. Session release is idempotent and remains explicit before
+  Preview on the successful capture path.
+- Previous-area reads fail closed: missing, unreadable, empty, malformed, or
+  overflowing state returns success with no geometry. The private store retains
+  the deterministic `x|y|width|height\n` format and nonzero-dimension validation.
+- Capture and overlay directories preserve their existing `0755` and `0700`
+  creation modes subject to umask.
 
-### Runtime previous-area boundary
+### Runtime process-execution boundary
 
-- `runtime/previous_area_store.{c,h}` owns the deterministic
-  `x|y|width|height\n` state format, whole-file ASCII trimming, numeric parsing,
-  parent creation, synchronous file I/O, and exact portal-backend exclusion.
-- Stores use caller-resolved bytewise paths, create parents through the runtime
-  path boundary, create/truncate the target with mode `0666` subject to umask,
-  write all bytes, and do not fsync or perform atomic replacement. Zero
-  dimensions are serialized verbatim because validity is checked on load.
-- Loads fail closed for missing, unreadable, allocation-failed, empty, malformed,
-  embedded-NUL, and numerically overflowing state. They require exactly four
-  fields, signed 32-bit x/y, and unsigned 32-bit nonzero width/height.
-- Parsing trims only ASCII space, tab, carriage return, and newline around the
-  entire file. Fields are not individually trimmed. Optional signs and internal
-  underscores follow Zig `parseInt` behavior, including unsigned negative zero.
-- Backend support is false only for the exact byte string `portal-screenshot`.
-  No normalization, case folding, shell interpretation, or locale-sensitive
-  processing occurs.
-- Geometry uses an asserted 16-byte fixed-width C ABI. The implementation has no
-  mutable global state and is safe for concurrent calls targeting distinct
-  state files.
-- Capture lifecycle resolves the caller-provided state path through the C runtime
-  path ABI and converts geometry/status values locally. The state format,
-  parser, filesystem behavior, and backend policy remain exclusively C-owned.
+- `runtime/process_exec.{c,h}` is the only maintained synchronous child-process
+  interface. Public argv values are NULL-terminated C arrays and are executed
+  directly without a shell.
+- Bare executable names resolve against the parent process `PATH`, including
+  when the child receives a replacement environment. The runtime concurrently
+  drains bounded stdout and stderr, supports binary stdin, and always reaps a
+  child after post-fork failure.
+- `shaula_process_run()` returns binary output and termination details;
+  `shaula_process_run_sync()` provides the shared text adapter; and
+  `shaula_process_run_with_input()` owns binary stdin publication.
+- Command modules retain command-specific mappings. For example, Settings
+  intentionally collapses every nonzero child termination to exit code `1`,
+  while Preview and capture retain their established helper-specific handling.
+- Preview notification, Settings, capture, capabilities, compositor probes,
+  Explore, and top-level command execution all use this interface. Direct
+  production `g_spawn_sync()` adapters are forbidden.
 
 ### Diagnostics and configuration
 
@@ -830,11 +799,11 @@ focused output. It must not probe compositor/backend state again.
   state-backed copy/import, notification test/action-listener, and file-reveal
   command contracts. These paths use direct argv/process APIs and do not invoke
   a shell for user-controlled values.
-- `settings/settings_config.{c,h}` owns the C-facing Settings model,
-  integrated defaults, config path resolution, preset mapping, and permissive
-  `config show --json` field extraction. `settings/settings_process.{c,h}` owns
-  exact Settings helper argv construction and synchronous process execution.
-  The obsolete Zig Settings bridge source was deleted during Phase 2 cleanup.
+- `settings/settings_config.{c,h}` owns the Settings model, integrated defaults,
+  config path resolution, preset mapping, and permissive `config show --json`
+  field extraction. `settings/settings_process.{c,h}` owns exact Settings helper
+  argv construction and the Settings-specific exit-code mapping over
+  `runtime/process_exec`.
 
 ### Preview boundaries
 
@@ -867,9 +836,8 @@ focused output. It must not probe compositor/backend state again.
 - `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
   tolerant INI loading, debounced dirty-key persistence, and cross-preview file
   locking. Inspector/widget state remains in `preview_properties_hud.*`.
-- Phase 2 strict cleanup removed the obsolete Zig Preview/Settings bridge
-  sources and the former compatibility bridge; the maintained build has one C owner for
-  each migrated bridge symbol.
+- Preview and Settings use their maintained C owners directly; no compatibility
+  bridge or duplicate synchronous process adapter remains.
 - `ShaulaPreviewDocument` owns output-affecting preview model state. GTK widgets,
   view state, tools, gestures, and rendering remain in the C preview surface.
 

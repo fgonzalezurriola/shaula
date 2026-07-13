@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <glib/gstdio.h>
-#include <sys/wait.h>
 #include <stdio.h>
 
 #include "preview_clipboard.h"
@@ -11,6 +10,7 @@
 #include "preview_render.h"
 #include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
+#include "process_exec.h"
 
 extern gboolean shaula_preview_notify(const char *summary, const char *body,
                                       const char *image_path, gboolean transient,
@@ -127,25 +127,11 @@ static gboolean shaula_preview_notify_saved(const char *path,
     argv[argc++] = (gchar *)image_path;
   argv[argc] = NULL;
 
-  gint status = 1;
-  GError *error = NULL;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, NULL,
-                   G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL,
-                   NULL, NULL, NULL, NULL, &status, &error);
-  if (!spawned) {
-    if (error != NULL)
-      g_error_free(error);
-    gboolean fallback_ok = shaula_preview_notify(
-        "Screenshot captured", body, image_path, transient, timeout_ms);
-    g_free(log_path);
-    g_free(absolute_path);
-    return fallback_ok;
-  }
-  if (error != NULL)
-    g_error_free(error);
-
-  gboolean ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+  int exit_code = 127;
+  gboolean ok =
+      shaula_process_run_sync((const char *const *)argv, NULL, NULL, NULL,
+                              &exit_code) == SHAULA_PROCESS_STATUS_OK &&
+      exit_code == 0;
   if (!ok) {
     gboolean fallback_ok = shaula_preview_notify(
         "Screenshot captured", body, image_path, transient, timeout_ms);

@@ -56,8 +56,8 @@ subdir('src/cli')
 subdir('src/core')
 subdir('src/errors')
 subdir('src/notify')
-subdir('src/preview')
 subdir('src/runtime')
+subdir('src/preview')
 subdir('src/explore')
 subdir('src/compositor')
 subdir('src/capabilities')
@@ -83,7 +83,7 @@ shaula_exe = executable(
     shaula_notify_request_dep,
     shaula_preflight_probe_dep,
     shaula_preview_result_dep,
-    shaula_runtime_process_exec_dep,
+    shaula_runtime_dep,
     shaula_capture_command_dep,
   ],
   install: true,

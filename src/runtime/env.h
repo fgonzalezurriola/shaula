@@ -8,10 +8,7 @@
 extern "C" {
 #endif
 
-/*
- * Status values are part of the temporary Zig/C ABI. Keep their exact numeric
- * values stable for all direct C ABI callers.
- */
+/* Status values are stable within the maintained C runtime interface. */
 typedef int32_t ShaulaEnvStatus;
 enum {
   SHAULA_ENV_STATUS_MISSING = 0,
@@ -68,8 +65,8 @@ ShaulaEnvStatus shaula_env_value_flag(const char *value, int32_t *out_value);
 /*
  * Parses a trimmed base-10 unsigned integer up to max_value. An optional
  * leading plus is accepted. A leading minus is accepted only when the parsed
- * magnitude is zero, matching Zig parseInt for unsigned types. Internal
- * underscores are ignored, but leading/trailing underscores are invalid.
+ * magnitude is zero. Internal underscores are ignored, but leading/trailing
+ * underscores are invalid.
  * Missing, empty, malformed, negative, or overflowing values return
  * default_value.
  */

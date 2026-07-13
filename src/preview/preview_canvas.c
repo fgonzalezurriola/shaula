@@ -449,9 +449,15 @@ static void draw_image_frame(ShaulaPreviewState *state, cairo_t *cr) {
   for (guint i = 0; state->document.annotations != NULL &&
                       i < state->document.annotations->len;
        i++) {
-    draw_annotation_preview(
-        state, cr, g_ptr_array_index(state->document.annotations, i),
-        preview_flags);
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, i);
+    /* Hide the committed text while its string is being re-edited so the draft
+     * path is the only visible copy.
+     */
+    if (state->text_entry != NULL && state->text_editing_id > 0 &&
+        annotation != NULL && annotation->id == state->text_editing_id)
+      continue;
+    draw_annotation_preview(state, cr, annotation, preview_flags);
   }
   if (selected_count > 1) {
     ShaulaRect group_bounds;
@@ -915,35 +921,111 @@ static gboolean on_scroll(GtkEventControllerScroll *controller, double dx,
   return TRUE;
 }
 
+static ShaulaAnnotation *annotation_by_id(ShaulaPreviewState *state, int id) {
+  if (state == NULL || state->document.annotations == NULL || id <= 0)
+    return NULL;
+  for (guint i = 0; i < state->document.annotations->len; i++) {
+    ShaulaAnnotation *annotation =
+        g_ptr_array_index(state->document.annotations, i);
+    if (annotation != NULL && annotation->id == id)
+      return annotation;
+  }
+  return NULL;
+}
+
+static gboolean text_style_equals_defaults(const ShaulaAnnotation *annotation,
+                                           const ShaulaPreviewState *state) {
+  if (annotation == NULL || state == NULL)
+    return FALSE;
+  const ShaulaColor *a = &annotation->color;
+  const ShaulaColor *b = &state->tool_defaults.text.color;
+  return fabs(a->r - b->r) <= 0.0001 && fabs(a->g - b->g) <= 0.0001 &&
+         fabs(a->b - b->b) <= 0.0001 && fabs(a->a - b->a) <= 0.0001 &&
+         fabs(annotation->data.text.font_size -
+              state->tool_defaults.text.font_size) <= 0.0001 &&
+         annotation->data.text.align == state->tool_defaults.text.align &&
+         annotation->data.text.font_mode == state->tool_defaults.text.font_mode;
+}
+
+static void apply_text_tool_defaults_from_annotation(
+    ShaulaPreviewState *state, const ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL ||
+      annotation->type != SHAULA_ANNOTATION_TEXT)
+    return;
+  state->tool_defaults.text.color = annotation->color;
+  state->tool_defaults.text.font_size = annotation->data.text.font_size;
+  state->tool_defaults.text.align = annotation->data.text.align;
+  state->tool_defaults.text.font_mode = annotation->data.text.font_mode;
+}
+
+static void select_text_after_commit(ShaulaPreviewState *state,
+                                     ShaulaAnnotation *annotation) {
+  if (state == NULL)
+    return;
+  state->active_tool = SHAULA_TOOL_SELECT;
+  if (annotation != NULL)
+    shaula_annotation_editor_select_only(state, annotation);
+  shaula_properties_hud_set_panel(&state->properties_hud,
+                                  SHAULA_PROPERTIES_PANEL_TEXT);
+  if (state->area != NULL)
+    gtk_widget_set_cursor_from_name(state->area, "default");
+  shaula_preview_toolbar_update_tool_state(state);
+  shaula_preview_toolbar_update_selection_state(state);
+}
+
 static void finish_text_entry(ShaulaPreviewState *state) {
   if (state == NULL || state->text_entry == NULL)
     return;
   char *text = text_view_contents(GTK_TEXT_VIEW(state->text_entry));
   char *trimmed = g_strdup(text != NULL ? text : "");
   g_strstrip(trimmed);
-  gboolean created = FALSE;
-  if (trimmed[0] != '\0') {
+  int editing_id = state->text_editing_id;
+  ShaulaAnnotation *editing = annotation_by_id(state, editing_id);
+  gboolean keep_selected = FALSE;
+  ShaulaAnnotation *committed = NULL;
+
+  if (editing != NULL) {
+    if (trimmed[0] == '\0') {
+      /* Clearing all characters deletes the re-edited annotation. */
+      shaula_annotation_editor_select_only(state, editing);
+      shaula_annotation_editor_delete_selected(state);
+    } else {
+      const char *previous =
+          editing->data.text.text != NULL ? editing->data.text.text : "";
+      gboolean content_changed = g_strcmp0(previous, text) != 0;
+      gboolean style_changed = !text_style_equals_defaults(editing, state);
+      if (content_changed || style_changed) {
+        shaula_preview_push_undo(state);
+        g_free(editing->data.text.text);
+        editing->data.text.text = g_strdup(text != NULL ? text : "");
+        editing->color = state->tool_defaults.text.color;
+        editing->color.a = 1.0;
+        editing->data.text.font_size = state->tool_defaults.text.font_size;
+        editing->data.text.align = state->tool_defaults.text.align;
+        editing->data.text.font_mode = state->tool_defaults.text.font_mode;
+        editing->data.text.position = state->text_anchor_image;
+        shaula_annotation_update_bounds(editing);
+        state->document.modified = TRUE;
+        shaula_preview_toolbar_update_history_state(state);
+      }
+      committed = editing;
+      keep_selected = TRUE;
+    }
+  } else if (trimmed[0] != '\0') {
     ShaulaAnnotation *annotation = shaula_annotation_new_text(
         state->text_anchor_image, text, state->tool_defaults.text.color,
         state->tool_defaults.text.font_size, state->tool_defaults.text.align,
         state->tool_defaults.text.font_mode);
     shaula_annotation_editor_add_annotation(state, annotation);
-    shaula_properties_hud_set_panel(&state->properties_hud,
-                                    SHAULA_PROPERTIES_PANEL_TEXT);
-    created = TRUE;
+    committed = annotation;
+    keep_selected = TRUE;
   }
+
   g_free(trimmed);
   g_free(text);
   shaula_preview_cancel_operation(state);
-  if (created) {
-    state->active_tool = SHAULA_TOOL_SELECT;
-    shaula_properties_hud_set_panel(&state->properties_hud,
-                                    SHAULA_PROPERTIES_PANEL_TEXT);
-    if (state->area != NULL)
-      gtk_widget_set_cursor_from_name(state->area, "default");
-    shaula_preview_toolbar_update_tool_state(state);
-    shaula_preview_toolbar_update_selection_state(state);
-  }
+  if (keep_selected)
+    select_text_after_commit(state, committed);
 }
 
 static gboolean on_text_entry_key(GtkEventControllerKey *controller,
@@ -978,14 +1060,18 @@ static void on_text_buffer_mark_set(GtkTextBuffer *buffer, GtkTextIter *iter,
     shaula_preview_queue_draw(data);
 }
 
-static void begin_text_entry(ShaulaPreviewState *state,
-                             ShaulaPoint image_point) {
-  if (state->canvas_overlay == NULL)
+static void begin_text_entry(ShaulaPreviewState *state, ShaulaPoint image_point,
+                             const char *initial_text, int editing_id) {
+  if (state == NULL || state->canvas_overlay == NULL)
     return;
   shaula_preview_cancel_operation(state);
+  shaula_annotation_editor_clear_selection(state);
+  shaula_preview_clear_region_selection(state);
+
   GtkWidget *entry = gtk_text_view_new();
   state->text_entry = entry;
   state->text_anchor_image = image_point;
+  state->text_editing_id = editing_id > 0 ? editing_id : 0;
   state->operation = SHAULA_OPERATION_TEXT;
 
   /* The GtkTextView is only the input buffer. The visible draft is rendered
@@ -1008,6 +1094,12 @@ static void begin_text_entry(ShaulaPreviewState *state,
   gtk_overlay_add_overlay(GTK_OVERLAY(state->canvas_overlay), entry);
 
   GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(entry));
+  if (initial_text != NULL && initial_text[0] != '\0') {
+    gtk_text_buffer_set_text(buffer, initial_text, -1);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+    gtk_text_buffer_place_cursor(buffer, &end);
+  }
   g_signal_connect(buffer, "changed", G_CALLBACK(on_text_buffer_changed),
                    state);
   g_signal_connect(buffer, "mark-set", G_CALLBACK(on_text_buffer_mark_set),
@@ -1015,8 +1107,30 @@ static void begin_text_entry(ShaulaPreviewState *state,
   GtkEventController *keys = gtk_event_controller_key_new();
   g_signal_connect(keys, "key-pressed", G_CALLBACK(on_text_entry_key), state);
   gtk_widget_add_controller(entry, keys);
+
+  shaula_properties_hud_set_panel(&state->properties_hud,
+                                  SHAULA_PROPERTIES_PANEL_TEXT);
+  shaula_properties_hud_sync_widgets(state);
   gtk_widget_grab_focus(entry);
   shaula_preview_queue_draw(state);
+}
+
+static void begin_text_entry_for_annotation(ShaulaPreviewState *state,
+                                            ShaulaAnnotation *annotation) {
+  if (state == NULL || annotation == NULL ||
+      annotation->type != SHAULA_ANNOTATION_TEXT)
+    return;
+  apply_text_tool_defaults_from_annotation(state, annotation);
+  begin_text_entry(state, annotation->data.text.position,
+                   annotation->data.text.text, annotation->id);
+}
+
+static gboolean begin_text_entry_for_id(ShaulaPreviewState *state, int id) {
+  ShaulaAnnotation *annotation = annotation_by_id(state, id);
+  if (annotation == NULL)
+    return FALSE;
+  begin_text_entry_for_annotation(state, annotation);
+  return TRUE;
 }
 
 static gboolean eraser_mark_segment(ShaulaPreviewState *state,
@@ -1146,8 +1260,16 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     }
     break;
   case SHAULA_TOOL_TEXT:
-    if (inside)
-      begin_text_entry(state, clamped);
+    if (inside) {
+      ShaulaAnnotationHit hit = shaula_annotation_behavior_hit_test(
+          state->document.annotations, image_point,
+          MAX(4.0, 8.0 / state->zoom));
+      if (hit.annotation != NULL &&
+          hit.annotation->type == SHAULA_ANNOTATION_TEXT)
+        begin_text_entry_for_annotation(state, hit.annotation);
+      else
+        begin_text_entry(state, clamped, NULL, 0);
+    }
     break;
   case SHAULA_TOOL_MEASURE:
     if (inside) {
@@ -1431,9 +1553,13 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
     gtk_widget_set_cursor_from_name(state->area, "none");
   } else if (shaula_preview_gesture_is_selection_operation(
                  completed_operation)) {
-    (void)shaula_preview_gesture_end_selection(state);
-    gtk_widget_set_cursor_from_name(state->area,
-                                    cursor_name_for_tool(state->active_tool));
+    int text_reedit_id = 0;
+    (void)shaula_preview_gesture_end_selection(state, &text_reedit_id);
+    if (text_reedit_id > 0)
+      begin_text_entry_for_id(state, text_reedit_id);
+    else
+      gtk_widget_set_cursor_from_name(state->area,
+                                      cursor_name_for_tool(state->active_tool));
   } else if (completed_operation == SHAULA_OPERATION_PAN) {
     state->operation = SHAULA_OPERATION_NONE;
     gtk_widget_set_cursor_from_name(state->area,
@@ -1479,6 +1605,22 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   GtkWidget *focus = state->window != NULL
                          ? gtk_window_get_focus(GTK_WINDOW(state->window))
                          : NULL;
+  /* Keep the draft editor focused while SHAULA_OPERATION_TEXT is active so
+   * HUD/toolbar clicks do not strand typing on the canvas shortcut path.
+   */
+  if (state->operation == SHAULA_OPERATION_TEXT && state->text_entry != NULL) {
+    if (keyval == GDK_KEY_Escape) {
+      finish_text_entry(state);
+      return TRUE;
+    }
+    if ((keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) && ctrl) {
+      finish_text_entry(state);
+      return TRUE;
+    }
+    if (!focus_is_editable_text(state, focus))
+      gtk_widget_grab_focus(state->text_entry);
+    return FALSE;
+  }
   if (focus_is_editable_text(state, focus)) {
     if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
       finish_text_entry(state);

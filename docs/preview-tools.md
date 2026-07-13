@@ -30,7 +30,7 @@ Save As is available from the responsive utility/More menu and through `Ctrl+Shi
 ### Hidden/unsupported actions
 
 - Share is not exposed; no upload backend exists.
-- Pin is not exposed. Unknown legacy helper action strings remain tolerated by the Zig preview-result parser but are not public actions.
+- Pin is not exposed. Unknown legacy helper action strings remain tolerated by the preview-result parser for compatibility but are not public actions.
 
 ## Tool Shortcuts
 
@@ -252,6 +252,16 @@ Keyboard behavior:
 - A canvas-only commit returns to Select with the new annotation selected.
 - `Backspace` remains text-editor behavior while the hidden text view has focus.
 - Selected-object deletion uses `Delete`.
+
+Re-editing committed text:
+
+- A second click (no drag) on a singly selected Text annotation reopens the string editor at that annotation.
+- With the Text tool, clicking an existing Text annotation reopens it instead of creating a new draft.
+- Re-edit loads the existing string, color, size, alignment, and font mode into the draft/HUD.
+- The committed annotation is hidden while the draft is active so only one visible copy is drawn.
+- Finishing a non-empty re-edit updates the same annotation (one undo entry when content or style changed).
+- Finishing an empty re-edit deletes the annotation.
+- HUD property changes during a draft restore focus to the hidden text view so typing can continue.
 
 ## Rectangle
 

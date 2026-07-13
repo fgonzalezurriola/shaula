@@ -12,7 +12,7 @@ Shaula is a machine-first, Niri-first screenshot tool written in C. The product 
 | --- | --- | --- | --- |
 | D-001 | Niri-first focus | Locked | Optimize for Niri's tile-based workflow and runtime contracts. |
 | D-002 | Agent-first CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
-| D-003 | Zig 0.16.0 pin | Locked | Stable toolchain with deterministic behavior and error handling. |
+| D-003 | Meson + C11 toolchain | Locked | Single maintained build path with deterministic behavior and error handling. |
 | D-004 | Hot-path isolation | Locked | Keep capture separate from non-essential work such as preview, history, and exports. |
 | D-005 | Direct command orchestration | Locked | Keep capture startup simple and fast: the CLI owns orchestration and delegates only bounded work to short-lived helpers. |
 | D-006 | Deterministic error taxonomy | Locked | Map every failure to specific `ERR_*` tokens and recovery actions. |
@@ -73,7 +73,7 @@ See [spec/performance.md](performance.md) for the numeric targets. The only cont
 | :--- | :--- | :--- | :--- |
 | R-001 | `wlr-screencopy` deprecation | Medium | Keep the migration path to `ext-image-copy-capture-v1` visible. |
 | R-002 | Niri IPC breaking changes | High | Stable capability probing plus versioned internal IPC. |
-| R-003 | Zig toolchain drift | Low | Keep the toolchain pinned in the build matrix. |
+| R-003 | Compiler/build-tool drift | Low | Exercise supported GCC/Clang and Meson configurations in the build matrix. |
 | R-004 | Portal latency | Low | Use fallback-only paths and keep direct Niri capture primary. |
 | R-005 | Fractional-scale coordinate drift | Medium | Normalize logical selection geometry before physical pixel edits and verify fixtures/manual Niri behavior. |
 | R-006 | Overlay/capture timing on Wayland | Medium | Keep overlay helpers off the post-capture critical path and manually verify live/frozen captures on Niri. |

@@ -341,8 +341,7 @@ Deterministic failure token for non-ready environment:
 - POSIX parent derivation, root/no-parent no-ops, recursive creation, repeated
   separators, non-canonicalized `..`, embedded-NUL rejection, and filesystem
   failures
-- Production caller integration for caller-supplied environments and Zig
-  allocator ownership through the owning C module
+- Generic runtime-path integration and capture-state delegation
 
 ### Runtime tool-lookup contract (`tests/unit/runtime_tool_lookup_test.c`)
 
@@ -360,20 +359,17 @@ Deterministic failure token for non-ready environment:
 - Production caller integration for caller-supplied PATH maps, borrowed fixed
   results, and caller ownership through the owning C module
 
-### Runtime helper-resolution contract (`tests/unit/runtime_helper_resolution_test.c`)
+### Runtime executable-discovery contract (`tests/unit/runtime_helper_resolution_test.c`)
 
-- Explicit override precedence with ASCII-only trimming and no filesystem check
-- Missing, empty, and whitespace-only override fallthrough
-- Existing sibling selection for non-executable files and directories
-- Missing executable-directory and sibling bare-name fallback without eager PATH
-  lookup
-- Byte-exact joins for trailing/repeated separators, empty and absolute-looking
-  binary names, spaces, shell metacharacters, non-ASCII bytes, `.`, and `..`
-- Embedded-NUL bare-name preservation when sibling POSIX lookup cannot match
-- Checked size overflow, invalid spans, GLib-owned result length/NUL rules, and
-  repeated cleanup
-- Production caller integration for caller-supplied environments,
-  executable-directory discovery, and caller ownership
+- Current executable path discovery through `/proc/self/exe`
+- Explicit helper override precedence with ASCII-only trimming and no filesystem
+  validation
+- Missing, empty, and whitespace-only override fallthrough to sibling and bare
+  binary-name discovery
+- Existing absolute candidate ordering followed by parent-`PATH` lookup
+- Existence-only behavior for non-executable files and directories
+- Shared `grim`, helper, and diagnostics policy with GLib-owned public results
+- Invalid public arguments and missing-tool outcomes
 
 ### Runtime previous-area contract (`tests/unit/runtime_previous_area_store_test.c`)
 
@@ -388,8 +384,7 @@ Deterministic failure token for non-ready environment:
   and numeric-overflow records failing closed
 - Embedded-NUL and oversized paths, invalid ABI spans, and output initialization
 - Exact case-sensitive `portal-screenshot` backend exclusion
-- Capture-lifecycle integration for caller-supplied path environments and the
-  fixed 16-byte geometry ABI
+- Private-store integration beneath the capture-state interface
 
 ### Runtime capture-session lock contract (`tests/unit/runtime_capture_session_lock_test.c`)
 
@@ -404,8 +399,15 @@ Deterministic failure token for non-ready environment:
 - Best-effort repeated release and successful reacquisition after release
 - Invalid spans, checked size overflow, embedded-NUL paths, and parent
   filesystem failures
-- Capture-lifecycle integration for caller-supplied lock paths, contention
-  mapping, caller ownership, release-before-Preview, and deinit idempotence
+- Private-lock integration beneath the capture-state interface
+
+### Runtime capture-state contract (`tests/unit/runtime_capture_state_test.c`)
+
+- Semantic capture and overlay locations without exposing filenames to capture
+  orchestration
+- Exclusive session contention, release, and reacquisition
+- Previous-area missing-state behavior and geometry round trips
+- Runtime-directory creation and ownership cleanup
 
 ### Runtime process-execution contract (`tests/unit/runtime_process_exec_test.c`)
 
@@ -419,13 +421,12 @@ Deterministic failure token for non-ready environment:
   default, and skipped empty PATH components
 - Direct `execve` behavior for slash-containing argv0, including rejection of
   executable text without a shebang rather than libc shell fallback
-- Missing, non-executable, oversized-PATH, invalid-span, and allocation-overflow
+- Missing, non-executable, oversized-PATH, NULL argv, and empty-program
   classifications
 - Binary stdin publication, exact file contents, nonzero consumer exits, ignored
   child output, and early-close SIGPIPE containment
-- Production caller integration for allocator-owned output copies, replacement
-  environment conversion, common spawn error names, termination reconstruction,
-  and binary stdin behavior through the owning C module
+- Production integration through the shared text adapter, replacement
+  environments, command-specific exit mapping, and binary stdin behavior
 
 ### Unit / Contracts / Mocks (`scripts/qa/run-unit-tests.sh`)
 

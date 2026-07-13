@@ -1,17 +1,16 @@
 #include "capabilities/runtime.h"
 
 #include "core/capture_mode.h"
+#include "runtime/helper_resolution.h"
 #include "runtime/process_exec.h"
-#include "runtime/tool_lookup.h"
 
+#include <glib.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #define ENV_SPAN_LITERAL(value)                                                \
-  { (value), sizeof(value) - 1U }
-#define PROCESS_SPAN_LITERAL(value)                                            \
   { (value), sizeof(value) - 1U }
 
 static const char backend_niri_wayland_direct[] = "niri-wayland-direct";
@@ -88,27 +87,26 @@ static ShaulaCaptureModes capture_modes_for(ShaulaBackendKind backend,
   return capture;
 }
 
-static int process_property(const char *property, size_t property_length,
-                            ShaulaProcessOutput *out) {
-  const ShaulaProcessSpan argv[] = {
-      PROCESS_SPAN_LITERAL("gdbus"),
-      PROCESS_SPAN_LITERAL("call"),
-      PROCESS_SPAN_LITERAL("--session"),
-      PROCESS_SPAN_LITERAL("--timeout"),
-      PROCESS_SPAN_LITERAL("2"),
-      PROCESS_SPAN_LITERAL("--dest"),
-      PROCESS_SPAN_LITERAL("org.freedesktop.portal.Desktop"),
-      PROCESS_SPAN_LITERAL("--object-path"),
-      PROCESS_SPAN_LITERAL("/org/freedesktop/portal/desktop"),
-      PROCESS_SPAN_LITERAL("--method"),
-      PROCESS_SPAN_LITERAL("org.freedesktop.DBus.Properties.Get"),
-      PROCESS_SPAN_LITERAL("org.freedesktop.portal.Screenshot"),
-      {property, property_length},
+static int process_property(const char *property, ShaulaProcessOutput *out) {
+  const char *argv[] = {
+      "gdbus",
+      "call",
+      "--session",
+      "--timeout",
+      "2",
+      "--dest",
+      "org.freedesktop.portal.Desktop",
+      "--object-path",
+      "/org/freedesktop/portal/desktop",
+      "--method",
+      "org.freedesktop.DBus.Properties.Get",
+      "org.freedesktop.portal.Screenshot",
+      property,
+      NULL,
   };
 
   memset(out, 0, sizeof(*out));
-  if (shaula_process_run((ShaulaProcessArgv){argv, sizeof(argv) / sizeof(argv[0])},
-                         NULL, 2048U, 2048U, out) !=
+  if (shaula_process_run(argv, NULL, 2048U, 2048U, out) !=
       SHAULA_PROCESS_STATUS_OK) {
     return 0;
   }
@@ -169,15 +167,14 @@ static PortalCapabilities probe_portal_capabilities(
     return portal;
   }
 
-  if (!process_property("version", sizeof("version") - 1U, &output)) {
+  if (!process_property("version", &output)) {
     shaula_process_output_clear(&output);
     return portal;
   }
   shaula_process_output_clear(&output);
   portal.available = 1;
 
-  if (!process_property("AvailableTargets", sizeof("AvailableTargets") - 1U,
-                        &output)) {
+  if (!process_property("AvailableTargets", &output)) {
     shaula_process_output_clear(&output);
     return portal;
   }
@@ -222,11 +219,8 @@ static int force_portal(const char *value) {
 }
 
 static int grim_available(void) {
-  ShaulaRuntimeToolSpan path = {NULL, 0U};
-  return shaula_runtime_tool_grim_path(&path) ==
-                 SHAULA_RUNTIME_TOOL_LOOKUP_STATUS_OK
-             ? 1
-             : 0;
+  g_autofree char *path = shaula_executable_find_grim();
+  return path != NULL ? 1 : 0;
 }
 
 static ShaulaBackendKind resolve_backend(

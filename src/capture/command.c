@@ -6,9 +6,9 @@
 #include "config/config.h"
 #include "errors/taxonomy.h"
 #include "preview/preview_result.h"
-#include "runtime/capture_session_lock.h"
+#include "runtime/capture_state.h"
+#include "runtime/helper_resolution.h"
 #include "runtime/paths.h"
-#include "runtime/previous_area_store.h"
 #include "runtime/process_exec.h"
 
 #include <errno.h>
@@ -47,22 +47,8 @@ static void frozen_source_clear(FrozenSource *source) {
 }
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(FrozenSource, frozen_source_clear)
 
-typedef struct {
-  char *path;
-  gboolean acquired;
-} CaptureSession;
-
-/* Owns the capture lock across every lifecycle exit and permits the explicit
- * release-before-Preview contract without duplicating cleanup branches. */
-static void capture_session_clear(CaptureSession *session) {
-  if (session->acquired)
-    shaula_capture_session_lock_release(
-        (ShaulaCaptureSessionSpan){.data = session->path,
-                                   .length = strlen(session->path)});
-  g_clear_pointer(&session->path, g_free);
-  session->acquired = FALSE;
-}
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(CaptureSession, capture_session_clear)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(ShaulaCaptureStateSession,
+                              shaula_capture_state_session_release)
 
 typedef struct {
   const char *mode;
@@ -153,48 +139,6 @@ static ShaulaCapabilitiesEnvironment capabilities_environment(void) {
   };
 }
 
-static char *executable_path(void) {
-  return g_file_read_link("/proc/self/exe", NULL);
-}
-
-static char *resolve_helper(const char *override_name, const char *binary_name) {
-  const char *override = g_getenv(override_name);
-  if (override != NULL && override[0] != '\0')
-    return g_strdup(override);
-  g_autofree char *self = executable_path();
-  if (self != NULL) {
-    g_autofree char *directory = g_path_get_dirname(self);
-    char *sibling = g_build_filename(directory, binary_name, NULL);
-    if (g_file_test(sibling, G_FILE_TEST_EXISTS))
-      return sibling;
-    g_free(sibling);
-  }
-  return g_strdup(binary_name);
-}
-
-static gboolean run_sync(char **argv, char **envp, char **stdout_text,
-                         char **stderr_text, int *exit_code) {
-  gint status = 0;
-  g_autoptr(GError) error = NULL;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, envp, G_SPAWN_SEARCH_PATH, NULL, NULL, stdout_text,
-                   stderr_text, &status, &error);
-  if (!spawned) {
-    if (exit_code != NULL)
-      *exit_code = 127;
-    return FALSE;
-  }
-  if (exit_code != NULL) {
-    if (WIFEXITED(status))
-      *exit_code = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status))
-      *exit_code = 128 + WTERMSIG(status);
-    else
-      *exit_code = 1;
-  }
-  return TRUE;
-}
-
 static gboolean env_flag(const char *name) {
   const char *value = g_getenv(name);
   return value != NULL &&
@@ -272,18 +216,6 @@ static gboolean parse_options(int argc, char **argv, const ShaulaConfig *config,
   return options->json;
 }
 
-static char *runtime_path(const char *relative) {
-  ShaulaRuntimeOwnedPath path = {0};
-  if (shaula_runtime_path_resolve(
-          NULL, g_getenv("XDG_RUNTIME_DIR"),
-          (ShaulaRuntimePathSpan){.data = relative, .length = strlen(relative)},
-          &path) != SHAULA_RUNTIME_PATH_STATUS_OK)
-    return NULL;
-  char *copy = g_strndup(path.data, path.length);
-  shaula_runtime_owned_path_clear(&path);
-  return copy;
-}
-
 static char *timestamp_path(const char *directory) {
   g_autoptr(GDateTime) now = g_date_time_new_now_utc();
   g_autofree char *stamp = g_date_time_format(now, "%Y%m%d-%H%M%S");
@@ -325,19 +257,22 @@ static char *resolve_output(const CaptureOptions *options,
     return g_strdup(options->output);
   }
   g_autofree char *directory = NULL;
-  if (options->save)
+  if (options->save) {
     directory = saved_directory(config);
-  else
-    directory = runtime_path("captures");
-  if (directory == NULL || g_mkdir_with_parents(directory, 0755) != 0)
-    return NULL;
+    if (directory == NULL || g_mkdir_with_parents(directory, 0755) != 0)
+      return NULL;
+  } else {
+    directory = shaula_capture_state_capture_directory();
+    if (directory == NULL)
+      return NULL;
+  }
   return timestamp_path(directory);
 }
 
 // Success notifications are detached so action handling cannot delay capture JSON.
 static gboolean spawn_saved_notification(const char *path,
                                          gboolean include_thumbnail) {
-  g_autofree char *self = executable_path();
+  g_autofree char *self = shaula_executable_current_path();
   if (self == NULL)
     return FALSE;
   char *argv[] = {self, "notify", "__saved-action-listener", (char *)path,
@@ -396,8 +331,10 @@ static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
     arguments[index++] = "--output";
     arguments[index++] = (char *)output;
   } else if (runtime->backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT) {
-    portal_helper = resolve_helper("SHAULA_PORTAL_SCREENSHOT_HELPER_BIN",
-                                   "shaula-portal-screenshot");
+    portal_helper = shaula_executable_resolve_helper(
+        "SHAULA_PORTAL_SCREENSHOT_HELPER_BIN", "shaula-portal-screenshot");
+    if (portal_helper == NULL)
+      return FALSE;
     arguments[index++] = portal_helper;
     arguments[index++] = "--backend";
     arguments[index++] = backend;
@@ -410,7 +347,7 @@ static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
     arguments[index++] = "--output";
     arguments[index++] = (char *)output;
   } else {
-    grim = g_find_program_in_path("grim");
+    grim = shaula_executable_find_grim();
     if (grim == NULL)
       return FALSE;
     arguments[index++] = grim;
@@ -429,7 +366,10 @@ static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
   }
   arguments[index] = NULL;
   int exit_code = 0;
-  return run_sync(arguments, NULL, NULL, NULL, &exit_code) && exit_code == 0;
+  return shaula_process_run_sync((const char *const *)arguments, NULL, NULL,
+                                 NULL, &exit_code) ==
+             SHAULA_PROCESS_STATUS_OK &&
+         exit_code == 0;
 }
 
 /* Captures the exact frame shown by a frozen overlay before the helper opens. */
@@ -443,14 +383,13 @@ static gboolean prepare_frozen_source(FrozenSource *source) {
   }
   if (env_flag("SHAULA_OVERLAY_DISABLE_BACKGROUND"))
     return FALSE;
-  g_autofree char *directory = runtime_path("overlay");
-  if (directory == NULL || g_mkdir_with_parents(directory, 0700) != 0)
+  source->path = shaula_capture_state_overlay_background_path(
+      g_get_real_time() / 1000);
+  if (source->path == NULL)
     return FALSE;
-  source->path = g_strdup_printf("%s/background-%" G_GINT64_FORMAT ".png",
-                                 directory, g_get_real_time() / 1000);
   source->output_name = focused_output();
   source->cleanup = TRUE;
-  g_autofree char *grim = g_find_program_in_path("grim");
+  g_autofree char *grim = shaula_executable_find_grim();
   if (grim == NULL)
     return FALSE;
   char *arguments[5] = {grim, NULL, NULL, NULL, NULL};
@@ -461,7 +400,10 @@ static gboolean prepare_frozen_source(FrozenSource *source) {
   }
   arguments[index++] = source->path;
   int exit_code = 0;
-  return run_sync(arguments, NULL, NULL, NULL, &exit_code) && exit_code == 0;
+  return shaula_process_run_sync((const char *const *)arguments, NULL, NULL,
+                                 NULL, &exit_code) ==
+             SHAULA_PROCESS_STATUS_OK &&
+         exit_code == 0;
 }
 
 static gboolean crop_frozen_source(const FrozenSource *source,
@@ -470,7 +412,10 @@ static gboolean crop_frozen_source(const FrozenSource *source,
       source->surface_height == 0)
     return FALSE;
   g_autofree char *helper =
-      resolve_helper("SHAULA_CROP_HELPER_BIN", "shaula-crop-image");
+      shaula_executable_resolve_helper("SHAULA_CROP_HELPER_BIN",
+                                       "shaula-crop-image");
+  if (helper == NULL)
+    return FALSE;
   g_autofree char *x = g_strdup_printf("%d", source->local_geometry.x);
   g_autofree char *y = g_strdup_printf("%d", source->local_geometry.y);
   g_autofree char *width =
@@ -486,7 +431,10 @@ static gboolean crop_frozen_source(const FrozenSource *source,
                        height,       surface_width, surface_height,
                        NULL};
   int exit_code = 0;
-  return run_sync(arguments, NULL, NULL, NULL, &exit_code) && exit_code == 0;
+  return shaula_process_run_sync((const char *const *)arguments, NULL, NULL,
+                                 NULL, &exit_code) ==
+             SHAULA_PROCESS_STATUS_OK &&
+         exit_code == 0;
 }
 
 static gboolean json_integer_after(const char *start, const char *key,
@@ -606,7 +554,10 @@ static SelectionStatus select_area(const CaptureOptions *options,
   }
 
   g_autofree char *helper =
-      resolve_helper("SHAULA_OVERLAY_HELPER_BIN", "shaula-overlay");
+      shaula_executable_resolve_helper("SHAULA_OVERLAY_HELPER_BIN",
+                                       "shaula-overlay");
+  if (helper == NULL)
+    return SELECTION_UNAVAILABLE;
   g_auto(GStrv) envp = g_get_environ();
   envp = g_environ_setenv(envp, "SHAULA_OVERLAY_INTERACTION_MODE",
                           g_str_equal(options->mode, "quick") ? "quick" : "area",
@@ -622,11 +573,14 @@ static SelectionStatus select_area(const CaptureOptions *options,
   if (frozen->output_name != NULL)
     envp = g_environ_setenv(envp, "SHAULA_OVERLAY_OUTPUT_NAME",
                             frozen->output_name, TRUE);
-  char *arguments[] = {helper, NULL};
+  const char *arguments[] = {helper, NULL};
   g_autofree char *stdout_text = NULL;
   g_autofree char *stderr_text = NULL;
   int exit_code = 0;
-  if (!run_sync(arguments, envp, &stdout_text, &stderr_text, &exit_code) ||
+  if (shaula_process_run_sync((const char *const *)arguments,
+                              (const char *const *)envp, &stdout_text,
+                              &stderr_text, &exit_code) !=
+          SHAULA_PROCESS_STATUS_OK ||
       exit_code != 0)
     return SELECTION_UNAVAILABLE;
   if (stdout_text == NULL || strstr(stdout_text, "\"status\":\"ok\"") == NULL) {
@@ -649,16 +603,11 @@ static gboolean copy_png(const char *path) {
   gsize length = 0;
   if (!g_file_get_contents(path, &bytes, &length, NULL))
     return FALSE;
-  ShaulaProcessSpan arguments[] = {{.data = "wl-copy", .length = 7},
-                                   {.data = "--type", .length = 6},
-                                   {.data = "image/png", .length = 9}};
+  const char *arguments[] = {"wl-copy", "--type", "image/png", NULL};
   ShaulaProcessTermKind term = SHAULA_PROCESS_TERM_UNKNOWN;
   guint32 value = 0;
-  return shaula_process_run_with_input(
-             (ShaulaProcessArgv){.items = arguments,
-                                 .length = G_N_ELEMENTS(arguments)},
-             (ShaulaProcessSpan){.data = bytes, .length = length}, &term,
-             &value) == SHAULA_PROCESS_STATUS_OK &&
+  return shaula_process_run_with_input(arguments, bytes, length, &term, &value) ==
+             SHAULA_PROCESS_STATUS_OK &&
          term == SHAULA_PROCESS_TERM_EXITED && value == 0;
 }
 
@@ -691,8 +640,11 @@ static gboolean run_preview(const char *path, const ShaulaConfig *config,
                             char **action, gboolean *copied, gboolean *saved,
                             char **saved_path) {
   g_autofree char *helper =
-      resolve_helper("SHAULA_PREVIEW_HELPER_BIN", "shaula-preview");
-  g_autofree char *self = executable_path();
+      shaula_executable_resolve_helper("SHAULA_PREVIEW_HELPER_BIN",
+                                       "shaula-preview");
+  if (helper == NULL)
+    return FALSE;
+  g_autofree char *self = shaula_executable_current_path();
   g_auto(GStrv) envp = g_get_environ();
   envp = g_environ_setenv(envp, "SHAULA_BIN", self != NULL ? self : "shaula",
                           TRUE);
@@ -700,11 +652,14 @@ static gboolean run_preview(const char *path, const ShaulaConfig *config,
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_CLOSE_ON_SAVE",
                           config->close_preview_on_save ? "1" : "0", TRUE);
   envp = g_environ_setenv(envp, "SHAULA_SAVE_FOLDER", config->save_folder, TRUE);
-  char *arguments[] = {helper, (char *)path, NULL};
+  const char *arguments[] = {helper, path, NULL};
   g_autofree char *stdout_text = NULL;
   g_autofree char *stderr_text = NULL;
   int exit_code = 0;
-  if (!run_sync(arguments, envp, &stdout_text, &stderr_text, &exit_code) ||
+  if (shaula_process_run_sync((const char *const *)arguments,
+                              (const char *const *)envp, &stdout_text,
+                              &stderr_text, &exit_code) !=
+          SHAULA_PROCESS_STATUS_OK ||
       exit_code != 0 || stdout_text == NULL)
     return FALSE;
   ShaulaPreviewResult result;
@@ -803,17 +758,15 @@ int shaula_capture_command_run(int argc, char **argv) {
                          "window target could not be resolved",
                          "{\"mode\":\"window\"}");
 
-  g_auto(CaptureSession) session = {.path = runtime_path("capture.lock")};
-  if (session.path == NULL)
-    return capture_error(command, "ERR_OUTPUT_PATH_INVALID",
-                         "capture lock path is unavailable", "{}");
-  if (shaula_capture_session_lock_acquire(
-          (ShaulaCaptureSessionSpan){.data = session.path,
-                                     .length = strlen(session.path)}) !=
-      SHAULA_CAPTURE_SESSION_STATUS_OK)
+  g_autoptr(ShaulaCaptureStateSession) session = NULL;
+  ShaulaCaptureStateStatus session_status =
+      shaula_capture_state_session_acquire(&session);
+  if (session_status == SHAULA_CAPTURE_STATE_STATUS_BUSY)
     return capture_error(command, "ERR_CAPTURE_IN_PROGRESS",
                          "another capture is already in progress", "{}");
-  session.acquired = TRUE;
+  if (session_status != SHAULA_CAPTURE_STATE_STATUS_OK)
+    return capture_error(command, "ERR_OUTPUT_PATH_INVALID",
+                         "capture runtime state is unavailable", "{}");
 
   CaptureGeometry geometry = {0};
   g_auto(FrozenSource) frozen = {0};
@@ -846,14 +799,10 @@ int shaula_capture_command_run(int argc, char **argv) {
                            "selection was cancelled by user", details);
     }
   } else if (previous_mode) {
-    g_autofree char *previous_path = runtime_path("previous-area.v1");
     gint32 present = 0;
-    ShaulaPreviousAreaGeometry previous = {0};
-    if (previous_path == NULL ||
-        shaula_previous_area_load(
-            (ShaulaPreviousAreaSpan){.data = previous_path,
-                                     .length = strlen(previous_path)},
-            &present, &previous) != SHAULA_PREVIOUS_AREA_STATUS_OK ||
+    ShaulaCaptureStateGeometry previous = {0};
+    if (shaula_capture_state_previous_load(&present, &previous) !=
+            SHAULA_CAPTURE_STATE_STATUS_OK ||
         !present) {
       return capture_error(command, "ERR_PREVIOUS_AREA_UNAVAILABLE",
                            "previous area is unavailable", "{}");
@@ -909,16 +858,13 @@ int shaula_capture_command_run(int argc, char **argv) {
   guint width = (guint)gdk_pixbuf_get_width(image);
   guint height = (guint)gdk_pixbuf_get_height(image);
 
-  if ((area_mode || previous_mode) && runtime.backend != SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT) {
-    g_autofree char *previous_path = runtime_path("previous-area.v1");
-    if (previous_path != NULL)
-      (void)shaula_previous_area_store(
-          (ShaulaPreviousAreaSpan){.data = previous_path,
-                                   .length = strlen(previous_path)},
-          (ShaulaPreviousAreaGeometry){.x = geometry.x,
-                                       .y = geometry.y,
-                                       .width = geometry.width,
-                                       .height = geometry.height});
+  if ((area_mode || previous_mode) &&
+      runtime.backend != SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT) {
+    (void)shaula_capture_state_previous_store(
+        (ShaulaCaptureStateGeometry){.x = geometry.x,
+                                     .y = geometry.y,
+                                     .width = geometry.width,
+                                     .height = geometry.height});
   }
 
   gboolean clipboard_ok = options.copy ? copy_png(output) : FALSE;
@@ -930,7 +876,7 @@ int shaula_capture_command_run(int argc, char **argv) {
   gboolean history_ok = append_history(output, width, height, backend,
                                        capture_timestamp);
 
-  capture_session_clear(&session);
+  g_clear_pointer(&session, shaula_capture_state_session_release);
 
   gboolean preview_attempted = options.preview;
   gboolean preview_ok = FALSE;

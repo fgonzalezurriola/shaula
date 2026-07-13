@@ -45,6 +45,8 @@ typedef enum {
 typedef struct {
   ShaulaAnnotation *pressed_annotation;
   gboolean preserved_multi_selection;
+  /* Click-without-drag on a singly selected Text reopens the string editor. */
+  gboolean pending_text_reedit;
   ShaulaAnnotationResizeHandle resize_handle;
   ShaulaRect resize_origin_rect;
   ShaulaPoint resize_fixed_corner;
@@ -90,8 +92,12 @@ gboolean shaula_preview_gesture_update(ShaulaPreviewState *state,
                                        double screen_x, double screen_y,
                                        double delta_x, double delta_y);
 
-/* Commits Select-tool history and click-without-movement semantics. */
-gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state);
+/* Commits Select-tool history and click-without-movement semantics.
+ * When a no-drag click should reopen a committed Text annotation for string
+ * editing, writes its id to text_reedit_id_out (0 otherwise).
+ */
+gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state,
+                                              int *text_reedit_id_out);
 
 const char *shaula_preview_gesture_hover_cursor(
     ShaulaPreviewState *state, double screen_x, double screen_y);

@@ -64,17 +64,10 @@ static gboolean object_boolean_any(JsonObject *object, const char *first,
 }
 
 static JsonNode *run_niri_json(const char *command) {
-  ShaulaProcessSpan arguments[] = {
-      {.data = "niri", .length = 4},
-      {.data = "msg", .length = 3},
-      {.data = "-j", .length = 2},
-      {.data = command, .length = strlen(command)},
-  };
+  const char *arguments[] = {"niri", "msg", "-j", command, NULL};
   ShaulaProcessOutput output = {0};
-  if (shaula_process_run(
-          (ShaulaProcessArgv){.items = arguments,
-                              .length = G_N_ELEMENTS(arguments)},
-          NULL, 1024 * 1024, 16 * 1024, &output) != SHAULA_PROCESS_STATUS_OK ||
+  if (shaula_process_run(arguments, NULL, 1024 * 1024, 16 * 1024, &output) !=
+          SHAULA_PROCESS_STATUS_OK ||
       output.term_kind != SHAULA_PROCESS_TERM_EXITED || output.term_value != 0) {
     shaula_process_output_clear(&output);
     return NULL;

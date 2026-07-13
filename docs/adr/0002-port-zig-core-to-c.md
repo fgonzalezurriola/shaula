@@ -1,16 +1,21 @@
 # ADR 0002: Port the Zig Core to C
 
-- Status: Accepted
+- Status: Accepted and implemented
 - Date: 2026-07-10
 - Decision owners: Shaula maintainers
 - Detailed migration contract: [`spec/zig-to-c-port.md`](../../spec/zig-to-c-port.md)
 
 ## Context
 
-Shaula is currently a mixed Zig and C application. The CLI, capture lifecycle,
-configuration, runtime orchestration, capability logic, and several C-facing
-bridge modules are implemented in Zig. Preview, Overlay, Settings, rendering,
-gestures, and most native GTK behavior are implemented in C.
+At the time of this decision, Shaula was a mixed Zig and C application. The CLI,
+capture lifecycle, configuration, runtime orchestration, capability logic, and
+several C-facing bridge modules were implemented in Zig. Preview, Overlay,
+Settings, rendering, gestures, and most native GTK behavior were implemented in
+C.
+
+The decision has now been fully implemented. All maintained production and test
+code is C, Meson is the sole build system, and Zig remains referenced here only
+as historical migration context.
 
 Maintaining the mixed toolchain requires Zig-specific build logic, object
 bridges, release setup, version pinning, and ownership contracts across the

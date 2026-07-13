@@ -120,9 +120,9 @@ Packaging scaffolds live under:
 - `aur/shaula`
 - `aur/shaula-bin`
 
-`shaula` builds from source for `x86_64` and `aarch64`; Zig belongs only in `makedepends`.
+`shaula` builds from source for `x86_64` and `aarch64` with Meson, Ninja, and a C11 compiler. Zig is not a build or packaging dependency.
 
-`shaula-bin` installs the GitHub Release archive without Zig. It currently declares only `x86_64` because releases do not yet provide a checked `shaula-linux-aarch64.tar.gz` asset.
+`shaula-bin` installs the GitHub Release archive. It currently declares only `x86_64` because releases do not yet provide a checked `shaula-linux-aarch64.tar.gz` asset.
 
 Both packages install a post-install message that points users to Settings and conditionally to `shaula setup`. Package hooks must not mutate user configuration.
 

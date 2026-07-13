@@ -2,76 +2,34 @@
 #define SHAULA_RUNTIME_HELPER_RESOLUTION_H
 
 #include <stddef.h>
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /*
- * Status values are part of the temporary Zig/C ABI. Keep their exact numeric
- * values stable for all direct C ABI callers.
- */
-typedef int32_t ShaulaRuntimeHelperStatus;
-enum {
-  SHAULA_RUNTIME_HELPER_STATUS_OK = 0,
-  SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT = 1,
-  SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY = 2,
-};
-
-typedef struct {
-  const char *data;
-  size_t length;
-} ShaulaRuntimeHelperSpan;
-
-typedef struct {
-  char *data;
-  size_t length;
-} ShaulaRuntimeHelperOwnedPath;
-
-_Static_assert(sizeof(ShaulaRuntimeHelperStatus) == 4,
-               "ShaulaRuntimeHelperStatus must remain a 32-bit C ABI value");
-_Static_assert(SHAULA_RUNTIME_HELPER_STATUS_OK == 0,
-               "helper resolution success ABI value changed");
-_Static_assert(SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT == 1,
-               "helper resolution invalid-argument ABI value changed");
-_Static_assert(SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY == 2,
-               "helper resolution out-of-memory ABI value changed");
-
-/*
- * The module has no mutable global state and is safe to call concurrently.
- * Inputs are borrowed for the synchronous call. override_value is a nullable
- * NUL-terminated environment value. Span inputs may contain arbitrary bytes; a
- * NULL pointer is valid only when length is zero. A NULL/empty executable_dir
- * means executable-directory discovery was unavailable.
+ * Executable discovery is the sole runtime seam for helper and external-tool
+ * resolution. Successful results are GLib-owned NUL-terminated strings released
+ * with g_free(); NULL means invalid input, allocation failure, or not found.
  *
- * Successful results are independent GLib-owned, length-bearing buffers with a
- * trailing NUL. Release them with shaula_runtime_helper_owned_path_clear(),
- * which is safe on empty values and repeated calls.
+ * Helpers resolve in this order: nonempty ASCII-trimmed environment override,
+ * an existing sibling of /proc/self/exe, then the bare binary name. The bare
+ * name deliberately defers PATH lookup and failure mapping to process execution.
  *
- * Resolution preserves the existing order and existence-only semantics:
- * 1. nonempty ASCII-trimmed override, without filesystem validation;
- * 2. byte-exact <executable_dir>/<binary_name> when that path exists;
- * 3. an owned copy of binary_name. The third result is intentionally a bare
- *    name: later process spawning, not this module, performs PATH lookup.
- *
- * Sibling checks do not require executable permission. No normalization,
- * canonicalization, shell interpretation, locale-sensitive classification, or
- * process spawning occurs. Embedded NUL bytes cannot match a sibling POSIX path
- * but remain preserved in the bare-name fallback.
+ * Tools resolve in this order: caller-provided absolute candidates, then the
+ * current parent PATH. Existence checks preserve Shaula's historical behavior:
+ * executable permission is not required during discovery.
  */
+char *shaula_executable_resolve_helper(const char *override_environment_name,
+                                       const char *binary_name);
 
-void shaula_runtime_helper_owned_path_clear(ShaulaRuntimeHelperOwnedPath *path);
+char *shaula_executable_find_tool(const char *tool_name,
+                                  const char *const *absolute_candidates,
+                                  size_t candidate_count);
 
-/*
- * out_path is required and is initialized empty on every call. Callers must
- * clear any previous owned value before reuse.
- */
-ShaulaRuntimeHelperStatus
-shaula_runtime_helper_resolve(const char *override_value,
-                              ShaulaRuntimeHelperSpan executable_dir,
-                              ShaulaRuntimeHelperSpan binary_name,
-                              ShaulaRuntimeHelperOwnedPath *out_path);
+char *shaula_executable_current_path(void);
+char *shaula_executable_find_program(const char *tool_name);
+char *shaula_executable_find_grim(void);
 
 #ifdef __cplusplus
 }

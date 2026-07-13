@@ -188,7 +188,7 @@ test(
 runtime_env_test = executable(
   'runtime-env-test',
   'runtime_env_test.c',
-  dependencies: [glib_dep, shaula_runtime_env_dep],
+  dependencies: [glib_dep, shaula_runtime_dep],
 )
 
 test(
@@ -200,7 +200,7 @@ test(
 runtime_paths_test = executable(
   'runtime-paths-test',
   'runtime_paths_test.c',
-  dependencies: shaula_runtime_paths_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(
@@ -212,7 +212,7 @@ test(
 runtime_tool_lookup_test = executable(
   'runtime-tool-lookup-test',
   'runtime_tool_lookup_test.c',
-  dependencies: shaula_runtime_tool_lookup_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(
@@ -224,7 +224,7 @@ test(
 runtime_helper_resolution_test = executable(
   'runtime-helper-resolution-test',
   'runtime_helper_resolution_test.c',
-  dependencies: shaula_runtime_helper_resolution_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(
@@ -236,7 +236,7 @@ test(
 runtime_previous_area_store_test = executable(
   'runtime-previous-area-store-test',
   'runtime_previous_area_store_test.c',
-  dependencies: shaula_runtime_previous_area_store_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(
@@ -248,7 +248,7 @@ test(
 runtime_capture_session_lock_test = executable(
   'runtime-capture-session-lock-test',
   'runtime_capture_session_lock_test.c',
-  dependencies: shaula_runtime_capture_session_lock_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(
@@ -257,10 +257,22 @@ test(
   suite: ['port', 'unit'],
 )
 
+runtime_capture_state_test = executable(
+  'runtime-capture-state-test',
+  'runtime_capture_state_test.c',
+  dependencies: shaula_runtime_dep,
+)
+
+test(
+  'runtime-capture-state-c',
+  runtime_capture_state_test,
+  suite: ['port', 'unit'],
+)
+
 runtime_process_exec_test = executable(
   'runtime-process-exec-test',
   'runtime_process_exec_test.c',
-  dependencies: shaula_runtime_process_exec_dep,
+  dependencies: shaula_runtime_dep,
 )
 
 test(

@@ -2,188 +2,85 @@
 
 #include <glib.h>
 #include <glib/gstdio.h>
-#include <stdint.h>
-#include <string.h>
 
-static ShaulaRuntimeHelperSpan span_from_string(const char *value) {
-  return (ShaulaRuntimeHelperSpan){value, strlen(value)};
-}
+static void test_current_path_and_helper_precedence(void) {
+  g_autofree char *current = shaula_executable_current_path();
+  g_autofree char *old_override = g_strdup(g_getenv("SHAULA_TEST_HELPER"));
+  g_autofree char *resolved = NULL;
 
-static void assert_owned_bytes(const ShaulaRuntimeHelperOwnedPath *actual,
-                               const char *expected, size_t expected_length) {
-  g_assert_nonnull(actual->data);
-  g_assert_cmpuint(actual->length, ==, expected_length);
-  g_assert_cmpmem(actual->data, actual->length, expected, expected_length);
-  g_assert_cmpint(actual->data[actual->length], ==, '\0');
-}
+  g_assert_nonnull(current);
+  g_assert_true(g_path_is_absolute(current));
 
-static void assert_owned_string(const ShaulaRuntimeHelperOwnedPath *actual,
-                                const char *expected) {
-  assert_owned_bytes(actual, expected, strlen(expected));
-}
+  g_assert_true(g_setenv("SHAULA_TEST_HELPER", "  /tmp/custom-helper \n", TRUE));
+  resolved =
+      shaula_executable_resolve_helper("SHAULA_TEST_HELPER", "missing-helper");
+  g_assert_cmpstr(resolved, ==, "/tmp/custom-helper");
+  g_clear_pointer(&resolved, g_free);
 
-static void write_non_executable_file(const char *path) {
-  g_autoptr(GError) error = NULL;
+  g_assert_true(g_setenv("SHAULA_TEST_HELPER", " \t\r\n", TRUE));
+  resolved = shaula_executable_resolve_helper(
+      "SHAULA_TEST_HELPER", "shaula-helper-that-does-not-exist");
+  g_assert_cmpstr(resolved, ==, "shaula-helper-that-does-not-exist");
+  g_clear_pointer(&resolved, g_free);
 
-  g_assert_true(g_file_set_contents(path, "helper", 6, &error));
-  g_assert_no_error(error);
-  g_assert_cmpint(g_chmod(path, 0644), ==, 0);
-}
+  g_assert_null(shaula_executable_resolve_helper(NULL, "helper"));
+  g_assert_null(shaula_executable_resolve_helper("ENV", ""));
 
-static void test_override_table(void) {
-  static const struct {
-    const char *name;
-    const char *override_value;
-    const char *expected;
-  } cases[] = {
-      {"absolute", " \t/opt/shaula helper\r\n", "/opt/shaula helper"},
-      {"relative", " ../helpers/shaula-preview ", "../helpers/shaula-preview"},
-      {"shell-bytes", " helper;$()'\" ", "helper;$()'\""},
-      {"non-ascii", " \xE6\x96\x87/helper ", "\xE6\x96\x87/helper"},
-  };
-  size_t index;
-
-  for (index = 0; index < G_N_ELEMENTS(cases); index += 1) {
-    ShaulaRuntimeHelperOwnedPath actual = {0};
-    ShaulaRuntimeHelperStatus status;
-
-    g_test_message("case: %s", cases[index].name);
-    status = shaula_runtime_helper_resolve(
-        cases[index].override_value, span_from_string("/ignored"),
-        span_from_string("ignored-helper"), &actual);
-    g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-    assert_owned_string(&actual, cases[index].expected);
-    shaula_runtime_helper_owned_path_clear(&actual);
-    shaula_runtime_helper_owned_path_clear(&actual);
+  if (old_override != NULL) {
+    g_assert_true(g_setenv("SHAULA_TEST_HELPER", old_override, TRUE));
+  } else {
+    g_unsetenv("SHAULA_TEST_HELPER");
   }
 }
 
-static void test_sibling_and_bare_fallback(void) {
+static void test_tool_candidates_and_path(void) {
   g_autoptr(GError) error = NULL;
   g_autofree char *root =
-      g_dir_make_tmp("shaula-helper-resolution-XXXXXX", &error);
-  g_autofree char *helper_path = NULL;
-  g_autofree char *directory_helper = NULL;
-  g_autofree char *trailing_dir = NULL;
-  g_autofree char *expected_trailing = NULL;
-  ShaulaRuntimeHelperOwnedPath actual = {0};
-  ShaulaRuntimeHelperStatus status;
+      g_dir_make_tmp("shaula-executable-discovery-XXXXXX", &error);
+  g_autofree char *first = NULL;
+  g_autofree char *second = NULL;
+  g_autofree char *path_tool = NULL;
+  g_autofree char *old_path = g_strdup(g_getenv("PATH"));
+  g_autofree char *resolved = NULL;
 
   g_assert_no_error(error);
   g_assert_nonnull(root);
+  first = g_build_filename(root, "first", NULL);
+  second = g_build_filename(root, "second", NULL);
+  path_tool = g_build_filename(root, "path-tool", NULL);
+  g_assert_true(g_file_set_contents(second, "", 0, &error));
+  g_assert_no_error(error);
+  g_assert_true(g_file_set_contents(path_tool, "", 0, &error));
+  g_assert_no_error(error);
 
-  helper_path = g_build_filename(root, "shaula-helper", NULL);
-  directory_helper = g_build_filename(root, "directory-helper", NULL);
-  write_non_executable_file(helper_path);
-  g_assert_cmpint(g_mkdir(directory_helper, 0755), ==, 0);
+  const char *candidates[] = {first, second};
+  resolved = shaula_executable_find_tool("unused", candidates,
+                                         G_N_ELEMENTS(candidates));
+  g_assert_cmpstr(resolved, ==, second);
+  g_clear_pointer(&resolved, g_free);
 
-  status = shaula_runtime_helper_resolve(
-      NULL, span_from_string(root), span_from_string("shaula-helper"), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_string(&actual, helper_path);
-  shaula_runtime_helper_owned_path_clear(&actual);
+  g_assert_true(g_setenv("PATH", root, TRUE));
+  resolved = shaula_executable_find_program("path-tool");
+  g_assert_cmpstr(resolved, ==, path_tool);
+  g_clear_pointer(&resolved, g_free);
+  g_assert_null(shaula_executable_find_program("missing"));
+  g_assert_null(shaula_executable_find_tool(NULL, NULL, 0));
 
-  status = shaula_runtime_helper_resolve(" \t\r\n", span_from_string(root),
-                                         span_from_string("directory-helper"),
-                                         &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_string(&actual, directory_helper);
-  shaula_runtime_helper_owned_path_clear(&actual);
-
-  status = shaula_runtime_helper_resolve("", span_from_string(root),
-                                         span_from_string("missing helper;$()"),
-                                         &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_string(&actual, "missing helper;$()");
-  shaula_runtime_helper_owned_path_clear(&actual);
-
-  status = shaula_runtime_helper_resolve(
-      NULL, (ShaulaRuntimeHelperSpan){NULL, 0},
-      span_from_string("shaula-preview"), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_string(&actual, "shaula-preview");
-  shaula_runtime_helper_owned_path_clear(&actual);
-
-  trailing_dir = g_strdup_printf("%s/", root);
-  expected_trailing = g_strdup_printf("%s//shaula-helper", root);
-  status =
-      shaula_runtime_helper_resolve(NULL, span_from_string(trailing_dir),
-                                    span_from_string("shaula-helper"), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_string(&actual, expected_trailing);
-  shaula_runtime_helper_owned_path_clear(&actual);
-  g_clear_pointer(&expected_trailing, g_free);
-
-  status = shaula_runtime_helper_resolve(NULL, span_from_string(root),
-                                         span_from_string("/shaula-helper"),
-                                         &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  expected_trailing = g_strdup_printf("%s//shaula-helper", root);
-  assert_owned_string(&actual, expected_trailing);
-  shaula_runtime_helper_owned_path_clear(&actual);
-  g_clear_pointer(&expected_trailing, g_free);
-
-  status = shaula_runtime_helper_resolve(NULL, span_from_string(root),
-                                         span_from_string(""), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  expected_trailing = g_strdup_printf("%s/", root);
-  assert_owned_string(&actual, expected_trailing);
-  shaula_runtime_helper_owned_path_clear(&actual);
-
-  g_assert_cmpint(g_remove(helper_path), ==, 0);
-  g_assert_cmpint(g_rmdir(directory_helper), ==, 0);
+  if (old_path != NULL) {
+    g_assert_true(g_setenv("PATH", old_path, TRUE));
+  } else {
+    g_unsetenv("PATH");
+  }
+  g_assert_cmpint(g_remove(second), ==, 0);
+  g_assert_cmpint(g_remove(path_tool), ==, 0);
   g_assert_cmpint(g_rmdir(root), ==, 0);
-}
-
-static void test_byte_and_error_contract(void) {
-  static const char embedded_name[] = {'h', 'e', '\0', 'l', 'p', 'e', 'r'};
-  ShaulaRuntimeHelperOwnedPath actual = {(char *)"sentinel", 8};
-  ShaulaRuntimeHelperStatus status;
-
-  status = shaula_runtime_helper_resolve(
-      NULL, span_from_string("/tmp"),
-      (ShaulaRuntimeHelperSpan){embedded_name, sizeof(embedded_name)}, &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OK);
-  assert_owned_bytes(&actual, embedded_name, sizeof(embedded_name));
-  shaula_runtime_helper_owned_path_clear(&actual);
-
-  actual = (ShaulaRuntimeHelperOwnedPath){(char *)"sentinel", 8};
-  status = shaula_runtime_helper_resolve(
-      NULL, (ShaulaRuntimeHelperSpan){"x", SIZE_MAX},
-      span_from_string("helper"), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY);
-  g_assert_null(actual.data);
-  g_assert_cmpuint(actual.length, ==, 0);
-
-  actual = (ShaulaRuntimeHelperOwnedPath){(char *)"sentinel", 8};
-  status =
-      shaula_runtime_helper_resolve(NULL, (ShaulaRuntimeHelperSpan){NULL, 1},
-                                    span_from_string("helper"), &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT);
-  g_assert_null(actual.data);
-  g_assert_cmpuint(actual.length, ==, 0);
-
-  status = shaula_runtime_helper_resolve(
-      NULL, (ShaulaRuntimeHelperSpan){NULL, 0},
-      (ShaulaRuntimeHelperSpan){NULL, 1}, &actual);
-  g_assert_cmpint(status, ==, SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT);
-
-  g_assert_cmpint(
-      shaula_runtime_helper_resolve(NULL, (ShaulaRuntimeHelperSpan){NULL, 0},
-                                    span_from_string("helper"), NULL),
-      ==, SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT);
-
-  shaula_runtime_helper_owned_path_clear(NULL);
-  shaula_runtime_helper_owned_path_clear(&actual);
-  shaula_runtime_helper_owned_path_clear(&actual);
 }
 
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
-  g_test_add_func("/runtime/helper-resolution/override", test_override_table);
-  g_test_add_func("/runtime/helper-resolution/sibling-fallback",
-                  test_sibling_and_bare_fallback);
-  g_test_add_func("/runtime/helper-resolution/bytes-errors",
-                  test_byte_and_error_contract);
+  g_test_add_func("/runtime/executable/helper-precedence",
+                  test_current_path_and_helper_precedence);
+  g_test_add_func("/runtime/executable/tool-discovery",
+                  test_tool_candidates_and_path);
   return g_test_run();
 }

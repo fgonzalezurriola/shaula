@@ -1,12 +1,14 @@
 # Zig-to-C Port Specification
 
-Status: **Accepted migration specification**  
-Branch: `port`  
+Status: **Implemented; retained as the historical migration contract**
+Completed: **2026-07-13**
 Decision record: [`docs/adr/0002-port-zig-core-to-c.md`](../docs/adr/0002-port-zig-core-to-c.md)
 
-This document defines the required process, target architecture, compatibility
-rules, memory-management discipline, verification gates, and completion criteria
-for removing Zig from Shaula and replacing the Zig implementation with C.
+This document records the process, target architecture, compatibility rules,
+memory-management discipline, verification gates, and completion criteria used
+to remove Zig from Shaula and replace the Zig implementation with C. The port is
+complete; forward-looking language remains as the historical contract governing
+the migration.
 
 The port is an implementation migration. It is not a product rewrite. Existing
 public behavior, helper contracts, error semantics, performance budgets, and GTK
@@ -1133,7 +1135,7 @@ The Zig-to-C port is complete only when:
 13. Repository-wide searches find no stale claims that Shaula requires or is
     implemented in Zig, except historical records explicitly marked as such.
 
-## 19. Immediate next actions on `port`
+## 19. Historical initial actions
 
 The first implementation work SHOULD be:
 

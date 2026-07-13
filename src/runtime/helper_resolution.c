@@ -6,124 +6,109 @@
 #include <glib.h>
 #include <string.h>
 
-static int span_is_valid(ShaulaRuntimeHelperSpan span) {
-  return span.data != NULL || span.length == 0;
+static int nonempty(const char *value) {
+  return value != NULL && value[0] != '\0';
 }
 
-static int checked_add_size(size_t left, size_t right, size_t *out) {
-  if (left > SIZE_MAX - right) {
-    return 0;
-  }
-  *out = left + right;
-  return 1;
-}
-
-static ShaulaRuntimeHelperStatus
-copy_span(ShaulaRuntimeHelperSpan value,
-          ShaulaRuntimeHelperOwnedPath *out_path) {
-  size_t allocation_size;
+static char *try_copy(const char *data, size_t length) {
   char *copy;
 
-  if (!span_is_valid(value)) {
-    return SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT;
+  if (length == SIZE_MAX) {
+    return NULL;
   }
-  if (!checked_add_size(value.length, (size_t)1, &allocation_size)) {
-    return SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY;
-  }
-
-  copy = g_try_malloc(allocation_size);
+  copy = g_try_malloc(length + 1U);
   if (copy == NULL) {
-    return SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY;
+    return NULL;
   }
-  if (value.length > 0) {
-    memcpy(copy, value.data, value.length);
+  if (length > 0) {
+    memcpy(copy, data, length);
   }
-  copy[value.length] = '\0';
-
-  out_path->data = copy;
-  out_path->length = value.length;
-  return SHAULA_RUNTIME_HELPER_STATUS_OK;
+  copy[length] = '\0';
+  return copy;
 }
 
-static ShaulaRuntimeHelperStatus
-join_sibling(ShaulaRuntimeHelperSpan executable_dir,
-             ShaulaRuntimeHelperSpan binary_name,
-             ShaulaRuntimeHelperOwnedPath *out_path) {
-  size_t joined_length;
-  size_t allocation_size;
-  char *joined;
-
-  if (!checked_add_size(executable_dir.length, (size_t)1, &joined_length) ||
-      !checked_add_size(joined_length, binary_name.length, &joined_length) ||
-      !checked_add_size(joined_length, (size_t)1, &allocation_size)) {
-    return SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY;
-  }
-
-  joined = g_try_malloc(allocation_size);
-  if (joined == NULL) {
-    return SHAULA_RUNTIME_HELPER_STATUS_OUT_OF_MEMORY;
-  }
-
-  memcpy(joined, executable_dir.data, executable_dir.length);
-  joined[executable_dir.length] = '/';
-  if (binary_name.length > 0) {
-    memcpy(joined + executable_dir.length + 1, binary_name.data,
-           binary_name.length);
-  }
-  joined[joined_length] = '\0';
-
-  out_path->data = joined;
-  out_path->length = joined_length;
-  return SHAULA_RUNTIME_HELPER_STATUS_OK;
+static char *try_strdup(const char *value) {
+  return try_copy(value, strlen(value));
 }
 
-void shaula_runtime_helper_owned_path_clear(
-    ShaulaRuntimeHelperOwnedPath *path) {
-  if (path == NULL) {
-    return;
-  }
-  g_free(path->data);
-  path->data = NULL;
-  path->length = 0;
+char *shaula_executable_current_path(void) {
+  return g_file_read_link("/proc/self/exe", NULL);
 }
 
-ShaulaRuntimeHelperStatus
-shaula_runtime_helper_resolve(const char *override_value,
-                              ShaulaRuntimeHelperSpan executable_dir,
-                              ShaulaRuntimeHelperSpan binary_name,
-                              ShaulaRuntimeHelperOwnedPath *out_path) {
-  ShaulaEnvSpan override_path = {0};
-  ShaulaRuntimeHelperStatus status;
+char *shaula_executable_resolve_helper(const char *override_environment_name,
+                                       const char *binary_name) {
+  ShaulaEnvSpan override = {0};
+  g_autofree char *self = NULL;
+  g_autofree char *directory = NULL;
+  g_autofree char *sibling = NULL;
 
-  if (out_path == NULL) {
-    return SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT;
-  }
-  out_path->data = NULL;
-  out_path->length = 0;
-
-  if (!span_is_valid(executable_dir) || !span_is_valid(binary_name)) {
-    return SHAULA_RUNTIME_HELPER_STATUS_INVALID_ARGUMENT;
+  if (!nonempty(override_environment_name) || !nonempty(binary_name)) {
+    return NULL;
   }
 
-  if (shaula_env_value_trimmed(override_value, &override_path) ==
+  if (shaula_env_value_trimmed(g_getenv(override_environment_name), &override) ==
       SHAULA_ENV_STATUS_VALID) {
-    return copy_span(
-        (ShaulaRuntimeHelperSpan){override_path.data, override_path.length},
-        out_path);
+    return try_copy(override.data, override.length);
   }
 
-  if (executable_dir.length > 0) {
-    status = join_sibling(executable_dir, binary_name, out_path);
-    if (status != SHAULA_RUNTIME_HELPER_STATUS_OK) {
-      return status;
+  self = shaula_executable_current_path();
+  if (self != NULL) {
+    directory = g_path_get_dirname(self);
+    sibling = g_build_filename(directory, binary_name, NULL);
+    if (sibling != NULL &&
+        shaula_runtime_tool_path_exists((ShaulaRuntimeToolSpan){
+            .data = sibling, .length = strlen(sibling)})) {
+      return g_steal_pointer(&sibling);
     }
-
-    if (shaula_runtime_tool_path_exists(
-            (ShaulaRuntimeToolSpan){out_path->data, out_path->length})) {
-      return SHAULA_RUNTIME_HELPER_STATUS_OK;
-    }
-    shaula_runtime_helper_owned_path_clear(out_path);
   }
 
-  return copy_span(binary_name, out_path);
+  return try_strdup(binary_name);
+}
+
+char *shaula_executable_find_tool(const char *tool_name,
+                                  const char *const *absolute_candidates,
+                                  size_t candidate_count) {
+  ShaulaRuntimeToolOwnedPath path = {0};
+  size_t index;
+
+  if (!nonempty(tool_name) ||
+      (absolute_candidates == NULL && candidate_count > 0)) {
+    return NULL;
+  }
+
+  for (index = 0; index < candidate_count; index += 1) {
+    const char *candidate = absolute_candidates[index];
+    if (!nonempty(candidate) || candidate[0] != '/') {
+      continue;
+    }
+    if (shaula_runtime_tool_path_exists((ShaulaRuntimeToolSpan){
+            .data = candidate, .length = strlen(candidate)})) {
+      return try_strdup(candidate);
+    }
+  }
+
+  if (shaula_runtime_tool_find_in_path(
+          g_getenv("PATH"),
+          (ShaulaRuntimeToolSpan){.data = tool_name,
+                                  .length = strlen(tool_name)},
+          &path) != SHAULA_RUNTIME_TOOL_LOOKUP_STATUS_OK) {
+    shaula_runtime_tool_owned_path_clear(&path);
+    return NULL;
+  }
+
+  return path.data;
+}
+
+char *shaula_executable_find_program(const char *tool_name) {
+  return shaula_executable_find_tool(tool_name, NULL, 0);
+}
+
+char *shaula_executable_find_grim(void) {
+  static const char *const candidates[] = {
+      "/usr/bin/grim",
+      "/bin/grim",
+      "/usr/local/bin/grim",
+  };
+  return shaula_executable_find_tool("grim", candidates,
+                                     G_N_ELEMENTS(candidates));
 }

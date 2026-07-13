@@ -796,18 +796,16 @@ typedef FocusedJsonStatus (*FocusedJsonRootParser)(
     gboolean *has_selected_name);
 
 static ShaulaFocusedOutputStatus focused_output_run_probe(
-    const ShaulaProcessSpan *arguments, size_t argument_count,
-    size_t stdout_limit, FocusedJsonRootParser parse_root,
-    ShaulaFocusedOutputResult *result) {
+    const char *const *arguments, size_t stdout_limit,
+    FocusedJsonRootParser parse_root, ShaulaFocusedOutputResult *result) {
   ShaulaProcessOutput output = {0};
   FocusedJsonParser parser;
   FocusedJsonRawString selected_name = {0};
   gboolean has_selected_name = FALSE;
   FocusedJsonStatus json_status;
   ShaulaFocusedOutputStatus final_status = SHAULA_FOCUSED_OUTPUT_STATUS_OK;
-  const ShaulaProcessStatus process_status = shaula_process_run(
-      (ShaulaProcessArgv){arguments, argument_count}, NULL, stdout_limit, 1024U,
-      &output);
+  const ShaulaProcessStatus process_status =
+      shaula_process_run(arguments, NULL, stdout_limit, 1024U, &output);
 
   if (process_status != SHAULA_PROCESS_STATUS_OK ||
       output.term_kind != SHAULA_PROCESS_TERM_EXITED || output.term_value != 0U) {
@@ -882,17 +880,11 @@ void shaula_focused_output_result_clear(ShaulaFocusedOutputResult *result) {
 ShaulaFocusedOutputStatus shaula_focused_output_resolve(
     const ShaulaFocusedOutputEnvironment *environment,
     ShaulaFocusedOutputResult *out_result) {
-  static const ShaulaProcessSpan niri_argv[] = {
-      {"niri", sizeof("niri") - 1U},
-      {"msg", sizeof("msg") - 1U},
-      {"-j", sizeof("-j") - 1U},
-      {"focused-output", sizeof("focused-output") - 1U},
+  static const char *const niri_argv[] = {
+      "niri", "msg", "-j", "focused-output", NULL,
   };
-  static const ShaulaProcessSpan sway_argv[] = {
-      {"swaymsg", sizeof("swaymsg") - 1U},
-      {"-t", sizeof("-t") - 1U},
-      {"get_outputs", sizeof("get_outputs") - 1U},
-      {"-r", sizeof("-r") - 1U},
+  static const char *const sway_argv[] = {
+      "swaymsg", "-t", "get_outputs", "-r", NULL,
   };
   ShaulaEnvSpan override = {0};
   ShaulaCompositorDetection compositor = {0};
@@ -916,14 +908,12 @@ ShaulaFocusedOutputStatus shaula_focused_output_resolve(
     return SHAULA_FOCUSED_OUTPUT_STATUS_OK;
   }
   if (compositor.kind == SHAULA_COMPOSITOR_KIND_NIRI) {
-    return focused_output_run_probe(
-        niri_argv, G_N_ELEMENTS(niri_argv), 8192U,
-        focused_json_parse_niri_root, out_result);
+    return focused_output_run_probe(niri_argv, 8192U,
+                                    focused_json_parse_niri_root, out_result);
   }
   if (focused_span_ascii_equal_case_insensitive(compositor.label, "sway")) {
-    return focused_output_run_probe(
-        sway_argv, G_N_ELEMENTS(sway_argv), 65536U,
-        focused_json_parse_sway_root, out_result);
+    return focused_output_run_probe(sway_argv, 65536U,
+                                    focused_json_parse_sway_root, out_result);
   }
   return SHAULA_FOCUSED_OUTPUT_STATUS_OK;
 }

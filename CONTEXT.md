@@ -11,9 +11,9 @@ history; this document records current behavior and ownership.
 - The Zig-to-C migration is cut over. Production, tests, QA, packaging, and CI
   use Meson and C; the repository has no maintained Zig source or Zig build
   metadata.
-- The port specification and decision record remain in
-  `spec/zig-to-c-port.md` and `docs/adr/0002-port-zig-core-to-c.md`. They describe
-  migration constraints and history, not current mixed-language ownership.
+- The port specification, ADR, baseline, and migration matrix remain as
+  historical records. Active architecture, testing, release, packaging, and
+  contributor documentation describe Meson and C as the only maintained path.
 - Interactive Wayland/Niri validation is still required whenever capture,
   overlay, clipboard, GTK, or compositor behavior changes.
 
@@ -36,9 +36,11 @@ history; this document records current behavior and ownership.
 
 - `src/main.c` owns top-level command dispatch and the public JSON command
   envelopes.
-- `src/capture/command.c` owns capture grammar, capability guards, session
-  locking, overlay selection, backend invocation, artifact validation, history,
-  clipboard, Preview launch, and capture result JSON.
+- `src/capture/command.c` owns capture grammar, capability guards, overlay
+  selection, backend invocation, artifact validation, history, clipboard,
+  Preview launch, and capture result JSON. Capture-specific runtime filenames,
+  locking, temporary directories, and previous-area persistence stay behind
+  `src/runtime/capture_state.{c,h}`.
 - Capture session ownership is lifecycle-scoped: every early outcome releases
   automatically, while the success path explicitly releases before Preview.
 - `src/config/config.c` owns defaults, the supported TOML subset, config path
@@ -50,8 +52,13 @@ history; this document records current behavior and ownership.
   Managed writes preserve surrounding user KDL, reject malformed
   markers with deterministic `ERR_CONFIG_INVALID`, back up changed files, and
   are idempotent.
-- `src/runtime/` owns environment parsing, runtime paths, tool/helper lookup,
-  process execution, previous-area state, and capture-session locking.
+- `src/runtime/` builds as one deep runtime module. `helper_resolution.{c,h}`
+  is the executable-discovery interface for current-binary, helper sibling,
+  fixed-candidate, and `PATH` lookup. `process_exec.{c,h}` is the sole
+  synchronous direct-argv process interface. `capture_state.{c,h}` owns
+  capture-specific runtime paths, the exclusive session, overlay artifacts,
+  and previous-area persistence; its path/lock/store modules are implementation
+  details.
 - `src/compositor/`, `src/capabilities/`, and `src/preflight/` own compositor
   classification, focused-output discovery, runtime/backend decisions, and the
   complete preflight response. `src/explore/inventory.c` queries Niri and
@@ -68,6 +75,10 @@ history; this document records current behavior and ownership.
 - `src/preview/preview_annotation_behavior.c` is the Preview edit-query seam
   for ranked hit testing, region selection, and eraser intersection. Annotation
   variant rules and ADR-0001 Image ownership remain in `preview_annotations.c`.
+- Preview Text drafts live in `preview_canvas.c` (`text_entry` +
+  `SHAULA_OPERATION_TEXT`). Committed Text can be reopened for string editing
+  via a no-drag second click when singly selected, or by clicking it with the
+  Text tool. `text_editing_id` tracks re-edit vs create; empty re-edit deletes.
 
 ## Public capture behavior
 
@@ -123,6 +134,8 @@ history; this document records current behavior and ownership.
 `./dev check` also runs the non-intrusive top-level port command compatibility
 fixture covering capture selection, config preservation, clipboard/history,
 Explore inventory, notification grammar, and overlay error details.
+The host-sensitive `contract` suite remains local QA and is excluded from the
+headless GitHub C-build matrix.
 
 Every code change must run:
 

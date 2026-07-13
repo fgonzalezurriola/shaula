@@ -384,6 +384,7 @@ static void restore_snapshot(ShaulaPreviewState *state,
       gtk_widget_unparent(state->text_entry);
     state->text_entry = NULL;
   }
+  state->text_editing_id = 0;
   if (state->draft_pen_points != NULL)
     g_array_set_size(state->draft_pen_points, 0);
   shaula_preview_cancel_history_gesture(state);
@@ -448,6 +449,7 @@ void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
       gtk_widget_unparent(state->text_entry);
     state->text_entry = NULL;
   }
+  state->text_editing_id = 0;
   shaula_preview_queue_draw(state);
 }
 

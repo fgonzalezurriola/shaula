@@ -124,6 +124,10 @@ typedef struct ShaulaPreviewState {
   ShaulaPoint eraser_hover_screen;
   ShaulaPoint eraser_last_screen;
   ShaulaPoint text_anchor_image;
+  /* Non-zero while re-editing a committed Text annotation's string content.
+   * Zero means the draft creates a new annotation on finish.
+   */
+  int text_editing_id;
 
   ShaulaAnnotationEditor annotation_editor;
   ShaulaSystemClipboardPaste *system_clipboard_paste;

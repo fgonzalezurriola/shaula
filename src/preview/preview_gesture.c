@@ -520,6 +520,11 @@ gboolean shaula_preview_gesture_begin_selection(
       return TRUE;
     }
 
+    /* Second click on a singly selected Text (no drag) reopens the editor. */
+    state->gesture.pending_text_reedit =
+        hit_was_selected && hit->type == SHAULA_ANNOTATION_TEXT &&
+        shaula_annotation_editor_selected_count(state) == 1;
+
     if (!hit_was_selected ||
         shaula_annotation_editor_selected_count(state) <= 1) {
       shaula_annotation_editor_select_only(state, hit);
@@ -678,7 +683,10 @@ gboolean shaula_preview_gesture_update(ShaulaPreviewState *state,
   return FALSE;
 }
 
-gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state) {
+gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state,
+                                              int *text_reedit_id_out) {
+  if (text_reedit_id_out != NULL)
+    *text_reedit_id_out = 0;
   if (state == NULL ||
       !shaula_preview_gesture_is_selection_operation(state->operation))
     return FALSE;
@@ -690,6 +698,14 @@ gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state) {
         shaula_annotation_editor_single_selection(state);
     sync_text_hud =
         selected != NULL && selected->type == SHAULA_ANNOTATION_TEXT;
+  }
+  int reedit_id = 0;
+  if (state->operation == SHAULA_OPERATION_MOVE &&
+      !state->operation_changed && state->gesture.pending_text_reedit) {
+    ShaulaAnnotation *selected =
+        shaula_annotation_editor_single_selection(state);
+    if (selected != NULL && selected->type == SHAULA_ANNOTATION_TEXT)
+      reedit_id = selected->id;
   }
   if (state->operation == SHAULA_OPERATION_MOVE ||
       state->operation == SHAULA_OPERATION_BEND_ARROW ||
@@ -719,6 +735,8 @@ gboolean shaula_preview_gesture_end_selection(ShaulaPreviewState *state) {
   state->operation = SHAULA_OPERATION_NONE;
   state->operation_changed = FALSE;
   shaula_preview_gesture_reset(&state->gesture);
+  if (text_reedit_id_out != NULL)
+    *text_reedit_id_out = reedit_id;
   return TRUE;
 }
 

@@ -10,6 +10,7 @@
 #include "notify/request.h"
 #include "preflight/probe.h"
 #include "preview/preview_result.h"
+#include "runtime/helper_resolution.h"
 #include "runtime/process_exec.h"
 
 #include <errno.h>
@@ -248,52 +249,6 @@ static int command_errors(int argc, char **argv) {
   return 0;
 }
 
-static char *executable_path(void) {
-  return g_file_read_link("/proc/self/exe", NULL);
-}
-
-static char *resolve_helper(const char *override_name, const char *binary_name) {
-  const char *override = g_getenv(override_name);
-  if (override != NULL && override[0] != '\0')
-    return g_strdup(override);
-  g_autofree char *self = executable_path();
-  if (self != NULL) {
-    g_autofree char *directory = g_path_get_dirname(self);
-    char *sibling = g_build_filename(directory, binary_name, NULL);
-    if (g_file_test(sibling, G_FILE_TEST_EXISTS))
-      return sibling;
-    g_free(sibling);
-  }
-  return g_strdup(binary_name);
-}
-
-static gboolean run_sync(char **argv, char **envp, char **stdout_text,
-                         char **stderr_text, int *exit_code) {
-  gint wait_status = 0;
-  g_autoptr(GError) error = NULL;
-  gboolean spawned =
-      g_spawn_sync(NULL, argv, envp, G_SPAWN_SEARCH_PATH, NULL, NULL, stdout_text,
-                   stderr_text, &wait_status, &error);
-  if (!spawned) {
-    if (stderr_text != NULL) {
-      g_free(*stderr_text);
-      *stderr_text = g_strdup(error != NULL ? error->message : "spawn failed");
-    }
-    if (exit_code != NULL)
-      *exit_code = 127;
-    return FALSE;
-  }
-  if (exit_code != NULL) {
-    if (WIFEXITED(wait_status))
-      *exit_code = WEXITSTATUS(wait_status);
-    else if (WIFSIGNALED(wait_status))
-      *exit_code = 128 + WTERMSIG(wait_status);
-    else
-      *exit_code = 1;
-  }
-  return TRUE;
-}
-
 static int command_settings(int argc, char **argv) {
   if (argc == 3 && g_str_equal(argv[2], "--json")) {
     return write_success(
@@ -323,10 +278,16 @@ static int command_settings(int argc, char **argv) {
     return write_error("settings", "ERR_CLI_USAGE",
                        "usage: shaula settings [--json]", "{}");
   g_autofree char *helper =
-      resolve_helper("SHAULA_SETTINGS_HELPER_BIN", "shaula-settings");
-  char *helper_argv[] = {helper, NULL};
+      shaula_executable_resolve_helper("SHAULA_SETTINGS_HELPER_BIN",
+                                       "shaula-settings");
+  if (helper == NULL)
+    return write_error("settings", "ERR_SETTINGS_UNAVAILABLE",
+                       "settings helper is unavailable", "{}");
+  const char *helper_argv[] = {helper, NULL};
   int exit_code = 0;
-  if (!run_sync(helper_argv, NULL, NULL, NULL, &exit_code) || exit_code != 0)
+  if (shaula_process_run_sync((const char *const *)helper_argv, NULL, NULL,
+                              NULL, &exit_code) != SHAULA_PROCESS_STATUS_OK ||
+      exit_code != 0)
     return write_error("settings", "ERR_SETTINGS_UNAVAILABLE",
                        "settings helper is unavailable", "{}");
   return 0;
@@ -536,7 +497,7 @@ static char *preview_rule(const ShaulaConfig *config) {
 }
 
 static char *render_keybinds(void) {
-  g_autofree char *binary = executable_path();
+  g_autofree char *binary = shaula_executable_current_path();
   const char *path = binary != NULL ? binary : "shaula";
   return g_strdup_printf(
       "binds {\n"
@@ -814,8 +775,12 @@ static int command_preview(int argc, char **argv) {
     return write_error("preview", "ERR_PREVIEW_INPUT_INVALID",
                        "preview input image is not readable", "{}");
   g_autofree char *helper =
-      resolve_helper("SHAULA_PREVIEW_HELPER_BIN", "shaula-preview");
-  g_autofree char *self = executable_path();
+      shaula_executable_resolve_helper("SHAULA_PREVIEW_HELPER_BIN",
+                                       "shaula-preview");
+  if (helper == NULL)
+    return write_error("preview", "ERR_PREVIEW_UNAVAILABLE",
+                       "preview helper is unavailable", "{}");
+  g_autofree char *self = shaula_executable_current_path();
   g_auto(GStrv) envp = g_get_environ();
   envp = g_environ_setenv(envp, "SHAULA_BIN", self != NULL ? self : "shaula",
                           TRUE);
@@ -831,11 +796,14 @@ static int command_preview(int argc, char **argv) {
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_WINDOW_WIDTH", width, TRUE);
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_WINDOW_HEIGHT", height, TRUE);
   envp = g_environ_setenv(envp, "SHAULA_SAVE_FOLDER", config.save_folder, TRUE);
-  char *helper_argv[] = {helper, (char *)path, NULL};
+  const char *helper_argv[] = {helper, path, NULL};
   g_autofree char *stdout_text = NULL;
   g_autofree char *stderr_text = NULL;
   int exit_code = 0;
-  if (!run_sync(helper_argv, envp, &stdout_text, &stderr_text, &exit_code) ||
+  if (shaula_process_run_sync((const char *const *)helper_argv,
+                              (const char *const *)envp, &stdout_text,
+                              &stderr_text, &exit_code) !=
+          SHAULA_PROCESS_STATUS_OK ||
       exit_code != 0) {
     if (exit_code == 43)
       return write_error("preview", "ERR_PREVIEW_INPUT_INVALID",
@@ -916,7 +884,10 @@ static int command_directory(int argc, char **argv) {
   if (open) {
     char *open_argv[] = {"xdg-open", directory, NULL};
     int exit_code = 0;
-    if (!run_sync(open_argv, NULL, NULL, NULL, &exit_code) || exit_code != 0)
+    if (shaula_process_run_sync((const char *const *)open_argv, NULL, NULL,
+                                NULL, &exit_code) !=
+            SHAULA_PROCESS_STATUS_OK ||
+        exit_code != 0)
       return write_error("directory screenshots", "ERR_OUTPUT_PATH_INVALID",
                          "could not open screenshot directory", "{}");
   }
@@ -1121,16 +1092,11 @@ static int command_clipboard(int argc, char **argv) {
       return write_error("clipboard copy-image", "ERR_CLIPBOARD_COPY_FAILED",
                          "clipboard image copy failed", "{}");
 
-    ShaulaProcessSpan arguments[] = {{.data = "wl-copy", .length = 7},
-                                     {.data = "--type", .length = 6},
-                                     {.data = "image/png", .length = 9}};
+    const char *arguments[] = {"wl-copy", "--type", "image/png", NULL};
     ShaulaProcessTermKind term = SHAULA_PROCESS_TERM_UNKNOWN;
     guint32 value = 0;
-    if (shaula_process_run_with_input(
-            (ShaulaProcessArgv){.items = arguments,
-                                .length = G_N_ELEMENTS(arguments)},
-            (ShaulaProcessSpan){.data = bytes, .length = length}, &term,
-            &value) != SHAULA_PROCESS_STATUS_OK ||
+    if (shaula_process_run_with_input(arguments, bytes, length, &term, &value) !=
+            SHAULA_PROCESS_STATUS_OK ||
         term != SHAULA_PROCESS_TERM_EXITED || value != 0)
       return write_error("clipboard copy-image", "ERR_CLIPBOARD_COPY_FAILED",
                          "clipboard image copy failed", "{}");
@@ -1234,7 +1200,7 @@ static int command_explore(int argc, char **argv) {
 static int command_doctor(int argc, char **argv) {
   if (argc != 3 || !g_str_equal(argv[2], "--json"))
     return write_error("doctor", "ERR_CLI_USAGE", "--json is required", "{}");
-  g_autofree char *self = executable_path();
+  g_autofree char *self = shaula_executable_current_path();
   g_autofree char *self_json = json_string(self != NULL ? self : "shaula");
   g_autofree char *config_path = shaula_config_path_new();
   g_autofree char *config_json_value =
@@ -1264,6 +1230,9 @@ static int command_doctor(int argc, char **argv) {
       noctalia_dir != NULL
           ? g_build_filename(noctalia_dir, "settings.json", NULL)
           : NULL;
+  g_autofree char *grim_path = shaula_executable_find_grim();
+  g_autofree char *wl_copy_path = shaula_executable_find_program("wl-copy");
+  g_autofree char *wl_paste_path = shaula_executable_find_program("wl-paste");
   g_autofree char *result = g_strdup_printf(
       "{\"paths\":{\"binary\":%s,\"config_file\":%s,"
       "\"config_exists\":%s},\"wayland\":{\"wayland_display\":%s},"
@@ -1275,9 +1244,8 @@ static int command_doctor(int argc, char **argv) {
       self_json, config_json_value,
       json_bool(config_path != NULL && g_file_test(config_path, G_FILE_TEST_EXISTS)),
       g_getenv("WAYLAND_DISPLAY") != NULL ? "\"present\"" : "null",
-      json_bool(g_find_program_in_path("grim") != NULL),
-      json_bool(g_find_program_in_path("wl-copy") != NULL),
-      json_bool(g_find_program_in_path("wl-paste") != NULL),
+      json_bool(grim_path != NULL), json_bool(wl_copy_path != NULL),
+      json_bool(wl_paste_path != NULL),
       json_bool(noctalia_dir != NULL &&
                 g_file_test(noctalia_dir, G_FILE_TEST_IS_DIR)),
       json_bool(noctalia_plugins != NULL &&
@@ -1435,8 +1403,10 @@ static gboolean notify_request_run(const char *summary, const char *body,
     g_autofree char *stdout_text = NULL;
     int exit_code = 0;
     gboolean spawned =
-        run_sync(argv, NULL, action_output != NULL ? &stdout_text : NULL, NULL,
-                 &exit_code);
+        shaula_process_run_sync((const char *const *)argv, NULL,
+                                action_output != NULL ? &stdout_text : NULL,
+                                NULL, &exit_code) ==
+        SHAULA_PROCESS_STATUS_OK;
     shaula_notify_send_args_clear(&args);
     if (spawned && exit_code == 0) {
       if (action_output != NULL) {
@@ -1474,12 +1444,18 @@ static gboolean reveal_file(const char *path) {
       NULL,
   };
   int exit_code = 0;
-  if (run_sync(gdbus_argv, NULL, NULL, NULL, &exit_code) && exit_code == 0)
+  if (shaula_process_run_sync((const char *const *)gdbus_argv, NULL, NULL,
+                              NULL, &exit_code) ==
+          SHAULA_PROCESS_STATUS_OK &&
+      exit_code == 0)
     return TRUE;
 
   g_autofree char *parent = g_path_get_dirname(absolute);
   char *open_argv[] = {"xdg-open", parent, NULL};
-  return run_sync(open_argv, NULL, NULL, NULL, &exit_code) && exit_code == 0;
+  return shaula_process_run_sync((const char *const *)open_argv, NULL, NULL,
+                                 NULL, &exit_code) ==
+             SHAULA_PROCESS_STATUS_OK &&
+         exit_code == 0;
 }
 
 static int notify_test(const char *kind) {

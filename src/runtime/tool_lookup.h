@@ -8,10 +8,7 @@
 extern "C" {
 #endif
 
-/*
- * Status values are part of the temporary Zig/C ABI. Keep their exact numeric
- * values stable for all direct C ABI callers.
- */
+/* Status values are stable within the runtime implementation interface. */
 typedef int32_t ShaulaRuntimeToolLookupStatus;
 enum {
   SHAULA_RUNTIME_TOOL_LOOKUP_STATUS_OK = 0,

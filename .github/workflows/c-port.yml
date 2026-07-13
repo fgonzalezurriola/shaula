@@ -84,7 +84,9 @@ jobs:
         run: meson compile -C build-c-port
 
       - name: Run C tests
-        run: meson test -C build-c-port --print-errorlogs
+        # Desktop contract fixtures depend on simulated Niri/Wayland state and
+        # belong to local QA rather than the headless GitHub runner.
+        run: meson test -C build-c-port --print-errorlogs --no-suite contract
 
       - name: Verify install payload
         run: |

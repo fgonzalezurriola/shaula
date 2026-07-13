@@ -47,7 +47,7 @@ _Static_assert(SHAULA_CAPTURE_SESSION_STATUS_FILESYSTEM_ERROR == 4,
  *
  * When a lock already exists, at most 64 bytes are read and ASCII whitespace is
  * trimmed around the complete file. A valid decimal pid_t accepts an optional
- * sign and Zig-compatible internal underscores. kill(pid, 0) classifies only
+ * sign and internal underscores between digits. kill(pid, 0) classifies only
  * ESRCH as stale. A stale file is unlinked and exclusive creation is retried
  * once; every live, inaccessible, malformed, oversized, or concurrently
  * replaced lock reports BUSY.

@@ -104,6 +104,11 @@ static gboolean property_input_allowed(const ShaulaPreviewState *state) {
 static void finish_property_change(ShaulaPreviewState *state) {
   shaula_preview_toolbar_update_selection_state(state);
   shaula_preview_queue_draw(state);
+  /* HUD widgets can steal focus from the hidden text draft editor. Restore it
+   * so typing continues after color/size/align changes mid-draft.
+   */
+  if (state != NULL && state->text_entry != NULL)
+    gtk_widget_grab_focus(state->text_entry);
 }
 
 static void sync_color_button(GtkWidget *widget, ShaulaColor color) {

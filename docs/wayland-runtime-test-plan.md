@@ -25,16 +25,15 @@ Before any heavy manual test setup:
 
 ```bash
 df -h / /home
-du -sh ~/.cache/zig ~/.cache 2>/dev/null || true
+du -sh ~/.cache 2>/dev/null || true
 ```
 
 Prefer a large non-root path for temporary work:
 
 ```bash
 export SHAULA_LAB_ROOT=$HOME/dev/shaula-lab
-mkdir -p "$SHAULA_LAB_ROOT"/{tmp,zig-cache,vm-images,captures}
+mkdir -p "$SHAULA_LAB_ROOT"/{tmp,vm-images,captures}
 export TMPDIR="$SHAULA_LAB_ROOT/tmp"
-export ZIG_GLOBAL_CACHE_DIR="$SHAULA_LAB_ROOT/zig-cache"
 export SHAULA_OUTPUT_DIR="$SHAULA_LAB_ROOT/captures"
 ```
 

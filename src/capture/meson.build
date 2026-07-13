@@ -19,10 +19,7 @@ shaula_capture_command_c = static_library(
     shaula_config_dep,
     shaula_error_taxonomy_dep,
     shaula_preview_result_dep,
-    shaula_runtime_capture_session_lock_dep,
-    shaula_runtime_paths_dep,
-    shaula_runtime_previous_area_store_dep,
-    shaula_runtime_process_exec_dep,
+    shaula_runtime_dep,
   ],
 )
 
@@ -38,10 +35,7 @@ shaula_capture_command_dep = declare_dependency(
     shaula_config_dep,
     shaula_error_taxonomy_dep,
     shaula_preview_result_dep,
-    shaula_runtime_capture_session_lock_dep,
-    shaula_runtime_paths_dep,
-    shaula_runtime_previous_area_store_dep,
-    shaula_runtime_process_exec_dep,
+    shaula_runtime_dep,
   ],
 )
 
