@@ -161,6 +161,18 @@ test(
   suite: ['port', 'unit'],
 )
 
+overlay_selection_session_test = executable(
+  'overlay-selection-session-test',
+  'overlay_selection_session_test.c',
+  dependencies: shaula_overlay_selection_dep,
+)
+
+test(
+  'overlay-selection-session-c',
+  overlay_selection_session_test,
+  suite: ['port', 'unit'],
+)
+
 settings_config_test = executable(
   'settings-config-test',
   'settings_config_test.c',

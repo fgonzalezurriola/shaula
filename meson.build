@@ -47,6 +47,7 @@ shaula_core_include = include_directories('src/core')
 shaula_errors_include = include_directories('src')
 shaula_explore_include = include_directories('src')
 shaula_notify_include = include_directories('src')
+shaula_overlay_include = include_directories('src/overlay')
 shaula_preflight_include = include_directories('src')
 shaula_preview_include = include_directories('src/preview')
 shaula_runtime_include = include_directories('src/runtime')
@@ -64,6 +65,7 @@ subdir('src/capabilities')
 subdir('src/preflight')
 subdir('src/config')
 subdir('src/settings')
+subdir('src/commands')
 subdir('src/overlay')
 subdir('src/capture')
 
@@ -72,18 +74,7 @@ shaula_exe = executable(
   'src/main.c',
   dependencies: [
     glib_dep,
-    gio_dep,
-    gdk_pixbuf_dep,
-    shaula_capabilities_runtime_dep,
-    shaula_cli_json_dep,
-    shaula_compositor_runtime_dep,
-    shaula_config_dep,
-    shaula_error_taxonomy_dep,
-    shaula_explore_inventory_dep,
-    shaula_notify_request_dep,
-    shaula_preflight_probe_dep,
-    shaula_preview_result_dep,
-    shaula_runtime_dep,
+    shaula_commands_dep,
     shaula_capture_command_dep,
   ],
   install: true,

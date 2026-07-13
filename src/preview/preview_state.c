@@ -4,7 +4,7 @@
 #include <math.h>
 #include <string.h>
 
-#include "preview_document_edit.h"
+#include "preview_edit_session.h"
 #include "preview_paths.h"
 #include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
@@ -251,14 +251,6 @@ void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor) {
   shaula_preview_queue_draw(state);
 }
 
-void shaula_preview_clear_region_selection(ShaulaPreviewState *state) {
-  if (state == NULL)
-    return;
-  state->has_region_selection = FALSE;
-  shaula_preview_queue_draw(state);
-  shaula_preview_toolbar_update_selection_state(state);
-}
-
 static gboolean pending_erase_ids_contain(ShaulaPreviewState *state, int id) {
   if (state == NULL || state->eraser_pending_annotation_ids == NULL || id <= 0)
     return FALSE;
@@ -314,143 +306,6 @@ gboolean shaula_preview_commit_eraser_pending(ShaulaPreviewState *state) {
   shaula_annotation_editor_clear_selection(state);
   shaula_preview_toolbar_update_history_state(state);
   return TRUE;
-}
-
-void shaula_preview_push_undo(ShaulaPreviewState *state) {
-  if (state == NULL)
-    return;
-  shaula_preview_history_push_undo(
-      &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document), TRUE);
-  shaula_preview_toolbar_update_history_state(state);
-}
-
-void shaula_preview_begin_history_gesture(ShaulaPreviewState *state) {
-  if (state == NULL || state->document.pending_history_snapshot != NULL)
-    return;
-  state->document.pending_history_snapshot =
-      shaula_preview_document_snapshot_new(&state->document);
-}
-
-void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
-                                           gboolean changed) {
-  if (state == NULL || state->document.pending_history_snapshot == NULL)
-    return;
-  if (changed) {
-    shaula_preview_history_push_undo(&state->document.history,
-                                     state->document.pending_history_snapshot,
-                                     TRUE);
-    state->document.pending_history_snapshot = NULL;
-    shaula_preview_toolbar_update_history_state(state);
-    return;
-  }
-  shaula_preview_snapshot_free(state->document.pending_history_snapshot);
-  state->document.pending_history_snapshot = NULL;
-}
-
-void shaula_preview_cancel_history_gesture(ShaulaPreviewState *state) {
-  if (state == NULL || state->document.pending_history_snapshot == NULL)
-    return;
-  shaula_preview_snapshot_free(state->document.pending_history_snapshot);
-  state->document.pending_history_snapshot = NULL;
-}
-
-gboolean shaula_preview_can_undo(ShaulaPreviewState *state) {
-  return state != NULL && (state->document.pending_history_snapshot != NULL ||
-                           shaula_preview_history_can_undo(
-                               &state->document.history));
-}
-
-gboolean shaula_preview_can_redo(ShaulaPreviewState *state) {
-  return state != NULL &&
-         shaula_preview_history_can_redo(&state->document.history);
-}
-
-static void restore_snapshot(ShaulaPreviewState *state,
-                             ShaulaPreviewSnapshot *snapshot) {
-  shaula_preview_document_restore_snapshot(&state->document, snapshot);
-  shaula_annotation_editor_rebuild_selection(state);
-  state->has_crop_draft = FALSE;
-  state->has_region_selection = FALSE;
-  state->operation = SHAULA_OPERATION_NONE;
-  shaula_preview_cancel_eraser_gesture(state);
-  shaula_properties_hud_set_panel(&state->properties_hud,
-                                  SHAULA_PROPERTIES_PANEL_NONE);
-  if (state->text_entry != NULL) {
-    if (state->canvas_overlay != NULL)
-      gtk_overlay_remove_overlay(GTK_OVERLAY(state->canvas_overlay),
-                                 state->text_entry);
-    else
-      gtk_widget_unparent(state->text_entry);
-    state->text_entry = NULL;
-  }
-  state->text_editing_id = 0;
-  if (state->draft_pen_points != NULL)
-    g_array_set_size(state->draft_pen_points, 0);
-  shaula_preview_cancel_history_gesture(state);
-  shaula_preview_update_dimensions_label(state);
-  shaula_preview_set_fit_mode(state, TRUE);
-}
-
-gboolean shaula_preview_undo(ShaulaPreviewState *state) {
-  if (state == NULL)
-    return FALSE;
-  shaula_preview_commit_history_gesture(state, TRUE);
-  if (!shaula_preview_can_undo(state))
-    return FALSE;
-  ShaulaPreviewSnapshot *snapshot =
-      shaula_preview_history_pop_undo(&state->document.history);
-  shaula_preview_history_push_redo(
-      &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document));
-  restore_snapshot(state, snapshot);
-  shaula_preview_snapshot_free(snapshot);
-  shaula_preview_toolbar_update_history_state(state);
-  return TRUE;
-}
-
-gboolean shaula_preview_redo(ShaulaPreviewState *state) {
-  if (state == NULL)
-    return FALSE;
-  shaula_preview_commit_history_gesture(state, TRUE);
-  if (!shaula_preview_can_redo(state))
-    return FALSE;
-  ShaulaPreviewSnapshot *snapshot =
-      shaula_preview_history_pop_redo(&state->document.history);
-  shaula_preview_history_push_undo(
-      &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document), FALSE);
-  restore_snapshot(state, snapshot);
-  shaula_preview_snapshot_free(snapshot);
-  shaula_preview_toolbar_update_history_state(state);
-  return TRUE;
-}
-
-void shaula_preview_cancel_operation(ShaulaPreviewState *state) {
-  if (state == NULL)
-    return;
-  if (state->operation == SHAULA_OPERATION_ERASE_ANNOTATIONS)
-    shaula_preview_cancel_eraser_gesture(state);
-  state->operation = SHAULA_OPERATION_NONE;
-  state->operation_changed = FALSE;
-  shaula_preview_gesture_reset(&state->gesture);
-  shaula_preview_cancel_history_gesture(state);
-  state->has_crop_draft = FALSE;
-  state->has_region_selection = FALSE;
-  shaula_properties_hud_set_panel(&state->properties_hud,
-                                  SHAULA_PROPERTIES_PANEL_NONE);
-  if (state->draft_pen_points != NULL)
-    g_array_set_size(state->draft_pen_points, 0);
-  if (state->text_entry != NULL) {
-    if (state->canvas_overlay != NULL)
-      gtk_overlay_remove_overlay(GTK_OVERLAY(state->canvas_overlay),
-                                 state->text_entry);
-    else
-      gtk_widget_unparent(state->text_entry);
-    state->text_entry = NULL;
-  }
-  state->text_editing_id = 0;
-  shaula_preview_queue_draw(state);
 }
 
 static gboolean crop_rect_to_pixels(ShaulaPreviewState *state, ShaulaRect rect,
@@ -714,10 +569,10 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
     break;
   }
 
-  shaula_preview_document_begin_edit(state);
-  shaula_preview_document_replace_image(state, copy);
-  shaula_preview_document_finish_edit(
-      state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});
+  shaula_preview_edit_begin(state);
+  shaula_preview_edit_replace_image(state, copy);
+  shaula_preview_edit_finish(
+      state, (ShaulaPreviewEditFinish){.queue_draw = TRUE});
   return TRUE;
 }
 
@@ -783,17 +638,17 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   if (copy == NULL)
     return FALSE;
 
-  shaula_preview_document_begin_edit(state);
-  shaula_preview_document_replace_image(state, copy);
+  shaula_preview_edit_begin(state);
+  shaula_preview_edit_replace_image(state, copy);
   remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
                                remove_annotation);
   remap_spotlight_regions_after_crop(state, (ShaulaRect){x, y, w, h});
-  shaula_preview_document_finish_edit(
-      state, (ShaulaPreviewDocumentFinish){.clear_crop_draft = TRUE,
-                                           .clear_region_selection = TRUE,
-                                           .reset_tool_to_select = TRUE,
-                                           .update_dimensions = TRUE,
-                                           .fit_to_screen = TRUE});
+  shaula_preview_edit_finish(
+      state, (ShaulaPreviewEditFinish){.clear_crop_draft = TRUE,
+                                       .clear_region_selection = TRUE,
+                                       .reset_tool_to_select = TRUE,
+                                       .update_dimensions = TRUE,
+                                       .fit_to_screen = TRUE});
   return TRUE;
 }
 
@@ -876,7 +731,7 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
       .border_color = state->tool_defaults.spotlight.border_color,
       .border_width = MAX(0.0, state->tool_defaults.spotlight.border_width),
   };
-  shaula_preview_document_begin_edit(state);
+  shaula_preview_edit_begin(state);
   g_array_append_val(state->document.spotlight_regions, region);
   int spotlight_index = (int)state->document.spotlight_regions->len - 1;
   shaula_properties_hud_target_spotlight(&state->properties_hud,
@@ -884,8 +739,8 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
   if (debug != NULL && debug[0] != '\0' && g_strcmp0(debug, "0") != 0)
     g_printerr("[DEBUG-spotlight] persisted index=%d count_after=%u\n",
                spotlight_index, state->document.spotlight_regions->len);
-  shaula_preview_document_finish_edit(
-      state, (ShaulaPreviewDocumentFinish){.queue_draw = TRUE});
+  shaula_preview_edit_finish(
+      state, (ShaulaPreviewEditFinish){.queue_draw = TRUE});
   return TRUE;
 }
 

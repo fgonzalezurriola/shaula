@@ -1,6 +1,6 @@
 #include "preview_canvas.h"
 
-#include "preview_annotation_behavior.h"
+#include "preview_edit_session.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -1151,9 +1151,9 @@ static gboolean eraser_mark_segment(ShaulaPreviewState *state,
     if (annotation == NULL ||
         shaula_preview_is_annotation_pending_erase(state, annotation))
       continue;
-    if (shaula_annotation_behavior_matches(
-            annotation, (ShaulaAnnotationQuery){
-                            .kind = SHAULA_ANNOTATION_QUERY_ERASER,
+    if (shaula_preview_edit_matches(
+            annotation, (ShaulaPreviewEditQuery){
+                            .kind = SHAULA_PREVIEW_EDIT_QUERY_ERASER,
                             .start = image_start,
                             .end = image_end,
                             .tolerance = radius})) {
@@ -1261,7 +1261,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
     break;
   case SHAULA_TOOL_TEXT:
     if (inside) {
-      ShaulaAnnotationHit hit = shaula_annotation_behavior_hit_test(
+      ShaulaAnnotationHit hit = shaula_preview_edit_hit_test(
           state->document.annotations, image_point,
           MAX(4.0, 8.0 / state->zoom));
       if (hit.annotation != NULL &&

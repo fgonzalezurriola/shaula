@@ -7,6 +7,7 @@
 #include "preview_annotation_editor.h"
 #include "preview_annotations.h"
 #include "preview_document.h"
+#include "preview_edit_session.h"
 #include "preview_geometry.h"
 #include "preview_gesture.h"
 #include "preview_measure.h"
@@ -185,24 +186,12 @@ void shaula_preview_set_fit_mode(ShaulaPreviewState *state, gboolean fit);
 void shaula_preview_set_actual_size(ShaulaPreviewState *state);
 void shaula_preview_zoom_by_factor(ShaulaPreviewState *state, double factor);
 
-void shaula_preview_clear_region_selection(ShaulaPreviewState *state);
 gboolean shaula_preview_is_annotation_pending_erase(
     ShaulaPreviewState *state, ShaulaAnnotation *annotation);
 void shaula_preview_clear_eraser_pending(ShaulaPreviewState *state);
 gboolean shaula_preview_commit_eraser_pending(ShaulaPreviewState *state);
 void shaula_preview_cancel_eraser_gesture(ShaulaPreviewState *state);
 
-void shaula_preview_push_undo(ShaulaPreviewState *state);
-void shaula_preview_begin_history_gesture(ShaulaPreviewState *state);
-void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
-                                           gboolean changed);
-void shaula_preview_cancel_history_gesture(ShaulaPreviewState *state);
-gboolean shaula_preview_can_undo(ShaulaPreviewState *state);
-gboolean shaula_preview_can_redo(ShaulaPreviewState *state);
-gboolean shaula_preview_undo(ShaulaPreviewState *state);
-gboolean shaula_preview_redo(ShaulaPreviewState *state);
-
-void shaula_preview_cancel_operation(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop(ShaulaPreviewState *state);
 gboolean shaula_preview_apply_crop_to_rect(ShaulaPreviewState *state,
                                            ShaulaRect rect);

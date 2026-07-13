@@ -1,5 +1,9 @@
 #include "settings_config.h"
 
+#include "cli/json.h"
+
+#include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 G_STATIC_ASSERT(REGION_LIVE == 0);
@@ -205,37 +209,41 @@ static void parse_after_mode(const char *json, const char *object_needle,
 }
 
 void shaula_settings_config_init_defaults(ShaulaSettingsConfig *config) {
+  ShaulaConfig defaults;
+  shaula_config_init_defaults(&defaults);
   *config = (ShaulaSettingsConfig){
-      .region_mode = REGION_FROZEN,
-      .window_mode = WINDOW_FLOATING,
-      .focused = TRUE,
-      .close_preview_on_save = TRUE,
-      .width = 1100,
-      .height = 720,
-      .column_display = g_strdup("normal"),
-      .floating_x_set = FALSE,
-      .floating_y_set = FALSE,
-      .floating_x = 0,
-      .floating_y = 0,
-      .floating_relative_to = g_strdup("top-left"),
-      .position_preset = POSITION_CENTERED,
-      .quick_skip_preview = FALSE,
-      .quick_copy = TRUE,
-      .quick_save = FALSE,
-      .area_skip_preview = FALSE,
-      .area_copy = TRUE,
-      .area_save = FALSE,
-      .fullscreen_skip_preview = TRUE,
-      .fullscreen_copy = TRUE,
-      .fullscreen_save = TRUE,
-      .all_screens_skip_preview = TRUE,
-      .all_screens_copy = TRUE,
-      .all_screens_save = TRUE,
-      .save_folder = g_strdup("~/Pictures/shaula"),
-      .notifications_success = TRUE,
-      .notifications_errors = TRUE,
-      .notifications_thumbnails = TRUE,
+      .region_mode = g_str_equal(defaults.region_capture_mode, "frozen")
+                         ? REGION_FROZEN
+                         : REGION_LIVE,
+      .window_mode = parse_window_mode(defaults.preview_mode),
+      .focused = defaults.preview_focused,
+      .close_preview_on_save = defaults.close_preview_on_save,
+      .width = (int)defaults.preview_width,
+      .height = (int)defaults.preview_height,
+      .column_display = g_strdup(defaults.column_display),
+      .floating_x_set = defaults.floating_x_set,
+      .floating_y_set = defaults.floating_y_set,
+      .floating_x = defaults.floating_x,
+      .floating_y = defaults.floating_y,
+      .floating_relative_to = g_strdup(defaults.floating_relative_to),
+      .quick_skip_preview = defaults.quick.skip_preview,
+      .quick_copy = defaults.quick.copy_to_clipboard,
+      .quick_save = defaults.quick.save_to_folder,
+      .area_skip_preview = defaults.area.skip_preview,
+      .area_copy = defaults.area.copy_to_clipboard,
+      .area_save = defaults.area.save_to_folder,
+      .fullscreen_skip_preview = defaults.fullscreen.skip_preview,
+      .fullscreen_copy = defaults.fullscreen.copy_to_clipboard,
+      .fullscreen_save = defaults.fullscreen.save_to_folder,
+      .all_screens_skip_preview = defaults.all_screens.skip_preview,
+      .all_screens_copy = defaults.all_screens.copy_to_clipboard,
+      .all_screens_save = defaults.all_screens.save_to_folder,
+      .save_folder = g_strdup(defaults.save_folder),
+      .notifications_success = defaults.notifications_success,
+      .notifications_errors = defaults.notifications_errors,
+      .notifications_thumbnails = defaults.notifications_thumbnails,
   };
+  config->position_preset = classify_position(config);
 }
 
 void shaula_settings_config_clear(ShaulaSettingsConfig *config) {
@@ -423,4 +431,280 @@ gboolean shaula_settings_config_from_show_json(const char *json,
   config->notifications_thumbnails = json_bool_after(
       json, "\"thumbnails\":", config->notifications_thumbnails);
   return TRUE;
+}
+
+static ShaulaJsonSpan settings_json_span(const char *value) {
+  return (ShaulaJsonSpan){.data = (const guint8 *)value,
+                          .length = value != NULL ? strlen(value) : 0};
+}
+
+static char *settings_json_string(const char *value) {
+  ShaulaJsonOwnedBytes output = {0};
+  if (shaula_json_string_escape(
+          settings_json_span(value != NULL ? value : ""), &output) !=
+      SHAULA_JSON_STATUS_OK)
+    return NULL;
+  char *copy = g_strndup((const char *)output.data, output.length);
+  shaula_json_owned_bytes_clear(&output);
+  return copy;
+}
+
+static const char *bool_text(gboolean value) {
+  return value ? "true" : "false";
+}
+
+char *shaula_settings_config_public_json_new(const ShaulaConfig *config) {
+  g_return_val_if_fail(config != NULL, NULL);
+
+  g_autofree char *save_folder = settings_json_string(config->save_folder);
+  g_autofree char *floating_x =
+      config->floating_x_set ? g_strdup_printf("%d", config->floating_x)
+                             : g_strdup("null");
+  g_autofree char *floating_y =
+      config->floating_y_set ? g_strdup_printf("%d", config->floating_y)
+                             : g_strdup("null");
+  return g_strdup_printf(
+      "{\"capture\":{\"region_capture_mode\":\"%s\",\"after\":{"
+      "\"save_folder\":%s,\"quick\":{\"skip_preview\":%s,"
+      "\"copy_to_clipboard\":%s,\"save_to_folder\":%s},\"area\":{"
+      "\"skip_preview\":%s,\"copy_to_clipboard\":%s,\"save_to_folder\":"
+      "%s},\"fullscreen\":{\"skip_preview\":%s,\"copy_to_clipboard\":%s,"
+      "\"save_to_folder\":%s},\"all_screens\":{\"skip_preview\":%s,"
+      "\"copy_to_clipboard\":%s,\"save_to_folder\":%s}}},"
+      "\"notifications\":{\"success\":%s,\"errors\":%s,\"thumbnails\":"
+      "%s},\"preview\":{\"window\":{\"app_id\":\"dev.shaula.preview\","
+      "\"title\":\"Shaula Preview\",\"mode\":\"%s\",\"focused\":%s,"
+      "\"close_preview_on_save\":%s,\"width\":%u,\"height\":%u,"
+      "\"default_column_display\":\"%s\",\"floating_position\":{\"x\":%s,"
+      "\"y\":%s,\"relative_to\":\"%s\"}}}}",
+      config->region_capture_mode, save_folder, bool_text(config->quick.skip_preview),
+      bool_text(config->quick.copy_to_clipboard),
+      bool_text(config->quick.save_to_folder), bool_text(config->area.skip_preview),
+      bool_text(config->area.copy_to_clipboard),
+      bool_text(config->area.save_to_folder),
+      bool_text(config->fullscreen.skip_preview),
+      bool_text(config->fullscreen.copy_to_clipboard),
+      bool_text(config->fullscreen.save_to_folder),
+      bool_text(config->all_screens.skip_preview),
+      bool_text(config->all_screens.copy_to_clipboard),
+      bool_text(config->all_screens.save_to_folder),
+      bool_text(config->notifications_success),
+      bool_text(config->notifications_errors),
+      bool_text(config->notifications_thumbnails), config->preview_mode,
+      bool_text(config->preview_focused),
+      bool_text(config->close_preview_on_save), config->preview_width,
+      config->preview_height, config->column_display, floating_x, floating_y,
+      config->floating_relative_to);
+}
+
+static gboolean parse_bool_arg(const char *value, gboolean *out) {
+  if (g_str_equal(value, "true")) {
+    *out = TRUE;
+    return TRUE;
+  }
+  if (g_str_equal(value, "false")) {
+    *out = FALSE;
+    return TRUE;
+  }
+  return FALSE;
+}
+
+static gboolean parse_uint_arg(const char *value, guint32 *out) {
+  char *end = NULL;
+  errno = 0;
+  unsigned long parsed = strtoul(value, &end, 10);
+  if (errno != 0 || end == value || *end != '\0' || parsed == 0 ||
+      parsed > G_MAXUINT32)
+    return FALSE;
+  *out = (guint32)parsed;
+  return TRUE;
+}
+
+static ShaulaAfterModeConfig *config_mode_for_flag(ShaulaConfig *config,
+                                                    const char *flag) {
+  if (strstr(flag, "--after-quick-") == flag)
+    return &config->quick;
+  if (strstr(flag, "--after-area-") == flag)
+    return &config->area;
+  if (strstr(flag, "--after-fullscreen-") == flag)
+    return &config->fullscreen;
+  if (strstr(flag, "--after-all-screens-") == flag)
+    return &config->all_screens;
+  return NULL;
+}
+
+gboolean shaula_settings_config_apply_cli_flag(ShaulaConfig *config,
+                                               const char *flag,
+                                               const char *value) {
+  g_return_val_if_fail(config != NULL, FALSE);
+  g_return_val_if_fail(flag != NULL, FALSE);
+  g_return_val_if_fail(value != NULL, FALSE);
+
+  if (g_str_equal(flag, "--region-mode")) {
+    if (!g_str_equal(value, "live") && !g_str_equal(value, "frozen"))
+      return FALSE;
+    g_strlcpy(config->region_capture_mode, value,
+              sizeof(config->region_capture_mode));
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--preview-mode")) {
+    if (!g_str_equal(value, "auto") && !g_str_equal(value, "tiling") &&
+        !g_str_equal(value, "floating") &&
+        !g_str_equal(value, "maximized") &&
+        !g_str_equal(value, "maximized-to-edges") &&
+        !g_str_equal(value, "fullscreen"))
+      return FALSE;
+    g_strlcpy(config->preview_mode, value, sizeof(config->preview_mode));
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--focused"))
+    return parse_bool_arg(value, &config->preview_focused);
+  if (g_str_equal(flag, "--close-preview-on-save"))
+    return parse_bool_arg(value, &config->close_preview_on_save);
+  if (g_str_equal(flag, "--width"))
+    return parse_uint_arg(value, &config->preview_width);
+  if (g_str_equal(flag, "--height"))
+    return parse_uint_arg(value, &config->preview_height);
+  if (g_str_equal(flag, "--default-column-display")) {
+    if (!g_str_equal(value, "normal") && !g_str_equal(value, "tabbed"))
+      return FALSE;
+    g_strlcpy(config->column_display, value, sizeof(config->column_display));
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--floating-x") ||
+      g_str_equal(flag, "--floating-y")) {
+    gboolean *is_set = g_str_equal(flag, "--floating-x")
+                           ? &config->floating_x_set
+                           : &config->floating_y_set;
+    gint32 *target = g_str_equal(flag, "--floating-x") ? &config->floating_x
+                                                        : &config->floating_y;
+    if (g_str_equal(value, "null")) {
+      *is_set = FALSE;
+      return TRUE;
+    }
+    char *end = NULL;
+    errno = 0;
+    long parsed = strtol(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || parsed < G_MININT32 ||
+        parsed > G_MAXINT32)
+      return FALSE;
+    *target = (gint32)parsed;
+    *is_set = TRUE;
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--floating-relative-to")) {
+    g_strlcpy(config->floating_relative_to, value,
+              sizeof(config->floating_relative_to));
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--save-folder")) {
+    g_strlcpy(config->save_folder, value, sizeof(config->save_folder));
+    return TRUE;
+  }
+
+  ShaulaAfterModeConfig *mode = config_mode_for_flag(config, flag);
+  if (mode != NULL) {
+    gboolean parsed = FALSE;
+    if (!parse_bool_arg(value, &parsed))
+      return FALSE;
+    if (g_str_has_suffix(flag, "-skip-preview"))
+      mode->skip_preview = parsed;
+    else if (g_str_has_suffix(flag, "-copy"))
+      mode->copy_to_clipboard = parsed;
+    else if (g_str_has_suffix(flag, "-save"))
+      mode->save_to_folder = parsed;
+    else
+      return FALSE;
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--notifications-success"))
+    return parse_bool_arg(value, &config->notifications_success);
+  if (g_str_equal(flag, "--notifications-errors"))
+    return parse_bool_arg(value, &config->notifications_errors);
+  if (g_str_equal(flag, "--notifications-thumbnails"))
+    return parse_bool_arg(value, &config->notifications_thumbnails);
+  return FALSE;
+}
+
+static void append_owned(GPtrArray *argv, char *value) {
+  g_ptr_array_add(argv, value);
+}
+
+static void append_literal(GPtrArray *argv, const char *value) {
+  append_owned(argv, g_strdup(value));
+}
+
+static void append_pair(GPtrArray *argv, const char *flag, const char *value) {
+  append_literal(argv, flag);
+  append_literal(argv, value);
+}
+
+char **shaula_settings_build_save_argv(const char *shaula_bin,
+                                       const ShaulaSettingsConfig *config) {
+  g_return_val_if_fail(shaula_bin != NULL && shaula_bin[0] != '\0', NULL);
+  g_return_val_if_fail(config != NULL, NULL);
+
+  GPtrArray *argv = g_ptr_array_new_with_free_func(g_free);
+  append_literal(argv, shaula_bin);
+  append_literal(argv, "config");
+  append_literal(argv, "save");
+  append_literal(argv, "--json");
+  append_pair(argv, "--region-mode",
+              shaula_settings_region_mode_text(config->region_mode));
+  append_pair(argv, "--preview-mode",
+              shaula_settings_window_mode_text(config->window_mode));
+  append_pair(argv, "--focused", bool_text(config->focused));
+  append_pair(argv, "--close-preview-on-save",
+              bool_text(config->close_preview_on_save));
+
+  g_autofree char *width = g_strdup_printf("%d", config->width);
+  g_autofree char *height = g_strdup_printf("%d", config->height);
+  g_autofree char *floating_x = config->floating_x_set
+                                    ? g_strdup_printf("%d", config->floating_x)
+                                    : g_strdup("null");
+  g_autofree char *floating_y = config->floating_y_set
+                                    ? g_strdup_printf("%d", config->floating_y)
+                                    : g_strdup("null");
+  append_pair(argv, "--width", width);
+  append_pair(argv, "--height", height);
+  append_pair(argv, "--default-column-display",
+              config->column_display != NULL ? config->column_display
+                                             : "normal");
+  append_pair(argv, "--floating-x", floating_x);
+  append_pair(argv, "--floating-y", floating_y);
+  append_pair(argv, "--floating-relative-to",
+              config->floating_relative_to != NULL
+                  ? config->floating_relative_to
+                  : "top-left");
+  append_pair(argv, "--after-quick-skip-preview",
+              bool_text(config->quick_skip_preview));
+  append_pair(argv, "--after-quick-copy", bool_text(config->quick_copy));
+  append_pair(argv, "--after-quick-save", bool_text(config->quick_save));
+  append_pair(argv, "--after-area-skip-preview",
+              bool_text(config->area_skip_preview));
+  append_pair(argv, "--after-area-copy", bool_text(config->area_copy));
+  append_pair(argv, "--after-area-save", bool_text(config->area_save));
+  append_pair(argv, "--after-fullscreen-skip-preview",
+              bool_text(config->fullscreen_skip_preview));
+  append_pair(argv, "--after-fullscreen-copy",
+              bool_text(config->fullscreen_copy));
+  append_pair(argv, "--after-fullscreen-save",
+              bool_text(config->fullscreen_save));
+  append_pair(argv, "--after-all-screens-skip-preview",
+              bool_text(config->all_screens_skip_preview));
+  append_pair(argv, "--after-all-screens-copy",
+              bool_text(config->all_screens_copy));
+  append_pair(argv, "--after-all-screens-save",
+              bool_text(config->all_screens_save));
+  append_pair(argv, "--save-folder",
+              config->save_folder != NULL ? config->save_folder : "");
+  append_pair(argv, "--notifications-success",
+              bool_text(config->notifications_success));
+  append_pair(argv, "--notifications-errors",
+              bool_text(config->notifications_errors));
+  append_pair(argv, "--notifications-thumbnails",
+              bool_text(config->notifications_thumbnails));
+  append_literal(argv, "--apply-niri");
+  g_ptr_array_add(argv, NULL);
+  return (char **)g_ptr_array_free(argv, FALSE);
 }

@@ -1,6 +1,6 @@
 #include "preview_annotation_editor.h"
 
-#include "preview_annotation_behavior.h"
+#include "preview_edit_session.h"
 #include "preview_state.h"
 #include "preview_toolbar.h"
 
@@ -253,9 +253,9 @@ guint shaula_annotation_editor_select_intersecting_rect(
   for (guint i = 0; i < state->document.annotations->len; i++) {
     ShaulaAnnotation *annotation =
         g_ptr_array_index(state->document.annotations, i);
-    if (shaula_annotation_behavior_matches(
-            annotation, (ShaulaAnnotationQuery){
-                            .kind = SHAULA_ANNOTATION_QUERY_SELECTION,
+    if (shaula_preview_edit_matches(
+            annotation, (ShaulaPreviewEditQuery){
+                            .kind = SHAULA_PREVIEW_EDIT_QUERY_SELECTION,
                             .rect = rect})) {
       int id = annotation->id;
       g_array_append_val(matched_ids, id);

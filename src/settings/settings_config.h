@@ -3,6 +3,8 @@
 
 #include <glib.h>
 
+#include "config/config.h"
+
 G_BEGIN_DECLS
 
 typedef enum {
@@ -109,6 +111,17 @@ char *shaula_settings_config_path_from_show_json(const char *json);
  */
 gboolean shaula_settings_config_from_show_json(const char *json,
                                                ShaulaSettingsConfig *config);
+
+/*
+ * Settings transport ownership. The Config command and GTK adapter both use
+ * this module for the public JSON shape, save-flag grammar, and argv mapping.
+ */
+char *shaula_settings_config_public_json_new(const ShaulaConfig *config);
+gboolean shaula_settings_config_apply_cli_flag(ShaulaConfig *config,
+                                               const char *flag,
+                                               const char *value);
+char **shaula_settings_build_save_argv(const char *shaula_bin,
+                                       const ShaulaSettingsConfig *config);
 
 SizePreset
 shaula_settings_size_preset_for_config(const ShaulaSettingsConfig *config);

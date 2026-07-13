@@ -1,6 +1,7 @@
 #include <gtk/gtk.h>
 
 #include "overlay_selection.h"
+#include "overlay_selection_session.h"
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gtk4-layer-shell.h>
 #include <stdio.h>
@@ -23,9 +24,6 @@ enum {
   DROPDOWN_ITEM_H = 32,
   DROPDOWN_PADDING = 6,
   DROPDOWN_RADIUS = 10,
-  RESIZE_HIT_RADIUS = 10,
-  MOVE_HIT_RADIUS = 24,
-  CREATE_THRESHOLD = 6,
 };
 
 typedef enum {
@@ -55,27 +53,6 @@ typedef enum {
   INTERACTION_AREA,
 } ShaulaInteractionMode;
 
-typedef enum {
-  DRAG_NONE,
-  DRAG_CREATE,
-  DRAG_MOVE,
-  DRAG_RESIZE,
-  DRAG_TOOLBAR,
-} ShaulaDragMode;
-
-typedef enum {
-  CURSOR_UNSET,
-  CURSOR_DEFAULT,
-  CURSOR_CROSSHAIR,
-  CURSOR_POINTER,
-  CURSOR_GRAB,
-  CURSOR_GRABBING,
-  CURSOR_RESIZE_EW,
-  CURSOR_RESIZE_NS,
-  CURSOR_RESIZE_NWSE,
-  CURSOR_RESIZE_NESW,
-} ShaulaCursorShape;
-
 typedef struct {
   GMainLoop *main_loop;
   GtkWidget *window;
@@ -85,23 +62,16 @@ typedef struct {
   int background_surface_width;
   int background_surface_height;
   ShaulaPoint output_origin;
-  gboolean has_selection;
-  ShaulaRect selection;
+  ShaulaOverlaySelectionSession selection_session;
+  ShaulaOverlaySelectionView selection_view;
   gboolean has_toolbar;
   ShaulaInteractionMode interaction_mode;
   ShaulaPoint toolbar;
-  gboolean has_aspect;
-  ShaulaAspect aspect;
-  ShaulaDragMode drag_mode;
-  ShaulaResizeHandle active_handle;
-  ShaulaResizeHandle hover_handle;
-  ShaulaPoint drag_start;
-  ShaulaRect drag_origin;
   gboolean dropdown_open;
   ShaulaAspectChoice aspect_choice;
   char aspect_output_label[32];
   gboolean suppress_pointer_drag;
-  ShaulaCursorShape cursor_shape;
+  ShaulaOverlayCursor cursor_shape;
   /* GTK widget toolbar */
   GtkWidget *overlay_container;
   GtkWidget *toolbar_box;
@@ -259,26 +229,15 @@ static ShaulaPoint output_size(void) {
   return initial_surface_size();
 }
 
-static gboolean point_in_selection(ShaulaRect selection, ShaulaPoint point) {
-  return point.x >= selection.x && point.x <= selection.x + selection.width &&
-         point.y >= selection.y && point.y <= selection.y + selection.height;
+static void sync_selection_view(void) {
+  state.selection_view =
+      *shaula_overlay_selection_session_view(&state.selection_session);
 }
 
-static gboolean point_near_selection_border(ShaulaRect selection,
-                                            ShaulaPoint point, int radius) {
-  if (!point_in_selection(selection, point))
-    return FALSE;
-
-  int left = selection.x;
-  int top = selection.y;
-  int right = selection.x + selection.width;
-  int bottom = selection.y + selection.height;
-  return abs(point.x - left) <= radius || abs(point.x - right) <= radius ||
-         abs(point.y - top) <= radius || abs(point.y - bottom) <= radius;
-}
-
-static gboolean point_near(ShaulaPoint a, ShaulaPoint b, int radius) {
-  return abs(a.x - b.x) <= radius && abs(a.y - b.y) <= radius;
+static void sync_selection_bounds(void) {
+  shaula_overlay_selection_session_set_bounds(&state.selection_session,
+                                              output_size());
+  sync_selection_view();
 }
 
 static void queue_draw(void) {
@@ -295,49 +254,25 @@ static void clear_background_surface(void) {
   state.background_surface_height = 0;
 }
 
-static const char *cursor_name(ShaulaCursorShape shape) {
+static const char *cursor_name(ShaulaOverlayCursor shape) {
   switch (shape) {
-  case CURSOR_DEFAULT:
-    return NULL;
-  case CURSOR_CROSSHAIR:
+  case SHAULA_OVERLAY_CURSOR_CROSSHAIR:
     return "crosshair";
-  case CURSOR_POINTER:
-    return "pointer";
-  case CURSOR_GRAB:
+  case SHAULA_OVERLAY_CURSOR_GRAB:
     return "grab";
-  case CURSOR_GRABBING:
+  case SHAULA_OVERLAY_CURSOR_GRABBING:
     return "grabbing";
-  case CURSOR_RESIZE_EW:
+  case SHAULA_OVERLAY_CURSOR_RESIZE_EW:
     return "ew-resize";
-  case CURSOR_RESIZE_NS:
+  case SHAULA_OVERLAY_CURSOR_RESIZE_NS:
     return "ns-resize";
-  case CURSOR_RESIZE_NWSE:
+  case SHAULA_OVERLAY_CURSOR_RESIZE_NWSE:
     return "nwse-resize";
-  case CURSOR_RESIZE_NESW:
+  case SHAULA_OVERLAY_CURSOR_RESIZE_NESW:
     return "nesw-resize";
-  case CURSOR_UNSET:
+  case SHAULA_OVERLAY_CURSOR_DEFAULT:
   default:
     return NULL;
-  }
-}
-
-static ShaulaCursorShape cursor_for_handle(ShaulaResizeHandle handle) {
-  switch (handle) {
-  case HANDLE_LEFT:
-  case HANDLE_RIGHT:
-    return CURSOR_RESIZE_EW;
-  case HANDLE_TOP:
-  case HANDLE_BOTTOM:
-    return CURSOR_RESIZE_NS;
-  case HANDLE_TOP_LEFT:
-  case HANDLE_BOTTOM_RIGHT:
-    return CURSOR_RESIZE_NWSE;
-  case HANDLE_TOP_RIGHT:
-  case HANDLE_BOTTOM_LEFT:
-    return CURSOR_RESIZE_NESW;
-  case HANDLE_NONE:
-  default:
-    return CURSOR_DEFAULT;
   }
 }
 
@@ -365,45 +300,17 @@ static int handle_index(ShaulaResizeHandle handle) {
   }
 }
 
-static void apply_cursor(ShaulaCursorShape shape) {
+static void apply_cursor(ShaulaOverlayCursor shape) {
   if (state.area == NULL || state.cursor_shape == shape)
     return;
   gtk_widget_set_cursor_from_name(state.area, cursor_name(shape));
   state.cursor_shape = shape;
 }
 
-static ShaulaResizeHandle resize_handle_at(ShaulaRect s, ShaulaPoint p) {
-  int left = s.x;
-  int top = s.y;
-  int right = s.x + s.width;
-  int bottom = s.y + s.height;
-  int mid_x = s.x + s.width / 2;
-  int mid_y = s.y + s.height / 2;
-
-  if (point_near(p, (ShaulaPoint){.x = left, .y = top}, RESIZE_HIT_RADIUS))
-    return HANDLE_TOP_LEFT;
-  if (point_near(p, (ShaulaPoint){.x = right, .y = top}, RESIZE_HIT_RADIUS))
-    return HANDLE_TOP_RIGHT;
-  if (point_near(p, (ShaulaPoint){.x = right, .y = bottom}, RESIZE_HIT_RADIUS))
-    return HANDLE_BOTTOM_RIGHT;
-  if (point_near(p, (ShaulaPoint){.x = left, .y = bottom}, RESIZE_HIT_RADIUS))
-    return HANDLE_BOTTOM_LEFT;
-  if (point_near(p, (ShaulaPoint){.x = mid_x, .y = top}, RESIZE_HIT_RADIUS))
-    return HANDLE_TOP;
-  if (point_near(p, (ShaulaPoint){.x = right, .y = mid_y}, RESIZE_HIT_RADIUS))
-    return HANDLE_RIGHT;
-  if (point_near(p, (ShaulaPoint){.x = mid_x, .y = bottom}, RESIZE_HIT_RADIUS))
-    return HANDLE_BOTTOM;
-  if (point_near(p, (ShaulaPoint){.x = left, .y = mid_y}, RESIZE_HIT_RADIUS))
-    return HANDLE_LEFT;
-
-  return HANDLE_NONE;
-}
-
 static void update_toolbar(void) {
-  if (!state.has_selection)
+  if (!state.selection_view.has_selection)
     return;
-  ShaulaRect selection = state.selection;
+  ShaulaRect selection = state.selection_view.selection;
   ShaulaPoint bounds = output_size();
   int min_x = PADDING;
   int max_x = bounds.x - PADDING - TOOLBAR_W;
@@ -439,37 +346,23 @@ static void update_toolbar(void) {
   reposition_toolbar_widget();
 }
 
-static ShaulaCursorShape resolve_hover_cursor(ShaulaPoint p) {
-  if (state.has_selection) {
-    ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
-    if (handle != HANDLE_NONE)
-      return cursor_for_handle(handle);
-    if (point_near_selection_border(state.selection, p, MOVE_HIT_RADIUS))
-      return CURSOR_GRAB;
-  }
-  return CURSOR_CROSSHAIR;
-}
-
 static void apply_aspect_choice(void) {
-  if (state.aspect_choice == ASPECT_FREE) {
-    state.has_aspect = FALSE;
-    state.aspect_output_label[0] = '\0';
-  } else {
-    state.has_aspect = TRUE;
-    state.aspect = (ShaulaAspect){
+  sync_selection_bounds();
+  gboolean enabled = state.aspect_choice != ASPECT_FREE;
+  ShaulaAspect aspect = {0};
+  if (enabled) {
+    aspect = (ShaulaAspect){
         .width = ASPECT_WIDTHS[(int)state.aspect_choice],
         .height = ASPECT_HEIGHTS[(int)state.aspect_choice],
     };
     snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
-             "%d:%d", state.aspect.width, state.aspect.height);
+             "%d:%d", aspect.width, aspect.height);
+  } else {
+    state.aspect_output_label[0] = '\0';
   }
-  if (state.has_selection && state.has_aspect) {
-    ShaulaPoint bounds = output_size();
-    ShaulaRect adj;
-    if (apply_aspect_from_center(state.selection, state.aspect, bounds, &adj)) {
-      state.selection = adj;
-    }
-  }
+  (void)shaula_overlay_selection_session_set_aspect(
+      &state.selection_session, enabled, aspect, FALSE);
+  sync_selection_view();
   update_toolbar();
   state.dropdown_open = FALSE;
   if (state.aspect_popover != NULL)
@@ -555,7 +448,9 @@ static void draw_handles(cairo_t *cr, ShaulaRect s) {
   double hw = 6;
   double hh = 6;
   ShaulaResizeHandle emphasized =
-      state.drag_mode == DRAG_RESIZE ? state.active_handle : state.hover_handle;
+      state.selection_view.drag_mode == SHAULA_OVERLAY_DRAG_RESIZE
+          ? state.selection_view.active_handle
+          : state.selection_view.hover_handle;
   int emphasized_index = handle_index(emphasized);
   ShaulaPoint points[8] = {
       {s.x, s.y},
@@ -633,8 +528,8 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
 
-  if (state.has_selection) {
-    ShaulaRect s = state.selection;
+  if (state.selection_view.has_selection) {
+    ShaulaRect s = state.selection_view.selection;
     if (state.background != NULL) {
       cairo_save(cr);
       cairo_rectangle(cr, s.x, s.y, s.width, s.height);
@@ -654,20 +549,21 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr, int width, int height,
 }
 
 static void confirm_with_action(const char *action) {
-  if (!state.has_selection || state.selection.width <= 0 ||
-      state.selection.height <= 0)
+  if (!state.selection_view.confirmable)
     return;
-  const char *aspect = state.has_aspect ? state.aspect_output_label : "Free";
+  ShaulaRect selection = state.selection_view.selection;
+  const char *aspect =
+      state.selection_view.has_aspect ? state.aspect_output_label : "Free";
   const char *output_name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
   ShaulaPoint bounds = initial_surface_size();
   printf("{\"status\":\"ok\",\"action\":\"%s\",\"aspect\":\"%s\","
          "\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
          "\"local_geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
          "\"output\":{\"name\":",
-         action, aspect, state.selection.x + state.output_origin.x,
-         state.selection.y + state.output_origin.y, state.selection.width,
-         state.selection.height, state.selection.x, state.selection.y,
-         state.selection.width, state.selection.height);
+         action, aspect, selection.x + state.output_origin.x,
+         selection.y + state.output_origin.y, selection.width,
+         selection.height, selection.x, selection.y, selection.width,
+         selection.height);
   if (output_name != NULL && output_name[0] != '\0') {
     putchar('"');
     for (const char *p = output_name; *p != '\0'; p += 1) {
@@ -694,13 +590,13 @@ static void copy_now(void) { confirm_with_action("copy"); }
 static void save_now(void) { confirm_with_action("save"); }
 
 static void cancel(void) {
-  if (state.has_selection && state.selection.width > 0 &&
-      state.selection.height > 0) {
+  if (state.selection_view.confirmable) {
+    ShaulaRect selection = state.selection_view.selection;
     printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":%"
            "d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
-           state.selection.x + state.output_origin.x,
-           state.selection.y + state.output_origin.y, state.selection.width,
-           state.selection.height);
+           selection.x + state.output_origin.x,
+           selection.y + state.output_origin.y, selection.width,
+           selection.height);
   } else {
     printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,"
            "\"error\":null}\n");
@@ -714,38 +610,12 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
                           gpointer data) {
   (void)gesture;
   (void)data;
-  ShaulaPoint p = {.x = (int)x, .y = (int)y};
-
-  if (!capture_on_release()) {
-    if (state.suppress_pointer_drag) {
-      state.drag_mode = DRAG_TOOLBAR;
-      apply_cursor(resolve_hover_cursor(p));
-      return;
-    }
-  }
-  state.drag_start = p;
-  state.drag_origin = state.selection;
-  state.active_handle = HANDLE_NONE;
-  state.hover_handle = HANDLE_NONE;
-  if (state.has_selection) {
-    ShaulaResizeHandle handle = resize_handle_at(state.selection, p);
-    if (handle != HANDLE_NONE) {
-      state.active_handle = handle;
-      state.hover_handle = handle;
-      state.drag_mode = DRAG_RESIZE;
-      apply_cursor(cursor_for_handle(handle));
-      queue_draw();
-      return;
-    }
-  }
-  if (state.has_selection &&
-      point_near_selection_border(state.selection, p, MOVE_HIT_RADIUS)) {
-    state.drag_mode = DRAG_MOVE;
-    apply_cursor(CURSOR_GRABBING);
-  } else {
-    state.drag_mode = DRAG_CREATE;
-    apply_cursor(CURSOR_CROSSHAIR);
-  }
+  sync_selection_bounds();
+  shaula_overlay_selection_session_begin(
+      &state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y},
+      !capture_on_release() && state.suppress_pointer_drag);
+  sync_selection_view();
+  apply_cursor(state.selection_view.cursor);
   queue_draw();
 }
 
@@ -753,85 +623,41 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
                            gpointer data) {
   (void)gesture;
   (void)data;
-  ShaulaPoint bounds = output_size();
-  ShaulaPoint p = {.x = state.drag_start.x + (int)dx,
-                   .y = state.drag_start.y + (int)dy};
-  ShaulaRect next;
-  if (state.drag_mode == DRAG_CREATE) {
-    if (abs((int)dx) < CREATE_THRESHOLD && abs((int)dy) < CREATE_THRESHOLD &&
-        state.has_selection) {
-      queue_draw();
-      return;
-    }
-    state.has_selection =
-        geometry_from_points(state.drag_start, p,
-                             state.has_aspect ? state.aspect
-                                              : (ShaulaAspect){0},
-                             bounds, &next);
-    if (state.has_selection)
-      state.selection = next;
-  } else if (state.drag_mode == DRAG_MOVE) {
-    if (move_selection(state.drag_origin, (int)dx, (int)dy, bounds, &next)) {
-      state.selection = next;
-      state.has_selection = TRUE;
-    }
-  } else if (state.drag_mode == DRAG_RESIZE) {
-    if (resize_selection(state.drag_origin, state.active_handle, p,
-                         state.has_aspect ? state.aspect : (ShaulaAspect){0},
-                         bounds, &next)) {
-      state.selection = next;
-      state.has_selection = TRUE;
-    }
-  }
-  if (state.drag_mode == DRAG_MOVE) {
-    apply_cursor(CURSOR_GRABBING);
-  } else if (state.drag_mode == DRAG_RESIZE) {
-    apply_cursor(cursor_for_handle(state.active_handle));
-  } else if (state.drag_mode == DRAG_CREATE) {
-    apply_cursor(CURSOR_CROSSHAIR);
-  }
+  sync_selection_bounds();
+  (void)shaula_overlay_selection_session_update(
+      &state.selection_session, (int)dx, (int)dy);
+  sync_selection_view();
+  apply_cursor(state.selection_view.cursor);
   update_toolbar();
   queue_draw();
 }
 
 static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
                         gpointer data) {
-  ShaulaDragMode completed_mode = state.drag_mode;
-  on_drag_update(gesture, dx, dy, data);
-  gboolean should_confirm =
-      capture_on_release() &&
-      (completed_mode == DRAG_CREATE || completed_mode == DRAG_MOVE ||
-       completed_mode == DRAG_RESIZE) &&
-      state.has_selection && state.selection.width > 0 &&
-      state.selection.height > 0;
-  state.drag_mode = DRAG_NONE;
-  state.active_handle = HANDLE_NONE;
+  (void)gesture;
+  (void)data;
+  sync_selection_bounds();
+  gboolean should_confirm = shaula_overlay_selection_session_end(
+      &state.selection_session, (int)dx, (int)dy, capture_on_release());
   state.suppress_pointer_drag = FALSE;
-  ShaulaPoint p = {.x = state.drag_start.x + (int)dx,
-                   .y = state.drag_start.y + (int)dy};
-  state.hover_handle =
-      state.has_selection ? resize_handle_at(state.selection, p) : HANDLE_NONE;
-  apply_cursor(resolve_hover_cursor(p));
+  sync_selection_view();
+  apply_cursor(state.selection_view.cursor);
+  update_toolbar();
   queue_draw();
-  if (should_confirm) {
+  if (should_confirm)
     confirm();
-  }
 }
 
 static void on_motion(GtkEventControllerMotion *controller, double x, double y,
                       gpointer data) {
   (void)controller;
   (void)data;
-  if (state.drag_mode != DRAG_NONE)
-    return;
-  ShaulaPoint p = {.x = (int)x, .y = (int)y};
-  ShaulaResizeHandle next_hover =
-      state.has_selection ? resize_handle_at(state.selection, p) : HANDLE_NONE;
-  if (next_hover != state.hover_handle) {
-    state.hover_handle = next_hover;
+  gboolean changed = shaula_overlay_selection_session_motion(
+      &state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y});
+  sync_selection_view();
+  if (changed)
     queue_draw();
-  }
-  apply_cursor(resolve_hover_cursor(p));
+  apply_cursor(state.selection_view.cursor);
 }
 
 static void on_motion_enter(GtkEventControllerMotion *controller, double x,
@@ -843,8 +669,9 @@ static void on_motion_leave(GtkEventControllerMotion *controller,
                             gpointer data) {
   (void)controller;
   (void)data;
-  state.hover_handle = HANDLE_NONE;
-  apply_cursor(CURSOR_DEFAULT);
+  shaula_overlay_selection_session_leave(&state.selection_session);
+  sync_selection_view();
+  apply_cursor(state.selection_view.cursor);
   queue_draw();
 }
 
@@ -922,12 +749,12 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     dy = -1;
   if (keyval == GDK_KEY_Down)
     dy = 1;
-  if ((dx != 0 || dy != 0) && state.has_selection) {
+  if ((dx != 0 || dy != 0) && state.selection_view.has_selection) {
+    sync_selection_bounds();
     int step = (modifiers & GDK_SHIFT_MASK) != 0 ? 10 : 1;
-    ShaulaRect next;
-    if (move_selection(state.selection, dx * step, dy * step, output_size(),
-                       &next)) {
-      state.selection = next;
+    if (shaula_overlay_selection_session_nudge(
+            &state.selection_session, dx, dy, step)) {
+      sync_selection_view();
       update_toolbar();
       queue_draw();
     }
@@ -938,31 +765,36 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
 
 static gboolean load_aspect(void) {
   const char *raw = getenv("SHAULA_OVERLAY_ASPECT");
+  state.aspect_choice = ASPECT_FREE;
+  state.aspect_output_label[0] = '\0';
   if (raw == NULL || raw[0] == '\0') {
-    state.has_aspect = FALSE;
-    state.aspect_choice = ASPECT_FREE;
-    state.aspect_output_label[0] = '\0';
+    (void)shaula_overlay_selection_session_set_aspect(
+        &state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
+    sync_selection_view();
     return FALSE;
   }
+
   int w = 0;
   int h = 0;
   if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
-    state.has_aspect = FALSE;
-    state.aspect_choice = ASPECT_FREE;
-    state.aspect_output_label[0] = '\0';
+    (void)shaula_overlay_selection_session_set_aspect(
+        &state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
+    sync_selection_view();
     return FALSE;
   }
-  state.aspect = (ShaulaAspect){.width = w, .height = h};
-  state.has_aspect = TRUE;
+
+  ShaulaAspect aspect = {.width = w, .height = h};
+  (void)shaula_overlay_selection_session_set_aspect(
+      &state.selection_session, TRUE, aspect, TRUE);
+  sync_selection_view();
   snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
            "%d:%d", w, h);
   for (int i = 1; i < ASPECT_COUNT; i += 1) {
     if (ASPECT_WIDTHS[i] == w && ASPECT_HEIGHTS[i] == h) {
       state.aspect_choice = (ShaulaAspectChoice)i;
-      return TRUE;
+      break;
     }
   }
-  state.aspect_choice = ASPECT_FREE;
   return TRUE;
 }
 
@@ -1011,19 +843,17 @@ static void load_initial_geometry(void) {
     return;
   }
 
-  state.selection = rect;
-  if (state.has_aspect) {
-    ShaulaRect adjusted;
-    if (apply_aspect_from_center_preserve(state.selection, state.aspect, bounds,
-                                          &adjusted))
-      state.selection = adjusted;
+  shaula_overlay_selection_session_set_bounds(&state.selection_session, bounds);
+  if (shaula_overlay_selection_session_set_selection(
+          &state.selection_session, rect, TRUE)) {
+    sync_selection_view();
+    update_toolbar();
   }
-  state.has_selection = TRUE;
-  update_toolbar();
 }
 
 static void ensure_default_area_selection(ShaulaPoint bounds) {
-  if (state.has_selection || state.interaction_mode != INTERACTION_AREA)
+  if (state.selection_view.has_selection ||
+      state.interaction_mode != INTERACTION_AREA)
     return;
 
   int margin_x = MAX(16, bounds.x / 5);
@@ -1043,14 +873,10 @@ static void ensure_default_area_selection(ShaulaPoint bounds) {
       .width = width,
       .height = height,
   };
-  if (state.has_aspect) {
-    ShaulaRect adjusted;
-    if (apply_aspect_from_center(rect, state.aspect, bounds, &adjusted))
-      rect = adjusted;
-  }
-  if (clamp_selection(rect, bounds, &rect)) {
-    state.selection = rect;
-    state.has_selection = TRUE;
+  shaula_overlay_selection_session_set_bounds(&state.selection_session, bounds);
+  if (shaula_overlay_selection_session_set_selection(
+          &state.selection_session, rect, FALSE)) {
+    sync_selection_view();
     update_toolbar();
   }
 }
@@ -1095,7 +921,7 @@ static void update_aspect_label(void) {
   if (state.aspect_button == NULL)
     return;
   const char *label;
-  if (!state.has_aspect) {
+  if (!state.selection_view.has_aspect) {
     label = "Free";
   } else if (state.aspect_output_label[0] != '\0') {
     label = state.aspect_output_label;
@@ -1141,8 +967,7 @@ static void reposition_toolbar_widget(void) {
   gtk_widget_set_margin_top(state.toolbar_box, state.toolbar.y);
   if (state.capture_button != NULL) {
     gtk_widget_set_sensitive(state.capture_button,
-                             state.has_selection && state.selection.width > 0 &&
-                                 state.selection.height > 0);
+                           state.selection_view.confirmable);
   }
 }
 
@@ -1189,7 +1014,8 @@ static GtkWidget *build_widget_toolbar(void) {
 
   GtkWidget *capture_btn = gtk_button_new_with_label("Capture");
   gtk_widget_add_css_class(capture_btn, "shaula-capture-btn");
-  gtk_widget_set_sensitive(capture_btn, state.has_selection);
+  gtk_widget_set_sensitive(capture_btn,
+                           state.selection_view.confirmable);
   g_signal_connect(capture_btn, "clicked", G_CALLBACK(on_capture_clicked),
                    NULL);
   state.capture_button = capture_btn;
@@ -1240,6 +1066,8 @@ static void setup_overlay_window(void) {
    */
   state.output_origin = current_output_origin();
   ShaulaPoint size = initial_surface_size();
+  shaula_overlay_selection_session_set_bounds(&state.selection_session, size);
+  sync_selection_view();
   gtk_window_set_default_size(GTK_WINDOW(window), size.x, size.y);
 
   GtkWidget *area = gtk_drawing_area_new();
@@ -1343,7 +1171,10 @@ int shaula_native_gtk_overlay_run(void) {
   memset(&state, 0, sizeof(state));
   state.toolbar = (ShaulaPoint){.x = PADDING, .y = PADDING};
   state.has_toolbar = TRUE;
-  state.cursor_shape = CURSOR_UNSET;
+  state.cursor_shape = SHAULA_OVERLAY_CURSOR_DEFAULT;
+  shaula_overlay_selection_session_init(&state.selection_session,
+                                        initial_surface_size());
+  sync_selection_view();
   install_transparent_overlay_css();
   load_interaction_mode();
   load_aspect();

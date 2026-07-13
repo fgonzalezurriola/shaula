@@ -1,6 +1,6 @@
 #include "preview_gesture.h"
 
-#include "preview_annotation_behavior.h"
+#include "preview_edit_session.h"
 
 #include <math.h>
 #include <string.h>
@@ -493,7 +493,7 @@ gboolean shaula_preview_gesture_begin_selection(
         shaula_annotation_editor_single_selection(state),
         SHAULA_ANNOTATION_HIT_HANDLE};
   } else if (inside && (!selection_edge_hit || event.shift)) {
-    hit_result = shaula_annotation_behavior_hit_test(
+    hit_result = shaula_preview_edit_hit_test(
         state->document.annotations, image_point, hit_tolerance);
   }
 
@@ -759,7 +759,7 @@ const char *shaula_preview_gesture_hover_cursor(
     return "grab";
 
   if (inside) {
-    ShaulaAnnotationHit hit = shaula_annotation_behavior_hit_test(
+    ShaulaAnnotationHit hit = shaula_preview_edit_hit_test(
         state->document.annotations, image_point,
         MAX(4.0, 8.0 / state->zoom));
     if (hit.annotation != NULL)

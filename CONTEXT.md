@@ -34,8 +34,10 @@ history; this document records current behavior and ownership.
 
 ## Runtime ownership
 
-- `src/main.c` owns top-level command dispatch and the public JSON command
-  envelopes.
+- `src/main.c` is a dispatch table only. `src/commands/` owns the non-capture
+  command families, shared command JSON/error adaptation, and each family's
+  public envelope. `src/capture/command.c` remains the deep capture command
+  interface.
 - `src/capture/command.c` owns capture grammar, capability guards, overlay
   selection, backend invocation, artifact validation, history, clipboard,
   Preview launch, and capture result JSON. Capture-specific runtime filenames,
@@ -48,8 +50,8 @@ history; this document records current behavior and ownership.
   backup, and atomic save. Canonical serialization is used for new files.
 - `src/config/niri_managed.c` owns managed Niri preview/keybind path resolution,
   marker validation, preservation, backups, atomic replacement, removal, and
-  conflict scanning; `src/main.c` owns rendering and public JSON presentation.
-  Managed writes preserve surrounding user KDL, reject malformed
+  conflict scanning; `src/commands/config_command*.c` owns rendering and public
+  JSON presentation. Managed writes preserve surrounding user KDL, reject malformed
   markers with deterministic `ERR_CONFIG_INVALID`, back up changed files, and
   are idempotent.
 - `src/runtime/` builds as one deep runtime module. `helper_resolution.{c,h}`
@@ -66,15 +68,25 @@ history; this document records current behavior and ownership.
 - `src/errors/taxonomy.c` is the canonical `ERR_*` table and exit mapping.
   `src/cli/json.c` owns shared JSON escaping, timestamps, warnings, and basic
   error envelopes.
-- `src/main.c` preserves the history list/show, clipboard state import/copy,
+- `src/commands/history_command.c`, `clipboard_command.c`, and
+  `notify_command.c` preserve history list/show, clipboard state import/copy,
   notification test/action-listener, and file-reveal command contracts.
 - `src/preview/`, `src/settings/`, and `src/overlay/` contain the native GTK
   helpers and their C support modules.
-- `src/overlay/overlay_selection.c` owns bounded create/move/resize/aspect
-  geometry; GTK callbacks adapt pointer events to that selection interface.
-- `src/preview/preview_annotation_behavior.c` is the Preview edit-query seam
-  for ranked hit testing, region selection, and eraser intersection. Annotation
-  variant rules and ADR-0001 Image ownership remain in `preview_annotations.c`.
+- `src/overlay/overlay_selection_session.{c,h}` owns selection interaction
+  ordering, drag/hover modes, handle resolution, aspect application, keyboard
+  nudging, semantic cursors, and release confirmation. `overlay_selection.c`
+  remains its bounded geometry implementation; GTK callbacks only adapt input
+  and render the session view.
+- `src/preview/preview_edit_session.{c,h}` owns annotation queries, edit
+  begin/finish policy, selection clearing, undo/redo snapshots, gesture history,
+  and operation cancellation. Annotation variant rules and ADR-0001 Image
+  ownership remain in `preview_annotations.c`; GTK files are edit-session
+  adapters.
+- `src/settings/settings_config.{c,h}` is the Settings configuration protocol.
+  It derives UI defaults from `ShaulaConfig` and owns public config JSON,
+  `config save` flag mapping, and the Settings save argv. `settings_process.c`
+  owns process execution only.
 - Preview Text drafts live in `preview_canvas.c` (`text_entry` +
   `SHAULA_OPERATION_TEXT`). Committed Text can be reopened for string editing
   via a no-drag second click when singly selected, or by clicking it with the

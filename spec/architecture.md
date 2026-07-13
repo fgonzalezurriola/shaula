@@ -555,20 +555,24 @@ focused output. It must not probe compositor/backend state again.
 - Process, exit, size-limit, and JSON failures remain advisory absence. The
   command still succeeds with `explore_inventory_unavailable`; it does not
   invent partial inventory or turn desktop discovery into a public error.
-- `src/main.c` resolves compositor and focused output, passes borrowed values to
-  the inventory module, owns the public envelope, and releases the GLib-owned
-  result string. JSON-GLib is therefore a maintained runtime and build
-  dependency.
+- `src/commands/explore_command.c` resolves compositor and focused output,
+  passes borrowed values to the inventory module, owns the public envelope, and
+  releases the GLib-owned result string. JSON-GLib is therefore a maintained
+  runtime and build dependency.
 
 ### Overlay
 
-- `src/capture/command.c` owns overlay orchestration; `src/overlay/` owns the native helper.
-- `src/capture/command.c` and `src/overlay/` owns helper environment preparation, optional
-  frozen backgrounds, dry-run/test payloads, helper protocol mapping, and
-  accepted-selection persistence.
-- `src/capture/command.c` and `src/overlay/` owns persisted overlay draft state.
-- `src/capture/command.c` and `src/overlay/` owns the helper stdio process boundary.
-- `src/capture/command.c` and `src/overlay/` owns parsing of the helper envelope.
+- `src/capture/command.c` owns overlay orchestration; `src/overlay/` owns the
+  native helper.
+- `overlay/overlay_selection_session.{c,h}` owns selection event ordering,
+  create/move/resize intent, handle and hover resolution, aspect application,
+  keyboard nudging, semantic cursor state, and release confirmation.
+- `overlay/overlay_selection.c` is the session's bounded geometry
+  implementation. GTK callbacks adapt pointer/keyboard events and render the
+  immutable session view; they do not own a second interaction state machine.
+- Capture and Overlay jointly preserve helper environment preparation, optional
+  frozen backgrounds, dry-run/test payloads, helper protocol mapping,
+  accepted-selection persistence, and the helper stdio contract.
 
 ### Post-capture and JSON
 
@@ -583,8 +587,8 @@ focused output. It must not probe compositor/backend state again.
   and keep only caller-local ABI/allocator/writer adaptation.
 - `notify/request.{c,h}` owns notification request defaults, urgency tokens,
   exact `notify-send` argv construction, action spelling, and file-URI escaping.
-  `src/main.c` owns execution, fallback, action listening, reveal behavior, and
-  caller-local C span/status/argv adaptation.
+  `src/commands/notify_command.c` owns execution, fallback, action listening,
+  reveal behavior, and caller-local C span/status/argv adaptation.
 
 ### Public JSON boundary
 
@@ -782,28 +786,33 @@ focused output. It must not probe compositor/backend state again.
   Explore, and top-level command execution all use this interface. Direct
   production `g_spawn_sync()` adapters are forbidden.
 
-### Diagnostics and configuration
+### Command families, diagnostics, and configuration
 
-- `src/main.c` owns installed/runtime discovery.
-- `src/config/config.c` and `src/main.c` own the `shaula config save`
-  setting-flag grammar and apply flags to the config draft.
+- `src/main.c` is a fixed dispatch table. `src/commands/` owns every non-capture
+  command family and shared command JSON/error adaptation; each family exposes
+  one `*_command_run` interface.
+- `src/commands/doctor_command.c` owns installed/runtime discovery.
+- `src/config/config.c` owns the persisted configuration model and
+  `settings/settings_config.{c,h}` owns the `shaula config save` setting-flag
+  grammar applied to the config draft.
 - Existing valid files are patched by known section/key so comments, section
   order, inline comments, whitespace, and unrelated custom values survive an
   unrelated Settings save. Missing known fields/sections are appended;
   intentionally cleared nullable floating coordinates are removed.
 - New files use canonical serialization. Changed existing files receive a
   unique timestamped backup before atomic temporary-file replacement.
-- `src/main.c` owns command-level config flags, orchestration, and JSON
-  envelopes.
-- `src/main.c` also retains the public `history list/show`, clipboard
+- `src/commands/config_command.c` owns command-level config orchestration and
+  JSON envelopes; `config_command_support.c` owns Niri rendering shared with
+  Setup.
+- Dedicated command modules own public history list/show, clipboard
   state-backed copy/import, notification test/action-listener, and file-reveal
-  command contracts. These paths use direct argv/process APIs and do not invoke
-  a shell for user-controlled values.
-- `settings/settings_config.{c,h}` owns the Settings model, integrated defaults,
-  config path resolution, preset mapping, and permissive `config show --json`
-  field extraction. `settings/settings_process.{c,h}` owns exact Settings helper
-  argv construction and the Settings-specific exit-code mapping over
-  `runtime/process_exec`.
+  contracts. These paths use direct argv/process interfaces and do not invoke a
+  shell for user-controlled values.
+- `settings/settings_config.{c,h}` is the Settings configuration protocol. It
+  derives UI defaults from `ShaulaConfig` and owns config-show extraction,
+  public config JSON, save-flag mapping, preset mapping, and exact save argv.
+  `settings/settings_process.{c,h}` owns only the Settings-specific execution
+  and exit-code mapping over `runtime/process_exec`.
 
 ### Preview boundaries
 
@@ -833,6 +842,10 @@ focused output. It must not probe compositor/backend state again.
   optional path into its existing caller allocation before C cleanup and preserves
   helper exit handling, `ERR_PREVIEW_RESULT_INVALID`, notifications, Preview CLI
   JSON, and post-capture result semantics.
+- `preview/preview_edit_session.{c,h}` owns annotation queries, edit
+  begin/finish policy, selection clearing, undo/redo snapshots, gesture history,
+  and operation cancellation. GTK modules submit edit intents and render state;
+  annotation variant rules remain in `preview_annotations.c`.
 - `preview/preview_tool_defaults.{c,h}` owns per-tool last-used HUD defaults,
   tolerant INI loading, debounced dirty-key persistence, and cross-preview file
   locking. Inspector/widget state remains in `preview_properties_hud.*`.
