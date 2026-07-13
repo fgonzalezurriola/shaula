@@ -17,6 +17,9 @@ executable(
   'native_gtk_overlay.c',
   dependencies: [gtk_dep, layer_shell_dep, math_dep,
                  shaula_overlay_selection_dep],
-  c_args: ['-DSHAULA_OVERLAY_STANDALONE=1'] + shaula_existing_helper_warning_args,
+  c_args: [
+    '-DSHAULA_OVERLAY_STANDALONE=1',
+    '-Wno-strict-prototypes',
+  ] + shaula_existing_helper_warning_args,
   install: true,
 )

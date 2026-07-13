@@ -186,9 +186,9 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - Canonical machine-readable source is `shaula errors list --json`.
 - `errors/taxonomy.{c,h}` owns the current 28-entry inventory, exact ordering,
   messages, retryability, classes, recovery actions, exit codes, and retry
-  budgets. `src/main.c` owns only command parsing and enumeration of that
-  table; shared contract-version, timestamp, escaping, and basic-error policy is
-  provided by `cli/json.{c,h}`.
+  budgets. `src/commands/errors_command.c` owns command parsing and enumeration
+  of that table; shared contract-version, timestamp, escaping, and basic-error
+  policy is provided by `cli/json.{c,h}` and `commands/support.{c,h}`.
 - Every failure must map deterministically as `error.code -> recovery action -> exit code`.
 - Unknown, malformed, or otherwise unmapped codes resolve to the exact
   `ERR_UNKNOWN_UNMAPPED` record with stable exit code `99` and retry budget `0`.
@@ -498,9 +498,9 @@ focused output. It must not probe compositor/backend state again.
   with trailing-NUL storage plus the command exit code. It must be released with
   `shaula_preflight_output_clear()`; replacement, partial failure, and repeated
   cleanup leave the structure valid and empty.
-- `src/main.c` includes `preflight/probe.h` directly and retains only flag dispatch,
-  environment adaptation, testable clock acquisition, stdout writing, and
-  returning the C-provided exit code. No maintained C preflight boundary remains.
+- `src/commands/preflight_command.c` includes `preflight/probe.h` directly and
+  retains only flag parsing, environment adaptation, testable clock acquisition,
+  stdout writing, and returning the C-provided exit code.
 
 ### Focused-output boundary
 
@@ -629,8 +629,9 @@ focused output. It must not probe compositor/backend state again.
   path bytes raw, and changing pathological quote/control-byte behavior requires
   a separate public-contract decision.
 - `preview/preview_result.{c,h}` owns the typed final-result parser at the Preview
-  helper stdout boundary. `src/main.c` and `src/preview/` owns helper execution, stable
-  error mapping, and caller-local transfer into the Preview/post-capture model.
+  helper stdout boundary. `src/commands/preview_command.c` and the capture
+  command own helper execution, stable error mapping, and caller-local transfer
+  into the Preview/post-capture model.
 
 ### Notification request boundary
 
@@ -661,10 +662,10 @@ focused output. It must not probe compositor/backend state again.
   trailing-NUL storage. Literals and request fields remain borrowed. Callers
   clear output through `shaula_notify_send_args_clear`; replacement and repeated
   cleanup are safe.
-- `src/main.c` includes `notify/request.h` directly, retains the request bytes
-  through execution, and copies a standalone file URI only where its command
-  interface requires owned bytes.
-- The top-level and Preview notification owners retain hint-to-icon fallback,
+- `src/commands/notify_command.c` includes `notify/request.h` directly, retains
+  the request bytes through execution, and copies a standalone file URI only
+  where its command interface requires owned bytes.
+- The command and Preview notification owners retain hint-to-icon fallback,
   action-output handling, file-manager reveal, logging, and public command JSON;
   synchronous child execution is delegated to `runtime/process_exec`.
 
@@ -678,7 +679,7 @@ focused output. It must not probe compositor/backend state again.
   directory, doctor, errors, explore, history, notify, preview, settings, and
   setup commands. Each includes the C header directly and performs only
   immediate caller-local slice/span or record conversion.
-- `src/main.c` owns only argument validation and the typed compact
+- `src/commands/errors_command.c` owns argument validation and the typed compact
   `errors list` result object. It enumerates the C table, obtains shared JSON
   policy through `cli/json.h`, and must not retain a second taxonomy.
 - Inputs are borrowed `data + length` spans. A NULL pointer with nonzero length
@@ -838,10 +839,10 @@ focused output. It must not probe compositor/backend state again.
   NUL. A nonempty result is GLib-owned, length-bearing, trailing-NUL storage that
   is released through `shaula_preview_result_clear()`; inputs and action-token
   spans are borrowed. Allocation failure is explicit and outputs remain
-  initialized and clearable on every outcome. `src/main.c` and `src/preview/` copies the
-  optional path into its existing caller allocation before C cleanup and preserves
-  helper exit handling, `ERR_PREVIEW_RESULT_INVALID`, notifications, Preview CLI
-  JSON, and post-capture result semantics.
+  initialized and clearable on every outcome. The Preview command and capture
+  command copy the optional path into caller-owned storage before C cleanup and
+  preserve helper exit handling, `ERR_PREVIEW_RESULT_INVALID`, notifications,
+  Preview CLI JSON, and post-capture result semantics.
 - `preview/preview_edit_session.{c,h}` owns annotation queries, edit
   begin/finish policy, selection clearing, undo/redo snapshots, gesture history,
   and operation cancellation. GTK modules submit edit intents and render state;

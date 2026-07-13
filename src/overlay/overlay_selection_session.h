@@ -34,16 +34,13 @@ typedef struct {
   gboolean confirmable;
 } ShaulaOverlaySelectionView;
 
-typedef struct {
-  ShaulaPoint bounds;
-  ShaulaOverlaySelectionView view;
-  ShaulaPoint drag_start;
-  ShaulaRect drag_origin;
-} ShaulaOverlaySelectionSession;
+typedef struct ShaulaOverlaySelectionSession ShaulaOverlaySelectionSession;
 
 /* Owns selection interaction ordering; GTK supplies input and renders the view. */
-void shaula_overlay_selection_session_init(
-    ShaulaOverlaySelectionSession *session, ShaulaPoint bounds);
+ShaulaOverlaySelectionSession *
+shaula_overlay_selection_session_new(ShaulaPoint bounds);
+void shaula_overlay_selection_session_free(
+    ShaulaOverlaySelectionSession *session);
 void shaula_overlay_selection_session_set_bounds(
     ShaulaOverlaySelectionSession *session, ShaulaPoint bounds);
 const ShaulaOverlaySelectionView *shaula_overlay_selection_session_view(

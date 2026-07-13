@@ -62,7 +62,7 @@ typedef struct {
   int background_surface_width;
   int background_surface_height;
   ShaulaPoint output_origin;
-  ShaulaOverlaySelectionSession selection_session;
+  ShaulaOverlaySelectionSession *selection_session;
   ShaulaOverlaySelectionView selection_view;
   gboolean has_toolbar;
   ShaulaInteractionMode interaction_mode;
@@ -84,6 +84,8 @@ typedef struct {
 } ShaulaOverlayState;
 
 static ShaulaOverlayState state;
+
+int shaula_native_gtk_overlay_run(void);
 
 static GdkMonitor *monitor_for_output(void);
 static ShaulaPoint initial_surface_size(void);
@@ -231,11 +233,11 @@ static ShaulaPoint output_size(void) {
 
 static void sync_selection_view(void) {
   state.selection_view =
-      *shaula_overlay_selection_session_view(&state.selection_session);
+      *shaula_overlay_selection_session_view(state.selection_session);
 }
 
 static void sync_selection_bounds(void) {
-  shaula_overlay_selection_session_set_bounds(&state.selection_session,
+  shaula_overlay_selection_session_set_bounds(state.selection_session,
                                               output_size());
   sync_selection_view();
 }
@@ -361,7 +363,7 @@ static void apply_aspect_choice(void) {
     state.aspect_output_label[0] = '\0';
   }
   (void)shaula_overlay_selection_session_set_aspect(
-      &state.selection_session, enabled, aspect, FALSE);
+      state.selection_session, enabled, aspect, FALSE);
   sync_selection_view();
   update_toolbar();
   state.dropdown_open = FALSE;
@@ -612,7 +614,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   (void)data;
   sync_selection_bounds();
   shaula_overlay_selection_session_begin(
-      &state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y},
+      state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y},
       !capture_on_release() && state.suppress_pointer_drag);
   sync_selection_view();
   apply_cursor(state.selection_view.cursor);
@@ -625,7 +627,7 @@ static void on_drag_update(GtkGestureDrag *gesture, double dx, double dy,
   (void)data;
   sync_selection_bounds();
   (void)shaula_overlay_selection_session_update(
-      &state.selection_session, (int)dx, (int)dy);
+      state.selection_session, (int)dx, (int)dy);
   sync_selection_view();
   apply_cursor(state.selection_view.cursor);
   update_toolbar();
@@ -638,7 +640,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
   (void)data;
   sync_selection_bounds();
   gboolean should_confirm = shaula_overlay_selection_session_end(
-      &state.selection_session, (int)dx, (int)dy, capture_on_release());
+      state.selection_session, (int)dx, (int)dy, capture_on_release());
   state.suppress_pointer_drag = FALSE;
   sync_selection_view();
   apply_cursor(state.selection_view.cursor);
@@ -653,7 +655,7 @@ static void on_motion(GtkEventControllerMotion *controller, double x, double y,
   (void)controller;
   (void)data;
   gboolean changed = shaula_overlay_selection_session_motion(
-      &state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y});
+      state.selection_session, (ShaulaPoint){.x = (int)x, .y = (int)y});
   sync_selection_view();
   if (changed)
     queue_draw();
@@ -669,7 +671,7 @@ static void on_motion_leave(GtkEventControllerMotion *controller,
                             gpointer data) {
   (void)controller;
   (void)data;
-  shaula_overlay_selection_session_leave(&state.selection_session);
+  shaula_overlay_selection_session_leave(state.selection_session);
   sync_selection_view();
   apply_cursor(state.selection_view.cursor);
   queue_draw();
@@ -753,7 +755,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
     sync_selection_bounds();
     int step = (modifiers & GDK_SHIFT_MASK) != 0 ? 10 : 1;
     if (shaula_overlay_selection_session_nudge(
-            &state.selection_session, dx, dy, step)) {
+            state.selection_session, dx, dy, step)) {
       sync_selection_view();
       update_toolbar();
       queue_draw();
@@ -769,7 +771,7 @@ static gboolean load_aspect(void) {
   state.aspect_output_label[0] = '\0';
   if (raw == NULL || raw[0] == '\0') {
     (void)shaula_overlay_selection_session_set_aspect(
-        &state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
+        state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
     sync_selection_view();
     return FALSE;
   }
@@ -778,14 +780,14 @@ static gboolean load_aspect(void) {
   int h = 0;
   if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
     (void)shaula_overlay_selection_session_set_aspect(
-        &state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
+        state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
     sync_selection_view();
     return FALSE;
   }
 
   ShaulaAspect aspect = {.width = w, .height = h};
   (void)shaula_overlay_selection_session_set_aspect(
-      &state.selection_session, TRUE, aspect, TRUE);
+      state.selection_session, TRUE, aspect, TRUE);
   sync_selection_view();
   snprintf(state.aspect_output_label, sizeof(state.aspect_output_label),
            "%d:%d", w, h);
@@ -843,9 +845,9 @@ static void load_initial_geometry(void) {
     return;
   }
 
-  shaula_overlay_selection_session_set_bounds(&state.selection_session, bounds);
+  shaula_overlay_selection_session_set_bounds(state.selection_session, bounds);
   if (shaula_overlay_selection_session_set_selection(
-          &state.selection_session, rect, TRUE)) {
+          state.selection_session, rect, TRUE)) {
     sync_selection_view();
     update_toolbar();
   }
@@ -873,9 +875,9 @@ static void ensure_default_area_selection(ShaulaPoint bounds) {
       .width = width,
       .height = height,
   };
-  shaula_overlay_selection_session_set_bounds(&state.selection_session, bounds);
+  shaula_overlay_selection_session_set_bounds(state.selection_session, bounds);
   if (shaula_overlay_selection_session_set_selection(
-          &state.selection_session, rect, FALSE)) {
+          state.selection_session, rect, FALSE)) {
     sync_selection_view();
     update_toolbar();
   }
@@ -1066,7 +1068,7 @@ static void setup_overlay_window(void) {
    */
   state.output_origin = current_output_origin();
   ShaulaPoint size = initial_surface_size();
-  shaula_overlay_selection_session_set_bounds(&state.selection_session, size);
+  shaula_overlay_selection_session_set_bounds(state.selection_session, size);
   sync_selection_view();
   gtk_window_set_default_size(GTK_WINDOW(window), size.x, size.y);
 
@@ -1172,8 +1174,15 @@ int shaula_native_gtk_overlay_run(void) {
   state.toolbar = (ShaulaPoint){.x = PADDING, .y = PADDING};
   state.has_toolbar = TRUE;
   state.cursor_shape = SHAULA_OVERLAY_CURSOR_DEFAULT;
-  shaula_overlay_selection_session_init(&state.selection_session,
-                                        initial_surface_size());
+  state.selection_session =
+      shaula_overlay_selection_session_new(initial_surface_size());
+  if (state.selection_session == NULL) {
+    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
+           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":"
+           "\"overlay selection session could not be created\"}}\n");
+    fflush(stdout);
+    return 36;
+  }
   sync_selection_view();
   install_transparent_overlay_css();
   load_interaction_mode();
@@ -1187,6 +1196,8 @@ int shaula_native_gtk_overlay_run(void) {
     fflush(stdout);
     if (state.background != NULL)
       g_object_unref(state.background);
+    shaula_overlay_selection_session_free(state.selection_session);
+    state.selection_session = NULL;
     return 36;
   }
 
@@ -1198,6 +1209,8 @@ int shaula_native_gtk_overlay_run(void) {
     fflush(stdout);
     if (state.background != NULL)
       g_object_unref(state.background);
+    shaula_overlay_selection_session_free(state.selection_session);
+    state.selection_session = NULL;
     return 36;
   }
   setup_overlay_window();
@@ -1207,6 +1220,8 @@ int shaula_native_gtk_overlay_run(void) {
   clear_background_surface();
   if (state.background != NULL)
     g_object_unref(state.background);
+  shaula_overlay_selection_session_free(state.selection_session);
+  state.selection_session = NULL;
   return 0;
 }
 

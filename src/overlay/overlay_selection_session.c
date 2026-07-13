@@ -8,6 +8,13 @@ enum {
   CREATE_THRESHOLD = 6,
 };
 
+struct ShaulaOverlaySelectionSession {
+  ShaulaPoint bounds;
+  ShaulaOverlaySelectionView view;
+  ShaulaPoint drag_start;
+  ShaulaRect drag_origin;
+};
+
 static gboolean point_in_selection(ShaulaRect selection, ShaulaPoint point) {
   return point.x >= selection.x && point.x <= selection.x + selection.width &&
          point.y >= selection.y && point.y <= selection.y + selection.height;
@@ -104,19 +111,23 @@ static void update_confirmable(ShaulaOverlaySelectionSession *session) {
       session->view.selection.height > 0;
 }
 
-void shaula_overlay_selection_session_init(
-    ShaulaOverlaySelectionSession *session, ShaulaPoint bounds) {
-  g_return_if_fail(session != NULL);
-  *session = (ShaulaOverlaySelectionSession){
-      .bounds = bounds,
-      .view =
-          {
-              .drag_mode = SHAULA_OVERLAY_DRAG_NONE,
-              .active_handle = HANDLE_NONE,
-              .hover_handle = HANDLE_NONE,
-              .cursor = SHAULA_OVERLAY_CURSOR_CROSSHAIR,
-          },
-  };
+ShaulaOverlaySelectionSession *
+shaula_overlay_selection_session_new(ShaulaPoint bounds) {
+  ShaulaOverlaySelectionSession *session =
+      g_try_new0(ShaulaOverlaySelectionSession, 1);
+  if (session == NULL)
+    return NULL;
+  session->bounds = bounds;
+  session->view.drag_mode = SHAULA_OVERLAY_DRAG_NONE;
+  session->view.active_handle = HANDLE_NONE;
+  session->view.hover_handle = HANDLE_NONE;
+  session->view.cursor = SHAULA_OVERLAY_CURSOR_CROSSHAIR;
+  return session;
+}
+
+void shaula_overlay_selection_session_free(
+    ShaulaOverlaySelectionSession *session) {
+  g_free(session);
 }
 
 void shaula_overlay_selection_session_set_bounds(
