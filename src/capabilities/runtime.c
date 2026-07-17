@@ -23,6 +23,8 @@ typedef struct {
   int32_t window_capable;
 } PortalCapabilities;
 
+static int force_portal(const char *value);
+
 static ShaulaEnvSpan invalid_span(void) {
   return (ShaulaEnvSpan){NULL, 0U};
 }
@@ -111,6 +113,13 @@ static int process_property(const char *property, ShaulaProcessOutput *out) {
     return 0;
   }
   return out->term_kind == SHAULA_PROCESS_TERM_EXITED && out->term_value == 0U;
+}
+
+/* Niri capture is native and does not consult the portal during startup. */
+static int should_probe_portal(const ShaulaCapabilitiesEnvironment *environment,
+                               ShaulaCompositorDetection compositor) {
+  return compositor.kind != SHAULA_COMPOSITOR_KIND_NIRI ||
+         force_portal(environment->capture_force_portal) != 0;
 }
 
 static int parse_last_unsigned(ShaulaProcessOwnedBytes bytes,
@@ -272,7 +281,10 @@ shaula_capabilities_resolve(const ShaulaCapabilitiesEnvironment *environment,
     return SHAULA_CAPABILITIES_STATUS_INVALID_ARGUMENT;
   }
 
-  portal = probe_portal_capabilities(environment);
+  portal = (PortalCapabilities){0, 0};
+  if (should_probe_portal(environment, out->compositor)) {
+    portal = probe_portal_capabilities(environment);
+  }
   supported = shaula_compositor_supported_in_current_scope(out->compositor,
                                                             portal.available);
   overlay_supported = shaula_compositor_overlay_supported(out->compositor);

@@ -108,6 +108,8 @@ history; this document records current behavior and ownership.
   to the configured save folder. PNG output is validated before side effects.
 - Runtime backend selection is deterministic: explicit override, forced portal,
   native compositor lane, then supported portal fallback.
+- Native Niri capture skips advisory portal capability subprocess probes on the
+  capture hot path; forced portal selection still probes the portal.
 - Region mode accepts `live` and `frozen`. The helper receives the frozen-mode
   contract; live mode observes the compositor settle barrier before capture.
   Frozen-source immutability remains a manual Wayland/Niri release gate.
