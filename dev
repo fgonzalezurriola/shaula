@@ -23,8 +23,8 @@ Core:
   release-arm    Build with SHAULA_MESON_CROSS_FILE for aarch64
   test           Run Meson tests
   check          Run build + tests
-  port-check     Rebuild and run the Meson tests with strict warnings
-  port-check-asan Rebuild and run Meson tests with ASan/UBSan
+  strict-check   Rebuild and run the Meson tests with strict warnings
+  sanitize-check Rebuild and run Meson tests with ASan/UBSan
   doctor         Check local toolchain/runtime dependencies
   clean          Remove build and QA scratch artifacts
 
@@ -136,7 +136,7 @@ doctor() {
   return "${fail}"
 }
 
-port_check() {
+strict_check() {
   local build_dir="${1}"
   shift
   meson setup "${build_dir}" --wipe -Dwerror=true "$@"
@@ -144,17 +144,20 @@ port_check() {
   meson test -C "${build_dir}" --print-errorlogs
 }
 
-port_check_asan() {
+sanitize_check() {
   local compiler="${CC:-cc}"
   local lundef=true
   if [[ "${compiler##*/}" == *clang* ]]; then
     lundef=false
   fi
-  port_check build-asan -Db_sanitize=address,undefined -Db_lundef="${lundef}"
+  strict_check build-sanitize -Db_sanitize=address,undefined \
+    -Db_lundef="${lundef}"
 }
 
 clean() {
-  rm -rf build build-release build-release-arm build-stage build-port build-asan build-c-port src/overlay/__pycache__ scripts/qa/__pycache__
+  rm -rf build build-release build-release-arm build-stage build-strict \
+    build-sanitize build-ci \
+    src/overlay/__pycache__ scripts/qa/__pycache__
   rm -f .qa/evidence/*.tmp .qa/evidence/*.log .qa/evidence/*.txt
   echo "ok clean"
 }
@@ -534,11 +537,11 @@ release-arm)
     build
     meson test -C "${BUILD_DIR}" --print-errorlogs
     ;;
-  port-check)
-    port_check build-port
+  strict-check)
+    strict_check build-strict
     ;;
-  port-check-asan)
-    port_check_asan
+  sanitize-check)
+    sanitize_check
     ;;
   doctor)
     doctor
@@ -610,7 +613,11 @@ all)
     run_shaula "$@"
     ;;
   qa)
-    SHAULA_QA_PROFILE="${QA_PROFILE}" SHAULA_QA_ALLOW_INTRUSIVE_UI=0 bash scripts/qa/run-all-tests.sh "$@"
+    build >/dev/null
+    bash scripts/qa/assert-preflight-schema.sh "$@"
+    bash scripts/qa/test-failure-matrix.sh
+    bash scripts/qa/assert-exit-code-mapping.sh
+    echo "ok qa profile=${QA_PROFILE} mode=non_intrusive"
     ;;
   *)
     echo "unknown dev command: ${cmd}" >&2

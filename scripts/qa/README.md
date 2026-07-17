@@ -18,10 +18,8 @@ changed runtime behavior.
 
 ## Current Non-Intrusive QA
 
-`./dev qa` is the only curated QA wrapper. It runs:
+`./dev qa` is the only curated QA entry point. It runs:
 
-- `scripts/qa/run-all-tests.sh`
-- `scripts/qa/run-unit-tests.sh`
 - `scripts/qa/assert-preflight-schema.sh`
 - `scripts/qa/test-failure-matrix.sh`
 - `scripts/qa/assert-exit-code-mapping.sh`
@@ -38,7 +36,7 @@ These can be useful when touching the named contract, but they are not part of
 the default gate unless explicitly invoked:
 
 - `./dev check` validates the Meson build and test suite, including
-  `assert-port-command-compatibility.sh` with fake capture, Niri, clipboard, and
+  `assert-command-compatibility.sh` with fake capture, Niri, clipboard, and
   notification processes.
 - `scripts/qa/assert-default-output-path.sh`
 - `scripts/qa/assert-overlay-geometry-fixtures.sh`

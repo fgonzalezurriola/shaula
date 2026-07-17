@@ -19,6 +19,93 @@ typedef enum {
   SECTION_FLOATING_POSITION,
 } ConfigSection;
 
+typedef guint64 ConfigFieldMask;
+
+typedef struct {
+  const char *name;
+  ConfigSection section;
+} ConfigSectionSpec;
+
+typedef struct {
+  ConfigSection section;
+  const char *key;
+  ConfigFieldMask bit;
+} ConfigFieldSpec;
+
+enum {
+  FIELD_REGION_MODE = G_GUINT64_CONSTANT(1) << 0,
+  FIELD_SAVE_FOLDER = G_GUINT64_CONSTANT(1) << 1,
+  FIELD_SKIP_PREVIEW = G_GUINT64_CONSTANT(1) << 2,
+  FIELD_COPY_TO_CLIPBOARD = G_GUINT64_CONSTANT(1) << 3,
+  FIELD_SAVE_TO_FOLDER = G_GUINT64_CONSTANT(1) << 4,
+  FIELD_NOTIFY_SUCCESS = G_GUINT64_CONSTANT(1) << 5,
+  FIELD_NOTIFY_ERRORS = G_GUINT64_CONSTANT(1) << 6,
+  FIELD_NOTIFY_THUMBNAILS = G_GUINT64_CONSTANT(1) << 7,
+  FIELD_PREVIEW_MODE = G_GUINT64_CONSTANT(1) << 8,
+  FIELD_PREVIEW_FOCUSED = G_GUINT64_CONSTANT(1) << 9,
+  FIELD_CLOSE_ON_SAVE = G_GUINT64_CONSTANT(1) << 10,
+  FIELD_PREVIEW_WIDTH = G_GUINT64_CONSTANT(1) << 11,
+  FIELD_PREVIEW_HEIGHT = G_GUINT64_CONSTANT(1) << 12,
+  FIELD_COLUMN_DISPLAY = G_GUINT64_CONSTANT(1) << 13,
+  FIELD_FLOATING_X = G_GUINT64_CONSTANT(1) << 14,
+  FIELD_FLOATING_Y = G_GUINT64_CONSTANT(1) << 15,
+  FIELD_FLOATING_RELATIVE = G_GUINT64_CONSTANT(1) << 16,
+};
+
+static const ConfigSectionSpec CONFIG_SECTIONS[] = {
+    {"capture", SECTION_CAPTURE},
+    {"capture.after", SECTION_CAPTURE_AFTER},
+    {"capture.after.quick", SECTION_QUICK},
+    {"capture.after.area", SECTION_AREA},
+    {"capture.after.fullscreen", SECTION_FULLSCREEN},
+    {"capture.after.all_screens", SECTION_ALL_SCREENS},
+    {"notifications", SECTION_NOTIFICATIONS},
+    {"preview.window", SECTION_PREVIEW_WINDOW},
+    {"preview.window.floating_position", SECTION_FLOATING_POSITION},
+};
+
+/* This ordered schema is shared by parsing, canonical serialization, and
+ * comment-preserving updates so config keys cannot drift between paths.
+ */
+static const ConfigFieldSpec CONFIG_FIELDS[] = {
+    {SECTION_CAPTURE, "region_capture_mode", FIELD_REGION_MODE},
+    {SECTION_CAPTURE_AFTER, "save_folder", FIELD_SAVE_FOLDER},
+    {SECTION_QUICK, "skip_preview", FIELD_SKIP_PREVIEW},
+    {SECTION_QUICK, "copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
+    {SECTION_QUICK, "save_to_folder", FIELD_SAVE_TO_FOLDER},
+    {SECTION_AREA, "skip_preview", FIELD_SKIP_PREVIEW},
+    {SECTION_AREA, "copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
+    {SECTION_AREA, "save_to_folder", FIELD_SAVE_TO_FOLDER},
+    {SECTION_FULLSCREEN, "skip_preview", FIELD_SKIP_PREVIEW},
+    {SECTION_FULLSCREEN, "copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
+    {SECTION_FULLSCREEN, "save_to_folder", FIELD_SAVE_TO_FOLDER},
+    {SECTION_ALL_SCREENS, "skip_preview", FIELD_SKIP_PREVIEW},
+    {SECTION_ALL_SCREENS, "copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
+    {SECTION_ALL_SCREENS, "save_to_folder", FIELD_SAVE_TO_FOLDER},
+    {SECTION_NOTIFICATIONS, "success", FIELD_NOTIFY_SUCCESS},
+    {SECTION_NOTIFICATIONS, "errors", FIELD_NOTIFY_ERRORS},
+    {SECTION_NOTIFICATIONS, "thumbnails", FIELD_NOTIFY_THUMBNAILS},
+    {SECTION_PREVIEW_WINDOW, "mode", FIELD_PREVIEW_MODE},
+    {SECTION_PREVIEW_WINDOW, "focused", FIELD_PREVIEW_FOCUSED},
+    {SECTION_PREVIEW_WINDOW, "close_preview_on_save", FIELD_CLOSE_ON_SAVE},
+    {SECTION_PREVIEW_WINDOW, "width", FIELD_PREVIEW_WIDTH},
+    {SECTION_PREVIEW_WINDOW, "height", FIELD_PREVIEW_HEIGHT},
+    {SECTION_PREVIEW_WINDOW, "default_column_display", FIELD_COLUMN_DISPLAY},
+    {SECTION_FLOATING_POSITION, "x", FIELD_FLOATING_X},
+    {SECTION_FLOATING_POSITION, "y", FIELD_FLOATING_Y},
+    {SECTION_FLOATING_POSITION, "relative_to", FIELD_FLOATING_RELATIVE},
+};
+
+static const ConfigFieldSpec *field_spec(ConfigSection section,
+                                         const char *key) {
+  for (gsize i = 0; i < G_N_ELEMENTS(CONFIG_FIELDS); i++) {
+    if (CONFIG_FIELDS[i].section == section &&
+        g_str_equal(CONFIG_FIELDS[i].key, key))
+      return &CONFIG_FIELDS[i];
+  }
+  return NULL;
+}
+
 static gboolean text_is_one_of(const char *value, const char *const *choices) {
   for (gsize i = 0; choices[i] != NULL; i++) {
     if (g_str_equal(value, choices[i]))
@@ -152,23 +239,9 @@ static gboolean parse_i32(const char *value, gint32 *out) {
 }
 
 static gboolean section_from_name(const char *name, ConfigSection *section) {
-  static const struct {
-    const char *name;
-    ConfigSection section;
-  } sections[] = {
-      {"capture", SECTION_CAPTURE},
-      {"capture.after", SECTION_CAPTURE_AFTER},
-      {"capture.after.quick", SECTION_QUICK},
-      {"capture.after.area", SECTION_AREA},
-      {"capture.after.fullscreen", SECTION_FULLSCREEN},
-      {"capture.after.all_screens", SECTION_ALL_SCREENS},
-      {"notifications", SECTION_NOTIFICATIONS},
-      {"preview.window", SECTION_PREVIEW_WINDOW},
-      {"preview.window.floating_position", SECTION_FLOATING_POSITION},
-  };
-  for (gsize i = 0; i < G_N_ELEMENTS(sections); i++) {
-    if (g_str_equal(name, sections[i].name)) {
-      *section = sections[i].section;
+  for (gsize i = 0; i < G_N_ELEMENTS(CONFIG_SECTIONS); i++) {
+    if (g_str_equal(name, CONFIG_SECTIONS[i].name)) {
+      *section = CONFIG_SECTIONS[i].section;
       return TRUE;
     }
   }
@@ -191,13 +264,13 @@ static ShaulaAfterModeConfig *mode_for_section(ShaulaConfig *config,
   }
 }
 
-static gboolean parse_mode_field(ShaulaAfterModeConfig *mode, const char *key,
-                                 const char *value) {
-  if (g_str_equal(key, "skip_preview"))
+static gboolean parse_mode_field(ShaulaAfterModeConfig *mode,
+                                 ConfigFieldMask field, const char *value) {
+  if (field == FIELD_SKIP_PREVIEW)
     return parse_bool(value, &mode->skip_preview);
-  if (g_str_equal(key, "copy_to_clipboard"))
+  if (field == FIELD_COPY_TO_CLIPBOARD)
     return parse_bool(value, &mode->copy_to_clipboard);
-  if (g_str_equal(key, "save_to_folder"))
+  if (field == FIELD_SAVE_TO_FOLDER)
     return parse_bool(value, &mode->save_to_folder);
   return FALSE;
 }
@@ -212,12 +285,15 @@ static gboolean parse_field(ShaulaConfig *config, ConfigSection section,
   static const char *const relative_modes[] = {
       "top-left", "top-right", "bottom-left", "bottom-right", "center", NULL};
 
+  const ConfigFieldSpec *field = field_spec(section, key);
+  if (field == NULL)
+    return FALSE;
+
   ShaulaAfterModeConfig *mode = mode_for_section(config, section);
   if (mode != NULL)
-    return parse_mode_field(mode, key, value);
+    return parse_mode_field(mode, field->bit, value);
 
-  if (section == SECTION_CAPTURE &&
-      g_str_equal(key, "region_capture_mode")) {
+  if (field->bit == FIELD_REGION_MODE) {
     char parsed[sizeof(config->region_capture_mode)];
     if (!parse_quoted(value, parsed, sizeof(parsed)) ||
         !text_is_one_of(parsed, region_modes))
@@ -226,7 +302,7 @@ static gboolean parse_field(ShaulaConfig *config, ConfigSection section,
               sizeof(config->region_capture_mode));
     return TRUE;
   }
-  if (section == SECTION_CAPTURE_AFTER && g_str_equal(key, "save_folder")) {
+  if (field->bit == FIELD_SAVE_FOLDER) {
     char parsed[sizeof(config->save_folder)];
     if (!parse_quoted(value, parsed, sizeof(parsed)) ||
         strchr(parsed, '"') != NULL || strchr(parsed, '\\') != NULL)
@@ -236,61 +312,52 @@ static gboolean parse_field(ShaulaConfig *config, ConfigSection section,
     g_strlcpy(config->save_folder, parsed, sizeof(config->save_folder));
     return TRUE;
   }
-  if (section == SECTION_NOTIFICATIONS) {
-    if (g_str_equal(key, "success"))
-      return parse_bool(value, &config->notifications_success);
-    if (g_str_equal(key, "errors"))
-      return parse_bool(value, &config->notifications_errors);
-    if (g_str_equal(key, "thumbnails"))
-      return parse_bool(value, &config->notifications_thumbnails);
-    return FALSE;
+  if (field->bit == FIELD_NOTIFY_SUCCESS)
+    return parse_bool(value, &config->notifications_success);
+  if (field->bit == FIELD_NOTIFY_ERRORS)
+    return parse_bool(value, &config->notifications_errors);
+  if (field->bit == FIELD_NOTIFY_THUMBNAILS)
+    return parse_bool(value, &config->notifications_thumbnails);
+  if (field->bit == FIELD_PREVIEW_MODE) {
+    char parsed[sizeof(config->preview_mode)];
+    if (!parse_quoted(value, parsed, sizeof(parsed)) ||
+        !text_is_one_of(parsed, preview_modes))
+      return FALSE;
+    g_strlcpy(config->preview_mode, parsed, sizeof(config->preview_mode));
+    return TRUE;
   }
-  if (section == SECTION_PREVIEW_WINDOW) {
-    if (g_str_equal(key, "mode")) {
-      char parsed[sizeof(config->preview_mode)];
-      if (!parse_quoted(value, parsed, sizeof(parsed)) ||
-          !text_is_one_of(parsed, preview_modes))
-        return FALSE;
-      g_strlcpy(config->preview_mode, parsed, sizeof(config->preview_mode));
-      return TRUE;
-    }
-    if (g_str_equal(key, "focused"))
-      return parse_bool(value, &config->preview_focused);
-    if (g_str_equal(key, "close_preview_on_save"))
-      return parse_bool(value, &config->close_preview_on_save);
-    if (g_str_equal(key, "width"))
-      return parse_u32(value, &config->preview_width);
-    if (g_str_equal(key, "height"))
-      return parse_u32(value, &config->preview_height);
-    if (g_str_equal(key, "default_column_display")) {
-      char parsed[sizeof(config->column_display)];
-      if (!parse_quoted(value, parsed, sizeof(parsed)) ||
-          !text_is_one_of(parsed, column_modes))
-        return FALSE;
-      g_strlcpy(config->column_display, parsed, sizeof(config->column_display));
-      return TRUE;
-    }
-    return FALSE;
+  if (field->bit == FIELD_PREVIEW_FOCUSED)
+    return parse_bool(value, &config->preview_focused);
+  if (field->bit == FIELD_CLOSE_ON_SAVE)
+    return parse_bool(value, &config->close_preview_on_save);
+  if (field->bit == FIELD_PREVIEW_WIDTH)
+    return parse_u32(value, &config->preview_width);
+  if (field->bit == FIELD_PREVIEW_HEIGHT)
+    return parse_u32(value, &config->preview_height);
+  if (field->bit == FIELD_COLUMN_DISPLAY) {
+    char parsed[sizeof(config->column_display)];
+    if (!parse_quoted(value, parsed, sizeof(parsed)) ||
+        !text_is_one_of(parsed, column_modes))
+      return FALSE;
+    g_strlcpy(config->column_display, parsed, sizeof(config->column_display));
+    return TRUE;
   }
-  if (section == SECTION_FLOATING_POSITION) {
-    if (g_str_equal(key, "x")) {
-      config->floating_x_set = parse_i32(value, &config->floating_x);
-      return config->floating_x_set;
-    }
-    if (g_str_equal(key, "y")) {
-      config->floating_y_set = parse_i32(value, &config->floating_y);
-      return config->floating_y_set;
-    }
-    if (g_str_equal(key, "relative_to")) {
-      char parsed[sizeof(config->floating_relative_to)];
-      if (!parse_quoted(value, parsed, sizeof(parsed)) ||
-          !text_is_one_of(parsed, relative_modes))
-        return FALSE;
-      g_strlcpy(config->floating_relative_to, parsed,
-                sizeof(config->floating_relative_to));
-      return TRUE;
-    }
-    return FALSE;
+  if (field->bit == FIELD_FLOATING_X) {
+    config->floating_x_set = parse_i32(value, &config->floating_x);
+    return config->floating_x_set;
+  }
+  if (field->bit == FIELD_FLOATING_Y) {
+    config->floating_y_set = parse_i32(value, &config->floating_y);
+    return config->floating_y_set;
+  }
+  if (field->bit == FIELD_FLOATING_RELATIVE) {
+    char parsed[sizeof(config->floating_relative_to)];
+    if (!parse_quoted(value, parsed, sizeof(parsed)) ||
+        !text_is_one_of(parsed, relative_modes))
+      return FALSE;
+    g_strlcpy(config->floating_relative_to, parsed,
+              sizeof(config->floating_relative_to));
+    return TRUE;
   }
   return FALSE;
 }
@@ -356,163 +423,10 @@ ShaulaConfigStatus shaula_config_load(const char *path, ShaulaConfig *config,
   return SHAULA_CONFIG_STATUS_OK;
 }
 
-char *shaula_config_serialize(const ShaulaConfig *config) {
-  g_return_val_if_fail(config != NULL, NULL);
-  g_autofree char *x_line =
-      config->floating_x_set ? g_strdup_printf("x = %d\n", config->floating_x)
-                             : g_strdup("");
-  g_autofree char *y_line =
-      config->floating_y_set ? g_strdup_printf("y = %d\n", config->floating_y)
-                             : g_strdup("");
-  return g_strdup_printf(
-      "[capture]\nregion_capture_mode = \"%s\"\n\n"
-      "[capture.after]\nsave_folder = \"%s\"\n\n"
-      "[capture.after.quick]\nskip_preview = %s\ncopy_to_clipboard = %s\n"
-      "save_to_folder = %s\n\n"
-      "[capture.after.area]\nskip_preview = %s\ncopy_to_clipboard = %s\n"
-      "save_to_folder = %s\n\n"
-      "[capture.after.fullscreen]\nskip_preview = %s\n"
-      "copy_to_clipboard = %s\nsave_to_folder = %s\n\n"
-      "[capture.after.all_screens]\nskip_preview = %s\n"
-      "copy_to_clipboard = %s\nsave_to_folder = %s\n\n"
-      "[notifications]\nsuccess = %s\nerrors = %s\nthumbnails = %s\n\n"
-      "[preview.window]\nmode = \"%s\"\nfocused = %s\n"
-      "close_preview_on_save = %s\nwidth = %u\nheight = %u\n"
-      "default_column_display = \"%s\"\n\n"
-      "[preview.window.floating_position]\n%s%s"
-      "relative_to = \"%s\"\n",
-      config->region_capture_mode, config->save_folder,
-      config->quick.skip_preview ? "true" : "false",
-      config->quick.copy_to_clipboard ? "true" : "false",
-      config->quick.save_to_folder ? "true" : "false",
-      config->area.skip_preview ? "true" : "false",
-      config->area.copy_to_clipboard ? "true" : "false",
-      config->area.save_to_folder ? "true" : "false",
-      config->fullscreen.skip_preview ? "true" : "false",
-      config->fullscreen.copy_to_clipboard ? "true" : "false",
-      config->fullscreen.save_to_folder ? "true" : "false",
-      config->all_screens.skip_preview ? "true" : "false",
-      config->all_screens.copy_to_clipboard ? "true" : "false",
-      config->all_screens.save_to_folder ? "true" : "false",
-      config->notifications_success ? "true" : "false",
-      config->notifications_errors ? "true" : "false",
-      config->notifications_thumbnails ? "true" : "false",
-      config->preview_mode, config->preview_focused ? "true" : "false",
-      config->close_preview_on_save ? "true" : "false", config->preview_width,
-      config->preview_height, config->column_display, x_line, y_line,
-      config->floating_relative_to);
-}
-
-typedef guint64 ConfigFieldMask;
-
-typedef struct {
-  const char *key;
-  ConfigFieldMask bit;
-} ConfigFieldSpec;
-
-enum {
-  FIELD_REGION_MODE = G_GUINT64_CONSTANT(1) << 0,
-  FIELD_SAVE_FOLDER = G_GUINT64_CONSTANT(1) << 1,
-  FIELD_SKIP_PREVIEW = G_GUINT64_CONSTANT(1) << 2,
-  FIELD_COPY_TO_CLIPBOARD = G_GUINT64_CONSTANT(1) << 3,
-  FIELD_SAVE_TO_FOLDER = G_GUINT64_CONSTANT(1) << 4,
-  FIELD_NOTIFY_SUCCESS = G_GUINT64_CONSTANT(1) << 5,
-  FIELD_NOTIFY_ERRORS = G_GUINT64_CONSTANT(1) << 6,
-  FIELD_NOTIFY_THUMBNAILS = G_GUINT64_CONSTANT(1) << 7,
-  FIELD_PREVIEW_MODE = G_GUINT64_CONSTANT(1) << 8,
-  FIELD_PREVIEW_FOCUSED = G_GUINT64_CONSTANT(1) << 9,
-  FIELD_CLOSE_ON_SAVE = G_GUINT64_CONSTANT(1) << 10,
-  FIELD_PREVIEW_WIDTH = G_GUINT64_CONSTANT(1) << 11,
-  FIELD_PREVIEW_HEIGHT = G_GUINT64_CONSTANT(1) << 12,
-  FIELD_COLUMN_DISPLAY = G_GUINT64_CONSTANT(1) << 13,
-  FIELD_FLOATING_X = G_GUINT64_CONSTANT(1) << 14,
-  FIELD_FLOATING_Y = G_GUINT64_CONSTANT(1) << 15,
-  FIELD_FLOATING_RELATIVE = G_GUINT64_CONSTANT(1) << 16,
-};
-
-static const ConfigFieldSpec capture_fields[] = {
-    {"region_capture_mode", FIELD_REGION_MODE},
-};
-static const ConfigFieldSpec capture_after_fields[] = {
-    {"save_folder", FIELD_SAVE_FOLDER},
-};
-static const ConfigFieldSpec mode_fields[] = {
-    {"skip_preview", FIELD_SKIP_PREVIEW},
-    {"copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
-    {"save_to_folder", FIELD_SAVE_TO_FOLDER},
-};
-static const ConfigFieldSpec notification_fields[] = {
-    {"success", FIELD_NOTIFY_SUCCESS},
-    {"errors", FIELD_NOTIFY_ERRORS},
-    {"thumbnails", FIELD_NOTIFY_THUMBNAILS},
-};
-static const ConfigFieldSpec preview_fields[] = {
-    {"mode", FIELD_PREVIEW_MODE},
-    {"focused", FIELD_PREVIEW_FOCUSED},
-    {"close_preview_on_save", FIELD_CLOSE_ON_SAVE},
-    {"width", FIELD_PREVIEW_WIDTH},
-    {"height", FIELD_PREVIEW_HEIGHT},
-    {"default_column_display", FIELD_COLUMN_DISPLAY},
-};
-static const ConfigFieldSpec floating_fields[] = {
-    {"x", FIELD_FLOATING_X},
-    {"y", FIELD_FLOATING_Y},
-    {"relative_to", FIELD_FLOATING_RELATIVE},
-};
-
-static const ConfigFieldSpec *fields_for_section(ConfigSection section,
-                                                  gsize *count) {
-  switch (section) {
-  case SECTION_CAPTURE:
-    *count = G_N_ELEMENTS(capture_fields);
-    return capture_fields;
-  case SECTION_CAPTURE_AFTER:
-    *count = G_N_ELEMENTS(capture_after_fields);
-    return capture_after_fields;
-  case SECTION_QUICK:
-  case SECTION_AREA:
-  case SECTION_FULLSCREEN:
-  case SECTION_ALL_SCREENS:
-    *count = G_N_ELEMENTS(mode_fields);
-    return mode_fields;
-  case SECTION_NOTIFICATIONS:
-    *count = G_N_ELEMENTS(notification_fields);
-    return notification_fields;
-  case SECTION_PREVIEW_WINDOW:
-    *count = G_N_ELEMENTS(preview_fields);
-    return preview_fields;
-  case SECTION_FLOATING_POSITION:
-    *count = G_N_ELEMENTS(floating_fields);
-    return floating_fields;
-  case SECTION_ROOT:
-    break;
-  }
-  *count = 0;
-  return NULL;
-}
-
 static const char *section_name(ConfigSection section) {
-  switch (section) {
-  case SECTION_CAPTURE:
-    return "capture";
-  case SECTION_CAPTURE_AFTER:
-    return "capture.after";
-  case SECTION_QUICK:
-    return "capture.after.quick";
-  case SECTION_AREA:
-    return "capture.after.area";
-  case SECTION_FULLSCREEN:
-    return "capture.after.fullscreen";
-  case SECTION_ALL_SCREENS:
-    return "capture.after.all_screens";
-  case SECTION_NOTIFICATIONS:
-    return "notifications";
-  case SECTION_PREVIEW_WINDOW:
-    return "preview.window";
-  case SECTION_FLOATING_POSITION:
-    return "preview.window.floating_position";
-  case SECTION_ROOT:
-    return NULL;
+  for (gsize i = 0; i < G_N_ELEMENTS(CONFIG_SECTIONS); i++) {
+    if (CONFIG_SECTIONS[i].section == section)
+      return CONFIG_SECTIONS[i].name;
   }
   return NULL;
 }
@@ -535,64 +449,55 @@ static const ShaulaAfterModeConfig *const_mode_for_section(
 
 static char *field_value_new(const ShaulaConfig *config, ConfigSection section,
                              const char *key) {
+  const ConfigFieldSpec *field = field_spec(section, key);
+  if (field == NULL)
+    return NULL;
   const ShaulaAfterModeConfig *mode =
       const_mode_for_section(config, section);
   if (mode != NULL) {
-    if (g_str_equal(key, "skip_preview"))
+    if (field->bit == FIELD_SKIP_PREVIEW)
       return g_strdup(mode->skip_preview ? "true" : "false");
-    if (g_str_equal(key, "copy_to_clipboard"))
+    if (field->bit == FIELD_COPY_TO_CLIPBOARD)
       return g_strdup(mode->copy_to_clipboard ? "true" : "false");
-    if (g_str_equal(key, "save_to_folder"))
+    if (field->bit == FIELD_SAVE_TO_FOLDER)
       return g_strdup(mode->save_to_folder ? "true" : "false");
   }
-  if (section == SECTION_CAPTURE &&
-      g_str_equal(key, "region_capture_mode"))
+  if (field->bit == FIELD_REGION_MODE)
     return g_strdup_printf("\"%s\"", config->region_capture_mode);
-  if (section == SECTION_CAPTURE_AFTER && g_str_equal(key, "save_folder"))
+  if (field->bit == FIELD_SAVE_FOLDER)
     return g_strdup_printf("\"%s\"", config->save_folder);
-  if (section == SECTION_NOTIFICATIONS) {
-    if (g_str_equal(key, "success"))
-      return g_strdup(config->notifications_success ? "true" : "false");
-    if (g_str_equal(key, "errors"))
-      return g_strdup(config->notifications_errors ? "true" : "false");
-    if (g_str_equal(key, "thumbnails"))
-      return g_strdup(config->notifications_thumbnails ? "true" : "false");
-  }
-  if (section == SECTION_PREVIEW_WINDOW) {
-    if (g_str_equal(key, "mode"))
-      return g_strdup_printf("\"%s\"", config->preview_mode);
-    if (g_str_equal(key, "focused"))
-      return g_strdup(config->preview_focused ? "true" : "false");
-    if (g_str_equal(key, "close_preview_on_save"))
-      return g_strdup(config->close_preview_on_save ? "true" : "false");
-    if (g_str_equal(key, "width"))
-      return g_strdup_printf("%u", config->preview_width);
-    if (g_str_equal(key, "height"))
-      return g_strdup_printf("%u", config->preview_height);
-    if (g_str_equal(key, "default_column_display"))
-      return g_strdup_printf("\"%s\"", config->column_display);
-  }
-  if (section == SECTION_FLOATING_POSITION) {
-    if (g_str_equal(key, "x"))
-      return config->floating_x_set ? g_strdup_printf("%d", config->floating_x)
-                                    : NULL;
-    if (g_str_equal(key, "y"))
-      return config->floating_y_set ? g_strdup_printf("%d", config->floating_y)
-                                    : NULL;
-    if (g_str_equal(key, "relative_to"))
-      return g_strdup_printf("\"%s\"", config->floating_relative_to);
-  }
+  if (field->bit == FIELD_NOTIFY_SUCCESS)
+    return g_strdup(config->notifications_success ? "true" : "false");
+  if (field->bit == FIELD_NOTIFY_ERRORS)
+    return g_strdup(config->notifications_errors ? "true" : "false");
+  if (field->bit == FIELD_NOTIFY_THUMBNAILS)
+    return g_strdup(config->notifications_thumbnails ? "true" : "false");
+  if (field->bit == FIELD_PREVIEW_MODE)
+    return g_strdup_printf("\"%s\"", config->preview_mode);
+  if (field->bit == FIELD_PREVIEW_FOCUSED)
+    return g_strdup(config->preview_focused ? "true" : "false");
+  if (field->bit == FIELD_CLOSE_ON_SAVE)
+    return g_strdup(config->close_preview_on_save ? "true" : "false");
+  if (field->bit == FIELD_PREVIEW_WIDTH)
+    return g_strdup_printf("%u", config->preview_width);
+  if (field->bit == FIELD_PREVIEW_HEIGHT)
+    return g_strdup_printf("%u", config->preview_height);
+  if (field->bit == FIELD_COLUMN_DISPLAY)
+    return g_strdup_printf("\"%s\"", config->column_display);
+  if (field->bit == FIELD_FLOATING_X)
+    return config->floating_x_set ? g_strdup_printf("%d", config->floating_x)
+                                  : NULL;
+  if (field->bit == FIELD_FLOATING_Y)
+    return config->floating_y_set ? g_strdup_printf("%d", config->floating_y)
+                                  : NULL;
+  if (field->bit == FIELD_FLOATING_RELATIVE)
+    return g_strdup_printf("\"%s\"", config->floating_relative_to);
   return NULL;
 }
 
 static ConfigFieldMask field_bit(ConfigSection section, const char *key) {
-  gsize count = 0;
-  const ConfigFieldSpec *fields = fields_for_section(section, &count);
-  for (gsize i = 0; i < count; i++) {
-    if (g_str_equal(fields[i].key, key))
-      return fields[i].bit;
-  }
-  return 0;
+  const ConfigFieldSpec *field = field_spec(section, key);
+  return field != NULL ? field->bit : 0;
 }
 
 static void ensure_line_boundary(GString *output) {
@@ -603,19 +508,15 @@ static void ensure_line_boundary(GString *output) {
 static void append_missing_fields(GString *output, const ShaulaConfig *config,
                                   ConfigSection section,
                                   ConfigFieldMask seen_fields) {
-  gsize count = 0;
-  const ConfigFieldSpec *fields = fields_for_section(section, &count);
-  if (fields == NULL)
-    return;
-  for (gsize i = 0; i < count; i++) {
-    if ((seen_fields & fields[i].bit) != 0)
+  for (gsize i = 0; i < G_N_ELEMENTS(CONFIG_FIELDS); i++) {
+    const ConfigFieldSpec *field = &CONFIG_FIELDS[i];
+    if (field->section != section || (seen_fields & field->bit) != 0)
       continue;
-    g_autofree char *value =
-        field_value_new(config, section, fields[i].key);
+    g_autofree char *value = field_value_new(config, section, field->key);
     if (value == NULL)
       continue;
     ensure_line_boundary(output);
-    g_string_append_printf(output, "%s = %s\n", fields[i].key, value);
+    g_string_append_printf(output, "%s = %s\n", field->key, value);
   }
 }
 
@@ -653,12 +554,6 @@ static const char *inline_comment_start(const char *value) {
 
 static char *patch_config_text(const char *current,
                                const ShaulaConfig *config) {
-  static const ConfigSection section_order[] = {
-      SECTION_CAPTURE,     SECTION_CAPTURE_AFTER, SECTION_QUICK,
-      SECTION_AREA,        SECTION_FULLSCREEN,    SECTION_ALL_SCREENS,
-      SECTION_NOTIFICATIONS, SECTION_PREVIEW_WINDOW,
-      SECTION_FLOATING_POSITION,
-  };
   const gboolean had_trailing_newline = g_str_has_suffix(current, "\n");
   g_auto(GStrv) lines = g_strsplit(current, "\n", -1);
   gsize line_count = g_strv_length(lines);
@@ -715,8 +610,8 @@ static char *patch_config_text(const char *current,
   }
   append_missing_fields(output, config, section, seen_fields);
 
-  for (gsize i = 0; i < G_N_ELEMENTS(section_order); i++) {
-    ConfigSection missing = section_order[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(CONFIG_SECTIONS); i++) {
+    ConfigSection missing = CONFIG_SECTIONS[i].section;
     if ((seen_sections & (G_GUINT64_CONSTANT(1) << (guint)missing)) != 0)
       continue;
     ensure_line_boundary(output);
@@ -726,6 +621,11 @@ static char *patch_config_text(const char *current,
     append_missing_fields(output, config, missing, 0);
   }
   return g_string_free(output, FALSE);
+}
+
+char *shaula_config_serialize(const ShaulaConfig *config) {
+  g_return_val_if_fail(config != NULL, NULL);
+  return patch_config_text("", config);
 }
 
 static char *backup_path_new(const char *path) {

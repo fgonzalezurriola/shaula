@@ -5,9 +5,9 @@ cli_json_test = executable(
 )
 
 test(
-  'cli-json-c',
+  'cli-json',
   cli_json_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 error_taxonomy_test = executable(
@@ -19,13 +19,13 @@ error_taxonomy_test = executable(
 error_taxonomy_test_env = environment()
 error_taxonomy_test_env.set(
   'SHAULA_ERRORS_FIXTURE',
-  join_paths(meson.project_source_root(), 'tests/fixtures/port/errors-list.json'),
+  join_paths(meson.project_source_root(), 'tests/fixtures/contracts/errors-list.json'),
 )
 
 test(
-  'error-taxonomy-c',
+  'error-taxonomy',
   error_taxonomy_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
   env: error_taxonomy_test_env,
 )
 
@@ -36,9 +36,9 @@ core_capture_mode_test = executable(
 )
 
 test(
-  'core-capture-mode-c',
+  'core-capture-mode',
   core_capture_mode_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 compositor_runtime_test = executable(
@@ -48,9 +48,9 @@ compositor_runtime_test = executable(
 )
 
 test(
-  'compositor-runtime-c',
+  'compositor-runtime',
   compositor_runtime_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 compositor_focused_output_test = executable(
@@ -60,9 +60,9 @@ compositor_focused_output_test = executable(
 )
 
 test(
-  'compositor-focused-output-c',
+  'compositor-focused-output',
   compositor_focused_output_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 capabilities_runtime_test = executable(
@@ -72,9 +72,9 @@ capabilities_runtime_test = executable(
 )
 
 test(
-  'capabilities-runtime-c',
+  'capabilities-runtime',
   capabilities_runtime_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preflight_probe_test = executable(
@@ -84,9 +84,9 @@ preflight_probe_test = executable(
 )
 
 test(
-  'preflight-probe-c',
+  'preflight-probe',
   preflight_probe_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 notify_request_test = executable(
@@ -96,9 +96,9 @@ notify_request_test = executable(
 )
 
 test(
-  'notify-request-c',
+  'notify-request',
   notify_request_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preview_result_test = executable(
@@ -108,9 +108,9 @@ preview_result_test = executable(
 )
 
 test(
-  'preview-result-c',
+  'preview-result',
   preview_result_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preview_geometry_test = executable(
@@ -120,9 +120,9 @@ preview_geometry_test = executable(
 )
 
 test(
-  'preview-geometry-c',
+  'preview-geometry',
   preview_geometry_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preview_image_io_test = executable(
@@ -132,9 +132,9 @@ preview_image_io_test = executable(
 )
 
 test(
-  'preview-image-io-c',
+  'preview-image-io',
   preview_image_io_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preview_clipboard_test = executable(
@@ -144,9 +144,9 @@ preview_clipboard_test = executable(
 )
 
 test(
-  'preview-clipboard-c',
+  'preview-clipboard',
   preview_clipboard_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 preview_notify_test = executable(
@@ -156,9 +156,9 @@ preview_notify_test = executable(
 )
 
 test(
-  'preview-notify-c',
+  'preview-notify',
   preview_notify_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 overlay_selection_session_test = executable(
@@ -168,9 +168,9 @@ overlay_selection_session_test = executable(
 )
 
 test(
-  'overlay-selection-session-c',
+  'overlay-selection-session',
   overlay_selection_session_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 settings_config_test = executable(
@@ -180,9 +180,9 @@ settings_config_test = executable(
 )
 
 test(
-  'settings-config-c',
+  'settings-config',
   settings_config_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 settings_process_test = executable(
@@ -192,9 +192,9 @@ settings_process_test = executable(
 )
 
 test(
-  'settings-process-c',
+  'settings-process',
   settings_process_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_env_test = executable(
@@ -204,9 +204,9 @@ runtime_env_test = executable(
 )
 
 test(
-  'runtime-env-c',
+  'runtime-env',
   runtime_env_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_paths_test = executable(
@@ -216,9 +216,9 @@ runtime_paths_test = executable(
 )
 
 test(
-  'runtime-paths-c',
+  'runtime-paths',
   runtime_paths_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_tool_lookup_test = executable(
@@ -228,9 +228,9 @@ runtime_tool_lookup_test = executable(
 )
 
 test(
-  'runtime-tool-lookup-c',
+  'runtime-tool-lookup',
   runtime_tool_lookup_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_helper_resolution_test = executable(
@@ -240,9 +240,9 @@ runtime_helper_resolution_test = executable(
 )
 
 test(
-  'runtime-helper-resolution-c',
+  'runtime-helper-resolution',
   runtime_helper_resolution_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_previous_area_store_test = executable(
@@ -252,9 +252,9 @@ runtime_previous_area_store_test = executable(
 )
 
 test(
-  'runtime-previous-area-store-c',
+  'runtime-previous-area-store',
   runtime_previous_area_store_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_capture_session_lock_test = executable(
@@ -264,9 +264,9 @@ runtime_capture_session_lock_test = executable(
 )
 
 test(
-  'runtime-capture-session-lock-c',
+  'runtime-capture-session-lock',
   runtime_capture_session_lock_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_capture_state_test = executable(
@@ -276,9 +276,9 @@ runtime_capture_state_test = executable(
 )
 
 test(
-  'runtime-capture-state-c',
+  'runtime-capture-state',
   runtime_capture_state_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 runtime_process_exec_test = executable(
@@ -288,9 +288,9 @@ runtime_process_exec_test = executable(
 )
 
 test(
-  'runtime-process-exec-c',
+  'runtime-process-exec',
   runtime_process_exec_test,
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )
 
 bash_program = find_program('bash')
@@ -298,5 +298,5 @@ test(
   'dev-noctalia-restart',
   bash_program,
   args: [files('dev_noctalia_test.sh')],
-  suite: ['port', 'unit'],
+  suite: ['unit'],
 )

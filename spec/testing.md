@@ -42,16 +42,17 @@ Deterministic failure token for non-ready environment:
 
 ## Test Matrix
 
-### Current Gate (`./dev check`, C port checks, `git diff --check`, `./dev qa`)
+### Current Gate (`./dev check`, strict checks, `git diff --check`, `./dev qa`)
 
 - `./dev check` builds the production C application and runs the
   maintained C helper tests.
-- `./dev port-check` configures Meson with warnings as errors and runs the
-  isolated C migration tests.
-- `./dev port-check-asan` runs the same C tests under AddressSanitizer and
+- `./dev strict-check` configures Meson with warnings as errors and runs the
+  maintained tests.
+- `./dev sanitize-check` runs the same tests under AddressSanitizer and
   UndefinedBehaviorSanitizer. It disables undefined-symbol rejection for Clang,
   matching the maintained CI compiler matrix.
-- The C lane currently contains twenty-two C tests plus two shell fixtures, for
+- The maintained lane currently contains twenty-two C tests plus two shell
+  fixtures, for
   24 Meson tests per lane. It covers the shared public JSON envelope/escaping
   policy; the public error taxonomy and recovery mapping; the core capture-mode
   model; the compositor environment detector and support/overlay policy;
@@ -69,11 +70,10 @@ Deterministic failure token for non-ready environment:
   Noctalia restart readiness; plus top-level capture, config, clipboard,
   history, Explore, notification, and overlay-error compatibility.
 - `git diff --check` rejects whitespace errors.
-- `./dev qa` runs the curated non-intrusive contract lane:
-  `run-all-tests.sh` -> `run-unit-tests.sh` -> preflight schema, failure
-  matrix, and exit-code mapping.
+- `./dev qa` runs preflight schema, failure matrix, and exit-code mapping checks
+  directly.
 
-### Top-level port command compatibility (`scripts/qa/assert-port-command-compatibility.sh`)
+### Top-level command compatibility (`scripts/qa/assert-command-compatibility.sh`)
 
 - Forced non-interactive Area capture bypasses a deliberately missing overlay
   helper and completes through the deterministic C fake capture backend.
@@ -105,7 +105,7 @@ Deterministic failure token for non-ready environment:
   remain unmapped
 - Process-lifetime borrowed record/token pointer stability with no allocation
 - Deterministic ordered comparison against
-  `tests/fixtures/port/errors-list.json`
+  `tests/fixtures/contracts/errors-list.json`
 - Production command coverage confirming `shaula errors list --json` matches the
   fixture semantically and its compact canonical error array byte-for-byte after
   excluding the timestamp envelope
@@ -234,9 +234,8 @@ Deterministic failure token for non-ready environment:
   portal-fallback mutation helpers, including malformed decision rejection
 - Borrowed environment/compositor labels, immutable backend labels, no result
   allocation or cleanup, and no mutable global state
-- Mixed production integration through capture dispatch/lifecycle/guards/backend,
-  preflight, capabilities output, and doctor using direct C headers and
-  caller-local fixed-layout conversion across independent `@cImport` namespaces
+- Production integration through capture dispatch/lifecycle/guards/backend,
+  preflight, capabilities output, and doctor using direct C headers
 
 ### Preflight probe contract (`tests/unit/preflight_probe_test.c`)
 
@@ -259,12 +258,10 @@ Deterministic failure token for non-ready environment:
 - Caller-supplied Unix timestamp behavior, including timestamp-range failure with
   no partial JSON or stale exit code
 - Borrowed environment and warning inputs plus no process-global environment or
-  clock access inside the C boundary
-- Production integration through `src/main.c` using `preflight/probe.h` directly;
-  Zig retains only flag dispatch, environment adaptation, clock acquisition,
-  stdout writing, and return of the C-provided exit code
-- Repository-wide maintained imports and build references to the retired Zig
-  preflight module are zero
+  clock access inside the preflight module
+- Production integration through `src/main.c` using `preflight/probe.h`
+  directly, including environment adaptation, clock acquisition, stdout, and
+  the returned exit code
 
 ### Focused-output contract (`tests/unit/compositor_focused_output_test.c`)
 
@@ -428,7 +425,7 @@ Deterministic failure token for non-ready environment:
 - Production integration through the shared text adapter, replacement
   environments, command-specific exit mapping, and binary stdin behavior
 
-### Unit / Contracts / Mocks (`scripts/qa/run-unit-tests.sh`)
+### Unit / Contracts / Mocks (`./dev qa`)
 
 - Preflight and capabilities envelope schema checks
 - Error taxonomy and exit-code mapping checks

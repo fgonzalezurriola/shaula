@@ -8,27 +8,23 @@ history; this document records current behavior and ownership.
 
 - v0.1.5 is the latest released baseline. v0.1.6 remains the image composition
   and expandable canvas release described in `docs/plan-v0.1.6.md`.
-- The Zig-to-C migration is cut over. Production, tests, QA, packaging, and CI
-  use Meson and C; the repository has no maintained Zig source or Zig build
-  metadata.
-- The port specification, ADR, baseline, and migration matrix remain as
-  historical records. Active architecture, testing, release, packaging, and
-  contributor documentation describe Meson and C as the only maintained path.
+- Production, tests, QA, packaging, and CI use Meson and C. Historical migration
+  scaffolding has been removed; ADR-0002 remains the decision record.
 - Interactive Wayland/Niri validation is still required whenever capture,
   overlay, clipboard, GTK, or compositor behavior changes.
 
 ## Build and install ownership
 
 - `meson.build` is the sole production build definition.
-- `./dev build`, `./dev check`, `./dev release`, `./dev port-check`, and
-  `./dev port-check-asan` are the supported developer entry points.
+- `./dev build`, `./dev check`, `./dev release`, `./dev strict-check`, and
+  `./dev sanitize-check` are the supported developer entry points.
 - Meson builds and installs six executables: `shaula`, `shaula-overlay`,
   `shaula-preview`, `shaula-settings`, `shaula-crop-image`, and
   `shaula-portal-screenshot`.
 - The install also includes the hicolor icon tree and the Noctalia integration.
 - `./dev dev-install --yes` stages the Meson install, makes a local release
   archive, invokes `scripts/install.sh`, and reloads Noctalia when applicable.
-- GitHub release and C-port workflows build, test, stage, and inspect the Meson
+- GitHub release and C-build workflows build, test, stage, and inspect the Meson
   payload. AUR source packaging uses Meson/Ninja. JSON-GLib is the maintained
   runtime/build dependency for normalized Niri Explore inventory.
 
@@ -45,9 +41,10 @@ history; this document records current behavior and ownership.
   `src/runtime/capture_state.{c,h}`.
 - Capture session ownership is lifecycle-scoped: every early outcome releases
   automatically, while the success path explicitly releases before Preview.
-- `src/config/config.c` owns defaults, the supported TOML subset, config path
-  resolution, validation, comment/layout-preserving field updates, timestamped
-  backup, and atomic save. Canonical serialization is used for new files.
+- `src/config/config.c` owns defaults, the ordered field schema, the supported
+  TOML subset, config path resolution, validation, canonical serialization,
+  comment/layout-preserving updates, timestamped backup, and atomic save. The
+  parser, serializer, and patcher share the same section/key schema.
 - `src/config/niri_managed.c` owns managed Niri preview/keybind path resolution,
   marker validation, preservation, backups, atomic replacement, removal, and
   conflict scanning; `src/commands/config_command*.c` owns rendering and public
@@ -78,6 +75,9 @@ history; this document records current behavior and ownership.
   nudging, semantic cursors, and release confirmation. `overlay_selection.c`
   remains its bounded geometry implementation; GTK callbacks only adapt input
   and render the session view.
+- `src/overlay/overlay_protocol.{c,h}` owns typed helper launch environment and
+  outcome JSON. Overlay emits through it and Capture rejects malformed payloads
+  through the same parser as `ERR_OVERLAY_PROTOCOL_INVALID`.
 - `src/preview/preview_edit_session.{c,h}` owns annotation queries, edit
   begin/finish policy, selection clearing, undo/redo snapshots, gesture history,
   and operation cancellation. Annotation variant rules and ADR-0001 Image
@@ -87,6 +87,9 @@ history; this document records current behavior and ownership.
   It derives UI defaults from `ShaulaConfig` and owns public config JSON,
   `config save` flag mapping, and the Settings save argv. `settings_process.c`
   owns process execution only.
+- `src/settings/settings_niri.{c,h}` owns typed Niri keybind status loading and
+  install/remove argv. GTK Settings only renders that state and forwards user
+  intent.
 - Preview Text drafts live in `preview_canvas.c` (`text_entry` +
   `SHAULA_OPERATION_TEXT`). Committed Text can be reopened for string editing
   via a no-drag second click when singly selected, or by clicking it with the
@@ -145,7 +148,7 @@ history; this document records current behavior and ownership.
 
 ## Verification
 
-`./dev check` also runs the non-intrusive top-level port command compatibility
+`./dev check` also runs the non-intrusive top-level command compatibility
 fixture covering capture selection, config preservation, clipboard/history,
 Explore inventory, notification grammar, and overlay error details.
 The host-sensitive `contract` suite remains local QA and is excluded from the
@@ -167,8 +170,8 @@ The fast non-intrusive product matrix is:
 Strict compiler and sanitizer lanes are:
 
 ```bash
-./dev port-check
-./dev port-check-asan
+./dev strict-check
+./dev sanitize-check
 ```
 
 For interactive overlay behavior, the user validates:

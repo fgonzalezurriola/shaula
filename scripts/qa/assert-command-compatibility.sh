@@ -166,4 +166,4 @@ printf '%s\n' "${overlay_json}" | jq -e '
   .error.details.mode == "area"
 ' >/dev/null
 
-echo "ok port_command_compatibility"
+echo "ok command_compatibility"

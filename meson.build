@@ -21,8 +21,8 @@ shaula_warning_args = cc.get_supported_arguments(
 )
 add_project_arguments(shaula_warning_args, language: 'c')
 
-# Existing GTK helpers predate the port's strict leaf-module warning policy.
-# Keep their historical warning surface while Meson assumes build ownership.
+# Existing GTK helpers retain their historical warning surface while strict
+# warnings remain enabled for the smaller runtime modules.
 shaula_existing_helper_warning_args = [
   '-Wno-deprecated-declarations',
   '-Wno-pedantic',
@@ -89,15 +89,13 @@ install_subdir(
   install_dir: get_option('datadir') / 'shaula' / 'integrations' / 'noctalia',
 )
 
-if get_option('port_tests')
-  subdir('tests/unit')
-  subdir('scripts/qa')
-endif
+subdir('tests/unit')
+subdir('scripts/qa')
 
 summary(
   {
-    'Production helpers': 'Meson',
-    'C port tests': get_option('port_tests'),
+    'Build system': 'Meson',
+    'Tests': true,
     'GLib': glib_dep.version(),
     'GIO': gio_dep.version(),
     'GTK': gtk_dep.version(),
@@ -107,6 +105,6 @@ summary(
     'Pango/Cairo': pango_cairo_dep.version(),
     'GTK4 layer shell': layer_shell_dep.version(),
   },
-  section: 'Shaula port foundation',
+  section: 'Shaula',
   bool_yn: true,
 )

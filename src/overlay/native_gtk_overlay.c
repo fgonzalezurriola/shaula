@@ -2,6 +2,7 @@
 
 #include "overlay_selection.h"
 #include "overlay_selection_session.h"
+#include "overlay_protocol.h"
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gtk4-layer-shell.h>
 #include <stdio.h>
@@ -63,6 +64,7 @@ typedef struct {
   int background_surface_height;
   ShaulaPoint output_origin;
   ShaulaOverlaySelectionSession *selection_session;
+  ShaulaOverlayLaunch launch;
   ShaulaOverlaySelectionView selection_view;
   gboolean has_toolbar;
   ShaulaInteractionMode interaction_mode;
@@ -93,6 +95,26 @@ static void reposition_toolbar_widget(void);
 static void update_aspect_label(void);
 static void prefer_fast_overlay_renderer(void);
 static void setup_overlay_window(void);
+static void clear_background_surface(void);
+
+static void emit_overlay_error(const char *message) {
+  ShaulaOverlayOutcome outcome;
+  shaula_overlay_outcome_init(&outcome);
+  shaula_overlay_outcome_set_error(&outcome, "ERR_OVERLAY_UNAVAILABLE",
+                                   message);
+  g_autofree char *json = shaula_overlay_outcome_json_new(&outcome);
+  printf("%s\n", json);
+  fflush(stdout);
+  shaula_overlay_outcome_clear(&outcome);
+}
+
+static void clear_overlay_state(void) {
+  clear_background_surface();
+  g_clear_object(&state.background);
+  g_clear_pointer(&state.selection_session,
+                  shaula_overlay_selection_session_free);
+  shaula_overlay_launch_clear(&state.launch);
+}
 
 static gboolean capture_on_release(void) {
   return state.interaction_mode == INTERACTION_QUICK;
@@ -556,30 +578,29 @@ static void confirm_with_action(const char *action) {
   ShaulaRect selection = state.selection_view.selection;
   const char *aspect =
       state.selection_view.has_aspect ? state.aspect_output_label : "Free";
-  const char *output_name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
   ShaulaPoint bounds = initial_surface_size();
-  printf("{\"status\":\"ok\",\"action\":\"%s\",\"aspect\":\"%s\","
-         "\"geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
-         "\"local_geometry\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
-         "\"output\":{\"name\":",
-         action, aspect, selection.x + state.output_origin.x,
-         selection.y + state.output_origin.y, selection.width,
-         selection.height, selection.x, selection.y, selection.width,
-         selection.height);
-  if (output_name != NULL && output_name[0] != '\0') {
-    putchar('"');
-    for (const char *p = output_name; *p != '\0'; p += 1) {
-      if (*p == '"' || *p == '\\')
-        putchar('\\');
-      putchar(*p);
-    }
-    putchar('"');
-  } else {
-    printf("null");
-  }
-  printf(",\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
-         "\"error\":null}\n",
-         state.output_origin.x, state.output_origin.y, bounds.x, bounds.y);
+  ShaulaOverlayAction outcome_action = SHAULA_OVERLAY_ACTION_CAPTURE;
+  if (g_str_equal(action, "copy"))
+    outcome_action = SHAULA_OVERLAY_ACTION_COPY;
+  else if (g_str_equal(action, "save"))
+    outcome_action = SHAULA_OVERLAY_ACTION_SAVE;
+  ShaulaOverlayOutcome outcome;
+  shaula_overlay_outcome_init(&outcome);
+  shaula_overlay_outcome_set_success(
+      &outcome, outcome_action, aspect,
+      (ShaulaRect){.x = selection.x + state.output_origin.x,
+                   .y = selection.y + state.output_origin.y,
+                   .width = selection.width,
+                   .height = selection.height},
+      selection,
+      (ShaulaRect){.x = state.output_origin.x,
+                   .y = state.output_origin.y,
+                   .width = bounds.x,
+                   .height = bounds.y},
+      state.launch.output_name);
+  g_autofree char *json = shaula_overlay_outcome_json_new(&outcome);
+  printf("%s\n", json);
+  shaula_overlay_outcome_clear(&outcome);
   fflush(stdout);
   if (state.main_loop != NULL)
     g_main_loop_quit(state.main_loop);
@@ -592,17 +613,21 @@ static void copy_now(void) { confirm_with_action("copy"); }
 static void save_now(void) { confirm_with_action("save"); }
 
 static void cancel(void) {
+  ShaulaOverlayOutcome outcome;
+  shaula_overlay_outcome_init(&outcome);
   if (state.selection_view.confirmable) {
     ShaulaRect selection = state.selection_view.selection;
-    printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":{\"x\":%"
-           "d,\"y\":%d,\"width\":%d,\"height\":%d},\"error\":null}\n",
-           selection.x + state.output_origin.x,
-           selection.y + state.output_origin.y, selection.width,
-           selection.height);
+    ShaulaRect global = {.x = selection.x + state.output_origin.x,
+                         .y = selection.y + state.output_origin.y,
+                         .width = selection.width,
+                         .height = selection.height};
+    shaula_overlay_outcome_set_cancel(&outcome, &global);
   } else {
-    printf("{\"status\":\"cancel\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":null}\n");
+    shaula_overlay_outcome_set_cancel(&outcome, NULL);
   }
+  g_autofree char *json = shaula_overlay_outcome_json_new(&outcome);
+  printf("%s\n", json);
+  shaula_overlay_outcome_clear(&outcome);
   fflush(stdout);
   if (state.main_loop != NULL)
     g_main_loop_quit(state.main_loop);
@@ -766,24 +791,17 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
 }
 
 static gboolean load_aspect(void) {
-  const char *raw = getenv("SHAULA_OVERLAY_ASPECT");
   state.aspect_choice = ASPECT_FREE;
   state.aspect_output_label[0] = '\0';
-  if (raw == NULL || raw[0] == '\0') {
+  if (!state.launch.has_aspect) {
     (void)shaula_overlay_selection_session_set_aspect(
         state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
     sync_selection_view();
     return FALSE;
   }
 
-  int w = 0;
-  int h = 0;
-  if (sscanf(raw, "%d:%d", &w, &h) != 2 || w <= 0 || h <= 0) {
-    (void)shaula_overlay_selection_session_set_aspect(
-        state.selection_session, FALSE, (ShaulaAspect){0}, TRUE);
-    sync_selection_view();
-    return FALSE;
-  }
+  int w = state.launch.aspect_width;
+  int h = state.launch.aspect_height;
 
   ShaulaAspect aspect = {.width = w, .height = h};
   (void)shaula_overlay_selection_session_set_aspect(
@@ -801,8 +819,7 @@ static gboolean load_aspect(void) {
 }
 
 static void load_interaction_mode(void) {
-  const char *raw = getenv("SHAULA_OVERLAY_INTERACTION_MODE");
-  if (raw != NULL && strcmp(raw, "area") == 0) {
+  if (state.launch.interaction == SHAULA_OVERLAY_INTERACTION_AREA) {
     state.interaction_mode = INTERACTION_AREA;
   } else {
     state.interaction_mode = INTERACTION_QUICK;
@@ -810,38 +827,28 @@ static void load_interaction_mode(void) {
 }
 
 static void load_background(void) {
-  const char *path = getenv("SHAULA_OVERLAY_BACKGROUND_PATH");
+  const char *path = state.launch.background_path;
   if (path == NULL || path[0] == '\0')
     return;
   state.background = gdk_pixbuf_new_from_file(path, NULL);
 }
 
 static void load_initial_geometry(void) {
-  const char *raw = getenv("SHAULA_OVERLAY_INITIAL_GEOMETRY");
-  if (raw == NULL || raw[0] == '\0')
+  if (!state.launch.has_initial_geometry)
     return;
-
-  int x = 0;
-  int y = 0;
-  int width = 0;
-  int height = 0;
-  if (sscanf(raw, "%d,%d,%d,%d", &x, &y, &width, &height) != 4 || width <= 0 ||
-      height <= 0) {
-    return;
-  }
+  ShaulaRect initial = state.launch.initial_geometry;
 
   ShaulaRect rect;
   ShaulaPoint bounds = initial_surface_size();
-  const char *legacy = getenv("SHAULA_OVERLAY_INITIAL_GEOMETRY_LEGACY");
-  if (legacy != NULL && strcmp(legacy, "1") == 0) {
-    if (x < 0 || y < 0 || width > bounds.x || height > bounds.y ||
-        x > bounds.x - width || y > bounds.y - height) {
+  if (state.launch.initial_geometry_legacy) {
+    if (initial.x < 0 || initial.y < 0 || initial.width > bounds.x ||
+        initial.height > bounds.y || initial.x > bounds.x - initial.width ||
+        initial.y > bounds.y - initial.height) {
       return;
     }
   }
   if (!clamp_selection_preserve_size(
-          (ShaulaRect){.x = x, .y = y, .width = width, .height = height},
-          bounds, &rect)) {
+          initial, bounds, &rect)) {
     return;
   }
 
@@ -884,7 +891,7 @@ static void ensure_default_area_selection(ShaulaPoint bounds) {
 }
 
 static GdkMonitor *monitor_for_output(void) {
-  const char *name = getenv("SHAULA_OVERLAY_OUTPUT_NAME");
+  const char *name = state.launch.output_name;
   if (name == NULL || name[0] == '\0')
     return NULL;
   GdkDisplay *display = gdk_display_get_default();
@@ -1143,10 +1150,7 @@ static void setup_overlay_window(void) {
 
 int shaula_native_gtk_overlay_run(void) {
   if (getenv("SHAULA_OVERLAY_HELPER_FORCE_UNAVAILABLE") != NULL) {
-    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":"
-           "\"forced unavailable\"}}\n");
-    fflush(stdout);
+    emit_overlay_error("forced unavailable");
     return 36;
   }
   if (getenv("SHAULA_OVERLAY_HELPER_FORCE_TIMEOUT") != NULL) {
@@ -1161,26 +1165,24 @@ int shaula_native_gtk_overlay_run(void) {
       fflush(stdout);
       return 0;
     }
-    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"gtk4-"
-           "layer-shell is not supported by this compositor\"}}\n");
-    fflush(stdout);
+    emit_overlay_error(
+        "gtk4-layer-shell is not supported by this compositor");
     return 36;
   }
 
   prefer_fast_overlay_renderer();
   gtk_init();
   memset(&state, 0, sizeof(state));
+  shaula_overlay_launch_init(&state.launch);
+  shaula_overlay_launch_load_environment(&state.launch);
   state.toolbar = (ShaulaPoint){.x = PADDING, .y = PADDING};
   state.has_toolbar = TRUE;
   state.cursor_shape = SHAULA_OVERLAY_CURSOR_DEFAULT;
   state.selection_session =
       shaula_overlay_selection_session_new(initial_surface_size());
   if (state.selection_session == NULL) {
-    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":"
-           "\"overlay selection session could not be created\"}}\n");
-    fflush(stdout);
+    emit_overlay_error("overlay selection session could not be created");
+    clear_overlay_state();
     return 36;
   }
   sync_selection_view();
@@ -1190,38 +1192,23 @@ int shaula_native_gtk_overlay_run(void) {
   load_background();
 
   if (!gtk_layer_is_supported()) {
-    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"gtk4-"
-           "layer-shell is not supported by this compositor\"}}\n");
-    fflush(stdout);
-    if (state.background != NULL)
-      g_object_unref(state.background);
-    shaula_overlay_selection_session_free(state.selection_session);
-    state.selection_session = NULL;
+    emit_overlay_error(
+        "gtk4-layer-shell is not supported by this compositor");
+    clear_overlay_state();
     return 36;
   }
 
   state.main_loop = g_main_loop_new(NULL, FALSE);
   if (state.main_loop == NULL) {
-    printf("{\"status\":\"error\",\"action\":\"cancel\",\"geometry\":null,"
-           "\"error\":{\"code\":\"ERR_OVERLAY_UNAVAILABLE\",\"message\":\"gtk "
-           "main loop could not be created\"}}\n");
-    fflush(stdout);
-    if (state.background != NULL)
-      g_object_unref(state.background);
-    shaula_overlay_selection_session_free(state.selection_session);
-    state.selection_session = NULL;
+    emit_overlay_error("gtk main loop could not be created");
+    clear_overlay_state();
     return 36;
   }
   setup_overlay_window();
   g_main_loop_run(state.main_loop);
   g_main_loop_unref(state.main_loop);
   state.main_loop = NULL;
-  clear_background_surface();
-  if (state.background != NULL)
-    g_object_unref(state.background);
-  shaula_overlay_selection_session_free(state.selection_session);
-  state.selection_session = NULL;
+  clear_overlay_state();
   return 0;
 }
 

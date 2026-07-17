@@ -197,8 +197,8 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 - Taxonomy lookup is explicit-length and byte-exact. It does not trim, fold case,
   accept prefixes/suffixes, normalize Unicode, or truncate at embedded NUL.
 - Static taxonomy records and class/action tokens are borrowed immutable
-  process-lifetime literals. Failure-class and recovery-action values cross the
-  Zig/C boundary as asserted 32-bit integers.
+  process-lifetime literals. Failure-class and recovery-action values use
+  asserted 32-bit integers.
 - `ERR_PREVIEW_RESULT_INVALID` is emitted by Preview service but is intentionally
   absent from the current compatibility fixture, so it preserves the existing
   unknown fallback and exit code `99`. `ERR_CAPABILITIES_PROBE_FAILED` remains a
@@ -530,9 +530,9 @@ focused output. It must not probe compositor/backend state again.
   unpaired surrogates, malformed numbers, wrong root types, and trailing input
   invalidate the probe. Escaped NUL and valid surrogate pairs are decoded into
   the explicit-length output exactly.
-- Probe-process and parser allocation failures remain advisory absence, matching
-  the former best-effort Zig boundary. Allocation of the final selected name is
-  the only out-of-memory status propagated to a caller.
+- Probe-process and parser allocation failures remain advisory absence.
+  Allocation of the final selected name is the only out-of-memory status
+  propagated to a caller.
 - A present result is an independent GLib-owned byte buffer with authoritative
   length and trailing-NUL storage. It may contain an embedded NUL and must be
   released through `shaula_focused_output_result_clear()`. Replacement and
@@ -598,8 +598,7 @@ focused output. It must not probe compositor/backend state again.
 - Every C JSON input is an explicit `data + length` span. NULL with zero length
   means an empty byte string; NULL with nonzero length is invalid. Arbitrary
   bytes are never silently interpreted as NUL-terminated text.
-- JSON escaping is byte-oriented and preserves the previous default Zig
-  stringifier behavior. Quote and backslash are escaped; slash is unchanged;
+- JSON escaping is byte-oriented. Quote and backslash are escaped; slash is unchanged;
   backspace, form feed, tab, carriage return, and newline use short escapes;
   every other byte `0x00..0x1f` uses lowercase `\\u00xx`; and every other byte
   is copied unchanged. Valid UTF-8, invalid UTF-8, and non-ASCII bytes therefore
@@ -607,8 +606,7 @@ focused output. It must not probe compositor/backend state again.
 - Nullable strings preserve absence as JSON `null` and a present zero-length
   span as JSON `""`; callers must not collapse those states.
 - Timestamp formatting consumes caller-supplied Unix seconds and emits exactly
-  `YYYY-MM-DDTHH:MM:SSZ`. Callers still obtain the clock through their existing
-  `std.Io` boundary before crossing the ABI, preserving test-clock behavior.
+  `YYYY-MM-DDTHH:MM:SSZ`, preserving deterministic test-clock behavior.
 - Successful C builders return GLib-owned length-bearing bytes with a trailing
   NUL for convenience. The authoritative length may include escaped source NULs;
   callers clear outputs with `shaula_json_owned_bytes_clear`. Repeated clear and
@@ -822,7 +820,7 @@ focused output. It must not probe compositor/backend state again.
   helper remains a separate C boundary.
 - `preview/preview_geometry.{c,h}` owns Preview geometry and color conversion.
 - `preview/preview_image_io.{c,h}` and `preview/preview_clipboard.{c,h}` own
-  Preview image and clipboard runtime calls. The clipboard C port intentionally
+  Preview image and clipboard runtime calls. The clipboard implementation
   replaces shell-mediated text publication with exact argv/stdin and suppresses
   child stdout so nested `--json` output cannot escape the helper boundary.
 - `preview/preview_notify.{c,h}` owns best-effort Preview notification argv,

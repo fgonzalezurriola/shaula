@@ -3,7 +3,6 @@ name: C build
 on:
   push:
     branches:
-      - port
       - master
   pull_request:
 
@@ -61,14 +60,14 @@ jobs:
           sudo meson install -C /tmp/gtk4-layer-shell/build
           sudo ldconfig
 
-      - name: Configure C build
+      - name: Configure build
         env:
           CC: ${{ matrix.compiler }}
-          SHAULA_C_PORT_MODE: ${{ matrix.mode }}
+          SHAULA_CI_MODE: ${{ matrix.mode }}
         run: |
           set -euo pipefail
           args=(-Dwerror=true)
-          if [ "${SHAULA_C_PORT_MODE}" = "asan-ubsan" ]; then
+          if [ "${SHAULA_CI_MODE}" = "asan-ubsan" ]; then
             lundef=true
             if [ "${CC}" = "clang" ]; then
               lundef=false
@@ -78,19 +77,19 @@ jobs:
               -Db_lundef="${lundef}"
             )
           fi
-          meson setup build-c-port "${args[@]}"
+          meson setup build-ci "${args[@]}"
 
-      - name: Compile C build
-        run: meson compile -C build-c-port
+      - name: Compile
+        run: meson compile -C build-ci
 
-      - name: Run C tests
+      - name: Run tests
         # Desktop contract fixtures depend on simulated Niri/Wayland state and
         # belong to local QA rather than the headless GitHub runner.
-        run: meson test -C build-c-port --print-errorlogs --no-suite contract
+        run: meson test -C build-ci --print-errorlogs --no-suite contract
 
       - name: Verify install payload
         run: |
-          DESTDIR="${PWD}/build-c-port/stage" meson install -C build-c-port
+          DESTDIR="${PWD}/build-ci/stage" meson install -C build-ci
           for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-crop-image shaula-portal-screenshot; do
-            test -x "build-c-port/stage/usr/local/bin/${binary}"
+            test -x "build-ci/stage/usr/local/bin/${binary}"
           done

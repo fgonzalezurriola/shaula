@@ -3,7 +3,8 @@
 - Status: Accepted and implemented
 - Date: 2026-07-10
 - Decision owners: Shaula maintainers
-- Detailed migration contract: [`spec/zig-to-c-port.md`](../../spec/zig-to-c-port.md)
+- Active C implementation contract:
+  [`spec/c-implementation.md`](../../spec/c-implementation.md)
 
 ## Context
 
@@ -42,8 +43,8 @@ The port will be incremental and contract-preserving:
 - the final repository will not require Zig to build, test, install, package, or
   release Shaula.
 
-The normative migration phases and memory-management rules live in
-`spec/zig-to-c-port.md`.
+The completed migration sequence remains in Git history. Active ownership,
+interface, and verification rules live in `spec/c-implementation.md`.
 
 ## Consequences
 

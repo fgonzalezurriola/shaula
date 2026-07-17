@@ -12,11 +12,25 @@ shaula_overlay_selection_dep = declare_dependency(
   dependencies: [glib_dep, math_dep],
 )
 
+shaula_overlay_protocol_c = static_library(
+  'shaula-overlay-protocol-c',
+  'overlay_protocol.c',
+  include_directories: shaula_overlay_include,
+  dependencies: [glib_dep, json_glib_dep],
+  install: false,
+)
+
+shaula_overlay_protocol_dep = declare_dependency(
+  link_with: shaula_overlay_protocol_c,
+  include_directories: shaula_overlay_include,
+  dependencies: [glib_dep, json_glib_dep],
+)
+
 executable(
   'shaula-overlay',
   'native_gtk_overlay.c',
   dependencies: [gtk_dep, layer_shell_dep, math_dep,
-                 shaula_overlay_selection_dep],
+                 shaula_overlay_selection_dep, shaula_overlay_protocol_dep],
   c_args: [
     '-DSHAULA_OVERLAY_STANDALONE=1',
     '-Wno-strict-prototypes',

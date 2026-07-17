@@ -8,13 +8,13 @@ shaula_fake_runtime_capture_helper = executable(
 )
 
 test(
-  'port-command-compatibility',
+  'command-compatibility',
   qa_bash_program,
   args: [
-    files('assert-port-command-compatibility.sh'),
+    files('assert-command-compatibility.sh'),
     shaula_exe,
     shaula_fake_runtime_capture_helper,
   ],
-  suite: ['port', 'contract'],
+  suite: ['contract'],
   timeout: 60,
 )

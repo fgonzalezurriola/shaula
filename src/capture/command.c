@@ -5,13 +5,13 @@
 #include "compositor/focused_output.h"
 #include "config/config.h"
 #include "errors/taxonomy.h"
+#include "overlay/overlay_protocol.h"
 #include "preview/preview_result.h"
 #include "runtime/capture_state.h"
 #include "runtime/helper_resolution.h"
 #include "runtime/paths.h"
 #include "runtime/process_exec.h"
 
-#include <errno.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gio/gio.h>
 #include <glib.h>
@@ -437,87 +437,6 @@ static gboolean crop_frozen_source(const FrozenSource *source,
          exit_code == 0;
 }
 
-static gboolean json_integer_after(const char *start, const char *key,
-                                   gint64 *out) {
-  const char *found = strstr(start, key);
-  if (found == NULL)
-    return FALSE;
-  found = strchr(found, ':');
-  if (found == NULL)
-    return FALSE;
-  found++;
-  while (g_ascii_isspace(*found))
-    found++;
-  errno = 0;
-  char *end = NULL;
-  gint64 value = g_ascii_strtoll(found, &end, 10);
-  if (errno != 0 || end == found)
-    return FALSE;
-  *out = value;
-  return TRUE;
-}
-
-static gboolean parse_geometry(const char *payload, CaptureGeometry *geometry,
-                               CaptureGeometry *local_geometry,
-                               guint32 *surface_width,
-                               guint32 *surface_height, char **action) {
-  const char *start = strstr(payload, "\"geometry\"");
-  if (start == NULL || strstr(start, "null") == start + 11)
-    return FALSE;
-  gint64 x = 0;
-  gint64 y = 0;
-  gint64 width = 0;
-  gint64 height = 0;
-  if (!json_integer_after(start, "\"x\"", &x) ||
-      !json_integer_after(start, "\"y\"", &y) ||
-      !json_integer_after(start, "\"width\"", &width) ||
-      !json_integer_after(start, "\"height\"", &height) || width <= 0 ||
-      height <= 0 || x < G_MININT32 || x > G_MAXINT32 || y < G_MININT32 ||
-      y > G_MAXINT32 || width > G_MAXUINT32 || height > G_MAXUINT32)
-    return FALSE;
-  geometry->x = (gint32)x;
-  geometry->y = (gint32)y;
-  geometry->width = (guint32)width;
-  geometry->height = (guint32)height;
-  *local_geometry = *geometry;
-  *surface_width = geometry->width;
-  *surface_height = geometry->height;
-  const char *local_start = strstr(payload, "\"local_geometry\"");
-  const char *output_start = strstr(payload, "\"output\"");
-  gint64 local_x = 0;
-  gint64 local_y = 0;
-  gint64 local_width = 0;
-  gint64 local_height = 0;
-  gint64 output_width = 0;
-  gint64 output_height = 0;
-  if (local_start != NULL && output_start != NULL &&
-      json_integer_after(local_start, "\"x\"", &local_x) &&
-      json_integer_after(local_start, "\"y\"", &local_y) &&
-      json_integer_after(local_start, "\"width\"", &local_width) &&
-      json_integer_after(local_start, "\"height\"", &local_height) &&
-      json_integer_after(output_start, "\"width\"", &output_width) &&
-      json_integer_after(output_start, "\"height\"", &output_height) &&
-      local_x >= 0 && local_y >= 0 && local_width > 0 && local_height > 0 &&
-      local_x <= G_MAXINT32 && local_y <= G_MAXINT32 &&
-      local_width <= G_MAXUINT32 && local_height <= G_MAXUINT32 &&
-      output_width > 0 && output_height > 0 && output_width <= G_MAXUINT32 &&
-      output_height <= G_MAXUINT32) {
-    *local_geometry = (CaptureGeometry){.x = (gint32)local_x,
-                                        .y = (gint32)local_y,
-                                        .width = (guint32)local_width,
-                                        .height = (guint32)local_height};
-    *surface_width = (guint32)output_width;
-    *surface_height = (guint32)output_height;
-  }
-  if (strstr(payload, "\"action\":\"copy\"") != NULL)
-    *action = g_strdup("copy");
-  else if (strstr(payload, "\"action\":\"save\"") != NULL)
-    *action = g_strdup("save");
-  else
-    *action = g_strdup("capture");
-  return TRUE;
-}
-
 /* Runs the interactive helper through its environment/stdout protocol. */
 static SelectionStatus select_area(const CaptureOptions *options,
                                    FrozenSource *frozen,
@@ -559,20 +478,12 @@ static SelectionStatus select_area(const CaptureOptions *options,
   if (helper == NULL)
     return SELECTION_UNAVAILABLE;
   g_auto(GStrv) envp = g_get_environ();
-  envp = g_environ_setenv(envp, "SHAULA_OVERLAY_INTERACTION_MODE",
-                          g_str_equal(options->mode, "quick") ? "quick" : "area",
-                          TRUE);
-  if (options->aspect != NULL)
-    envp = g_environ_setenv(envp, "SHAULA_OVERLAY_ASPECT", options->aspect, TRUE);
-  if (g_str_equal(options->region_mode, "frozen")) {
-    envp = g_environ_setenv(envp, "SHAULA_OVERLAY_REGION_MODE", "frozen", TRUE);
-    if (frozen->path != NULL)
-      envp = g_environ_setenv(envp, "SHAULA_OVERLAY_BACKGROUND_PATH",
-                              frozen->path, TRUE);
-  }
-  if (frozen->output_name != NULL)
-    envp = g_environ_setenv(envp, "SHAULA_OVERLAY_OUTPUT_NAME",
-                            frozen->output_name, TRUE);
+  envp = shaula_overlay_launch_environment_apply(
+      envp, g_str_equal(options->mode, "quick")
+                ? SHAULA_OVERLAY_INTERACTION_QUICK
+                : SHAULA_OVERLAY_INTERACTION_AREA,
+      options->aspect, g_str_equal(options->region_mode, "frozen"),
+      frozen->path, frozen->output_name);
   const char *arguments[] = {helper, NULL};
   g_autofree char *stdout_text = NULL;
   g_autofree char *stderr_text = NULL;
@@ -580,19 +491,46 @@ static SelectionStatus select_area(const CaptureOptions *options,
   if (shaula_process_run_sync((const char *const *)arguments,
                               (const char *const *)envp, &stdout_text,
                               &stderr_text, &exit_code) !=
-          SHAULA_PROCESS_STATUS_OK ||
-      exit_code != 0)
+      SHAULA_PROCESS_STATUS_OK)
     return SELECTION_UNAVAILABLE;
-  if (stdout_text == NULL || strstr(stdout_text, "\"status\":\"ok\"") == NULL) {
-    if (stdout_text != NULL &&
-        strstr(stdout_text, "\"status\":\"cancel\"") != NULL)
-      return SELECTION_CANCELLED;
+  ShaulaOverlayOutcome outcome;
+  shaula_overlay_outcome_init(&outcome);
+  if (!shaula_overlay_outcome_parse(stdout_text, &outcome))
+    return exit_code == 0 ? SELECTION_PROTOCOL_INVALID
+                          : SELECTION_UNAVAILABLE;
+  if (outcome.status == SHAULA_OVERLAY_OUTCOME_ERROR) {
+    shaula_overlay_outcome_clear(&outcome);
+    return SELECTION_UNAVAILABLE;
+  }
+  if (exit_code != 0) {
+    shaula_overlay_outcome_clear(&outcome);
     return SELECTION_PROTOCOL_INVALID;
   }
-  return parse_geometry(stdout_text, geometry, &frozen->local_geometry,
-                        &frozen->surface_width, &frozen->surface_height, action)
-             ? SELECTION_OK
-             : SELECTION_PROTOCOL_INVALID;
+  if (outcome.status == SHAULA_OVERLAY_OUTCOME_CANCEL) {
+    shaula_overlay_outcome_clear(&outcome);
+    return SELECTION_CANCELLED;
+  }
+  if (outcome.status != SHAULA_OVERLAY_OUTCOME_OK ||
+      !outcome.has_geometry || outcome.local_geometry.x < 0 ||
+      outcome.local_geometry.y < 0 || outcome.output_geometry.width <= 0 ||
+      outcome.output_geometry.height <= 0) {
+    shaula_overlay_outcome_clear(&outcome);
+    return SELECTION_PROTOCOL_INVALID;
+  }
+  *geometry = (CaptureGeometry){.x = outcome.geometry.x,
+                                .y = outcome.geometry.y,
+                                .width = (guint32)outcome.geometry.width,
+                                .height = (guint32)outcome.geometry.height};
+  frozen->local_geometry =
+      (CaptureGeometry){.x = outcome.local_geometry.x,
+                        .y = outcome.local_geometry.y,
+                        .width = (guint32)outcome.local_geometry.width,
+                        .height = (guint32)outcome.local_geometry.height};
+  frozen->surface_width = (guint32)outcome.output_geometry.width;
+  frozen->surface_height = (guint32)outcome.output_geometry.height;
+  *action = g_strdup(shaula_overlay_action_text(outcome.action));
+  shaula_overlay_outcome_clear(&outcome);
+  return SELECTION_OK;
 }
 
 static gboolean copy_png(const char *path) {

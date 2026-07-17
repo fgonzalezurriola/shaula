@@ -3,6 +3,7 @@
 #include <glib/gstdio.h>
 #include <string.h>
 #include "settings_config.h"
+#include "settings_niri.h"
 #include "settings_process.h"
 
 typedef struct {
@@ -44,10 +45,7 @@ typedef struct {
   gboolean config_exists;
   gboolean config_invalid;
   ShaulaSettingsConfig config;
-  gboolean niri_detected;
-  char *niri_config_path;
-  gboolean niri_shortcuts_installed;
-  gboolean niri_shortcuts_conflicts;
+  ShaulaSettingsNiriStatus niri;
   GtkWidget *niri_detected_label;
   GtkWidget *niri_config_path_label;
   GtkWidget *niri_shortcuts_status_label;
@@ -62,13 +60,6 @@ static AppState state;
 static const int SETTINGS_CONTROL_W = 132;
 static const int SETTINGS_SWITCH_W = 46;
 static const int SETTINGS_SWITCH_H = 26;
-
-static gboolean json_niri_changed(const char *json) {
-  const char *niri = strstr(json, "\"niri\":");
-  if (niri == NULL)
-    return FALSE;
-  return strstr(niri, "\"changed\":true") != NULL;
-}
 
 static void set_status(const char *text, gboolean is_error) {
   gtk_label_set_text(GTK_LABEL(state.status_label), text);
@@ -177,7 +168,13 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   state.config = next;
   state.config_exists = TRUE;
 
-  if (json_niri_changed(out))
+  gboolean niri_changed = FALSE;
+  ShaulaSettingsNiriResult niri_result =
+      shaula_settings_niri_rule_changed(out, &niri_changed);
+  if (niri_result != SHAULA_SETTINGS_NIRI_OK)
+    set_status("ERR_CONFIG_INVALID: saved, but the response was malformed.",
+               TRUE);
+  else if (niri_changed)
     set_status("Saved. Niri rule file changed. Reload Niri config with your "
                "normal workflow.",
                FALSE);
@@ -213,70 +210,22 @@ static void on_open_clicked(GtkButton *button, gpointer data) {
   g_free(err);
 }
 
-static const char *json_bool(const char *json, const char *key) {
-  char *needle = g_strdup_printf("\"%s\":", key);
-  const char *pos = strstr(json, needle);
-  g_free(needle);
-  if (pos == NULL)
-    return NULL;
-  pos += strlen(key) + 3;
-  if (strncmp(pos, "true", 4) == 0)
-    return "true";
-  if (strncmp(pos, "false", 5) == 0)
-    return "false";
-  return NULL;
-}
-
-static char *json_string(const char *json, const char *key) {
-  char *needle = g_strdup_printf("\"%s\":\"", key);
-  const char *pos = strstr(json, needle);
-  g_free(needle);
-  if (pos == NULL)
-    return NULL;
-  pos += strlen(key) + 4;
-  const char *end = strchr(pos, '"');
-  if (end == NULL)
-    return NULL;
-  return g_strndup(pos, end - pos);
-}
-
-static void refresh_niri_status(void) {
-  state.niri_detected = FALSE;
-  state.niri_shortcuts_installed = FALSE;
-  state.niri_shortcuts_conflicts = FALSE;
-  g_free(state.niri_config_path);
-  state.niri_config_path = NULL;
-
-  char *argv[] = {state.shaula_bin, "config", "niri-keybinds-status", "--json",
-                  NULL};
-  gchar *out = NULL;
-  gchar *err = NULL;
-  int exit_code = 1;
-  shaula_settings_run_command(argv, &out, &err, &exit_code);
-
-  if (exit_code == 0 && out != NULL) {
-    const char *detected = json_bool(out, "niri_detected");
-    state.niri_detected = detected != NULL && strcmp(detected, "true") == 0;
-
-    char *path = json_string(out, "config_path");
-    if (path != NULL)
-      state.niri_config_path = path;
-
-    const char *installed = json_bool(out, "installed");
-    state.niri_shortcuts_installed =
-        installed != NULL && strcmp(installed, "true") == 0;
-
-    state.niri_shortcuts_conflicts = strstr(out, "\"conflicts\":[") != NULL &&
-                                     strstr(out, "\"conflicts\":[]") == NULL;
+static gboolean refresh_niri_status(void) {
+  g_autofree char *error = NULL;
+  ShaulaSettingsNiriResult result =
+      shaula_settings_niri_load(state.shaula_bin, &state.niri, &error);
+  if (result != SHAULA_SETTINGS_NIRI_OK) {
+    shaula_settings_niri_status_clear(&state.niri);
+    set_status(error != NULL && error[0] != '\0'
+                   ? error
+                   : "ERR_CONFIG_INVALID: Niri status unavailable",
+               TRUE);
   }
-
-  g_free(out);
-  g_free(err);
 
   if (state.niri_detected_label != NULL) {
     gtk_label_set_text(GTK_LABEL(state.niri_detected_label),
-                       state.niri_detected ? "Detected" : "Not detected");
-    if (state.niri_detected)
+                       state.niri.detected ? "Detected" : "Not detected");
+    if (state.niri.detected)
       gtk_widget_remove_css_class(state.niri_detected_label, "error");
     else
       gtk_widget_add_css_class(state.niri_detected_label, "error");
@@ -284,20 +233,20 @@ static void refresh_niri_status(void) {
 
   if (state.niri_config_path_label != NULL) {
     gtk_label_set_text(GTK_LABEL(state.niri_config_path_label),
-                       state.niri_config_path != NULL ? state.niri_config_path
+                       state.niri.config_path != NULL ? state.niri.config_path
                                                       : "unknown");
   }
 
   if (state.niri_shortcuts_status_label != NULL) {
-    if (!state.niri_detected) {
+    if (!state.niri.detected) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
                          "Niri not detected");
       gtk_widget_remove_css_class(state.niri_shortcuts_status_label, "error");
-    } else if (state.niri_shortcuts_conflicts) {
+    } else if (state.niri.shortcuts_conflict) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
                          "Conflicts detected");
       gtk_widget_add_css_class(state.niri_shortcuts_status_label, "error");
-    } else if (state.niri_shortcuts_installed) {
+    } else if (state.niri.shortcuts_installed) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
                          "Installed");
       gtk_widget_remove_css_class(state.niri_shortcuts_status_label, "error");
@@ -309,13 +258,13 @@ static void refresh_niri_status(void) {
   }
 
   if (state.niri_shortcuts_detail_label != NULL) {
-    if (state.niri_shortcuts_installed) {
+    if (state.niri.shortcuts_installed) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
                          "Quick capture: Ctrl+Shift+1\n"
                          "Area capture: Ctrl+Shift+2\n"
                          "Fullscreen: Ctrl+Shift+3\n"
                          "All screens: Ctrl+Shift+4");
-    } else if (state.niri_shortcuts_conflicts) {
+    } else if (state.niri.shortcuts_conflict) {
       gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
                          "Existing CTRL+Shift+1/2/3/4 bindings found outside "
                          "Shaula block.");
@@ -324,15 +273,16 @@ static void refresh_niri_status(void) {
     }
   }
 
-  gboolean has_niri = state.niri_detected;
+  gboolean has_niri = state.niri.detected;
   if (state.niri_install_button != NULL)
     gtk_widget_set_sensitive(state.niri_install_button, has_niri);
   if (state.niri_remove_button != NULL)
     gtk_widget_set_sensitive(state.niri_remove_button,
-                             has_niri && state.niri_shortcuts_installed);
+                             has_niri && state.niri.shortcuts_installed);
   if (state.niri_open_config_button != NULL)
     gtk_widget_set_sensitive(state.niri_open_config_button,
-                             state.niri_config_path != NULL);
+                             state.niri.config_path != NULL);
+  return result == SHAULA_SETTINGS_NIRI_OK;
 }
 
 static void do_niri_install(gboolean force);
@@ -345,7 +295,7 @@ static void on_niri_install_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
 
-  if (state.niri_shortcuts_conflicts) {
+  if (state.niri.shortcuts_conflict) {
     GtkWidget *dialog = gtk_message_dialog_new(
         GTK_WINDOW(state.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
         GTK_BUTTONS_NONE,
@@ -368,34 +318,24 @@ static void on_niri_install_clicked(GtkButton *button, gpointer data) {
 }
 
 static void do_niri_install(gboolean force) {
-  char *argv[] = {state.shaula_bin,
-                  "config",
-                  "niri-keybinds-install",
-                  "--json",
-                  force ? "--force" : NULL,
-                  NULL};
-  gchar *out = NULL;
-  gchar *err = NULL;
-  int exit_code = 1;
-  shaula_settings_run_command(argv, &out, &err, &exit_code);
-
-  if (exit_code != 0) {
-    char *message =
-        g_strdup_printf("%s%s", out != NULL && *out != '\0' ? out : "",
-                        err != NULL && *err != '\0' ? err : "");
-    set_status(message != NULL && *message != '\0'
-                   ? message
-                   : "ERR: keybind install failed",
+  g_autofree char *error = NULL;
+  if (shaula_settings_niri_install(state.shaula_bin, force, &error) !=
+      SHAULA_SETTINGS_NIRI_OK) {
+    set_status(error != NULL && error[0] != '\0'
+                   ? error
+                   : "ERR_CONFIG_UNREADABLE: keybind install failed",
                TRUE);
-    g_free(message);
-    g_free(out);
-    g_free(err);
     return;
   }
 
-  g_free(out);
-  g_free(err);
-  refresh_niri_status();
+  if (!refresh_niri_status())
+    return;
+  if (!state.niri.shortcuts_installed) {
+    set_status("ERR_CONFIG_INVALID: install completed, but Niri status did not "
+               "confirm the shortcuts.",
+               TRUE);
+    return;
+  }
   set_status("Niri shortcuts installed. Niri should pick up config changes "
              "automatically; restart/reload Niri if they do not apply.",
              FALSE);
@@ -434,41 +374,35 @@ static void on_niri_remove_response(GtkDialog *dialog, int response,
   if (response != GTK_RESPONSE_ACCEPT)
     return;
 
-  char *argv[] = {state.shaula_bin, "config", "niri-keybinds-remove", "--json",
-                  NULL};
-  gchar *out = NULL;
-  gchar *err = NULL;
-  int exit_code = 1;
-  shaula_settings_run_command(argv, &out, &err, &exit_code);
-
-  if (exit_code != 0) {
-    char *message =
-        g_strdup_printf("%s%s", out != NULL && *out != '\0' ? out : "",
-                        err != NULL && *err != '\0' ? err : "");
-    set_status(message != NULL && *message != '\0'
-                   ? message
-                   : "ERR: keybind remove failed",
+  g_autofree char *error = NULL;
+  if (shaula_settings_niri_remove(state.shaula_bin, &error) !=
+      SHAULA_SETTINGS_NIRI_OK) {
+    set_status(error != NULL && error[0] != '\0'
+                   ? error
+                   : "ERR_CONFIG_UNREADABLE: keybind remove failed",
                TRUE);
-    g_free(message);
-    g_free(out);
-    g_free(err);
     return;
   }
 
-  g_free(out);
-  g_free(err);
-  refresh_niri_status();
+  if (!refresh_niri_status())
+    return;
+  if (state.niri.shortcuts_installed) {
+    set_status("ERR_CONFIG_INVALID: remove completed, but Niri status still "
+               "reports installed shortcuts.",
+               TRUE);
+    return;
+  }
   set_status("Shaula Niri shortcuts removed.", FALSE);
 }
 
 static void on_niri_open_config_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
-  if (state.niri_config_path == NULL) {
+  if (state.niri.config_path == NULL) {
     set_status("Niri config path not detected.", TRUE);
     return;
   }
-  char *argv[] = {"xdg-open", state.niri_config_path, NULL};
+  char *argv[] = {"xdg-open", state.niri.config_path, NULL};
   gchar *err = NULL;
   int exit_code = 1;
   shaula_settings_run_command(argv, NULL, &err, &exit_code);
@@ -1049,6 +983,7 @@ static void install_css(GtkApplication *app, gpointer data) {
 }
 
 int main(int argc, char **argv) {
+  shaula_settings_niri_status_init(&state.niri);
   state.shaula_bin =
       g_strdup(argc >= 2 && argv[1][0] != '\0' ? argv[1] : "shaula");
   GtkApplication *app =
@@ -1061,7 +996,7 @@ int main(int argc, char **argv) {
   g_object_unref(app);
   g_free(state.shaula_bin);
   g_free(state.config_path);
-  g_free(state.niri_config_path);
+  shaula_settings_niri_status_clear(&state.niri);
   shaula_settings_config_clear(&state.config);
   return rc > 255 ? 255 : rc;
 }
