@@ -83,6 +83,10 @@ history; this document records current behavior and ownership.
   and operation cancellation. Annotation variant rules and ADR-0001 Image
   ownership remain in `preview_annotations.c`; GTK files are edit-session
   adapters.
+- `preview_canvas.c` owns the post-commit selection policy for one-shot creation
+  tools. Rectangle stays selected after commit; Arrow and Line (sharing Arrow
+  storage with `has_head = FALSE`) now drop the selection like Pen, Highlight,
+  and Measure, leaving the canvas uncluttered for the next gesture.
 - `src/settings/settings_config.{c,h}` is the Settings configuration protocol.
   It derives UI defaults from `ShaulaConfig` and owns public config JSON,
   `config save` flag mapping, and the Settings save argv. `settings_process.c`

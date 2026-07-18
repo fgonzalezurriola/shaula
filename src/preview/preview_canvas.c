@@ -1495,7 +1495,6 @@ static void finish_shape_annotation(ShaulaPreviewState *state) {
 
   if (annotation != NULL) {
     gboolean keep_selected =
-        annotation->type == SHAULA_ANNOTATION_ARROW ||
         annotation->type == SHAULA_ANNOTATION_RECTANGLE;
 
     if (keep_selected) {
