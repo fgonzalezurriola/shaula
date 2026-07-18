@@ -20,6 +20,7 @@ shaula_commands_c = static_library(
   dependencies: [
     glib_dep,
     shaula_capabilities_runtime_dep,
+    shaula_clipboard_dep,
     shaula_cli_json_dep,
     shaula_compositor_runtime_dep,
     shaula_config_dep,
@@ -39,6 +40,7 @@ shaula_commands_dep = declare_dependency(
   dependencies: [
     glib_dep,
     shaula_capabilities_runtime_dep,
+    shaula_clipboard_dep,
     shaula_cli_json_dep,
     shaula_compositor_runtime_dep,
     shaula_config_dep,

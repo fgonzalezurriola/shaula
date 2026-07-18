@@ -1,15 +1,18 @@
-# Shaula v0.1.6 Plan
+# Original Shaula v0.1.6 Image Composition Plan
 
-> Status: **Active planning**
+> Status: **Superseded as a release-number plan**
 >
-> Schedule: **No fixed date** — release when the feature set is coherent,
-> validated, and comfortable for daily use
+> The image-composition design remains future product work, but v0.1.6 now ships
+> the Meson/C, universal Wayland, clipboard lifecycle, and dual-architecture
+> release work documented in `docs/release-v0.1.6.md`. This file is retained as
+> historical design input and must not be used as the v0.1.6 release checklist.
 >
-> Baseline: v0.1.5
+> Original baseline: v0.1.5
 
-## 1. Release Direction
+## 1. Original Release Direction
 
-v0.1.6 is the **image composition and expandable canvas release**.
+The original proposal made v0.1.6 the **image composition and expandable canvas
+release**.
 
 The release builds on the stable v0.1.5 capture and Preview workflow. Its main
 product goal is to let users combine screenshots or other images in one editable

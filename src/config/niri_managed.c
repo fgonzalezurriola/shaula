@@ -147,21 +147,19 @@ GPtrArray *niri_keybind_conflicts(const char *path) {
   return conflicts;
 }
 
-gboolean remove_managed_keybinds(const char *path_override,
-                                        gboolean dry_run,
-                                        ManagedBlockResult *result,
-                                        gboolean *invalid) {
+gboolean remove_managed_block(const char *path_override,
+                              const char *begin_marker,
+                              const char *end_marker, gboolean dry_run,
+                              ManagedBlockResult *result, gboolean *invalid) {
   *result = (ManagedBlockResult){0};
   *invalid = FALSE;
   result->path = niri_config_path(path_override);
-  if (result->path == NULL)
+  if (result->path == NULL || begin_marker == NULL || end_marker == NULL)
     return FALSE;
   g_autofree char *current = NULL;
   gsize length = 0;
   if (!g_file_get_contents(result->path, &current, &length, NULL))
     return FALSE;
-  const char *begin_marker = "// BEGIN SHAULA MANAGED KEYBINDS";
-  const char *end_marker = "// END SHAULA MANAGED KEYBINDS";
   guint begins = count_text(current, begin_marker);
   guint ends = count_text(current, end_marker);
   const char *begin = strstr(current, begin_marker);
@@ -196,5 +194,15 @@ gboolean remove_managed_keybinds(const char *path_override,
     return FALSE;
   }
   return TRUE;
+}
+
+gboolean remove_managed_keybinds(const char *path_override,
+                                 gboolean dry_run,
+                                 ManagedBlockResult *result,
+                                 gboolean *invalid) {
+  return remove_managed_block(path_override,
+                              "// BEGIN SHAULA MANAGED KEYBINDS",
+                              "// END SHAULA MANAGED KEYBINDS", dry_run,
+                              result, invalid);
 }
 

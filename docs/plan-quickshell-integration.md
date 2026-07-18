@@ -25,7 +25,7 @@ Expand Shaula's shell integration beyond the Noctalia-specific plugin to a **gen
 
 | Component | Path | Role |
 |-----------|------|------|
-| `manifest.json` | `integrations/noctalia/shaula/manifest.json` | Plugin identity (id `shaula`, v0.1.5, entryPoint `BarWidget.qml`) |
+| `manifest.json` | `integrations/noctalia/shaula/manifest.json` | Plugin identity (id `shaula`, v0.1.6, entryPoint `BarWidget.qml`) |
 | `BarWidget.qml` | `integrations/noctalia/shaula/BarWidget.qml` | QML bar widget: icon button → context menu → `Quickshell.execDetached(["sh","-lc","shaula capture ..."])` |
 | `noctalia-action-adapter.sh` | `integrations/noctalia/noctalia-action-adapter.sh` | Bash bridge: builds JSON action menu (8 actions), resolves action→shaula-argv, executes CLI, handles open targets |
 | `noctalia-plugin-poc.sh` | `integrations/noctalia/noctalia-plugin-poc.sh` | Outer CLI wrapper parsing `--menu`/`--action`/`--dry-run` |

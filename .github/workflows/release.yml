@@ -10,8 +10,125 @@ permissions:
   contents: read
 
 jobs:
-  publish-linux-x86_64:
-    name: Build and publish Linux x86_64 release
+  validate-release-identity:
+    name: Validate release identity
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Require exact tag and release notes
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          bash scripts/qa/assert-release-contract.sh "${PWD}" "" "${TAG_NAME}"
+
+  build-release:
+    name: Build Linux ${{ matrix.arch }} release
+    needs: validate-release-identity
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Enable AArch64 emulation
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build, test, and package
+        env:
+          ARCH: ${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --platform "${PLATFORM}" \
+            --env ARCH="${ARCH}" \
+            --volume "${PWD}:/work" \
+            --workdir /work \
+            ubuntu:24.04 \
+            bash -euxo pipefail -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                binutils \
+                build-essential \
+                ca-certificates \
+                dbus-daemon \
+                file \
+                git \
+                jq \
+                meson \
+                ninja-build \
+                pkg-config \
+                libgtk-4-dev \
+                libgdk-pixbuf-2.0-dev \
+                libjson-glib-dev \
+                libcairo2-dev \
+                libwayland-dev \
+                wayland-protocols
+
+              git clone --depth 1 --branch v1.3.0 \
+                https://github.com/wmww/gtk4-layer-shell.git \
+                /tmp/gtk4-layer-shell
+              meson setup /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell \
+                --prefix=/usr \
+                -Dexamples=false \
+                -Ddocs=false \
+                -Dtests=false \
+                -Dintrospection=false \
+                -Dvapi=false
+              meson compile -C /tmp/gtk4-layer-shell/build
+              meson install -C /tmp/gtk4-layer-shell/build
+              ldconfig
+
+              build_dir="build-release-${ARCH}"
+              output_dir="dist/${ARCH}"
+              rm -rf "${build_dir}" "${output_dir}"
+              meson setup "${build_dir}" \
+                --prefix=/usr \
+                --buildtype=release \
+                --strip \
+                -Db_lto=true \
+                -Dwerror=true
+              meson compile -C "${build_dir}"
+              meson test -C "${build_dir}" --print-errorlogs
+
+              mkdir -p "${output_dir}"
+              DESTDIR="${PWD}/${output_dir}/stage" \
+                meson install -C "${build_dir}"
+              archive="${PWD}/${output_dir}/shaula-linux-${ARCH}.tar.gz"
+              tar -C "${output_dir}/stage/usr" -czf "${archive}" bin share
+              bash scripts/qa/assert-release-archive.sh \
+                "${PWD}" "${archive}" "${ARCH}"
+            '
+
+      - name: Upload architecture archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: shaula-linux-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/shaula-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Linux release
+    needs: build-release
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -22,179 +139,48 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Install system dependencies
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: shaula-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Install validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            ca-certificates \
-            curl \
-            git \
-            gh \
-            jq \
-            meson \
-            ninja-build \
-            pkg-config \
-            libgtk-4-dev \
-            libgdk-pixbuf-2.0-dev \
-            libjson-glib-dev \
-            libcairo2-dev \
-            libwayland-dev \
-            wayland-protocols
+          sudo apt-get install -y --no-install-recommends binutils gh jq
 
-      - name: Install gtk4-layer-shell
+      - name: Build and verify checksums
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch v1.3.0 https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
-          meson setup /tmp/gtk4-layer-shell/build /tmp/gtk4-layer-shell \
-            --prefix=/usr \
-            -Dexamples=false \
-            -Ddocs=false \
-            -Dtests=false \
-            -Dintrospection=false \
-            -Dvapi=false
-          meson compile -C /tmp/gtk4-layer-shell/build
-          sudo meson install -C /tmp/gtk4-layer-shell/build
-          sudo ldconfig
-          pkg-config --exists gtk4-layer-shell-0
-
-      - name: Build release
-        run: |
-          meson setup build-release --prefix=/usr --buildtype=release --strip -Db_lto=true -Dwerror=true
-          meson compile -C build-release
-
-      - name: Run release checks
-        run: meson test -C build-release --print-errorlogs
-
-      - name: Package release assets
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-
-          DESTDIR="${PWD}/dist/stage" meson install -C build-release
-          test -x dist/stage/usr/bin/shaula
-          tar -C dist/stage/usr -czf dist/shaula-linux-x86_64.tar.gz bin share
-          tar -tzf dist/shaula-linux-x86_64.tar.gz > dist/TARCONTENTS
-
-          required_paths=(
-            "bin/shaula"
-            "bin/shaula-overlay"
-            "bin/shaula-preview"
-            "bin/shaula-crop-image"
-            "bin/shaula-portal-screenshot"
-            "bin/shaula-settings"
-            "share/icons/hicolor/index.theme"
-            "share/icons/hicolor/256x256/apps/shaula.png"
-            "share/icons/hicolor/512x512/apps/shaula.png"
-            "share/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
-            "share/icons/hicolor/scalable/actions/shaula-save-symbolic.svg"
-            "share/icons/hicolor/scalable/actions/shaula-spotlight-symbolic.svg"
-            "share/shaula/integrations/noctalia/shaula/manifest.json"
-            "share/shaula/integrations/noctalia/shaula/BarWidget.qml"
-            "share/shaula/integrations/noctalia/shaula/README.md"
-          )
-          for path in "${required_paths[@]}"; do
-            grep -Fxq "${path}" dist/TARCONTENTS || {
-              echo "missing release payload path: ${path}" >&2
-              exit 1
-            }
-          done
-
-          top_level="$(awk -F/ 'NF { print $1 }' dist/TARCONTENTS | sort -u | tr '\n' ' ')"
-          test "${top_level}" = "bin share "
-
           (
             cd dist
-            sha256sum shaula-linux-x86_64.tar.gz > SHA256SUMS
-            sha256sum -c SHA256SUMS
+            sha256sum \
+              shaula-linux-x86_64.tar.gz \
+              shaula-linux-aarch64.tar.gz \
+              > SHA256SUMS
           )
+          bash scripts/qa/assert-release-contract.sh \
+            "${PWD}" "${PWD}/dist" "${TAG_NAME}"
 
-      - name: Verify release install UX
+      - name: Verify AUR .SRCINFO regeneration
         run: |
           set -euo pipefail
-
-          tmp_dir="$(mktemp -d)"
-          trap 'rm -rf "${tmp_dir}"' EXIT
-
-          home_dir="${tmp_dir}/home"
-          xdg_bin="${tmp_dir}/bin"
-          xdg_data="${tmp_dir}/share"
-          xdg_config="${tmp_dir}/config"
-          fake_bin="${tmp_dir}/fake-bin"
-          cache_log="${tmp_dir}/desktop-cache.log"
-          mkdir -p \
-            "${home_dir}" \
-            "${xdg_bin}" \
-            "${xdg_data}" \
-            "${fake_bin}" \
-            "${xdg_config}/niri" \
-            "${xdg_config}/noctalia"
-
-          cat > "${fake_bin}/gtk-update-icon-cache" <<'EOF'
-          #!/bin/sh
-          printf 'gtk-update-icon-cache %s\n' "$*" >> "${SHAULA_TEST_CACHE_LOG}"
-          EOF
-          cat > "${fake_bin}/update-desktop-database" <<'EOF'
-          #!/bin/sh
-          printf 'update-desktop-database %s\n' "$*" >> "${SHAULA_TEST_CACHE_LOG}"
-          EOF
-          chmod +x \
-            "${fake_bin}/gtk-update-icon-cache" \
-            "${fake_bin}/update-desktop-database"
-
-          mkdir -p "${xdg_data}/icons/hicolor/scalable/apps"
-          printf '<svg/>\n' > "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
-
-          printf '// fake niri config for installer detection\n' > "${xdg_config}/niri/config.kdl"
-          printf '{"version":2,"states":{}}\n' > "${xdg_config}/noctalia/plugins.json"
-          printf '{"bar":{"widgets":{"left":[],"center":[],"right":[]}}}\n' > "${xdg_config}/noctalia/settings.json"
-
-          env \
-            HOME="${home_dir}" \
-            PATH="${fake_bin}:${PATH}" \
-            XDG_BIN_HOME="${xdg_bin}" \
-            XDG_DATA_HOME="${xdg_data}" \
-            XDG_CONFIG_HOME="${xdg_config}" \
-            SHAULA_TEST_CACHE_LOG="${cache_log}" \
-            SHAULA_RELEASE_ASSET_URL="file://${PWD}/dist/shaula-linux-x86_64.tar.gz" \
-            SHAULA_SHA256SUMS_URL="file://${PWD}/dist/SHA256SUMS" \
-            scripts/install.sh --yes
-
-          for binary in shaula shaula-overlay shaula-preview shaula-crop-image shaula-portal-screenshot shaula-settings; do
-            test -x "${xdg_bin}/${binary}"
-          done
-          test -f "${xdg_data}/applications/shaula.desktop"
-          test -f "${xdg_data}/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
-          test -f "${xdg_data}/icons/hicolor/256x256/apps/shaula.png"
-          test -f "${xdg_data}/icons/hicolor/512x512/apps/shaula.png"
-          test ! -e "${xdg_data}/icons/hicolor/scalable/apps/shaula.svg"
-          grep -Fxq \
-            "gtk-update-icon-cache -f -t ${xdg_data}/icons/hicolor" \
-            "${cache_log}"
-          grep -Fxq \
-            "update-desktop-database -q ${xdg_data}/applications" \
-            "${cache_log}"
-          test -f "${xdg_config}/shaula/config.toml"
-          grep -q "BEGIN SHAULA PREVIEW WINDOW RULE" "${xdg_config}/niri/config.kdl"
-          test -f "${xdg_config}/noctalia/plugins/shaula/manifest.json"
-          jq -e '.states.shaula.enabled == true' "${xdg_config}/noctalia/plugins.json" >/dev/null
-          jq -e '.bar.widgets.right | any(.id == "plugin:shaula")' "${xdg_config}/noctalia/settings.json" >/dev/null
-
-          env \
-            HOME="${home_dir}" \
-            XDG_BIN_HOME="${xdg_bin}" \
-            XDG_DATA_HOME="${xdg_data}" \
-            XDG_CONFIG_HOME="${xdg_config}" \
-            "${xdg_bin}/shaula" doctor --json \
-            | jq -e '.ok == true and .paths.config_exists == true and .noctalia.plugin_installed == true' >/dev/null
-
-          env \
-            HOME="${home_dir}" \
-            XDG_BIN_HOME="${xdg_bin}" \
-            XDG_DATA_HOME="${xdg_data}" \
-            XDG_CONFIG_HOME="${xdg_config}" \
-            "${xdg_bin}/shaula" capture area --dry-run --json \
-            | jq -e '.ok == true and .command == "capture area" and .selection.cancelled == false' >/dev/null
+          docker run --rm \
+            --volume "${PWD}:/work:ro" \
+            archlinux:base-devel \
+            bash -euxo pipefail -c '
+              useradd --create-home builder
+              for package in shaula shaula-bin; do
+                su builder -c "cd /work/aur/${package} && makepkg --printsrcinfo" \
+                  > "/tmp/${package}.SRCINFO"
+                diff -u "/work/aur/${package}/.SRCINFO" \
+                  "/tmp/${package}.SRCINFO"
+              done
+            '
 
       - name: Publish GitHub Release
         env:
@@ -202,7 +188,7 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-
+          notes_file="docs/release-${TAG_NAME}.md"
           prerelease_args=()
           case "${TAG_NAME}" in
             *alpha*|*beta*|*rc*) prerelease_args=(--prerelease) ;;
@@ -211,16 +197,19 @@ jobs:
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
             gh release edit "${TAG_NAME}" \
               --title "${TAG_NAME}" \
+              --notes-file "${notes_file}" \
               "${prerelease_args[@]}"
             gh release upload "${TAG_NAME}" \
               dist/shaula-linux-x86_64.tar.gz \
+              dist/shaula-linux-aarch64.tar.gz \
               dist/SHA256SUMS \
               --clobber
           else
             gh release create "${TAG_NAME}" \
               dist/shaula-linux-x86_64.tar.gz \
+              dist/shaula-linux-aarch64.tar.gz \
               dist/SHA256SUMS \
               --title "${TAG_NAME}" \
-              --generate-notes \
+              --notes-file "${notes_file}" \
               "${prerelease_args[@]}"
           fi

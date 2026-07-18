@@ -123,15 +123,18 @@ static void test_open_containing_folder_uses_exact_argv(void) {
 
   g_autofree char *opened_path = NULL;
   gsize opened_length = 0;
-  for (int attempt = 0; attempt < 200 && opened_path == NULL; attempt += 1) {
+  for (int attempt = 0; attempt < 1000; attempt += 1) {
     if (g_file_test(log_path, G_FILE_TEST_EXISTS)) {
       GError *read_error = NULL;
+      g_clear_pointer(&opened_path, g_free);
+      opened_length = 0;
       if (!g_file_get_contents(log_path, &opened_path, &opened_length,
                                &read_error))
         g_clear_error(&read_error);
+      if (opened_path != NULL && opened_length == strlen(folder))
+        break;
     }
-    if (opened_path == NULL)
-      g_usleep(5000);
+    g_usleep(5000);
   }
 
   restore_environment("PATH", old_path);

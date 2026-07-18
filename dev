@@ -69,6 +69,30 @@ have() {
 shaula_env() {
   export SHAULA_COMPOSITOR="${SHAULA_COMPOSITOR:-niri}"
   export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+  if [[ -z "${SHAULA_OVERLAY_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/overlay/shaula-overlay" ]]; then
+    export SHAULA_OVERLAY_HELPER_BIN="${BUILD_DIR}/src/overlay/shaula-overlay"
+  fi
+  if [[ -z "${SHAULA_PREVIEW_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/preview/shaula-preview" ]]; then
+    export SHAULA_PREVIEW_HELPER_BIN="${BUILD_DIR}/src/preview/shaula-preview"
+  fi
+  if [[ -z "${SHAULA_SETTINGS_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/settings/shaula-settings" ]]; then
+    export SHAULA_SETTINGS_HELPER_BIN="${BUILD_DIR}/src/settings/shaula-settings"
+  fi
+  if [[ -z "${SHAULA_PORTAL_SCREENSHOT_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/capture/shaula-portal-screenshot" ]]; then
+    export SHAULA_PORTAL_SCREENSHOT_HELPER_BIN="${BUILD_DIR}/src/capture/shaula-portal-screenshot"
+  fi
+  if [[ -z "${SHAULA_CROP_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/capture/shaula-crop-image" ]]; then
+    export SHAULA_CROP_HELPER_BIN="${BUILD_DIR}/src/capture/shaula-crop-image"
+  fi
+  if [[ -z "${SHAULA_CLIPBOARD_PROVIDER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/clipboard/shaula-clipboard-provider" ]]; then
+    export SHAULA_CLIPBOARD_PROVIDER_BIN="${BUILD_DIR}/src/clipboard/shaula-clipboard-provider"
+  fi
   if [[ -z "${NIRI_SOCKET:-}" ]]; then
     local candidate
     candidate="$(find "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" -maxdepth 1 -type s -name 'niri*.sock' 2>/dev/null | head -n 1 || true)"
@@ -111,7 +135,7 @@ doctor() {
   local fail=0
   echo "Shaula doctor"
 
-  for tool in cc meson ninja pkg-config jq grim wl-copy wl-paste niri; do
+  for tool in cc meson ninja pkg-config jq; do
     if have "${tool}"; then
       echo "ok ${tool}=$(command -v "${tool}")"
     else
@@ -119,8 +143,15 @@ doctor() {
       fail=1
     fi
   done
+  for optional in grim niri quickshell; do
+    if have "${optional}"; then
+      echo "optional ${optional}=$(command -v "${optional}")"
+    else
+      echo "optional ${optional}=missing"
+    fi
+  done
 
-  if pkg-config --exists gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo 2>/dev/null; then
+  if pkg-config --exists gtk4 gtk4-layer-shell-0 gdk-pixbuf-2.0 cairo json-glib-1.0 2>/dev/null; then
     echo "ok gtk4-layer-shell deps"
   else
     echo "missing gtk4-layer-shell pkg-config deps"
@@ -164,25 +195,21 @@ clean() {
 
 # Copy the prompt context without mutating the real Git index.
 context() {
-  if ! have wl-copy; then
-    echo "missing wl-copy" >&2
-    exit 1
-  fi
+  build >/dev/null
 
-  local git_index temp_index
+  local git_index temp_index context_file
   git_index="$(git rev-parse --git-path index)"
   temp_index="$(mktemp)"
+  context_file="$(mktemp)"
+  trap 'rm -f "${temp_index}" "${context_file}"' RETURN
+  cp "${git_index}" "${temp_index}"
 
-  (
-    trap 'rm -f "${temp_index}"' EXIT
-    cp "${git_index}" "${temp_index}"
-
-    {
-      if [[ -f CONTEXT.md ]]; then
-        cat CONTEXT.md
-        printf '\n'
-      fi
-      cat <<'EOF'
+  {
+    if [[ -f CONTEXT.md ]]; then
+      cat CONTEXT.md
+      printf '\n'
+    fi
+    cat <<'EOF'
 ## Dev Context Script Capture Mode Note
 
 - Region capture has an explicit foundation with `live` and `frozen` modes.
@@ -197,15 +224,15 @@ context() {
   verify interactively when checking for overlay contamination.
 
 EOF
-      printf '## Last 3 commits\n'
-      git log --format='- %h %s' -3
-      printf '\n## Diff\n'
-      GIT_INDEX_FILE="${temp_index}" git add -N .
-      GIT_INDEX_FILE="${temp_index}" git diff
-    }
-  ) | wl-copy
+    printf '## Last 3 commits\n'
+    git log --format='- %h %s' -3
+    printf '\n## Diff\n'
+    GIT_INDEX_FILE="${temp_index}" git add -N .
+    GIT_INDEX_FILE="${temp_index}" git diff
+  } >"${context_file}"
 
-  echo "ok context copied to clipboard"
+  "${SHAULA_BIN}" clipboard copy-text --input "${context_file}" --json >/dev/null
+  echo "ok context copied with Shaula clipboard provider"
 }
 
 stage() {
@@ -430,31 +457,19 @@ dev_install_should_restart_noctalia() {
 }
 
 noctalia_load() {
-  build >/dev/null
-
-  local tmp_dir archive sums
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_dir}"' RETURN
-
-  archive="${tmp_dir}/shaula-linux-x86_64.tar.gz"
-  sums="${tmp_dir}/SHA256SUMS"
-
-  rm -rf build-stage
-  DESTDIR="${ROOT_DIR}/build-stage" meson install -C "${BUILD_DIR}" >/dev/null
-  tar -C build-stage/usr -czf "${archive}" .
-  (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
-
-  SHAULA_RELEASE_ASSET_URL="file://${archive}" \
-    SHAULA_SHA256SUMS_URL="file://${sums}" \
-    scripts/install.sh --yes
-
+  echo "build: Shaula"
+  build
+  echo "setup: Noctalia widget only"
+  SHAULA_NOCTALIA_PLUGIN_SOURCE="${ROOT_DIR}/integrations/noctalia/shaula" \
+    "${SHAULA_BIN}" setup --no-niri --noctalia
+  echo "reload: Noctalia"
   restart_noctalia || true
-
-  echo "Noctalia widget installed at ${HOME}/.config/noctalia/plugins/shaula"
+  echo "installed: Noctalia widget"
 }
 
 install_local() {
-  build >/dev/null
+  echo "build: current checkout"
+  build
 
   local arch tmp_dir archive sums
   case "$(uname -m)" in
@@ -476,8 +491,10 @@ install_local() {
   archive="${tmp_dir}/shaula-linux-${arch}.tar.gz"
   sums="${tmp_dir}/SHA256SUMS"
 
+  echo "staging: Meson install payload"
   rm -rf build-stage
-  DESTDIR="${ROOT_DIR}/build-stage" meson install -C "${BUILD_DIR}" >/dev/null
+  DESTDIR="${ROOT_DIR}/build-stage" meson install -C "${BUILD_DIR}"
+  echo "staging: local release archive"
   tar -C build-stage/usr -czf "${archive}" .
   (cd "${tmp_dir}" && sha256sum "$(basename "${archive}")" > "$(basename "${sums}")")
 
@@ -497,6 +514,7 @@ Installed files still go to the normal per-user locations used by Shaula:
 
 EOF
 
+  echo "install: user-local application files"
   SHAULA_RELEASE_ASSET_URL="file://${archive}" \
     SHAULA_SHA256SUMS_URL="file://${sums}" \
     SHAULA_INSTALL_CONTEXT=dev \

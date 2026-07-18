@@ -1,7 +1,7 @@
 project(
   'shaula',
   'c',
-  version: '0.1.5',
+  version: '0.1.6',
   meson_version: '>=1.3.0',
   default_options: [
     'c_std=c11',
@@ -58,6 +58,7 @@ subdir('src/core')
 subdir('src/errors')
 subdir('src/notify')
 subdir('src/runtime')
+subdir('src/clipboard')
 subdir('src/preview')
 subdir('src/explore')
 subdir('src/compositor')
@@ -80,9 +81,27 @@ shaula_exe = executable(
   install: true,
 )
 
+install_data(
+  'data/shaula.desktop',
+  install_dir: get_option('datadir') / 'applications',
+)
+install_data(
+  'data/release-manifest.txt',
+  install_dir: get_option('datadir') / 'shaula',
+)
+foreach icon_size : ['48x48', '64x64', '128x128', '256x256', '512x512']
+  install_subdir(
+    'src/preview/icons/hicolor' / icon_size / 'apps',
+    install_dir: get_option('datadir') / 'icons' / 'hicolor' / icon_size,
+  )
+endforeach
 install_subdir(
-  'src/preview/icons/hicolor',
-  install_dir: get_option('datadir') / 'icons',
+  'src/preview/icons/hicolor/scalable/apps',
+  install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable',
+)
+install_subdir(
+  'src/preview/icons/hicolor/scalable/actions',
+  install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable',
 )
 install_subdir(
   'integrations/noctalia/shaula',

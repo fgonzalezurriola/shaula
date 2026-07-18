@@ -1,5 +1,6 @@
 #include "commands.h"
 
+#include "clipboard/clipboard.h"
 #include "config/config.h"
 #include "runtime/helper_resolution.h"
 #include "support.h"
@@ -46,14 +47,12 @@ int shaula_doctor_command_run(int argc, char **argv) {
           ? g_build_filename(noctalia_dir, "settings.json", NULL)
           : NULL;
   g_autofree char *grim_path = shaula_executable_find_grim();
-  g_autofree char *wl_copy_path = shaula_executable_find_program("wl-copy");
-  g_autofree char *wl_paste_path = shaula_executable_find_program("wl-paste");
 
   g_autofree char *result = g_strdup_printf(
       "{\"paths\":{\"binary\":%s,\"config_file\":%s,"
       "\"config_exists\":%s},\"wayland\":{\"wayland_display\":%s},"
-      "\"tools\":{\"grim\":{\"found\":%s},\"wl-copy\":{\"found\":%s},"
-      "\"wl-paste\":{\"found\":%s}},\"noctalia\":{"
+      "\"tools\":{\"grim\":{\"found\":%s},"
+      "\"shaula-clipboard-provider\":{\"found\":%s}},\"noctalia\":{"
       "\"dir_exists\":%s,\"plugins_dir_exists\":%s,"
       "\"plugins_json_exists\":%s,\"settings_json_exists\":%s,"
       "\"shaula_plugin_dir_exists\":%s,\"plugin_installed\":%s}}",
@@ -62,8 +61,7 @@ int shaula_doctor_command_run(int argc, char **argv) {
                                g_file_test(config_path, G_FILE_TEST_EXISTS)),
       g_getenv("WAYLAND_DISPLAY") != NULL ? "\"present\"" : "null",
       shaula_command_json_bool(grim_path != NULL),
-      shaula_command_json_bool(wl_copy_path != NULL),
-      shaula_command_json_bool(wl_paste_path != NULL),
+      shaula_command_json_bool(shaula_clipboard_provider_available()),
       shaula_command_json_bool(noctalia_dir != NULL &&
                                g_file_test(noctalia_dir, G_FILE_TEST_IS_DIR)),
       shaula_command_json_bool(

@@ -13,6 +13,7 @@ static ShaulaCapabilitiesEnvironment environment_for(const char *compositor,
   ShaulaCapabilitiesEnvironment environment = {0};
   environment.compositor.shaula_compositor = compositor;
   environment.compositor.wayland_display = wayland;
+  environment.grim_available = "1";
   environment.portal_available = "0";
   environment.portal_window_capable = "0";
   return environment;
@@ -121,7 +122,7 @@ static void test_niri_success(void) {
       "{\"ok\":true,\"contract_version\":\"1.0.0\",\"command\":\"preflight\","
       "\"timestamp\":\"1970-01-01T00:00:00Z\",\"compositor\":\"niri\","
       "\"ready\":true,\"result\":{\"compositor\":\"niri\",\"wayland\":true,"
-      "\"backend\":\"niri-wayland-direct\",\"portal_available\":false},"
+      "\"backend\":\"grim-wlroots\",\"portal_available\":false},"
       "\"warnings\":[]}\n";
 
   g_assert_cmpint(shaula_preflight_build(&environment, 0,

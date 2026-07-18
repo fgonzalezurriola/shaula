@@ -56,16 +56,39 @@ case "${3:-}" in
     ;;
 esac
 EOF
-cat > "${TMP_DIR}/bin/wl-copy" <<'EOF'
+cat > "${TMP_DIR}/bin/shaula-clipboard-provider" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
 cat >/dev/null
+if [[ ${SHAULA_TEST_CLIPBOARD_MODE:-ready} == failure ]]; then
+  exit 47
+fi
+printf 'READY shaula-clipboard/1\n'
+sleep 1
 EOF
 cat > "${TMP_DIR}/bin/notify-send" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-chmod +x "${TMP_DIR}/bin/niri" "${TMP_DIR}/bin/wl-copy" \
-  "${TMP_DIR}/bin/notify-send"
+cat > "${TMP_DIR}/bin/portal-capture-helper" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$*" > "${TMP_DIR}/portal-argv.log"
+if [[ -n "\${SHAULA_FAKE_PORTAL_EXIT_CODE:-}" ]]; then
+  exit "\${SHAULA_FAKE_PORTAL_EXIT_CODE}"
+fi
+exec "${FAKE_CAPTURE_HELPER}" "\$@"
+EOF
+cat > "${TMP_DIR}/bin/forbidden-overlay" <<EOF
+#!/usr/bin/env bash
+touch "${TMP_DIR}/overlay-launched"
+exit 1
+EOF
+chmod +x "${TMP_DIR}/bin/niri" \
+  "${TMP_DIR}/bin/shaula-clipboard-provider" \
+  "${TMP_DIR}/bin/notify-send" \
+  "${TMP_DIR}/bin/portal-capture-helper" \
+  "${TMP_DIR}/bin/forbidden-overlay"
 
 PATH="${TMP_DIR}/bin:${PATH}"
 export PATH
@@ -76,6 +99,7 @@ capture_json="$(
   NIRI_SOCKET=/tmp/niri.sock \
   WAYLAND_DISPLAY=wayland-1 \
   SHAULA_REGION_CAPTURE_MODE=live \
+  SHAULA_GRIM_AVAILABLE=1 \
   SHAULA_CAPTURE_FORCE_NONINTERACTIVE_SELECTION=1 \
   SHAULA_OVERLAY_HELPER_BIN=/definitely/missing/shaula-overlay \
   SHAULA_RUNTIME_CAPTURE_HELPER="${FAKE_CAPTURE_HELPER}" \
@@ -86,14 +110,69 @@ printf '%s\n' "${capture_json}" | jq -e --arg path "${capture_path}" '
 ' >/dev/null
 [[ -s "${capture_path}" ]]
 
+portal_path="${TMP_DIR}/portal-area.png"
+portal_json="$(
+  SHAULA_COMPOSITOR=gnome \
+  WAYLAND_DISPLAY=wayland-1 \
+  SHAULA_GRIM_AVAILABLE=0 \
+  SHAULA_PORTAL_AVAILABLE=1 \
+  SHAULA_REGION_CAPTURE_MODE=frozen \
+  SHAULA_OVERLAY_HELPER_BIN="${TMP_DIR}/bin/forbidden-overlay" \
+  SHAULA_RUNTIME_CAPTURE_HELPER="${TMP_DIR}/bin/portal-capture-helper" \
+  "${SHAULA_BIN}" capture area --json --no-preview --output "${portal_path}"
+)"
+printf '%s\n' "${portal_json}" | jq -e --arg path "${portal_path}" '
+  .ok == true and .result.path == $path and
+  .result.backend_used == "portal-screenshot"
+' >/dev/null
+[[ -s "${portal_path}" ]]
+[[ ! -e "${TMP_DIR}/overlay-launched" ]]
+grep -q -- '--backend portal-screenshot --mode area' "${TMP_DIR}/portal-argv.log"
+! grep -q -- '--geometry' "${TMP_DIR}/portal-argv.log"
+
 set +e
-clipboard_error="$(SHAULA_CLIPBOARD_AVAILABLE=0 "${SHAULA_BIN}" clipboard import-image --json)"
+portal_cancel_json="$(
+  SHAULA_COMPOSITOR=gnome \
+  WAYLAND_DISPLAY=wayland-1 \
+  SHAULA_GRIM_AVAILABLE=0 \
+  SHAULA_PORTAL_AVAILABLE=1 \
+  SHAULA_FAKE_PORTAL_EXIT_CODE=33 \
+  SHAULA_OVERLAY_HELPER_BIN="${TMP_DIR}/bin/forbidden-overlay" \
+  SHAULA_RUNTIME_CAPTURE_HELPER="${TMP_DIR}/bin/portal-capture-helper" \
+  "${SHAULA_BIN}" capture area --json --no-preview \
+    --output "${TMP_DIR}/portal-cancel.png"
+)"
+portal_cancel_rc=$?
+set -e
+[[ ${portal_cancel_rc} -ne 0 ]]
+printf '%s\n' "${portal_cancel_json}" | jq -e '
+  .ok == false and .error.code == "ERR_SELECTION_CANCELLED"
+' >/dev/null
+[[ ! -e "${TMP_DIR}/overlay-launched" ]]
+
+set +e
+clipboard_error="$(SHAULA_CLIPBOARD_AVAILABLE=0 "${SHAULA_BIN}" clipboard copy-image --json --input "${capture_path}")"
 clipboard_rc=$?
 set -e
 [[ ${clipboard_rc} -ne 0 ]]
 printf '%s\n' "${clipboard_error}" | jq -e '
   .ok == false and .error.code == "ERR_CLIPBOARD_UNAVAILABLE"
 ' >/dev/null
+
+set +e
+clipboard_text_error="$(
+  SHAULA_TEST_CLIPBOARD_MODE=failure \
+  "${SHAULA_BIN}" clipboard copy-text --json --text 'payload'
+)"
+clipboard_text_rc=$?
+set -e
+[[ ${clipboard_text_rc} -ne 0 ]]
+printf '%s\n' "${clipboard_text_error}" | jq -e '
+  .ok == false and .error.code == "ERR_CLIPBOARD_COPY_FAILED" and
+  .error.message == "clipboard text copy failed" and
+  .error.details.provider_status == "provider_failed"
+' >/dev/null
+! grep -Fq 'clipboard image copy failed' <<<"${clipboard_text_error}"
 
 "${SHAULA_BIN}" clipboard copy-image --json --input "${capture_path}" >/dev/null
 import_path="${TMP_DIR}/imported.png"
@@ -103,7 +182,7 @@ printf '%s\n' "${import_json}" | jq -e --arg path "${import_path}" '
 ' >/dev/null
 cmp "${capture_path}" "${import_path}"
 
-printf '%s|image/png|640|360|niri-wayland-direct|2026-07-11T20:00:00Z\n' \
+printf '%s|image/png|640|360|grim-wlroots|2026-07-11T20:00:00Z\n' \
   "${capture_path}" > "${HISTORY_PATH}"
 history_json="$("${SHAULA_BIN}" history show --json --id latest)"
 printf '%s\n' "${history_json}" | jq -e --arg path "${capture_path}" '
@@ -155,6 +234,10 @@ printf '%s\n' "${notify_json}" | jq -e '
 
 set +e
 overlay_json="$(
+  SHAULA_COMPOSITOR=niri \
+  NIRI_SOCKET=/tmp/niri.sock \
+  WAYLAND_DISPLAY=wayland-1 \
+  SHAULA_GRIM_AVAILABLE=1 \
   SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE=malformed \
   "${SHAULA_BIN}" capture area --dry-run --json
 )"

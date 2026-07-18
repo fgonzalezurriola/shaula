@@ -1,40 +1,40 @@
 # Shaula
 
-Shaula is a screenshot tool for Wayland/Niri.
+Shaula is a Wayland screenshot application with capture, area selection, Preview,
+saving, and clipboard copy as built-in product features.
 
-Shaula is currently tested primarily on Niri, with integration work for
-Noctalia Shell. Broader Wayland compositor support is in progress, but Niri is
-the primary supported environment today.
+It chooses a working capture route automatically:
+
+- Niri and compatible wlroots compositors use `grim` when it is available.
+- Other Wayland desktops use the desktop Screenshot portal and its interactive
+  picker.
+- Installation stops with an actionable error rather than installing a broken
+  application when neither route is available.
+
+Users do not choose a backend or install a separate clipboard command. Shaula
+ships its own clipboard provider so copied images and text remain available
+after the initiating CLI or Preview process exits.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
 ## Current release
 
-The latest stable release is **v0.1.5**. See
-[`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for highlights, validation,
-and scope notes.
+The latest stable release is **v0.1.6**. See
+[`docs/release-v0.1.6.md`](docs/release-v0.1.6.md) for that release's highlights
+and validation notes.
 
 ## Installation
 
-### Arch Linux / CachyOS
-
-```bash
-paru -S shaula      # or paru -S shaula-bin
-shaula setup        # configure Niri shortcuts and Noctalia integration
-```
-
-Uninstall:
-
-```bash
-paru -R shaula
-paru -R shaula-bin
-```
-
-### Install script
+Run the normal installer from an active Wayland desktop session:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
 ```
+
+The installer verifies the complete release before changing user files, installs
+under `~/.local`, validates the current capture route, and runs optional setup
+interactively when a terminal is available. It never invokes `sudo`, installs
+system packages, or chooses a desktop portal implementation.
 
 Uninstall:
 
@@ -42,13 +42,16 @@ Uninstall:
 curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh -s -- --uninstall
 ```
 
-## Manual dependencies
-
-Runtime dependencies:
+### Arch Linux / CachyOS
 
 ```bash
-sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell json-glib
+paru -S shaula      # or: paru -S shaula-bin
+shaula setup
 ```
+
+The packages declare linked application libraries and the desktop portal
+framework. `grim` is optional and enables the native Niri/wlroots route. Niri
+and Noctalia remain optional integrations.
 
 Optional fonts:
 
@@ -58,75 +61,69 @@ paru -S ttf-geist ttf-excalifont
 
 ## Usage
 
-Main usage is through the installed Noctalia Shell menu and keyboard shortcuts
-(Ctrl+Shift+1/2/3/4).
-
-Shaula can also be called from the terminal:
-
 ```bash
 shaula capture quick --json
 shaula capture area --json
-shaula capture area --json --no-preview
+shaula capture fullscreen --json --save
+shaula capture all-screens --json --save
 shaula settings --json
 shaula explore --json --brief
 ```
 
-Preview supports Copy, Save, Save As, and Done/accept flows. Save and Done use
-the configured save folder, defaulting to `~/Pictures/shaula`, and generate
-`YYYYMMDD-HHMMSS.png` names. `Ctrl+Shift+V`, also available as **Paste
-text/image** in the More menu, inserts clipboard text or an image near the center
-of the visible canvas.
+Native Niri/wlroots area capture uses Shaula's overlay. Portal-based area capture
+uses the desktop's picker directly and does not launch Shaula's overlay.
 
-Direct no-preview saved captures use the same `YYYYMMDD-HHMMSS.png` template,
-adding `-2`, `-3`, and so on when a filename already exists.
+Preview supports Copy, Save, Save As, and Done. Saved screenshots default to
+`~/Pictures/shaula` and use `YYYYMMDD-HHMMSS.png`, adding `-2`, `-3`, and so on
+when necessary. `Ctrl+Shift+V`, also available as **Paste text/image**, reads the
+system clipboard through GTK/GDK and inserts text or an image into the canvas.
 
-The default fullscreen and all-screens shortcuts save a durable copy to the
-configured save folder.
+Inside Shaula's native Quick/Area overlay:
 
-Inside the Quick/Area selection overlay, `Enter` follows the configured capture
-flow, `Ctrl+C` bypasses preview and copies immediately, and `Ctrl+S` bypasses
-preview and saves immediately. Direct save also copies when **Copy to
-clipboard** is enabled for that capture mode in Settings.
+- `Enter` follows the configured capture flow.
+- `Ctrl+C` captures and copies without opening Preview.
+- `Ctrl+S` captures and saves without opening Preview.
+
+Optional integrations can be configured or removed symmetrically:
+
+```bash
+shaula setup
+shaula setup --niri --niri-keybinds
+shaula setup --noctalia
+shaula setup --remove
+```
 
 ## Development
 
 Requirements:
 
-* Meson and Ninja
-* A C11 compiler
-* `jq`
-* GTK4 / gtk4-layer-shell development packages
-* JSON-GLib development package
-* Wayland development packages
+- Meson and Ninja
+- A C11 compiler
+- `jq`
+- GTK4, gtk4-layer-shell, GDK Pixbuf, Cairo, Pango, and JSON-GLib development
+  packages
+- Wayland development packages
 
-Build from source:
+Build and test:
 
 ```bash
 meson setup build --prefix=/usr
 meson compile -C build
-```
-
-Release build:
-
-```bash
-meson setup build-release --buildtype=release --prefix=/usr -Db_lto=true
-meson compile -C build-release
-```
-
-Run checks:
-
-```bash
 ./dev check
 ```
 
 Useful development commands:
 
 ```bash
+./dev dev-install --yes
 ./dev capture
+./dev all
 ./dev noctalia-load
-./dev dev-install
-shaula setup
+./dev run capabilities list --json
 ```
+
+`./dev noctalia-load` changes only Noctalia user state and reloads Noctalia; it
+does not perform a full application install.
 
 ## Support
 

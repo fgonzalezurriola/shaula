@@ -309,6 +309,13 @@ ShaulaPreflightStatus shaula_preflight_build(
         "wayland environment is not ready",
         sizeof("wayland environment is not ready") - 1U, 1U,
         runtime.compositor.label, output);
+  } else if (runtime.capture_route_available == 0) {
+    status = build_error(
+        unix_seconds, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
+        sizeof("ERR_CAPTURE_BACKEND_UNAVAILABLE") - 1U,
+        "no usable Wayland capture route is available",
+        sizeof("no usable Wayland capture route is available") - 1U, 0U,
+        runtime.compositor.label, output);
   } else {
     status = build_success(unix_seconds, portal_fallback_warning, &runtime,
                            output);

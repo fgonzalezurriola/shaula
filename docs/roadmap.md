@@ -1,121 +1,48 @@
 # Shaula Roadmap
 
 Shaula is a focused Wayland screenshot workflow with a native capture overlay
-and post-capture preview/editor.
+and post-capture Preview/editor.
 
 ## Released: v0.1.5
 
 v0.1.5 was released on 2026-06-24 after manual validation of the primary
-Wayland/Niri journeys. It delivers system-clipboard text/image paste, Image and
-Text resize, Annotation Eraser, stronger selection and history behavior, direct
-Quick/Area copy and save shortcuts, expanded runtime discovery, and removal of
-the resident-daemon architecture.
+Wayland/Niri journeys. Detailed historical notes live in
+`docs/release-v0.1.5.md`.
 
-Detailed notes live in `docs/release-v0.1.5.md`.
+## Release candidate: v0.1.6
 
-## Current Release Focus: v0.1.6
+v0.1.6 completes the Meson/C production port and the universal Wayland release
+contracts described by ADR-0002 and ADR-0003.
 
-v0.1.6 is the **image composition and expandable canvas release**.
+The release bar includes:
 
-The release has no fixed date. It should ship when the new document model and
-human workflow are coherent, bounded, and manually validated. The active plan
-lives in `docs/plan-v0.1.6.md`.
+- deterministic native `grim` versus Screenshot portal selection;
+- a bundled clipboard provider with bounded readiness, complete child cleanup,
+  detached successful lifetime, and race-free provider replacement;
+- manifest-backed x86_64 and AArch64 release archives;
+- installer architecture selection and complete payload validation;
+- source and binary AUR metadata prepared for both architectures;
+- exact tag/version and release-note gates in release CI;
+- no known failing unit, contract, strict, sanitizer, install, archive, or package
+  metadata check;
+- live Niri capture validation where the current environment permits it.
 
-### Core direction
+GNOME and KDE interactive portal/graphical validation is not checked for v0.1.6
+and is explicitly deferred to v0.1.7. The v0.1.6 release must not claim that
+those graphical checks passed.
 
-- Separate bounded document canvas dimensions from the original screenshot
-  pixbuf.
-- Make canvas expansion undoable and deterministic.
-- Compose a small ordered set of images vertically or horizontally.
-- Import images from the current clipboard and explicit files.
-- Keep imported images editable instead of flattening immediately.
-- Preserve Copy, Save, Save As, Done, crop, Spotlight, selection, resize, and
-  export across expanded documents.
-- Keep one composition apply as one undo step.
-- Refit the view after document-size changes.
-- Add explicit canvas dimension, total-pixel, and memory limits.
-- Keep global clipboard history out of the core product.
+Detailed notes and release procedure:
 
-### Planned additions
+- `docs/release-v0.1.6.md`
+- `docs/releasing.md`
+- `docs/adr/0003-universal-wayland-runtime.md`
 
-- Recent Shaula captures as a composition source.
-- Direct controls for adding canvas space above, below, left, or right.
-- Canvas background controls.
-- `Capture and add…` from an existing Preview.
-- Grid and equal-cell comparison layouts.
-- Simple alignment and distribution guidance for free placement.
+## Shipped foundation
 
-These additions must not appear as placeholders. Each one enters the public UI
-only when its source loading, cancellation, history, export, and failure paths
-are complete.
-
-### Emergent work
-
-v0.1.6 may also include work discovered during implementation when it:
-
-- fixes a bug exposed by the new document model;
-- removes a confusing capture or Preview interaction;
-- reduces memory, rendering, history, or ownership risk;
-- improves module boundaries or testability needed by the release;
-- aligns Settings, installation, integration, or documentation;
-- addresses a concrete issue found during normal daily use.
-
-This lane keeps the plan flexible without turning v0.1.6 into an unrelated
-feature collection.
-
-### Existing workflow quality
-
-The stable v0.1.5 baseline remains part of the release bar:
-
-- Quick, Area, Fullscreen, All Screens, and Window capture must stay predictable.
-- Copy, Save, Save As, Done, and Discard must keep their documented semantics.
-- Preview toolbar width and overflow must remain stable.
-- Keyboard shortcuts must not conflict with text editing, modal tools, or active
-  selections.
-- Settings must preserve custom values during unrelated saves.
-- Noctalia remains optional and outside the capture hot path.
-- Errors and notifications must remain actionable without exposing temporary
-  runtime artifacts.
-
-### v0.1.6 release bar
-
-v0.1.6 is ready when:
-
-- vertical and horizontal composition solve the navbar/footer and comparison
-  workflows cleanly;
-- undo and redo restore canvas bounds, assets, and pixels deterministically;
-- Copy, Save, Save As, Done, crop, and Spotlight operate on the expanded canvas;
-- cancel and failure paths leave the document unchanged;
-- supported image and history limits keep memory bounded;
-- no known high-impact regression affects the v0.1.5 capture or Preview flows;
-- automated checks pass;
-- the final candidate receives manual Wayland/Niri validation.
-
-Required automated baseline:
-
-```bash
-./dev check
-git diff --check
-```
-
-After UI changes:
-
-```bash
-./dev dev-install --yes
-```
-
-Detailed product and technical contracts:
-
-- `docs/plan-v0.1.6.md`
-- `docs/plan-image-composition.md`
-- `docs/preview-expandable-canvas-design.md`
-
-## Shipped Foundation
-
-- Native Wayland capture overlay and GTK preview/editor.
+- Native Wayland capture overlay and GTK Preview/editor.
 - Quick, Area, Fullscreen, All Screens, Window, and Previous Area capture paths.
 - Direct CLI orchestration with short-lived helpers and no resident daemon.
-- Niri direct capture, wlroots/`grim`, and xdg-desktop-portal runtime paths.
+- Niri/wlroots `grim` capture and generic Screenshot portal capture routes.
 - Noctalia Bar Widget with packaged installer integration.
 - Copy, Save, Save As, Done, Discard, and actionable save notifications.
 - Undo/redo history for document edits.
@@ -128,21 +55,24 @@ Detailed product and technical contracts:
 
 ## After v0.1.6
 
+The image-composition and expandable-canvas work remains planned rather than
+part of the v0.1.6 release. Its design material remains in:
+
+- `docs/plan-image-composition.md`
+- `docs/preview-expandable-canvas-design.md`
+- `docs/plan-v0.1.6.md` as the original, superseded release-number proposal.
+
 Potential follow-up work should continue to be driven by real usage:
 
-- Dedicated active eyedropper mode if passive sampling and swatch apply are not
-  sufficient.
-- More filename templating and save-path configuration.
-- Additional preview history affordances if users need more visibility or
-  control.
-- General QuickShell integration only after the draft architecture and expected
-  user value are reviewed.
-- Deploy and maintain the static product landing page.
-- Composition refinements that do not fit coherently into the v0.1.6 release.
+- GNOME and KDE graphical portal validation for v0.1.7;
+- bounded image composition and canvas expansion;
+- dedicated active eyedropper mode if passive sampling is insufficient;
+- more filename templating and save-path configuration;
+- additional Preview history affordances;
+- broader QuickShell integration after architecture and user value review;
+- deployment and maintenance of the static product landing page.
 
-## Current Non-Goals
-
-These are not targets for v0.1.6:
+## Current non-goals
 
 - exposing placeholders for unfinished features;
 - infinite canvas;

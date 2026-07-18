@@ -323,9 +323,31 @@ static void wait_reap(pid_t pid) {
   }
 }
 
+static int wait_reap_for(pid_t pid, uint32_t timeout_ms) {
+  const gint64 deadline =
+      g_get_monotonic_time() + (gint64)timeout_ms * G_TIME_SPAN_MILLISECOND;
+
+  for (;;) {
+    int status;
+    pid_t result = waitpid(pid, &status, WNOHANG);
+    if (result == pid)
+      return 1;
+    if (result < 0)
+      return errno == ECHILD;
+    if (g_get_monotonic_time() >= deadline)
+      return 0;
+    g_usleep(10U * 1000U);
+  }
+}
+
 static void terminate_and_reap(pid_t pid) {
   if (kill(pid, SIGTERM) < 0 && errno != ESRCH) {
-    /* Match the former best-effort child cleanup boundary. */
+    /* Escalation below still guarantees the wait boundary. */
+  }
+  if (wait_reap_for(pid, 250U))
+    return;
+  if (kill(pid, SIGKILL) < 0 && errno != ESRCH) {
+    /* A blocking wait remains the final ownership boundary. */
   }
   wait_reap(pid);
 }
@@ -785,6 +807,345 @@ fail_before_fork:
   close_fd(&stdin_pipe[1]);
   close_fd(&error_pipe[0]);
   close_fd(&error_pipe[1]);
+  g_clear_pointer(&parent_path, g_free);
+  owned_argv_clear(&owned_argv);
+  return status;
+}
+
+#define SHAULA_READY_REPORT_MAGIC UINT32_C(0x53485244)
+#define SHAULA_READY_REPORT_VERSION UINT32_C(1)
+#define SHAULA_READY_RECORD_MAX 4096U
+
+typedef struct {
+  uint32_t magic;
+  uint32_t version;
+  int32_t process_status;
+  int32_t ready_status;
+  int32_t term_kind;
+  uint32_t term_value;
+} DetachedReadyReport;
+
+static int write_fixed(int fd, const void *data, size_t length) {
+  const unsigned char *bytes = data;
+  size_t offset = 0;
+
+  while (offset < length) {
+    ssize_t result = write(fd, bytes + offset, length - offset);
+    if (result > 0) {
+      offset += (size_t)result;
+      continue;
+    }
+    if (result < 0 && errno == EINTR)
+      continue;
+    return 0;
+  }
+  return 1;
+}
+
+static int read_fixed(int fd, void *data, size_t length) {
+  unsigned char *bytes = data;
+  size_t offset = 0;
+
+  while (offset < length) {
+    ssize_t result = read(fd, bytes + offset, length - offset);
+    if (result > 0) {
+      offset += (size_t)result;
+      continue;
+    }
+    if (result < 0 && errno == EINTR)
+      continue;
+    return 0;
+  }
+  return 1;
+}
+
+static void report_ready_and_exit(int report_fd, ShaulaProcessStatus status,
+                                  const ShaulaProcessReadyResult *result) {
+  DetachedReadyReport report = {
+      .magic = SHAULA_READY_REPORT_MAGIC,
+      .version = SHAULA_READY_REPORT_VERSION,
+      .process_status = (int32_t)status,
+      .ready_status = (int32_t)result->ready_status,
+      .term_kind = (int32_t)result->term_kind,
+      .term_value = result->term_value,
+  };
+
+  (void)write_fixed(report_fd, &report, sizeof(report));
+  (void)close(report_fd);
+  _exit(0);
+}
+
+static int wait_for_term_for(pid_t pid, uint32_t timeout_ms,
+                             ShaulaProcessTermKind *out_kind,
+                             uint32_t *out_value) {
+  const gint64 deadline =
+      g_get_monotonic_time() + (gint64)timeout_ms * G_TIME_SPAN_MILLISECOND;
+
+  for (;;) {
+    int wait_status;
+    pid_t result = waitpid(pid, &wait_status, WNOHANG);
+    if (result == pid) {
+      term_from_wait_status(wait_status, out_kind, out_value);
+      return 1;
+    }
+    if (result < 0)
+      return errno == ECHILD;
+    if (g_get_monotonic_time() >= deadline)
+      return 0;
+    g_usleep(5U * 1000U);
+  }
+}
+
+static ShaulaProcessReadyStatus read_ready_record(
+    int fd, pid_t pid, const unsigned char *expected, size_t expected_length,
+    uint32_t timeout_ms, ShaulaProcessReadyResult *result,
+    int *out_child_reaped) {
+  unsigned char record[SHAULA_READY_RECORD_MAX];
+  size_t length = 0;
+  const gint64 deadline =
+      g_get_monotonic_time() + (gint64)timeout_ms * G_TIME_SPAN_MILLISECOND;
+
+  *out_child_reaped = 0;
+  while (length < sizeof(record)) {
+    gint64 remaining_us = deadline - g_get_monotonic_time();
+    if (remaining_us <= 0)
+      return SHAULA_PROCESS_READY_TIMEOUT;
+    gint64 remaining_ms64 =
+        (remaining_us + G_TIME_SPAN_MILLISECOND - 1) /
+        G_TIME_SPAN_MILLISECOND;
+    int remaining_ms =
+        remaining_ms64 > INT_MAX ? INT_MAX : (int)remaining_ms64;
+    struct pollfd descriptor = {
+        .fd = fd,
+        .events = POLLIN | POLLHUP | POLLERR,
+        .revents = 0,
+    };
+    int poll_result;
+    do {
+      poll_result = poll(&descriptor, 1, remaining_ms);
+    } while (poll_result < 0 && errno == EINTR);
+    if (poll_result == 0)
+      return SHAULA_PROCESS_READY_TIMEOUT;
+    if (poll_result < 0 || (descriptor.revents & POLLNVAL) != 0)
+      return SHAULA_PROCESS_READY_IO_ERROR;
+
+    unsigned char byte = 0;
+    ssize_t read_result;
+    do {
+      read_result = read(fd, &byte, 1);
+    } while (read_result < 0 && errno == EINTR);
+    if (read_result < 0)
+      return SHAULA_PROCESS_READY_IO_ERROR;
+    if (read_result == 0) {
+      if (length > 0)
+        return SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+      if (wait_for_term_for(pid, 100U, &result->term_kind,
+                            &result->term_value)) {
+        *out_child_reaped = 1;
+        return SHAULA_PROCESS_READY_CHILD_EXITED;
+      }
+      return SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+    }
+
+    record[length] = byte;
+    if (length >= expected_length || byte != expected[length])
+      return SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+    length += 1;
+    if (byte == '\n')
+      return length == expected_length ? SHAULA_PROCESS_READY_OK
+                                       : SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+    if (length == expected_length)
+      return SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+  }
+  return SHAULA_PROCESS_READY_PROTOCOL_INVALID;
+}
+
+static void spawn_ready_launcher(
+    int report_fd, const OwnedArgv *argv, const char *parent_path,
+    const ShaulaProcessInputChunk *input_chunks, size_t input_chunk_count,
+    const unsigned char *expected_ready, size_t expected_ready_length,
+    uint32_t timeout_ms) {
+  int stdin_pipe[2] = {-1, -1};
+  int stdout_pipe[2] = {-1, -1};
+  int error_pipe[2] = {-1, -1};
+  int exec_error = 0;
+  pid_t provider_pid = -1;
+  int child_reaped = 0;
+  ShaulaProcessReadyResult result = {
+      .ready_status = SHAULA_PROCESS_READY_IO_ERROR,
+      .term_kind = SHAULA_PROCESS_TERM_UNKNOWN,
+      .term_value = 0,
+  };
+  ShaulaProcessStatus status = SHAULA_PROCESS_STATUS_OK;
+
+  if (!make_pipe(stdin_pipe) || !make_pipe(stdout_pipe) ||
+      !make_pipe(error_pipe)) {
+    status = map_errno_to_spawn_status(errno);
+    goto report;
+  }
+
+  provider_pid = fork();
+  if (provider_pid < 0) {
+    status = map_errno_to_spawn_status(errno);
+    goto report;
+  }
+  if (provider_pid == 0) {
+    int child_report_fd = report_fd;
+    close_fd(&stdin_pipe[1]);
+    close_fd(&stdout_pipe[0]);
+    close_fd(&error_pipe[0]);
+    close_fd(&child_report_fd);
+    child_dup_or_report(stdin_pipe[0], STDIN_FILENO, error_pipe[1]);
+    child_dup_or_report(stdout_pipe[1], STDOUT_FILENO, error_pipe[1]);
+    close_fd(&stdin_pipe[0]);
+    close_fd(&stdout_pipe[1]);
+    child_exec_path(argv, NULL, parent_path, error_pipe[1]);
+  }
+
+  close_fd(&stdin_pipe[0]);
+  close_fd(&stdout_pipe[1]);
+  close_fd(&error_pipe[1]);
+
+  status = read_exec_error(error_pipe[0], &exec_error);
+  close_fd(&error_pipe[0]);
+  if (status != SHAULA_PROCESS_STATUS_OK) {
+    close_fd(&stdin_pipe[1]);
+    close_fd(&stdout_pipe[0]);
+    wait_reap(provider_pid);
+    child_reaped = 1;
+    goto report;
+  }
+
+  for (size_t index = 0; index < input_chunk_count; index += 1) {
+    if (input_chunks[index].length == 0)
+      continue;
+    if (!write_all_without_sigpipe(stdin_pipe[1], input_chunks[index].data,
+                                   input_chunks[index].length)) {
+      close_fd(&stdin_pipe[1]);
+      close_fd(&stdout_pipe[0]);
+      if (wait_for_term_for(provider_pid, 100U, &result.term_kind,
+                            &result.term_value)) {
+        child_reaped = 1;
+        result.ready_status = SHAULA_PROCESS_READY_CHILD_EXITED;
+      } else {
+        result.ready_status = SHAULA_PROCESS_READY_IO_ERROR;
+      }
+      goto finish_provider;
+    }
+  }
+  close_fd(&stdin_pipe[1]);
+
+  result.ready_status = read_ready_record(
+      stdout_pipe[0], provider_pid, expected_ready, expected_ready_length,
+      timeout_ms, &result, &child_reaped);
+  close_fd(&stdout_pipe[0]);
+
+  if (result.ready_status == SHAULA_PROCESS_READY_OK) {
+    int wait_status;
+    pid_t wait_result = waitpid(provider_pid, &wait_status, WNOHANG);
+    if (wait_result == provider_pid) {
+      term_from_wait_status(wait_status, &result.term_kind, &result.term_value);
+      result.ready_status = SHAULA_PROCESS_READY_CHILD_EXITED;
+      child_reaped = 1;
+    } else if (wait_result < 0 && errno != ECHILD) {
+      result.ready_status = SHAULA_PROCESS_READY_IO_ERROR;
+    }
+  }
+
+finish_provider:
+  if (result.ready_status != SHAULA_PROCESS_READY_OK && !child_reaped)
+    terminate_and_reap(provider_pid);
+
+report:
+  close_fd(&stdin_pipe[0]);
+  close_fd(&stdin_pipe[1]);
+  close_fd(&stdout_pipe[0]);
+  close_fd(&stdout_pipe[1]);
+  close_fd(&error_pipe[0]);
+  close_fd(&error_pipe[1]);
+  report_ready_and_exit(report_fd, status, &result);
+}
+
+ShaulaProcessStatus shaula_process_spawn_ready_detached(
+    const char *const *argv, const ShaulaProcessInputChunk *input_chunks,
+    size_t input_chunk_count, const void *expected_ready,
+    size_t expected_ready_length, uint32_t timeout_ms,
+    ShaulaProcessReadyResult *out_result) {
+  OwnedArgv owned_argv = {0};
+  ShaulaProcessStatus status;
+  char *parent_path = NULL;
+  int report_pipe[2] = {-1, -1};
+  pid_t launcher_pid;
+  DetachedReadyReport report = {0};
+
+  if (out_result == NULL || expected_ready == NULL ||
+      expected_ready_length == 0 ||
+      expected_ready_length > SHAULA_READY_RECORD_MAX || timeout_ms == 0 ||
+      (input_chunk_count > 0 && input_chunks == NULL)) {
+    return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
+  }
+  out_result->ready_status = SHAULA_PROCESS_READY_IO_ERROR;
+  out_result->term_kind = SHAULA_PROCESS_TERM_UNKNOWN;
+  out_result->term_value = 0;
+  for (size_t index = 0; index < input_chunk_count; index += 1) {
+    if (input_chunks[index].data == NULL && input_chunks[index].length > 0)
+      return SHAULA_PROCESS_STATUS_INVALID_ARGUMENT;
+  }
+
+  status = owned_argv_init(argv, &owned_argv);
+  if (status != SHAULA_PROCESS_STATUS_OK)
+    return status;
+  status = copy_parent_path(&parent_path);
+  if (status != SHAULA_PROCESS_STATUS_OK) {
+    owned_argv_clear(&owned_argv);
+    return status;
+  }
+  if (!make_pipe(report_pipe)) {
+    status = map_errno_to_spawn_status(errno);
+    goto cleanup;
+  }
+
+  launcher_pid = fork();
+  if (launcher_pid < 0) {
+    status = map_errno_to_spawn_status(errno);
+    goto cleanup;
+  }
+  if (launcher_pid == 0) {
+    close_fd(&report_pipe[0]);
+    spawn_ready_launcher(
+        report_pipe[1], &owned_argv, parent_path, input_chunks,
+        input_chunk_count, expected_ready, expected_ready_length, timeout_ms);
+  }
+
+  close_fd(&report_pipe[1]);
+  if (!read_fixed(report_pipe[0], &report, sizeof(report))) {
+    close_fd(&report_pipe[0]);
+    wait_reap(launcher_pid);
+    status = SHAULA_PROCESS_STATUS_SPAWN_ERROR;
+    goto cleanup;
+  }
+  close_fd(&report_pipe[0]);
+  wait_reap(launcher_pid);
+
+  if (report.magic != SHAULA_READY_REPORT_MAGIC ||
+      report.version != SHAULA_READY_REPORT_VERSION || report.process_status < 0 ||
+      report.process_status > SHAULA_PROCESS_STATUS_PERMISSION_DENIED ||
+      report.ready_status < SHAULA_PROCESS_READY_OK ||
+      report.ready_status > SHAULA_PROCESS_READY_IO_ERROR ||
+      report.term_kind < SHAULA_PROCESS_TERM_EXITED ||
+      report.term_kind > SHAULA_PROCESS_TERM_UNKNOWN) {
+    status = SHAULA_PROCESS_STATUS_SPAWN_ERROR;
+    goto cleanup;
+  }
+
+  out_result->ready_status = (ShaulaProcessReadyStatus)report.ready_status;
+  out_result->term_kind = (ShaulaProcessTermKind)report.term_kind;
+  out_result->term_value = report.term_value;
+  status = (ShaulaProcessStatus)report.process_status;
+
+cleanup:
+  close_fd(&report_pipe[0]);
+  close_fd(&report_pipe[1]);
   g_clear_pointer(&parent_path, g_free);
   owned_argv_clear(&owned_argv);
   return status;

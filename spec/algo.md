@@ -4,13 +4,13 @@ See [spec/requirements.md](requirements.md) for product direction and [spec/perf
 
 ## Executive Technical Summary
 
-Shaula is a machine-first, Niri-first screenshot tool written in C. The product direction lives in [spec/requirements.md](requirements.md); this file keeps the implementation contracts that make the product deterministic, low-latency, and easy to automate.
+Shaula is a machine-first Wayland screenshot tool written in C, with Niri as its primary native integration environment and a generic Screenshot-portal route for other desktops. The product direction lives in [spec/requirements.md](requirements.md); this file keeps the implementation contracts that make the product deterministic, low-latency, and easy to automate.
 
 ## Decision Register
 
 | ID | Decision | Status | Rationale |
 | --- | --- | --- | --- |
-| D-001 | Niri-first focus | Locked | Optimize for Niri's tile-based workflow and runtime contracts. |
+| D-001 | Universal Wayland core, Niri-first integration | Locked | Keep capture, Preview, save, and copy mandatory while optimizing native integration for Niri. |
 | D-002 | Agent-first CLI | Locked | Guarantee machine-readability via deterministic JSON contracts and error tokens. |
 | D-003 | Meson + C11 toolchain | Locked | Single maintained build path with deterministic behavior and error handling. |
 | D-004 | Hot-path isolation | Locked | Keep capture separate from non-essential work such as preview, history, and exports. |
@@ -22,11 +22,11 @@ Shaula is a machine-first, Niri-first screenshot tool written in C. The product 
 
 | Feature | Path | Status | Risk |
 | --- | --- | --- | --- |
-| Area capture | `wlr-screencopy` | MVP | Protocol deprecation path to `ext-image-copy-capture-v1`. |
-| Fullscreen capture | `wlr-screencopy` | MVP | Same risk as area capture. |
-| Window capture | Niri IPC / heuristics | MVP | Window/tile semantics are still evolving in Niri. |
-| Selection overlay | `layer-shell` | MVP | Input and focus edge cases on multi-output. |
-| Clipboard export | `wl-clipboard` | MVP | External dependency reliability. |
+| Area capture | Verified `grim-wlroots` route or Screenshot portal picker | MVP | Native overlay timing and desktop-specific portal UX. |
+| Fullscreen capture | Verified `grim-wlroots` route or Screenshot portal | MVP | Focused-output semantics and portal policy variance. |
+| Window capture | Capability-gated | Deferred | Window/tile semantics and portal target support vary. |
+| Selection overlay | `layer-shell` on native route; desktop picker on portal route | MVP | Input/focus edge cases and portal UI variance. |
+| Clipboard export | Bundled long-lived GTK/GDK provider | MVP | Selection ownership lifetime and replacement correctness. |
 | History store | File-backed | MVP | Storage availability and concurrent access. |
 
 Current hidden/non-goal surfaces: Pin is not an exposed preview action, Share is
@@ -50,7 +50,7 @@ Command families:
 
 - `ext-image-copy-capture-v1` is a future migration path, not a public promise.
 - Niri window vs tile identity remains capability-gated and must fail deterministically when unresolved.
-- Portal or permission-mediated paths are fallback-only and may exceed the hot-path budget.
+- Portal or permission-mediated paths are automatically selected when no verified native route exists and may exceed the native hot-path budget.
 - Optional integrations must never block capture completion.
 - Selection and output-layout coordinates are logical compositor/output values
   until normalized; persisted PNG dimensions and preview edit tools operate on

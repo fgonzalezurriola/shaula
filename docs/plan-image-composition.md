@@ -1,8 +1,8 @@
 # Image Composition Plan
 
-> Status: **Approved product direction** — Planned for phased implementation
+> Status: **Approved future product direction** — Planned for phased implementation
 >
-> Release scope: **v0.1.6**
+> Release scope: **Post-v0.1.6; no version assigned**
 >
 > Owner: Shaula project
 
@@ -28,9 +28,9 @@ capability that enables it and may later receive direct controls.
 
 ## 2. Scope Boundary
 
-Image composition and bounded canvas expansion are the central product direction
-for v0.1.6. Implementation should proceed in phases and preserve the stable
-v0.1.5 capture and Preview behavior throughout the work.
+Image composition and bounded canvas expansion are a post-v0.1.6 product
+direction. Implementation should proceed in phases and preserve the stable
+v0.1.6 capture and Preview behavior throughout the work.
 
 The release has no fixed calendar deadline. Correct document ownership,
 predictable history, bounded memory use, and a usable composition flow take
@@ -95,7 +95,7 @@ Initial sources:
 - **Recent Shaula captures**: show images Shaula already created or retained.
 - **Choose files…**: import explicit image files.
 
-A later v0.1.6 milestone should add **Capture and add…**, which starts another
+A later post-v0.1.6 milestone should add **Capture and add…**, which starts another
 capture and returns the result to the existing Preview document when the return
 channel and cancellation contracts are reliable.
 
@@ -173,7 +173,7 @@ optional adapter, not a core dependency.
 
 ## 8. Capture and Add
 
-A later v0.1.6 milestone should reduce friction for the navbar/footer scenario:
+A later post-v0.1.6 milestone should reduce friction for the navbar/footer scenario:
 
 1. Capture the first region and open Preview.
 2. Invoke `Capture and add…`.

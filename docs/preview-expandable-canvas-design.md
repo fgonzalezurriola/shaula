@@ -4,9 +4,9 @@
 >
 > Product plan: `docs/plan-image-composition.md`
 >
-> Release plan: `docs/plan-v0.1.6.md`
+> Historical release-number plan: `docs/plan-v0.1.6.md`
 >
-> Release scope: **v0.1.6**
+> Release scope: **Post-v0.1.6; no version assigned**
 
 ## 1. Problem Statement
 
@@ -488,6 +488,6 @@ Recommended order:
 - Whether imported images always render above Spotlight.
 
 These decisions are durable enough to warrant an ADR when implementation begins.
-This file guides v0.1.6 implementation, but unresolved alternatives must not be
+This file guides post-v0.1.6 implementation, but unresolved alternatives must not be
 treated as shipped architecture until code, tests, and the relevant ADR settle
 them.

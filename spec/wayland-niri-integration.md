@@ -1,104 +1,123 @@
-# Shaula Wayland/Niri Integration
+# Shaula Wayland and Niri Integration
 
-See [spec/requirements.md](requirements.md) for the product scope and [spec/algo.md](algo.md) for the locked engineering decisions.
+See [spec/requirements.md](requirements.md), [spec/algo.md](algo.md), and
+[docs/adr/0003-universal-wayland-runtime.md](../docs/adr/0003-universal-wayland-runtime.md).
 
-## Scope and Strategy
+## Product contract
 
-Shaula v1 is **Niri-first only**. The primary capture strategy is to rely on Niri/Wayland capabilities for fast-path capture modes, and to use xdg-desktop-portal screenshot semantics only as an explicit fallback path when direct capture paths are unavailable or policy-constrained.
+Shaula provides capture, area selection, Preview, saving, and clipboard copy on
+Wayland without asking users to select a capture or clipboard implementation.
+Niri remains the primary native integration environment, but the core product is
+not Niri-only.
 
-Operational lock for this integration spec:
+Runtime capture selection is automatic and prerequisite-driven:
 
-- Runtime capture path is real backend execution, no productive stub success path.
-- capabilities strict contract is enforced before backend execution.
-- Overlay remains v1 base scope for selection only.
-- Shell artifact precondition guard runs before capture with bounded timeout behavior.
-- Noctalia remains optional and adapter-based, outside capture hot-path dependencies.
+1. An explicit test/development override is honored only when its prerequisite
+   is available.
+2. Forced portal mode requires a verified Screenshot portal.
+3. Niri and compatible wlroots sessions use `grim-wlroots` only when `grim` is
+   resolvable.
+4. Otherwise a verified `org.freedesktop.portal.Screenshot` interface selects
+   `portal-screenshot`.
+5. Otherwise capability and preflight commands report no usable capture route.
 
-Primary sources used for this spike:
+No implementation may advertise a native Niri backend while executing `grim`.
+The canonical label for that route is `grim-wlroots`.
 
-- Niri repository (feature surface and protocol support): https://github.com/niri-wm/niri
-- Niri screenshot tile/window semantics discussion: https://github.com/niri-wm/niri/pull/3731
-- `wlr-layer-shell-unstable-v1` protocol (overlay surfaces and input semantics): https://wayland.app/protocols/wlr-layer-shell-unstable-v1
-- `wlr-screencopy-unstable-v1` protocol (capture semantics and deprecation notice): https://wayland.app/protocols/wlr-screencopy-unstable-v1
-- XDG portal screenshot interface (`org.freedesktop.portal.Screenshot`): https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html
+## Capability matrix
 
-## Niri Spike Exit Criteria
+| Feature | `grim-wlroots` | `portal-screenshot` |
+| --- | --- | --- |
+| Quick / Area | Shaula layer-shell overlay, then region capture | Desktop portal interactive picker; no Shaula overlay |
+| Fullscreen | Focused output through `grim -o` | Portal screenshot request |
+| All Screens | Compositor layout through `grim` | Not advertised |
+| Previous Area | Stored native geometry | Not advertised |
+| Window | Capability-gated; currently not advertised | Capability-gated; currently not advertised |
+| Preview / Save | Required | Required |
+| Image/text copy | Bundled Shaula clipboard provider | Bundled Shaula clipboard provider |
 
-Go/No-Go for consolidating MVP backend decisions:
+A portal area request must not prepare a `grim` frozen image, launch
+`shaula-overlay`, or pass a Shaula geometry to the portal helper.
 
-1. **Compositor target lock**: environment is explicitly treated as Niri-only in v1 docs/contracts.
-2. **Capture modes lock**: MVP supports deterministic `area` and `fullscreen`; `window` is allowed only with explicit degradation semantics.
-3. **Overlay feasibility lock**: layer-shell overlay path is documented with explicit input/keyboard handling constraints.
-4. **Fallback lock**: portal screenshot path is documented as fallback, not primary.
-5. **Scope lock**: unsupported flows are kept out of the public product contract instead of being represented as placeholders.
+## Runtime decisions
 
-## MVP Capability Matrix
+`src/capabilities/runtime.{c,h}` is the single backend-decision seam. Its result
+distinguishes:
 
-| Feature | Protocol/Path | Status | Fallback | Risk |
-| --- | --- | --- | --- | --- |
-| Area capture | `wlr-screencopy-unstable-v1` output region capture | **MVP feasible** | `org.freedesktop.portal.Screenshot` whole screenshot + user-mediated crop (degraded UX) | `wlr-screencopy` is marked deprecated/experimental; medium protocol churn risk |
-| Fullscreen capture | `wlr-screencopy-unstable-v1` full output capture | **MVP feasible** | `org.freedesktop.portal.Screenshot` | Same deprecation/churn risk as area capture |
-| Window capture (targeted) | Niri IPC screenshot actions (`screenshot-window`, active tile/window semantics discussed in PR #3731) | **MVP feasible with degradation** | Explicit degrade to area capture when target identity/geometry is unresolved | Window/tile semantics are evolving; target ambiguity risk during compositor/runtime transitions |
-| Selection overlay | `wlr-layer-shell-unstable-v1` (`overlay` layer + explicit input region / keyboard interactivity rules) | **MVP feasible** | Abort capture with deterministic error if overlay surface cannot be mapped | Focus/input edge cases on multi-output and interactivity modes |
-| Permission mediation | Direct compositor path when available (Niri session), otherwise portal-mediated consent | **MVP feasible** | Portal request/response flow (`org.freedesktop.portal.Request`) | User prompt latency and sandbox policy variance |
-### Supported Product Surface
+- compositor support;
+- native overlay support;
+- `grim` availability;
+- Screenshot portal availability;
+- one selected backend;
+- whether any capture route is usable;
+- the exact supported mode matrix;
+- only verified fallback routes.
 
-- area capture
-- fullscreen capture
-- window capture with explicit capability checks
-- selection overlay
-- permission mediation
+A supported compositor without a working backend returns
+`ERR_CAPTURE_BACKEND_UNAVAILABLE`; it does not select an optimistic backend.
 
-### Runtime Contract Notes for Niri-first Capture
+## Portal outcomes
 
-- Capture command success requires runtime backend execution through the configured helper/process boundary.
-- Runtime helper unavailability maps deterministically to `ERR_CAPTURE_BACKEND_UNAVAILABLE`.
-- Backend identifier reported in capabilities and capture payloads is canonicalized to `niri-wayland-direct`.
-- Implicit copy/preview captures use an internal runtime artifact path. Explicit
-  `--save` captures use the configured save folder, defaulting to
-  `~/Pictures/shaula`.
-- History persistence is post-capture and bounded to Top-N 20 entries, newest-first.
+The portal helper uses `org.freedesktop.portal.Request` and preserves these
+outcomes through the capture command:
 
-### Overlay Helper STDIO Contract v1
+- user cancellation → `ERR_SELECTION_CANCELLED`;
+- timeout → `ERR_IPC_TIMEOUT`;
+- unavailable portal/helper → `ERR_CAPTURE_BACKEND_UNAVAILABLE`;
+- other malformed or failed outcomes → deterministic mapped failure.
 
-The overlay parent/parser boundary uses a deterministic helper envelope on stdout:
+Helper diagnostics use stderr. Public command stdout remains a single JSON
+object.
+
+## Native overlay contract
+
+The overlay helper handles selection UI only. Its stdout protocol is:
 
 ```json
 {
   "status": "ok|cancel|error",
   "geometry": { "x": 0, "y": 0, "width": 0, "height": 0 },
-  "action": "capture|cancel",
+  "action": "capture|copy|save|cancel",
   "error": { "code": "ERR_*", "message": "text" }
 }
 ```
 
-Deterministic parser mapping (`src/capture/command.c` and `src/overlay/`) to `SelectionResult`:
+Native frozen mode captures the focused-output source before opening the
+overlay, then crops that immutable source. Native live mode waits for overlay
+teardown before invoking `grim`. Portal mode ignores native region-mode and
+selection-overlay machinery.
 
-- `status="ok"` requires `action="capture"` and valid non-zero `geometry`; maps to `cancelled=false` and forwards exact geometry.
-- `status="cancel"` maps to `cancelled=true`.
-- `status="error"` maps to `cancelled=true` (parent capture command then emits deterministic `ERR_SELECTION_CANCELLED` envelope).
-- Malformed/invalid helper payload maps to `cancelled=true` (same deterministic caller behavior).
+## Clipboard contract
 
-Contract guardrail: this parser contract does **not** change public `capture area` JSON field names or envelope structure.
+Capture, CLI clipboard commands, and Preview publish through one deep clipboard
+module. The bundled `shaula-clipboard-provider` receives a private versioned,
+length-delimited PNG or UTF-8 payload, loads it fully, claims the Wayland
+clipboard, and remains alive after the caller exits.
 
-## Runtime Constraints
+A subsequent Shaula provider claims the selection first and then replaces the
+session-bus lease `dev.shaula.ClipboardProvider`. The prior lease owner exits
+only after the new provider is ready, avoiding PID files, stale owners, and
+kill-before-ready races. Preview paste remains an asynchronous GTK/GDK reader.
 
-1. `wlr-screencopy-unstable-v1` is documented as deprecated in favor of `ext-image-copy-capture-v1`; this is a migration constraint, not a public feature promise.
-2. Niri window vs tile screenshot semantics remain capability-gated and must fail deterministically when unresolved.
-3. Portal screenshot API is a fallback path only.
-4. Overlay keyboard/focus failures must surface deterministic `ERR_*` outcomes rather than silent retry loops.
-5. Fractional scaling can expose logical-vs-physical drift; helper selection
-   geometry is compositor/output logical, while crop/redaction/export operate on
-   physical PNG pixels after normalization.
-6. Overlay teardown timing can still affect live capture if the compositor has
-   not repainted after Shaula's layer surface exits. Frozen region capture crops
-   from the frozen source image; live capture still needs manual Niri
-   verification.
+## Optional integrations
 
-## Optional Noctalia Plugin Integration (post-MVP)
+Niri keybindings/window rules and Noctalia are user-scoped optional integrations.
+Rejecting or skipping either integration must not reduce capture, Preview, save,
+or copy functionality.
 
-- Noctalia integration is **non-blocking** and optional. It is not part of the primary Wayland/Niri capture path.
-- The plugin uses an adapter model to map these MVP actions to Shaula CLI operations: `capture-area`, `capture-fullscreen`, `capture-window`, `open-last`, `history`.
-- The plugin invokes public Shaula CLI commands for optional shell actions; it does not depend on a resident daemon or private socket protocol.
-- If the plugin is absent, disabled, or fails to launch a command, terminal and keybinding capture flows remain unchanged and fully functional.
-- Failure domain separation is mandatory: plugin UI failures do not mutate core capture contract semantics.
+`shaula setup` owns their state, including validation, backups, atomic writes,
+idempotent installation, and symmetrical removal. Packages and installers only
+place the distributed integration payload.
+
+## Manual verification
+
+Run the native host checks after capture, overlay, clipboard, or Niri changes:
+
+```bash
+./dev capture
+./dev all
+```
+
+Use a full graphical GNOME/KDE session for portal picker verification and a Sway
+or other compatible wlroots session for `grim-wlroots` verification. See
+[docs/wayland-runtime-test-plan.md](../docs/wayland-runtime-test-plan.md).

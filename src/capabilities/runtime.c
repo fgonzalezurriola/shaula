@@ -10,10 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define ENV_SPAN_LITERAL(value)                                                \
-  { (value), sizeof(value) - 1U }
-
-static const char backend_niri_wayland_direct[] = "niri-wayland-direct";
+static const char backend_none[] = "unavailable";
 static const char backend_grim_wlroots[] = "grim-wlroots";
 static const char backend_portal_screenshot[] = "portal-screenshot";
 static const char backend_stub[] = "__stub__";
@@ -22,8 +19,6 @@ typedef struct {
   int32_t available;
   int32_t window_capable;
 } PortalCapabilities;
-
-static int force_portal(const char *value);
 
 static ShaulaEnvSpan invalid_span(void) {
   return (ShaulaEnvSpan){NULL, 0U};
@@ -48,7 +43,7 @@ static int boolean_valid(int32_t value) {
 }
 
 static int backend_valid(ShaulaBackendKind backend) {
-  return backend == SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT ||
+  return backend == SHAULA_BACKEND_KIND_NONE ||
          backend == SHAULA_BACKEND_KIND_GRIM_WLROOTS ||
          backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT ||
          backend == SHAULA_BACKEND_KIND_STUB;
@@ -62,11 +57,12 @@ static void capture_modes_reset(ShaulaCaptureModes *capture) {
 }
 
 static void decision_reset(ShaulaRuntimeDecision *out) {
-  if (out == NULL) {
+  if (out == NULL)
     return;
-  }
   out->compositor_supported = 0;
   out->overlay_supported = 0;
+  out->capture_route_available = 0;
+  out->grim_available = 0;
   out->backend = SHAULA_BACKEND_KIND_INVALID;
   capture_modes_reset(&out->capture);
   out->portal_available = 0;
@@ -78,14 +74,18 @@ static void decision_reset(ShaulaRuntimeDecision *out) {
 static ShaulaCaptureModes capture_modes_for(ShaulaBackendKind backend,
                                              int32_t compositor_supported) {
   ShaulaCaptureModes capture;
-
   capture_modes_reset(&capture);
-  if (compositor_supported == 0 || backend == SHAULA_BACKEND_KIND_STUB) {
+  if (compositor_supported == 0)
     return capture;
+
+  if (backend == SHAULA_BACKEND_KIND_GRIM_WLROOTS) {
+    capture.area = 1;
+    capture.fullscreen = 1;
+    capture.all_screens = 1;
+  } else if (backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT) {
+    capture.area = 1;
+    capture.fullscreen = 1;
   }
-  capture.area = 1;
-  capture.fullscreen = 1;
-  capture.all_screens = 1;
   return capture;
 }
 
@@ -109,17 +109,9 @@ static int process_property(const char *property, ShaulaProcessOutput *out) {
 
   memset(out, 0, sizeof(*out));
   if (shaula_process_run(argv, NULL, 2048U, 2048U, out) !=
-      SHAULA_PROCESS_STATUS_OK) {
+      SHAULA_PROCESS_STATUS_OK)
     return 0;
-  }
   return out->term_kind == SHAULA_PROCESS_TERM_EXITED && out->term_value == 0U;
-}
-
-/* Niri capture is native and does not consult the portal during startup. */
-static int should_probe_portal(const ShaulaCapabilitiesEnvironment *environment,
-                               ShaulaCompositorDetection compositor) {
-  return compositor.kind != SHAULA_COMPOSITOR_KIND_NIRI ||
-         force_portal(environment->capture_force_portal) != 0;
 }
 
 static int parse_last_unsigned(ShaulaProcessOwnedBytes bytes,
@@ -129,27 +121,22 @@ static int parse_last_unsigned(ShaulaProcessOwnedBytes bytes,
   size_t index;
   uint64_t value = 0U;
 
-  if (out_value == NULL || (bytes.data == NULL && bytes.length != 0U)) {
+  if (out_value == NULL || (bytes.data == NULL && bytes.length != 0U))
     return 0;
-  }
   while (end > 0U) {
     while (end > 0U &&
-           (bytes.data[end - 1U] < '0' || bytes.data[end - 1U] > '9')) {
+           (bytes.data[end - 1U] < '0' || bytes.data[end - 1U] > '9'))
       end -= 1U;
-    }
-    if (end == 0U) {
+    if (end == 0U)
       return 0;
-    }
     start = end;
     while (start > 0U && bytes.data[start - 1U] >= '0' &&
-           bytes.data[start - 1U] <= '9') {
+           bytes.data[start - 1U] <= '9')
       start -= 1U;
-    }
     for (index = start; index < end; index += 1U) {
       const uint64_t digit = (uint64_t)(bytes.data[index] - '0');
-      if (value > (UINT64_MAX - digit) / 10U) {
+      if (value > (UINT64_MAX - digit) / 10U)
         return 0;
-      }
       value = value * 10U + digit;
     }
     *out_value = value;
@@ -170,9 +157,8 @@ static PortalCapabilities probe_portal_capabilities(
     portal.available = flag != 0 ? 1 : 0;
     if (portal.available != 0 &&
         shaula_env_value_flag(environment->portal_window_capable, &flag) ==
-            SHAULA_ENV_STATUS_VALID) {
+            SHAULA_ENV_STATUS_VALID)
       portal.window_capable = flag != 0 ? 1 : 0;
-    }
     return portal;
   }
 
@@ -188,35 +174,10 @@ static PortalCapabilities probe_portal_capabilities(
     return portal;
   }
   if (parse_last_unsigned(output.stdout_bytes, &targets) != 0 &&
-      ((targets & UINT64_C(2)) != 0U || (targets & UINT64_C(8)) != 0U)) {
+      ((targets & UINT64_C(2)) != 0U || (targets & UINT64_C(8)) != 0U))
     portal.window_capable = 1;
-  }
   shaula_process_output_clear(&output);
   return portal;
-}
-
-static ShaulaBackendKind backend_override(const char *value) {
-  ShaulaEnvSpan token = {NULL, 0U};
-
-  if (shaula_env_value_trimmed(value, &token) != SHAULA_ENV_STATUS_VALID) {
-    return SHAULA_BACKEND_KIND_INVALID;
-  }
-  if (span_equals(token, literal_span(backend_stub, sizeof(backend_stub) - 1U))) {
-    return SHAULA_BACKEND_KIND_STUB;
-  }
-  if (span_equals(token, literal_span(backend_portal_screenshot,
-                                      sizeof(backend_portal_screenshot) - 1U))) {
-    return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
-  }
-  if (span_equals(token, literal_span(backend_grim_wlroots,
-                                      sizeof(backend_grim_wlroots) - 1U))) {
-    return SHAULA_BACKEND_KIND_GRIM_WLROOTS;
-  }
-  if (span_equals(token, literal_span(backend_niri_wayland_direct,
-                                      sizeof(backend_niri_wayland_direct) - 1U))) {
-    return SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT;
-  }
-  return SHAULA_BACKEND_KIND_INVALID;
 }
 
 static int force_portal(const char *value) {
@@ -227,64 +188,94 @@ static int force_portal(const char *value) {
              : 0;
 }
 
-static int grim_available(void) {
+static int grim_available(const ShaulaCapabilitiesEnvironment *environment) {
+  int32_t flag = 0;
+  if (shaula_env_value_flag(environment->grim_available, &flag) ==
+      SHAULA_ENV_STATUS_VALID)
+    return flag != 0 ? 1 : 0;
   g_autofree char *path = shaula_executable_find_grim();
   return path != NULL ? 1 : 0;
 }
 
+static ShaulaBackendKind backend_override(const char *value) {
+  ShaulaEnvSpan token = {NULL, 0U};
+  if (shaula_env_value_trimmed(value, &token) != SHAULA_ENV_STATUS_VALID)
+    return SHAULA_BACKEND_KIND_INVALID;
+  if (span_equals(token, literal_span(backend_stub, sizeof(backend_stub) - 1U)))
+    return SHAULA_BACKEND_KIND_STUB;
+  if (span_equals(token, literal_span(backend_portal_screenshot,
+                                      sizeof(backend_portal_screenshot) - 1U)))
+    return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
+  if (span_equals(token, literal_span(backend_grim_wlroots,
+                                      sizeof(backend_grim_wlroots) - 1U)))
+    return SHAULA_BACKEND_KIND_GRIM_WLROOTS;
+  return SHAULA_BACKEND_KIND_INVALID;
+}
+
+static int should_probe_portal(const ShaulaCapabilitiesEnvironment *environment,
+                               ShaulaCompositorDetection compositor,
+                               int32_t grim_present) {
+  const ShaulaBackendKind override = backend_override(environment->capture_backend);
+  if (override == SHAULA_BACKEND_KIND_STUB)
+    return 0;
+  if (override == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT ||
+      force_portal(environment->capture_force_portal) != 0)
+    return 1;
+  if ((compositor.kind == SHAULA_COMPOSITOR_KIND_NIRI ||
+       shaula_compositor_is_wlroots(compositor) > 0) &&
+      grim_present != 0)
+    return 0;
+  return 1;
+}
+
 static ShaulaBackendKind resolve_backend(
     const ShaulaCapabilitiesEnvironment *environment,
-    ShaulaCompositorDetection compositor, int32_t portal_available) {
+    ShaulaCompositorDetection compositor, int32_t grim_present,
+    int32_t portal_available) {
   const ShaulaBackendKind override = backend_override(environment->capture_backend);
-  int32_t wlroots;
-
-  if (backend_valid(override)) {
+  if (override == SHAULA_BACKEND_KIND_STUB)
     return override;
-  }
-  if (force_portal(environment->capture_force_portal) != 0) {
-    return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
-  }
-  if (compositor.kind == SHAULA_COMPOSITOR_KIND_NIRI) {
-    return SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT;
-  }
+  if (override == SHAULA_BACKEND_KIND_GRIM_WLROOTS)
+    return grim_present != 0 ? override : SHAULA_BACKEND_KIND_NONE;
+  if (override == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT)
+    return portal_available != 0 ? override : SHAULA_BACKEND_KIND_NONE;
+  if (force_portal(environment->capture_force_portal) != 0)
+    return portal_available != 0 ? SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT
+                                 : SHAULA_BACKEND_KIND_NONE;
 
-  wlroots = shaula_compositor_is_wlroots(compositor);
-  if (wlroots > 0) {
-    if (grim_available() != 0) {
+  if (compositor.kind == SHAULA_COMPOSITOR_KIND_NIRI ||
+      shaula_compositor_is_wlroots(compositor) > 0) {
+    if (grim_present != 0)
       return SHAULA_BACKEND_KIND_GRIM_WLROOTS;
-    }
-    if (portal_available != 0) {
+    if (portal_available != 0)
       return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
-    }
-    return SHAULA_BACKEND_KIND_GRIM_WLROOTS;
+    return SHAULA_BACKEND_KIND_NONE;
   }
-  if (portal_available != 0 &&
-      compositor.kind == SHAULA_COMPOSITOR_KIND_WAYLAND) {
+  if (compositor.kind == SHAULA_COMPOSITOR_KIND_WAYLAND &&
+      portal_available != 0)
     return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
-  }
-  return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
+  return SHAULA_BACKEND_KIND_NONE;
 }
 
 ShaulaCapabilitiesStatus
 shaula_capabilities_resolve(const ShaulaCapabilitiesEnvironment *environment,
                             ShaulaRuntimeDecision *out) {
-  PortalCapabilities portal;
+  PortalCapabilities portal = {0, 0};
   int32_t supported;
   int32_t overlay_supported;
+  int32_t grim_present;
 
   decision_reset(out);
-  if (environment == NULL || out == NULL) {
+  if (environment == NULL || out == NULL)
     return SHAULA_CAPABILITIES_STATUS_INVALID_ARGUMENT;
-  }
   if (shaula_compositor_detect(&environment->compositor, &out->compositor) !=
-      SHAULA_COMPOSITOR_STATUS_OK) {
+      SHAULA_COMPOSITOR_STATUS_OK)
     return SHAULA_CAPABILITIES_STATUS_INVALID_ARGUMENT;
-  }
 
-  portal = (PortalCapabilities){0, 0};
-  if (should_probe_portal(environment, out->compositor)) {
+  grim_present = grim_available(environment);
+  if (should_probe_portal(environment, out->compositor, grim_present))
     portal = probe_portal_capabilities(environment);
-  }
+
   supported = shaula_compositor_supported_in_current_scope(out->compositor,
                                                             portal.available);
   overlay_supported = shaula_compositor_overlay_supported(out->compositor);
@@ -295,18 +286,24 @@ shaula_capabilities_resolve(const ShaulaCapabilitiesEnvironment *environment,
 
   out->compositor_supported = supported;
   out->overlay_supported = overlay_supported;
-  out->backend = resolve_backend(environment, out->compositor, portal.available);
-  out->capture = capture_modes_for(out->backend, supported);
+  out->grim_available = grim_present;
   out->portal_available = portal.available;
   out->portal_window_capable = portal.window_capable;
+  out->backend = resolve_backend(environment, out->compositor, grim_present,
+                                 portal.available);
+  out->capture = capture_modes_for(out->backend, supported);
+  out->capture_route_available =
+      out->backend == SHAULA_BACKEND_KIND_GRIM_WLROOTS ||
+              out->backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT
+          ? 1
+          : 0;
   return SHAULA_CAPABILITIES_STATUS_OK;
 }
 
 ShaulaEnvSpan shaula_capabilities_backend_label(ShaulaBackendKind backend) {
   switch (backend) {
-  case SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT:
-    return literal_span(backend_niri_wayland_direct,
-                        sizeof(backend_niri_wayland_direct) - 1U);
+  case SHAULA_BACKEND_KIND_NONE:
+    return literal_span(backend_none, sizeof(backend_none) - 1U);
   case SHAULA_BACKEND_KIND_GRIM_WLROOTS:
     return literal_span(backend_grim_wlroots,
                         sizeof(backend_grim_wlroots) - 1U);
@@ -320,35 +317,27 @@ ShaulaEnvSpan shaula_capabilities_backend_label(ShaulaBackendKind backend) {
   }
 }
 
-size_t shaula_capabilities_fallback_count(ShaulaBackendKind backend) {
-  switch (backend) {
-  case SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT:
-  case SHAULA_BACKEND_KIND_GRIM_WLROOTS:
-  case SHAULA_BACKEND_KIND_STUB:
+size_t shaula_capabilities_fallback_count(ShaulaRuntimeDecision decision) {
+  if (decision.backend == SHAULA_BACKEND_KIND_GRIM_WLROOTS &&
+      decision.portal_available != 0)
     return 1U;
-  case SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT:
-  default:
-    return 0U;
-  }
+  return 0U;
 }
 
-ShaulaBackendKind shaula_capabilities_fallback_at(ShaulaBackendKind backend,
+ShaulaBackendKind shaula_capabilities_fallback_at(ShaulaRuntimeDecision decision,
                                                    size_t index) {
-  if (shaula_capabilities_fallback_count(backend) == 1U && index == 0U) {
+  if (shaula_capabilities_fallback_count(decision) == 1U && index == 0U)
     return SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
-  }
   return SHAULA_BACKEND_KIND_INVALID;
 }
 
 int32_t shaula_capabilities_mode_supported(ShaulaCaptureModes capture,
                                            ShaulaEnvSpan mode) {
   ShaulaCaptureMode parsed;
-
   if (!span_valid(mode) || !boolean_valid(capture.area) ||
       !boolean_valid(capture.fullscreen) ||
-      !boolean_valid(capture.all_screens) || !boolean_valid(capture.window)) {
+      !boolean_valid(capture.all_screens) || !boolean_valid(capture.window))
     return -1;
-  }
   parsed = shaula_capture_mode_parse_cli_token(
       (ShaulaCaptureModeSpan){mode.data, mode.length});
   switch (parsed) {
@@ -371,6 +360,8 @@ int32_t shaula_capabilities_mode_supported(ShaulaCaptureModes capture,
 static int decision_valid(ShaulaRuntimeDecision decision) {
   return boolean_valid(decision.compositor_supported) &&
          boolean_valid(decision.overlay_supported) &&
+         boolean_valid(decision.capture_route_available) &&
+         boolean_valid(decision.grim_available) &&
          boolean_valid(decision.capture.area) &&
          boolean_valid(decision.capture.fullscreen) &&
          boolean_valid(decision.capture.all_screens) &&
@@ -382,9 +373,8 @@ static int decision_valid(ShaulaRuntimeDecision decision) {
 
 int32_t
 shaula_capabilities_uses_portal_backend(ShaulaRuntimeDecision decision) {
-  if (!decision_valid(decision)) {
+  if (!decision_valid(decision))
     return -1;
-  }
   return decision.backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT ? 1 : 0;
 }
 
@@ -395,36 +385,34 @@ int32_t shaula_capabilities_degraded_backend(ShaulaRuntimeDecision decision) {
 int32_t shaula_capabilities_should_bypass_overlay_selection(
     ShaulaRuntimeDecision decision) {
   const int32_t portal = shaula_capabilities_uses_portal_backend(decision);
-  if (portal < 0) {
+  if (portal < 0)
     return -1;
-  }
-  return portal != 0 || decision.overlay_supported == 0 ? 1 : 0;
+  return portal != 0 ? 1 : 0;
 }
 
 int32_t shaula_capabilities_portal_selection_available(
     ShaulaRuntimeDecision decision) {
-  const int32_t portal = shaula_capabilities_uses_portal_backend(decision);
-  if (portal < 0) {
+  if (!decision_valid(decision))
     return -1;
-  }
-  return portal != 0 || decision.portal_available != 0 ? 1 : 0;
+  return decision.portal_available;
 }
 
 int32_t shaula_capabilities_previous_area_supported(
     ShaulaRuntimeDecision decision) {
   const int32_t portal = shaula_capabilities_uses_portal_backend(decision);
-  if (portal < 0) {
+  if (portal < 0)
     return -1;
-  }
-  return portal == 0 ? 1 : 0;
+  return decision.capture_route_available != 0 && portal == 0 ? 1 : 0;
 }
 
 ShaulaCapabilitiesStatus
 shaula_capabilities_select_portal_fallback(ShaulaRuntimeDecision *decision) {
-  if (decision == NULL || !decision_valid(*decision)) {
+  if (decision == NULL || !decision_valid(*decision))
     return SHAULA_CAPABILITIES_STATUS_INVALID_ARGUMENT;
-  }
+  if (decision->portal_available == 0)
+    return SHAULA_CAPABILITIES_STATUS_BACKEND_UNAVAILABLE;
   decision->backend = SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
+  decision->capture_route_available = 1;
   decision->capture = capture_modes_for(decision->backend,
                                         decision->compositor_supported);
   return SHAULA_CAPABILITIES_STATUS_OK;

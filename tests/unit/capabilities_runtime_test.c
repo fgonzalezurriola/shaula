@@ -25,6 +25,7 @@ static void assert_span_equal(ShaulaEnvSpan actual, const char *expected) {
 static ShaulaCapabilitiesEnvironment base_environment(const char *compositor) {
   ShaulaCapabilitiesEnvironment environment = {0};
   environment.compositor.shaula_compositor = compositor;
+  environment.grim_available = "1";
   environment.portal_available = "0";
   environment.portal_window_capable = "0";
   return environment;
@@ -42,15 +43,14 @@ static void test_abi_and_backend_labels(void) {
   g_assert_cmpuint(sizeof(ShaulaBackendKind), ==, 4U);
   g_assert_cmpuint(sizeof(ShaulaCapabilitiesStatus), ==, 4U);
   g_assert_cmpint(SHAULA_BACKEND_KIND_INVALID, ==, -1);
-  g_assert_cmpint(SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT, ==, 0);
+  g_assert_cmpint(SHAULA_BACKEND_KIND_NONE, ==, 0);
   g_assert_cmpint(SHAULA_BACKEND_KIND_GRIM_WLROOTS, ==, 1);
   g_assert_cmpint(SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT, ==, 2);
   g_assert_cmpint(SHAULA_BACKEND_KIND_STUB, ==, 3);
 
   assert_span_equal(
-      shaula_capabilities_backend_label(
-          SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT),
-      "niri-wayland-direct");
+      shaula_capabilities_backend_label(SHAULA_BACKEND_KIND_NONE),
+      "unavailable");
   assert_span_equal(
       shaula_capabilities_backend_label(SHAULA_BACKEND_KIND_GRIM_WLROOTS),
       "grim-wlroots");
@@ -90,8 +90,9 @@ static void test_niri_runtime_decision(void) {
   assert_span_equal(decision.compositor.label, "niri");
   g_assert_cmpint(decision.compositor_supported, ==, 1);
   g_assert_cmpint(decision.overlay_supported, ==, 1);
-  g_assert_cmpint(decision.backend, ==,
-                  SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT);
+  g_assert_cmpint(decision.backend, ==, SHAULA_BACKEND_KIND_GRIM_WLROOTS);
+  g_assert_cmpint(decision.grim_available, ==, 1);
+  g_assert_cmpint(decision.capture_route_available, ==, 1);
   g_assert_cmpint(decision.capture.area, ==, 1);
   g_assert_cmpint(decision.capture.fullscreen, ==, 1);
   g_assert_cmpint(decision.capture.all_screens, ==, 1);
@@ -108,15 +109,15 @@ static void test_backend_override_precedence(void) {
       {"__stub__", SHAULA_BACKEND_KIND_STUB},
       {" portal-screenshot\t", SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT},
       {"grim-wlroots", SHAULA_BACKEND_KIND_GRIM_WLROOTS},
-      {"niri-wayland-direct", SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT},
   };
   size_t index;
 
   for (index = 0U; index < G_N_ELEMENTS(cases); index += 1U) {
     ShaulaCapabilitiesEnvironment environment = base_environment("niri");
-    const ShaulaRuntimeDecision decision = (environment.capture_backend =
-                                                cases[index].token,
-                                            resolve_environment(environment));
+    environment.capture_backend = cases[index].token;
+    if (cases[index].expected == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT)
+      environment.portal_available = "1";
+    const ShaulaRuntimeDecision decision = resolve_environment(environment);
     g_assert_cmpint(decision.backend, ==, cases[index].expected);
   }
 
@@ -124,7 +125,7 @@ static void test_backend_override_precedence(void) {
     ShaulaCapabilitiesEnvironment environment = base_environment("niri");
     environment.capture_backend = "unknown";
     g_assert_cmpint(resolve_environment(environment).backend, ==,
-                    SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT);
+                    SHAULA_BACKEND_KIND_GRIM_WLROOTS);
   }
 }
 
@@ -133,6 +134,7 @@ static void test_force_portal_and_stub_capture_modes(void) {
   ShaulaRuntimeDecision decision;
 
   environment.capture_force_portal = "YeS";
+  environment.portal_available = "1";
   decision = resolve_environment(environment);
   g_assert_cmpint(decision.backend, ==,
                   SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT);
@@ -155,8 +157,8 @@ static void test_generic_wayland_portal_gating(void) {
                   SHAULA_COMPOSITOR_KIND_WAYLAND);
   g_assert_cmpint(decision.compositor_supported, ==, 0);
   g_assert_cmpint(decision.overlay_supported, ==, 0);
-  g_assert_cmpint(decision.backend, ==,
-                  SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT);
+  g_assert_cmpint(decision.backend, ==, SHAULA_BACKEND_KIND_NONE);
+  g_assert_cmpint(decision.capture_route_available, ==, 0);
   g_assert_cmpint(decision.capture.area, ==, 0);
 
   environment.portal_available = "true";
@@ -207,18 +209,17 @@ static void test_mode_and_fallback_policy(void) {
                       capture, (ShaulaEnvSpan){NULL, 1U}),
                   ==, -1);
 
-  g_assert_cmpuint(shaula_capabilities_fallback_count(
-                       SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT),
-                   ==, 1U);
-  g_assert_cmpint(shaula_capabilities_fallback_at(
-                      SHAULA_BACKEND_KIND_NIRI_WAYLAND_DIRECT, 0U),
-                  ==, SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT);
-  g_assert_cmpuint(shaula_capabilities_fallback_count(
-                       SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT),
-                   ==, 0U);
-  g_assert_cmpint(shaula_capabilities_fallback_at(
-                      SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT, 0U),
-                  ==, SHAULA_BACKEND_KIND_INVALID);
+  ShaulaRuntimeDecision decision =
+      resolve_environment(base_environment("niri"));
+  g_assert_cmpuint(shaula_capabilities_fallback_count(decision), ==, 0U);
+  decision.portal_available = 1;
+  g_assert_cmpuint(shaula_capabilities_fallback_count(decision), ==, 1U);
+  g_assert_cmpint(shaula_capabilities_fallback_at(decision, 0U), ==,
+                  SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT);
+  decision.backend = SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT;
+  g_assert_cmpuint(shaula_capabilities_fallback_count(decision), ==, 0U);
+  g_assert_cmpint(shaula_capabilities_fallback_at(decision, 0U), ==,
+                  SHAULA_BACKEND_KIND_INVALID);
 }
 
 static void test_decision_policy_helpers(void) {
@@ -234,6 +235,9 @@ static void test_decision_policy_helpers(void) {
   g_assert_cmpint(shaula_capabilities_previous_area_supported(decision), ==,
                   1);
 
+  g_assert_cmpint(shaula_capabilities_select_portal_fallback(&decision), ==,
+                  SHAULA_CAPABILITIES_STATUS_BACKEND_UNAVAILABLE);
+  decision.portal_available = 1;
   g_assert_cmpint(shaula_capabilities_select_portal_fallback(&decision), ==,
                   SHAULA_CAPABILITIES_STATUS_OK);
   g_assert_cmpint(decision.backend, ==,
@@ -284,6 +288,7 @@ static void test_portal_probe_process_contract(void) {
   g_assert_true(g_setenv("PATH", directory, TRUE));
   g_assert_true(g_setenv("SHAULA_TEST_GDBUS_LOG", log_path, TRUE));
 
+  environment.grim_available = "0";
   environment.portal_available = NULL;
   environment.portal_window_capable = NULL;
   decision = resolve_environment(environment);

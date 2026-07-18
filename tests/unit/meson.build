@@ -149,6 +149,31 @@ test(
   suite: ['unit'],
 )
 
+clipboard_lifecycle_test = executable(
+  'clipboard-lifecycle-test',
+  'clipboard_lifecycle_test.c',
+  dependencies: [glib_dep, shaula_clipboard_dep],
+)
+
+test(
+  'clipboard-lifecycle',
+  clipboard_lifecycle_test,
+  suite: ['unit'],
+)
+
+clipboard_handoff_test = executable(
+  'clipboard-handoff-test',
+  'clipboard_handoff_test.c',
+  dependencies: [glib_dep, gio_dep, shaula_clipboard_handoff_dep],
+)
+
+test(
+  'clipboard-handoff',
+  clipboard_handoff_test,
+  suite: ['unit'],
+  timeout: 30,
+)
+
 preview_notify_test = executable(
   'preview-notify-test',
   'preview_notify_test.c',
@@ -194,6 +219,18 @@ settings_process_test = executable(
 test(
   'settings-process',
   settings_process_test,
+  suite: ['unit'],
+)
+
+noctalia_managed_test = executable(
+  'noctalia-managed-test',
+  'noctalia_managed_test.c',
+  dependencies: [shaula_config_dep, json_glib_dep],
+)
+
+test(
+  'noctalia-managed',
+  noctalia_managed_test,
   suite: ['unit'],
 )
 

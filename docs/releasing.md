@@ -1,180 +1,285 @@
 # Releasing and Installation
 
-This document owns Shaula's release, installer, package, icon, and user-integration contracts.
+This document owns Shaula's release payload, public installer, package metadata,
+icons, helpers, and user-integration contracts.
 
-## GitHub Releases
+## Ownership model
 
-GitHub Releases are published by `.github/workflows/release.yml` on `v*` tag pushes.
+Immutable application files are owned by Meson, packages, release archives, and
+the public installer:
 
-The release job:
+- `shaula` and all bundled helpers, including `shaula-clipboard-provider`;
+- the canonical `data/shaula.desktop` launcher;
+- application icons and Preview runtime action icons;
+- `data/release-manifest.txt`;
+- distributed Noctalia integration source files.
 
-1. Configures and builds the tagged commit with Meson in release mode.
-2. Runs the maintained Meson tests.
-3. Stages the Meson install and packages its `usr/bin` and `usr/share` payload as `shaula-linux-x86_64.tar.gz`.
-4. Writes and verifies `SHA256SUMS`.
-5. Verifies that the archive contains every helper binary, preview toolbar icon, and Noctalia widget file.
-6. Installs the local archive into fake XDG paths to validate desktop, icon, config, Niri, and Noctalia behavior.
-7. Publishes or replaces release assets through `gh`.
+Mutable user state is owned by `shaula setup`:
 
-The publish job uses `contents: write`, does not run on pull requests, does not use shared caches, and uses a tag-specific run name.
+- `${XDG_CONFIG_HOME:-~/.config}/shaula/config.toml`;
+- managed Niri preview and keybinding blocks;
+- the installed Noctalia plugin directory and matching Noctalia JSON state.
 
-The public repository currently uses `master` as its default branch. Raw installer links must therefore use `raw.githubusercontent.com/.../master/scripts/install.sh` unless the default branch changes.
+`./dev` only orchestrates development build, staging, install, setup, validation,
+and reload operations. Package hooks must not mutate user configuration.
 
-## Release Installer
+## GitHub releases
 
-`scripts/install.sh` and `scripts/uninstall.sh` provide a user-local installation flow.
+`.github/workflows/release.yml` publishes releases for `v*` tag pushes. Before
+building, it rejects the tag unless it is exactly `v` plus the Meson project
+version and `docs/release-<tag>.md` exists. The workflow then:
 
-The installer:
+1. Builds and tests the tagged commit in native x86_64 and QEMU-backed native
+   AArch64 Ubuntu containers.
+2. Stages Meson's install under `usr/bin` and `usr/share` for each architecture.
+3. Packages `shaula-linux-x86_64.tar.gz` and
+   `shaula-linux-aarch64.tar.gz`.
+4. Verifies every executable's ELF architecture and executable mode.
+5. Checks that every archive file is manifest-backed and every manifest path is
+   present.
+6. Confirms that Shaula does not install or claim the shared
+   `icons/hicolor/index.theme` file.
+7. Writes and verifies one `SHA256SUMS` containing both archives.
+8. Exercises installer architecture selection and installs the native archive
+   into fake XDG paths.
+9. Publishes or replaces the release assets through `gh`, using the matching
+   checked-in release notes.
 
-- verifies the GitHub Release `SHA256SUMS`;
-- supports the latest stable release, `--version`, a positional `v*` version, and `SHAULA_VERSION`;
-- warns about missing runtime tools;
-- installs desktop and icon assets;
-- refreshes the user hicolor icon cache and desktop application database when
-  `gtk-update-icon-cache` and `update-desktop-database` are available;
-- delegates user configuration and integrations to `shaula setup`;
-- preserves an existing `~/.config/shaula/config.toml`;
-- uses `sudo` only after explicit Arch/CachyOS runtime-dependency confirmation.
-
-On Arch/CachyOS, the dependency prompt installs:
+The public repository uses `master` as its default branch. The normal installer
+command is therefore:
 
 ```bash
-sudo pacman -S --needed grim wl-clipboard gtk4 gtk4-layer-shell
+curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scripts/install.sh | sh
 ```
 
-The prompt reads from `/dev/tty` so an interactive `curl | sh` install still works. It logs when packages are already installed and uses concise TTY status prefixes without coloring entire log lines. `--yes` must never authorize privilege escalation automatically.
+## Release payload manifest
 
-Test-only installer variables:
+`data/release-manifest.txt` is the canonical immutable payload list. Meson
+installs it as `share/shaula/release-manifest.txt`; release CI, the public
+installer, and binary packaging consume the same payload.
 
-- `SHAULA_INSTALL_ASSUME_ARCH=1`
-- `SHAULA_INSTALL_TEST_MISSING_ARCH_PACKAGES=...`
+Any new helper or runtime resource must be added to Meson and the manifest in the
+same change. Release validation must fail when a listed file is absent or a
+binary is not executable.
 
-These variables allow the dependency prompt to be tested without uninstalling system packages.
+The payload includes:
 
-Release installs otherwise stay non-interactive. `shaula setup` owns optional Niri and Noctalia prompts when those environments are detected.
+- `shaula`, overlay, Preview, Settings, crop, portal, and clipboard-provider
+  executables;
+- the desktop entry;
+- fixed-size and scalable application icons;
+- all Preview symbolic action icons;
+- the Noctalia integration source.
 
-Noctalia plugin state hot-applies. The release installer must not ask users to restart Noctalia after installing the widget.
+## Public installer
 
-Every prompt that changes integration state must explain the visible outcome, affected files, settings, or keybindings before requesting confirmation. User-facing copy should describe outcomes rather than expose internal CLI commands. Output should be grouped by visible phases and name backup/config paths when useful for recovery.
+`scripts/install.sh` is a user-local installer. Before changing user files it:
 
-## Local Development Installation
+1. downloads the release archive and `SHA256SUMS`;
+2. verifies the archive checksum;
+3. verifies every manifest path, executable mode, and path safety constraint;
+4. runs the extracted Shaula binary against the active Wayland session to ensure
+   a usable capture route exists.
 
-`./dev dev-install [scripts/install.sh args...]` builds the current checkout, stages the Meson install into a temporary release archive with `SHA256SUMS`, and runs `scripts/install.sh` against `file://` URLs.
+It then installs the immutable payload, refreshes optional desktop caches, runs
+`shaula setup`, and validates the installed capture route, preflight, diagnostics,
+clipboard helper, Preview resources, and integration payload.
 
-Use:
+The installer must never:
+
+- invoke `sudo` or another privilege-escalation command;
+- install system packages;
+- choose or install a desktop portal backend;
+- complete successfully when no usable Screenshot portal or compatible native
+  capture route exists.
+
+The desktop environment owns portal backend selection. `grim` is not universal;
+it is used automatically only on a compatible compositor when present.
+
+`--yes` is an advanced automation flag. It makes setup noninteractive and accepts
+detected optional integrations, but it does not authorize system changes or
+privilege escalation. Normal installation documentation must not require it.
+
+`--no-icon` skips application icons only. Preview symbolic icons remain mandatory
+runtime resources. `--no-desktop` skips only the canonical desktop entry.
+
+In a noninteractive installation without explicit acceptance, setup creates or
+keeps the Shaula config and skips optional integrations without failing. With an
+interactive TTY, setup can offer detected Niri and Noctalia integration.
+
+A successful installation ends with a direct command the user can run:
+
+```bash
+shaula capture area --json
+```
+
+## Setup
+
+`shaula setup` owns user configuration and integration state. Supported flags:
+
+- `--yes`
+- `--niri`
+- `--noctalia`
+- `--niri-keybinds`
+- `--no-integrations`
+- `--no-niri`
+- `--no-noctalia`
+- `--remove`
+- `--dry-run`
+
+Setup operations are idempotent. Changed files are validated, backed up, and
+atomically replaced. Removal uses the same managed markers and state model as
+installation.
+
+Niri integration owns two blocks:
+
+- `// BEGIN/END SHAULA PREVIEW WINDOW RULE`
+- `// BEGIN/END SHAULA MANAGED KEYBINDS`
+
+Noctalia integration installs only into a directory marked `.shaula-managed`.
+It refuses to overwrite or remove an unmarked plugin directory. When present,
+`plugins.json` must use version 2 with an object `states` member, and
+`settings.json` must expose `bar.widgets`; otherwise setup fails without applying
+that mutation. Missing Noctalia JSON files are reported as skipped rather than
+invented.
+
+## Clipboard provider
+
+`shaula-clipboard-provider` is an installed GTK helper and a required core
+resource. Capture, `shaula clipboard`, and Preview publish through one clipboard
+module.
+
+The initiating process sends a versioned, length-delimited PNG or UTF-8 payload
+over a private stdin pipe and waits for one readiness line. Provider diagnostics
+use stderr; stdout is reserved for the readiness protocol so child output cannot
+corrupt public JSON.
+
+The helper loads the payload before claiming the clipboard. It remains alive
+while Shaula owns the selection. Replacement follows ADR-0003 through a private
+session-bus prepare/commit protocol and a unique clipboard MIME marker. Provider
+A remains alive until provider B owns the Wayland clipboard, replaces
+`dev.shaula.ClipboardProvider`, and emits readiness; B commits A's exit only
+after those steps. A failed B aborts the handoff, allowing A to retain or restore
+its valid selection. A clipboard change without the prepared marker is external
+replacement and still terminates the active provider. A provider from before
+v0.1.6 has no handoff object; that one-time upgrade case is detected as legacy
+and replaced through its existing clipboard/name-loss behavior rather than
+making clipboard publication permanently unavailable.
+
+Spawn failures and provider exit 35 map to clipboard unavailable. Malformed
+readiness, readiness timeout, and generic provider failure remain distinct.
+Every failed child is terminated and reaped before return, while a successful
+provider is detached from the initiating caller. Preview paste continues to use
+asynchronous GTK/GDK reads and does not depend on a separate paste executable.
+
+## Capture packaging contract
+
+Runtime capability selection advertises only verified prerequisites:
+
+- `grim-wlroots` requires a resolvable `grim` executable on Niri or a compatible
+  wlroots compositor;
+- `portal-screenshot` requires a verified
+  `org.freedesktop.portal.Screenshot` interface;
+- otherwise preflight and installation fail with a deterministic unavailable
+  capture route.
+
+Portal Quick/Area capture invokes the portal's interactive picker directly. It
+must not prepare a frozen source, launch `shaula-overlay`, or pass a Shaula area
+geometry to the portal helper. Portal cancellation, timeout, unavailability, and
+other failure outcomes remain distinct.
+
+## Local development installation
+
+`./dev dev-install [installer args...]` builds the current checkout, stages the
+Meson install, creates a local release archive and checksums, invokes the public
+installer with `file://` assets, runs setup and validation, and reloads Noctalia
+when applicable.
 
 ```bash
 ./dev dev-install --yes
 ```
 
-for a non-interactive install of the exact local build. The old `./dev install` alias no longer exists.
-
-The development wrapper sets `SHAULA_INSTALL_CONTEXT=dev` and makes install/Noctalia prompts explicit that the current local build is being installed or reloaded rather than a GitHub release.
-
-When `~/.config/noctalia` exists, a real development install restarts Noctalia by trying, in order:
-
-1. `noctalia.service`
-2. `qs`
-3. `quickshell`
-
-Restart is skipped for `--help`, `--uninstall`, and `--no-integrations`.
-
-`./dev dev-install --yes` does not install Niri keybindings by itself. It passes `--skip-niri-keybinds` to `shaula setup` so non-interactive installs cannot silently edit Niri configuration.
-
-Install keybindings explicitly with one of:
+The command displays build, staging, install, setup, and validation phases.
+Keybindings remain opt-in:
 
 ```bash
 ./dev dev-install --yes --niri-keybinds
-shaula setup
 ```
 
-or the Settings shortcut installer.
+`./dev noctalia-load` is widget-only: it builds Shaula, runs setup with Niri
+disabled and Noctalia explicitly selected, then reloads Noctalia. It does not run
+the full installer.
 
-Managed Ctrl+Shift+1/2/3/4 Niri keybindings must spawn `shaula capture <mode> --json`. Capture commands reject non-JSON invocations with `ERR_CLI_USAGE`.
+## AUR packages
 
-## Setup Wizard
+Packaging scaffolds live in `aur/shaula` and `aur/shaula-bin`.
 
-`shaula setup` is the post-install user wizard for package-manager installations such as AUR `shaula-bin`.
+Both packages declare linked application libraries, JSON-GLib, and the desktop
+portal framework as hard dependencies. They do not declare `grim` or a separate
+clipboard utility as universal dependencies. `grim`, Niri, and Quickshell are
+classified as optional integrations/capture implementations.
 
-Packages install files. Setup owns user state:
+`shaula` builds from source for `x86_64` and `aarch64`. `shaula-bin` consumes
+the checked x86_64 or AArch64 release archive selected by makepkg. Both
+`.SRCINFO` files must be regenerated whenever their PKGBUILD metadata changes.
 
-- creates the user config;
-- asks before mutating Niri configuration;
-- asks before installing the Noctalia Bar Widget;
-- writes backups before editing JSON or config files.
+The binary package installs the complete archive payload, including
+`shaula-clipboard-provider`, rather than recreating the desktop entry or icons.
 
-Supported non-interactive/setup flags include:
+### AUR checksum finalization
 
-- `--yes`
-- `--no-integrations`
-- `--no-niri`
-- `--no-noctalia`
-- `--niri-keybinds`
-- `--skip-niri-keybinds`
-- `--dry-run`
+During release preparation, remote `v0.1.6` sources and assets do not exist yet.
+The PKGBUILDs therefore use the explicit non-final marker `SKIP`; no old checksum
+or fabricated future checksum is permitted. After the tag and GitHub release
+assets exist, but before publishing to the AUR:
 
-## AUR Packages
+1. download the immutable tag source archive, LICENSE, and both release archives;
+2. calculate each SHA-256 from those downloaded files;
+3. replace every `SKIP` with the matching checksum;
+4. regenerate both `.SRCINFO` files with `makepkg --printsrcinfo`;
+5. rerun `scripts/qa/assert-release-contract.sh` and package builds on both
+   architectures where available.
 
-Packaging scaffolds live under:
+AUR publication is not complete while any `SKIP` remains.
 
-- `aur/shaula`
-- `aur/shaula-bin`
+## Icon packaging
 
-`shaula` builds from source for `x86_64` and `aarch64` with Meson, Ninja, and a C11 compiler. Zig is not a build or packaging dependency.
+The desktop launcher uses `Icon=shaula`. Application icons are distributed at
+48, 64, 128, 256, and 512 pixels plus
+`scalable/apps/shaula.svg`. Preview runtime icons are installed under
+`scalable/actions`.
 
-`shaula-bin` installs the GitHub Release archive. It currently declares only `x86_64` because releases do not yet provide a checked `shaula-linux-aarch64.tar.gz` asset.
+Shaula installs its icon files into the existing hicolor tree but never installs
+or overwrites the shared `index.theme`. Cache refresh tools are optional and must
+not determine installation success.
 
-Both packages install a post-install message that points users to Settings and conditionally to `shaula setup`. Package hooks must not mutate user configuration.
+## Verification
 
-AUR maintainer metadata uses:
+After every code change:
 
-```text
-fgonzalezurriola <fgonzalezurriola@gmail.com>
+```bash
+./dev check
+git diff --check
 ```
 
-Keep `shaula` and `shaula-bin` aligned when publishing releases. Both scaffolds are currently at v0.1.5 with regenerated `.SRCINFO` and their corresponding source/binary checksums.
+For release/install changes also run:
 
-## Icon Packaging
+```bash
+scripts/qa/assert-release-contract.sh "$PWD"
+scripts/qa/assert-release-archive.sh "$PWD" \
+  dist/shaula-linux-x86_64.tar.gz x86_64
+scripts/qa/assert-release-archive.sh "$PWD" \
+  dist/shaula-linux-aarch64.tar.gz aarch64
+./dev dev-install --yes
+```
 
-The installer copies the packaged `share/icons/hicolor` tree into `~/.local/share/icons/hicolor`.
+Wayland capture and clipboard lifetime still require a live graphical session.
+For native interactive behavior run:
 
-The desktop launcher uses `Icon=shaula`. The application icon is distributed as fixed PNG sizes under:
+```bash
+./dev capture
+./dev all
+```
 
-- `48x48`
-- `64x64`
-- `128x128`
-- `256x256`
-- `512x512`
-
-It is also distributed as a raster-preserving `scalable/apps/shaula.svg` so
-launchers that prefer scalable app icons, including Noctalia/Quickshell, can
-resolve `Icon=shaula` without changing the app artwork.
-
-The source raster is `src/preview/icons/source/shaula-source.png`. Regenerate
-the scalable app SVG from that source with Inkscape. Do not add unused
-root-level icon copies.
-
-Uninstall removes these PNG sizes and the SVG application icon, then refreshes
-the same desktop caches when the host tools are available.
-
-Preview toolbar icons are loaded from `../share/icons` relative to the installed helper. Missing `scalable/actions/shaula-*-symbolic.svg` assets appear as GTK missing-icon glyphs and must be caught by release archive/install verification.
-
-## Niri and Noctalia Integration
-
-Integration state is user-scoped. Packages and the installer place files; `shaula setup` detects user configuration and asks before changing it.
-
-Managed Niri blocks include:
-
-- the preview floating window rule;
-- quick capture;
-- area capture;
-- current-monitor fullscreen capture;
-- all-screens capture.
-
-Generated keybindings use the installed absolute `shaula` path.
-
-When Noctalia is detected, setup can install `integrations/noctalia/shaula/` into `~/.config/noctalia/plugins/shaula/`. It enables `states.shaula.enabled` and adds `plugin:shaula` to a bar only after backing up and validating Noctalia JSON configuration.
-
-The Noctalia menu exposes capture actions, Settings, screenshots folder, and bug reporting. `shaula doctor` stays out of the menu because it is a diagnostic/development command.
-
-Niri and Noctalia detection must honor `XDG_CONFIG_HOME` before legacy `~/.config/...` fallbacks. This applies to release installs and CI install-smoke tests.
+GNOME and KDE interactive portal/graphical validation is not checked for
+v0.1.6. It is explicitly deferred to v0.1.7 and must not be reported as passed.

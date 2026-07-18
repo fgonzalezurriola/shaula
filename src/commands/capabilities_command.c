@@ -1,6 +1,7 @@
 #include "commands.h"
 
 #include "capabilities/runtime.h"
+#include "clipboard/clipboard.h"
 #include "support.h"
 
 #include <glib.h>
@@ -32,6 +33,16 @@ int shaula_capabilities_command_run(int argc, char **argv) {
         "capabilities list", "ERR_UNSUPPORTED_COMPOSITOR",
         "unsupported compositor for shaula v1", details);
   }
+  if (!runtime.capture_route_available) {
+    g_autofree char *details = g_strdup_printf(
+        "{\"detected_compositor\":%s,\"grim_available\":%s,"
+        "\"portal_available\":%s}",
+        compositor, shaula_command_json_bool(runtime.grim_available),
+        shaula_command_json_bool(runtime.portal_available));
+    return shaula_command_write_error(
+        "capabilities list", "ERR_CAPTURE_BACKEND_UNAVAILABLE",
+        "no usable Wayland capture route is available", details);
+  }
 
   ShaulaEnvSpan backend_span =
       shaula_capabilities_backend_label(runtime.backend);
@@ -40,10 +51,10 @@ int shaula_capabilities_command_run(int argc, char **argv) {
   g_autofree char *backend = shaula_command_json_string(backend_text);
   GString *fallbacks = g_string_new("[");
   size_t fallback_count =
-      shaula_capabilities_fallback_count(runtime.backend);
+      shaula_capabilities_fallback_count(runtime);
   for (size_t i = 0; i < fallback_count; i++) {
     ShaulaEnvSpan fallback_span = shaula_capabilities_backend_label(
-        shaula_capabilities_fallback_at(runtime.backend, i));
+        shaula_capabilities_fallback_at(runtime, i));
     g_autofree char *fallback_text =
         g_strndup(fallback_span.data, fallback_span.length);
     g_autofree char *fallback =
@@ -73,23 +84,33 @@ int shaula_capabilities_command_run(int argc, char **argv) {
       "\"capabilities list\",\"timestamp\":\"%s\",\"capture\":{"
       "\"area\":%s,\"fullscreen\":%s,\"all_screens\":%s,\"window\":%s},"
       "\"backend\":%s,\"fallbacks\":%s,\"portal_window_capable\":%s,"
-      "\"result\":{\"capture\":{\"area\":%s,\"fullscreen\":%s,"
-      "\"all_screens\":%s,\"window\":%s},\"backend\":%s,"
-      "\"fallbacks\":%s,\"compositor\":%s,\"ipc_version\":\"1.0.0\","
-      "\"portal_available\":%s,\"portal_window_capable\":%s,"
-      "\"overlay_supported\":%s},\"warnings\":%s}\n",
+      "\"grim_available\":%s,\"capture_route_available\":%s,"
+      "\"clipboard_provider_available\":%s,\"result\":{\"capture\":{"
+      "\"area\":%s,\"fullscreen\":%s,\"all_screens\":%s,\"window\":%s},"
+      "\"backend\":%s,\"fallbacks\":%s,\"compositor\":%s,"
+      "\"ipc_version\":\"1.0.0\",\"portal_available\":%s,"
+      "\"portal_window_capable\":%s,\"overlay_supported\":%s,"
+      "\"grim_available\":%s,\"capture_route_available\":%s,"
+      "\"clipboard_provider_available\":%s},\"warnings\":%s}\n",
       timestamp, shaula_command_json_bool(runtime.capture.area),
       shaula_command_json_bool(runtime.capture.fullscreen),
       shaula_command_json_bool(runtime.capture.all_screens),
       shaula_command_json_bool(runtime.capture.window), backend, fallbacks->str,
       shaula_command_json_bool(runtime.portal_window_capable),
+      shaula_command_json_bool(runtime.grim_available),
+      shaula_command_json_bool(runtime.capture_route_available),
+      shaula_command_json_bool(shaula_clipboard_provider_available()),
       shaula_command_json_bool(runtime.capture.area),
       shaula_command_json_bool(runtime.capture.fullscreen),
       shaula_command_json_bool(runtime.capture.all_screens),
       shaula_command_json_bool(runtime.capture.window), backend, fallbacks->str,
       compositor, shaula_command_json_bool(runtime.portal_available),
       shaula_command_json_bool(runtime.portal_window_capable),
-      shaula_command_json_bool(runtime.overlay_supported), warnings->str);
+      shaula_command_json_bool(runtime.overlay_supported),
+      shaula_command_json_bool(runtime.grim_available),
+      shaula_command_json_bool(runtime.capture_route_available),
+      shaula_command_json_bool(shaula_clipboard_provider_available()),
+      warnings->str);
   g_string_free(fallbacks, TRUE);
   g_string_free(warnings, TRUE);
   return 0;

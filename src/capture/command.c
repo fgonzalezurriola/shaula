@@ -2,6 +2,7 @@
 
 #include "capabilities/runtime.h"
 #include "cli/json.h"
+#include "clipboard/clipboard.h"
 #include "compositor/focused_output.h"
 #include "config/config.h"
 #include "errors/taxonomy.h"
@@ -72,6 +73,14 @@ typedef enum {
   SELECTION_PROTOCOL_INVALID,
 } SelectionStatus;
 
+typedef enum {
+  BACKEND_OK,
+  BACKEND_CANCELLED,
+  BACKEND_TIMEOUT,
+  BACKEND_UNAVAILABLE,
+  BACKEND_FAILED,
+} BackendStatus;
+
 static ShaulaJsonSpan json_span(const char *value) {
   return (ShaulaJsonSpan){.data = (const guint8 *)value,
                           .length = value != NULL ? strlen(value) : 0};
@@ -134,6 +143,7 @@ static ShaulaCapabilitiesEnvironment capabilities_environment(void) {
           },
       .capture_backend = g_getenv("SHAULA_CAPTURE_BACKEND"),
       .capture_force_portal = g_getenv("SHAULA_CAPTURE_FORCE_PORTAL"),
+      .grim_available = g_getenv("SHAULA_GRIM_AVAILABLE"),
       .portal_available = g_getenv("SHAULA_PORTAL_AVAILABLE"),
       .portal_window_capable = g_getenv("SHAULA_PORTAL_WINDOW_CAPABLE"),
   };
@@ -299,9 +309,14 @@ static char *focused_output(void) {
   return copy;
 }
 
-static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
-                                const char *mode, const CaptureGeometry *geometry,
-                                const char *output) {
+/*
+ * Execute one verified capture adapter and preserve portal cancellation,
+ * timeout, unavailability, and generic failure as distinct outcomes.
+ */
+static BackendStatus execute_backend(const ShaulaRuntimeDecision *runtime,
+                                     const char *mode,
+                                     const CaptureGeometry *geometry,
+                                     const char *output) {
   ShaulaEnvSpan backend_span =
       shaula_capabilities_backend_label(runtime->backend);
   g_autofree char *backend =
@@ -334,22 +349,18 @@ static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
     portal_helper = shaula_executable_resolve_helper(
         "SHAULA_PORTAL_SCREENSHOT_HELPER_BIN", "shaula-portal-screenshot");
     if (portal_helper == NULL)
-      return FALSE;
+      return BACKEND_UNAVAILABLE;
     arguments[index++] = portal_helper;
     arguments[index++] = "--backend";
     arguments[index++] = backend;
     arguments[index++] = "--mode";
     arguments[index++] = (char *)mode;
-    if (geometry_text != NULL) {
-      arguments[index++] = "--geometry";
-      arguments[index++] = geometry_text;
-    }
     arguments[index++] = "--output";
     arguments[index++] = (char *)output;
   } else {
     grim = shaula_executable_find_grim();
     if (grim == NULL)
-      return FALSE;
+      return BACKEND_UNAVAILABLE;
     arguments[index++] = grim;
     if (geometry_text != NULL) {
       arguments[index++] = "-g";
@@ -358,18 +369,30 @@ static gboolean execute_backend(const ShaulaRuntimeDecision *runtime,
                g_str_equal(mode, "focused")) {
       focus = focused_output();
       if (focus == NULL)
-        return FALSE;
+        return BACKEND_UNAVAILABLE;
       arguments[index++] = "-o";
       arguments[index++] = focus;
     }
     arguments[index++] = (char *)output;
   }
   arguments[index] = NULL;
+
   int exit_code = 0;
-  return shaula_process_run_sync((const char *const *)arguments, NULL, NULL,
-                                 NULL, &exit_code) ==
-             SHAULA_PROCESS_STATUS_OK &&
-         exit_code == 0;
+  if (shaula_process_run_sync((const char *const *)arguments, NULL, NULL, NULL,
+                              &exit_code) != SHAULA_PROCESS_STATUS_OK)
+    return BACKEND_UNAVAILABLE;
+  if (exit_code == 0)
+    return BACKEND_OK;
+  if (runtime->backend == SHAULA_BACKEND_KIND_PORTAL_SCREENSHOT) {
+    if (exit_code == 23)
+      return BACKEND_TIMEOUT;
+    if (exit_code == 30)
+      return BACKEND_UNAVAILABLE;
+    if (exit_code == 33)
+      return BACKEND_CANCELLED;
+    return BACKEND_FAILED;
+  }
+  return BACKEND_UNAVAILABLE;
 }
 
 /* Captures the exact frame shown by a frozen overlay before the helper opens. */
@@ -534,19 +557,7 @@ static SelectionStatus select_area(const CaptureOptions *options,
 }
 
 static gboolean copy_png(const char *path) {
-  if (g_getenv("SHAULA_CLIPBOARD_AVAILABLE") != NULL &&
-      !env_flag("SHAULA_CLIPBOARD_AVAILABLE"))
-    return FALSE;
-  g_autofree char *bytes = NULL;
-  gsize length = 0;
-  if (!g_file_get_contents(path, &bytes, &length, NULL))
-    return FALSE;
-  const char *arguments[] = {"wl-copy", "--type", "image/png", NULL};
-  ShaulaProcessTermKind term = SHAULA_PROCESS_TERM_UNKNOWN;
-  guint32 value = 0;
-  return shaula_process_run_with_input(arguments, bytes, length, &term, &value) ==
-             SHAULA_PROCESS_STATUS_OK &&
-         term == SHAULA_PROCESS_TERM_EXITED && value == 0;
+  return shaula_clipboard_publish_png_file(path) == SHAULA_CLIPBOARD_STATUS_OK;
 }
 
 static gboolean append_history(const char *path, guint width, guint height,
@@ -679,6 +690,18 @@ int shaula_capture_command_run(int argc, char **argv) {
   if (!runtime.compositor_supported)
     return capture_error(command, "ERR_UNSUPPORTED_COMPOSITOR",
                          "unsupported compositor for shaula v1", "{}");
+  if (!runtime.capture_route_available)
+    return capture_error(
+        command, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
+        "no usable Wayland capture route is available",
+        "{\"required\":\"grim on a compatible compositor or a Screenshot portal\"}");
+  const gboolean portal_backend =
+      shaula_capabilities_uses_portal_backend(runtime) == 1;
+  if (previous_mode &&
+      shaula_capabilities_previous_area_supported(runtime) != 1)
+    return capture_error(command, "ERR_CAPTURE_MODE_UNSUPPORTED",
+                         "previous-area is unavailable for portal capture",
+                         "{\"backend\":\"portal-screenshot\"}");
   const char *support_mode = area_mode || previous_mode
                                  ? "area"
                                  : (all_mode ? "all-screens" : options.mode);
@@ -709,7 +732,7 @@ int shaula_capture_command_run(int argc, char **argv) {
   CaptureGeometry geometry = {0};
   g_auto(FrozenSource) frozen = {0};
   g_autofree char *confirm_action = NULL;
-  if (area_mode) {
+  if (area_mode && !portal_backend) {
     if (g_str_equal(options.region_mode, "frozen") &&
         !options.dry_run &&
         (g_getenv("SHAULA_OVERLAY_HELPER_STDIO_TEST_MODE") == NULL ||
@@ -736,6 +759,10 @@ int shaula_capture_command_run(int argc, char **argv) {
       return capture_error(command, "ERR_SELECTION_CANCELLED",
                            "selection was cancelled by user", details);
     }
+  } else if (area_mode && options.simulate_cancel) {
+    return capture_error(command, "ERR_SELECTION_CANCELLED",
+                         "selection was cancelled by user",
+                         "{\"backend\":\"portal-screenshot\"}");
   } else if (previous_mode) {
     gint32 present = 0;
     ShaulaCaptureStateGeometry previous = {0};
@@ -776,13 +803,28 @@ int shaula_capture_command_run(int argc, char **argv) {
   }
 
   const char *backend_mode = area_mode || previous_mode ? "area" : options.mode;
-  gboolean backend_ok =
+  BackendStatus backend_status =
       area_mode && frozen.path != NULL
-          ? crop_frozen_source(&frozen, output)
+          ? (crop_frozen_source(&frozen, output) ? BACKEND_OK
+                                                : BACKEND_UNAVAILABLE)
           : execute_backend(&runtime, backend_mode,
-                            area_mode || previous_mode ? &geometry : NULL,
+                            !portal_backend && (area_mode || previous_mode)
+                                ? &geometry
+                                : NULL,
                             output);
-  if (!backend_ok) {
+  if (backend_status != BACKEND_OK) {
+    if (backend_status == BACKEND_CANCELLED)
+      return capture_error(command, "ERR_SELECTION_CANCELLED",
+                           "portal selection was cancelled by user",
+                           "{\"backend\":\"portal-screenshot\"}");
+    if (backend_status == BACKEND_TIMEOUT)
+      return capture_error(command, "ERR_IPC_TIMEOUT",
+                           "portal screenshot request timed out",
+                           "{\"backend\":\"portal-screenshot\"}");
+    if (backend_status == BACKEND_FAILED)
+      return capture_error(command, "ERR_UNKNOWN_UNMAPPED",
+                           "portal screenshot request failed",
+                           "{\"backend\":\"portal-screenshot\"}");
     return capture_error(command, "ERR_CAPTURE_BACKEND_UNAVAILABLE",
                          "capture backend unavailable", "{}");
   }

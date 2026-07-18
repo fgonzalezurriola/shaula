@@ -248,7 +248,7 @@ Required fields: `ok`, `contract_version`, `command`, `timestamp`, `error`.
 
 ## Process Topology
 
-Shaula v1 uses direct CLI orchestration with short-lived helper processes and strict hot-path isolation.
+Shaula v1 uses direct CLI orchestration with bounded helpers and strict hot-path isolation. The clipboard provider is the deliberate exception: it remains alive only while Shaula owns the current Wayland selection.
 
 ### Process Boundaries
 
@@ -256,11 +256,13 @@ Shaula v1 uses direct CLI orchestration with short-lived helper processes and st
 - **Overlay helper**: Handles selection UI/input only and exits after producing deterministic selection output.
 - **Capture helper/backend process**: Performs compositor or portal capture work and returns normalized capture metadata.
 - **Preview/settings helpers**: Native GTK processes launched only when requested; they own their UI lifecycle and exit independently.
-- **Runtime selection state**: Stores the last confirmed area geometry independently from history so `previous-area` stays on the short capture path.
+- **Clipboard provider**: Bundled GTK helper that loads one framed PNG or UTF-8 payload, claims the Wayland selection, survives caller exit, and terminates on replacement or session teardown.
+- **Runtime selection state**: Stores the last confirmed native area geometry independently from history so `previous-area` stays on the short capture path.
 
 ### Hot-Path Isolation Rule
 
-- Hot path is: `hotkey -> shaula CLI -> overlay selection (if needed) -> capture backend/helper -> artifact ready`.
+- Native hot path is: `hotkey -> shaula CLI -> Shaula overlay selection (if needed) -> grim-wlroots -> artifact ready`.
+- Portal hot path is: `hotkey -> shaula CLI -> desktop portal picker/request -> artifact ready`; it never launches the Shaula overlay.
 - The capture path must work without plugin presence.
 - Worker jobs and optional integrations must never block or delay hot-path completion.
 - If a non-critical subsystem fails, the CLI returns deterministic `ERR_*` or degraded status while preserving capture completion when possible.
@@ -271,7 +273,7 @@ Shaula v1 uses direct CLI orchestration with short-lived helper processes and st
 - Stub payload generation is allowed only for deterministic tests, never for productive runtime success.
 - A forced stub backend (`SHAULA_CAPTURE_BACKEND=__stub__`) must fail deterministically with `ERR_CAPTURE_BACKEND_UNAVAILABLE` and must not leave output artifacts.
 - `capabilities strict contract`: when `capabilities.capture.<mode>` is `false`, the related `capture <mode>` command must fail with `ERR_CAPTURE_MODE_UNSUPPORTED` before backend execution.
-- Canonical backend identifier is `niri-wayland-direct` for both capabilities and capture result payloads.
+- Canonical productive backend identifiers are `grim-wlroots` and `portal-screenshot`. A route is advertised only when its prerequisite is verified; otherwise capability/preflight commands return deterministic unavailability.
 
 ## Capture Persistence and History Contract
 

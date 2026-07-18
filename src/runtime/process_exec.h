@@ -50,6 +50,25 @@ typedef struct {
   uint32_t term_value;
 } ShaulaProcessOutput;
 
+typedef struct {
+  const void *data;
+  size_t length;
+} ShaulaProcessInputChunk;
+
+typedef enum {
+  SHAULA_PROCESS_READY_OK = 0,
+  SHAULA_PROCESS_READY_TIMEOUT = 1,
+  SHAULA_PROCESS_READY_PROTOCOL_INVALID = 2,
+  SHAULA_PROCESS_READY_CHILD_EXITED = 3,
+  SHAULA_PROCESS_READY_IO_ERROR = 4,
+} ShaulaProcessReadyStatus;
+
+typedef struct {
+  ShaulaProcessReadyStatus ready_status;
+  ShaulaProcessTermKind term_kind;
+  uint32_t term_value;
+} ShaulaProcessReadyResult;
+
 /*
  * Direct-argv synchronous process execution. argv must be NULL-terminated and
  * is never interpreted by a shell. Bare argv[0] names are resolved against the
@@ -82,6 +101,23 @@ ShaulaProcessStatus shaula_process_run_sync(
 ShaulaProcessStatus shaula_process_run_with_input(
     const char *const *argv, const void *input, size_t input_length,
     ShaulaProcessTermKind *out_term_kind, uint32_t *out_term_value);
+
+/*
+ * Starts a long-lived provider behind a short-lived launcher. The launcher
+ * writes all borrowed input chunks, validates one exact readiness record, and
+ * reports only after every failure path has terminated and reaped the provider.
+ * On success the launcher exits, orphaning the ready provider so it survives the
+ * initiating process without leaving a child for the caller to reap.
+ *
+ * Provider stdout is private protocol data. Provider stderr remains inherited
+ * so diagnostics stay on stderr. Expected deterministic outcomes are returned
+ * through ShaulaProcessReadyResult rather than mixed with spawn failures.
+ */
+ShaulaProcessStatus shaula_process_spawn_ready_detached(
+    const char *const *argv, const ShaulaProcessInputChunk *input_chunks,
+    size_t input_chunk_count, const void *expected_ready,
+    size_t expected_ready_length, uint32_t timeout_ms,
+    ShaulaProcessReadyResult *out_result);
 
 #ifdef __cplusplus
 }

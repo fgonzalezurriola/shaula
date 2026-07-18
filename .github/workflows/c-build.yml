@@ -34,6 +34,7 @@ jobs:
             build-essential \
             ca-certificates \
             clang \
+            dbus-daemon \
             git \
             meson \
             ninja-build \
@@ -90,6 +91,25 @@ jobs:
       - name: Verify install payload
         run: |
           DESTDIR="${PWD}/build-ci/stage" meson install -C build-ci
-          for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-crop-image shaula-portal-screenshot; do
+          for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-crop-image shaula-portal-screenshot shaula-clipboard-provider; do
             test -x "build-ci/stage/usr/local/bin/${binary}"
           done
+          test -f build-ci/stage/usr/local/share/applications/shaula.desktop
+          test -f build-ci/stage/usr/local/share/shaula/release-manifest.txt
+          test ! -e build-ci/stage/usr/local/share/icons/hicolor/index.theme
+
+      - name: Verify AUR .SRCINFO regeneration
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --volume "${PWD}:/work:ro" \
+            archlinux:base-devel \
+            bash -euxo pipefail -c '
+              useradd --create-home builder
+              for package in shaula shaula-bin; do
+                su builder -c "cd /work/aur/${package} && makepkg --printsrcinfo" \
+                  > "/tmp/${package}.SRCINFO"
+                diff -u "/work/aur/${package}/.SRCINFO" \
+                  "/tmp/${package}.SRCINFO"
+              done
+            '

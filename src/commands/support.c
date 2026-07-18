@@ -86,6 +86,7 @@ ShaulaCapabilitiesEnvironment shaula_command_capabilities_environment(void) {
           },
       .capture_backend = g_getenv("SHAULA_CAPTURE_BACKEND"),
       .capture_force_portal = g_getenv("SHAULA_CAPTURE_FORCE_PORTAL"),
+      .grim_available = g_getenv("SHAULA_GRIM_AVAILABLE"),
       .portal_available = g_getenv("SHAULA_PORTAL_AVAILABLE"),
       .portal_window_capable = g_getenv("SHAULA_PORTAL_WINDOW_CAPABLE"),
   };

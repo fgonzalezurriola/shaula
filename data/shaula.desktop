@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Shaula
+Comment=Capture, preview, save, and copy screenshots on Wayland
+Exec=shaula capture area --json
+TryExec=shaula
+Icon=shaula
+Terminal=false
+Categories=Graphics;Utility;
+Keywords=screenshot;screen capture;wayland;
+StartupNotify=false

@@ -1,22 +1,23 @@
 # Maintainer: fgonzalezurriola <fgonzalezurriola@gmail.com>
 pkgname=shaula
-pkgver=0.1.5
+pkgver=0.1.6
 pkgrel=1
-pkgdesc='Wayland screenshot tool for Niri'
+pkgdesc='Capture, preview, save, and copy screenshots on Wayland'
 arch=('x86_64' 'aarch64')
 url='https://github.com/fgonzalezurriola/shaula'
 license=('MIT')
 depends=(
   'cairo'
   'gdk-pixbuf2'
+  'glib2'
   'glibc'
-  'grim'
   'gtk4'
   'gtk4-layer-shell'
   'hicolor-icon-theme'
   'json-glib'
+  'pango'
   'wayland'
-  'wl-clipboard'
+  'xdg-desktop-portal'
 )
 makedepends=(
   'meson'
@@ -24,7 +25,8 @@ makedepends=(
   'pkgconf'
 )
 optdepends=(
-  'niri: primary supported compositor and setup integration'
+  'grim: native capture on Niri and wlroots compositors'
+  'niri: compositor-specific setup integration'
   'quickshell: Noctalia Shell integration'
   'ttf-geist: recommended UI font'
   'ttf-excalifont: recommended annotation font'
@@ -33,7 +35,9 @@ provides=('shaula')
 conflicts=('shaula-bin')
 install='shaula.install'
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('9bd5f0f2110b8cf028ad388ffee8985c9ad5f849c65169019a39a1fa6cf631cf')
+# Release preparation only: replace SKIP with the v0.1.6 tag archive SHA-256
+# after GitHub has generated the immutable source archive and before AUR publish.
+sha256sums=('SKIP')
 
 build() {
   cd "${srcdir}/${pkgname}-${pkgver}"
@@ -46,15 +50,4 @@ package() {
   DESTDIR="${pkgdir}" meson install -C build
 
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
-  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/shaula.desktop" <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Shaula
-Comment=Wayland screenshot tool for Niri
-Exec=shaula capture area --json
-Icon=shaula
-Terminal=false
-Categories=Graphics;Utility;
-StartupNotify=false
-EOF
 }

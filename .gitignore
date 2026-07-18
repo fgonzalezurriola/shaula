@@ -2,10 +2,11 @@
 .zig-cache/
 zig-out/
 
-# Meson / Ninja build trees (default, release, port, sanitizer, migration)
+# Meson / Ninja build trees and staged release artifacts
 /build/
 /build-*/
 /build-stage/
+/dist/
 
 # Web site generated output and dependencies
 web/node_modules/

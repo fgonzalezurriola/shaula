@@ -1,7 +1,7 @@
 {
   "id": "shaula",
   "name": "Shaula",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "Shaula contributors",
   "description": "Minimal Noctalia bar widget for Shaula screenshots.",
   "entryPoints": {
