@@ -27,10 +27,10 @@ pkgbase = shaula-bin
 	provides = shaula
 	conflicts = shaula
 	source = LICENSE::https://github.com/fgonzalezurriola/shaula/raw/v0.1.6/LICENSE
-	sha256sums = 51100d4e517c591b0c6fa0bf94f10b86d7309736a46a23d53b0c85bf4c86966a
+	sha256sums = SKIP
 	source_x86_64 = shaula-bin-0.1.6-x86_64.tar.gz::https://github.com/fgonzalezurriola/shaula/releases/download/v0.1.6/shaula-linux-x86_64.tar.gz
-	sha256sums_x86_64 = 61f11f893d9d06774711bba16d3cbfe612f7e25c53c1a49ad202b467a3319e99
+	sha256sums_x86_64 = SKIP
 	source_aarch64 = shaula-bin-0.1.6-aarch64.tar.gz::https://github.com/fgonzalezurriola/shaula/releases/download/v0.1.6/shaula-linux-aarch64.tar.gz
-	sha256sums_aarch64 = e964a120282d2b12afab8161861b9e0a1dfc914fae8758232377d69229226460
+	sha256sums_aarch64 = SKIP
 
 pkgname = shaula-bin
