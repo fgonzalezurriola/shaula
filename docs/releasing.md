@@ -131,7 +131,8 @@ shaula capture area --json
 
 Setup operations are idempotent. Changed files are validated, backed up, and
 atomically replaced. Removal uses the same managed markers and state model as
-installation.
+installation. Interactive setup asks separately before installing the Niri
+window rule and the recommended Niri capture shortcuts.
 
 Niri integration owns two blocks:
 

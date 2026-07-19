@@ -29,6 +29,9 @@ Capture routing follows ADR-0003:
 
 The `./dev` live commands export build-tree helper paths explicitly, so they
 exercise the current checkout rather than relying on a previous local install.
+Interactive `shaula setup` asks separately about the managed Niri preview rule
+and recommended capture shortcuts, so accepting the rule no longer silently
+leaves shortcut configuration undiscovered.
 
 ## Clipboard publication and replacement
 

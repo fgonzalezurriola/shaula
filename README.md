@@ -84,7 +84,9 @@ Inside Shaula's native Quick/Area overlay:
 - `Ctrl+C` captures and copies without opening Preview.
 - `Ctrl+S` captures and saves without opening Preview.
 
-Optional integrations can be configured or removed symmetrically:
+Optional integrations can be configured or removed symmetrically. Interactive
+setup asks separately about the Niri window rule, recommended capture shortcuts,
+and the Noctalia widget:
 
 ```bash
 shaula setup

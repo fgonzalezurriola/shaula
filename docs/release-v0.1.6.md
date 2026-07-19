@@ -24,6 +24,8 @@ introduced.
   modes.
 - Both AUR package definitions are prepared for `0.1.6`; the binary package
   supports x86_64 and AArch64.
+- Interactive setup asks separately before installing the managed Niri preview
+  rule and recommended capture shortcuts.
 
 ## Release artifact contract
 

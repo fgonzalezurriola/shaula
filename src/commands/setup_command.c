@@ -249,8 +249,14 @@ int shaula_setup_command_run(int argc, char **argv) {
       options.niri && niri_path != NULL &&
       g_file_test(niri_path, G_FILE_TEST_IS_REGULAR);
   gboolean use_niri = options.niri_explicit || options.assume_yes;
-  if (niri_detected && !options.remove && !use_niri && interactive)
+  gboolean niri_accepted_interactively = FALSE;
+  if (niri_detected && !options.remove && !use_niri && interactive) {
     use_niri = setup_prompt("Install Shaula's Niri window rule?");
+    niri_accepted_interactively = use_niri;
+  }
+  if (niri_accepted_interactively && !options.install_keybinds)
+    options.install_keybinds =
+        setup_prompt("Install recommended Niri capture shortcuts?");
   if (options.remove)
     use_niri = niri_detected;
   if (!niri_detected) {
