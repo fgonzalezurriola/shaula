@@ -143,34 +143,14 @@ It refuses to overwrite or remove an unmarked plugin directory. When present,
 that mutation. Missing Noctalia JSON files are reported as skipped rather than
 invented.
 
-## Clipboard provider
+## Clipboard publication
 
-`shaula-clipboard-provider` is an installed GTK helper and a required core
-resource. Capture, `shaula clipboard`, and Preview publish through one clipboard
-module.
-
-The initiating process sends a versioned, length-delimited PNG or UTF-8 payload
-over a private stdin pipe and waits for one readiness line. Provider diagnostics
-use stderr; stdout is reserved for the readiness protocol so child output cannot
-corrupt public JSON.
-
-The helper loads the payload before claiming the clipboard. It remains alive
-while Shaula owns the selection. Replacement follows ADR-0003 through a private
-session-bus prepare/commit protocol and a unique clipboard MIME marker. Provider
-A remains alive until provider B owns the Wayland clipboard, replaces
-`dev.shaula.ClipboardProvider`, and emits readiness; B commits A's exit only
-after those steps. A failed B aborts the handoff, allowing A to retain or restore
-its valid selection. A clipboard change without the prepared marker is external
-replacement and still terminates the active provider. A provider from before
-v0.1.6 has no handoff object; that one-time upgrade case is detected as legacy
-and replaced through its existing clipboard/name-loss behavior rather than
-making clipboard publication permanently unavailable.
-
-Spawn failures and provider exit 35 map to clipboard unavailable. Malformed
-readiness, readiness timeout, and generic provider failure remain distinct.
-Every failed child is terminated and reaped before return, while a successful
-provider is detached from the initiating caller. Preview paste continues to use
-asynchronous GTK/GDK reads and does not depend on a separate paste executable.
+Capture, `shaula clipboard`, and Preview publish through one clipboard module.
+The module pipes complete PNG or UTF-8 payloads to the required `wl-copy`
+runtime, which uses Wayland data-control and keeps the selection available after
+the initiating process exits. Spawn and nonzero-exit failures map through the
+existing deterministic clipboard status and `ERR_*` taxonomy. Preview paste
+continues to use asynchronous GTK/GDK reads.
 
 ## Capture packaging contract
 
@@ -214,10 +194,9 @@ the full installer.
 
 Packaging scaffolds live in `aur/shaula` and `aur/shaula-bin`.
 
-Both packages declare linked application libraries, JSON-GLib, and the desktop
-portal framework as hard dependencies. They do not declare `grim` or a separate
-clipboard utility as universal dependencies. `grim`, Niri, and Quickshell are
-classified as optional integrations/capture implementations.
+Both packages declare linked application libraries, JSON-GLib, `wl-clipboard`,
+and the desktop portal framework as hard dependencies. `grim`, Niri, and
+Quickshell are classified as optional integrations/capture implementations.
 
 `shaula` builds from source for `x86_64` and `aarch64`. `shaula-bin` consumes
 the checked x86_64 or AArch64 release archive selected by makepkg. Both

@@ -44,6 +44,7 @@ jobs:
             libjson-glib-dev \
             libcairo2-dev \
             libwayland-dev \
+            wl-clipboard \
             wayland-protocols
 
       - name: Install gtk4-layer-shell

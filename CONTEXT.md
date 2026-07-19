@@ -126,6 +126,8 @@ The current source state has passed:
 - installer architecture-selection and AUR metadata consistency checks.
 - CI regenerates AUR `.SRCINFO` files from writable temporary package copies;
   the repository remains mounted read-only inside the Arch validation container.
+- Build and release containers install the required `wl-clipboard` runtime, and
+  both workflows use the same writable-copy AUR metadata validation.
 
 Live Niri validation:
 
