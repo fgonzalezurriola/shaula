@@ -62,15 +62,23 @@ part of the v0.1.6 release. Its design material remains in:
 - `docs/preview-expandable-canvas-design.md`
 - `docs/plan-v0.1.6.md` as the original, superseded release-number proposal.
 
-Potential follow-up work should continue to be driven by real usage:
+## v0.1.7
 
-- GNOME and KDE graphical portal validation for v0.1.7;
-- bounded image composition and canvas expansion;
-- dedicated active eyedropper mode if passive sampling is insufficient;
-- more filename templating and save-path configuration;
-- additional Preview history affordances;
-- broader QuickShell integration after architecture and user value review;
-- deployment and maintenance of the static product landing page.
+Consolidated pending work, driven by real usage:
+
+- Normalize the project hero/description phrase across PKGBUILD `pkgdesc`, GitHub
+  repo description, README hero, and desktop entry metadata. Canonical candidate:
+  `Capture, Annotate, save, and copy screenshots on Wayland`.
+- Re-record the demo clip to reflect v0.1.6 (clipboard via `wl-copy`, current
+  Preview UI) before using it in the README/landing page.
+- Finish and deploy the static product landing page (consistent hero phrase,
+  current clip).
+- GNOME and KDE graphical portal validation (deferred from v0.1.6).
+- Bounded image composition and canvas expansion.
+- Dedicated active eyedropper mode if passive sampling is insufficient.
+- More filename templating and save-path configuration.
+- Additional Preview history affordances.
+- Broader QuickShell integration after architecture and user-value review.
 
 ## Current non-goals
 

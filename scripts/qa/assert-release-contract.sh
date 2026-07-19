@@ -63,9 +63,9 @@ grep -Fq "shaula-linux-aarch64.tar.gz" \
 [[ $(grep -c $'\tarch = x86_64' "${SOURCE_ROOT}/aur/shaula-bin/.SRCINFO") -eq 1 ]]
 [[ $(grep -c $'\tarch = aarch64' "${SOURCE_ROOT}/aur/shaula-bin/.SRCINFO") -eq 1 ]]
 
-# The tag and release assets do not exist during release preparation. SKIP is
-# accepted only as an explicit non-final marker; stale v0.1.5 hashes or plausible
-# fabricated v0.1.6 hashes are rejected. docs/releasing.md defines finalization.
+# Checked-in PKGBUILDs are release templates: their SKIP markers are required so
+# preparation never guesses hashes for remote artifacts. release.yml replaces
+# them only in writable AUR clones after publishing the GitHub assets.
 grep -Fq "sha256sums=('SKIP')" "${SOURCE_ROOT}/aur/shaula/PKGBUILD"
 grep -Fq "sha256sums=('SKIP')" "${SOURCE_ROOT}/aur/shaula-bin/PKGBUILD"
 grep -Fq "sha256sums_x86_64=('SKIP')" \
@@ -77,7 +77,9 @@ if grep -REq '598c04b65ec31f44925db1b339c94638d171344cbe4a8ba17d2b76530f71a277|9
   echo 'stale v0.1.5 AUR checksum remains' >&2
   exit 1
 fi
-grep -Fq 'AUR checksum finalization' "${SOURCE_ROOT}/docs/releasing.md"
+grep -Fq 'checked-in PKGBUILDs must retain every `SKIP` marker' \
+  "${SOURCE_ROOT}/docs/releasing.md"
+grep -Fq 'AUR_SSH_KEY' "${SOURCE_ROOT}/docs/releasing.md"
 
 if [[ -n ${DIST_DIR} ]]; then
   x86_archive="${DIST_DIR}/shaula-linux-x86_64.tar.gz"

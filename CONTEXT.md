@@ -91,21 +91,22 @@ and `docs/release-<tag>.md` exists with the matching heading.
 
 ## AUR state
 
-Both `aur/shaula` and `aur/shaula-bin` are prepared for `0.1.6`, and both
-`.SRCINFO` files were regenerated from their PKGBUILDs.
+Tag release CI publishes both `aur/shaula` and `aur/shaula-bin` to the AUR as
+`0.1.6-1`, with final immutable checksums and regenerated `.SRCINFO` files in
+the temporary AUR clones.
 
 - `shaula` builds the Meson/C source tree from tag `v0.1.6` on x86_64 and
   AArch64.
 - `shaula-bin` selects the matching x86_64 or AArch64 release archive and
   installs the complete manifest-backed payload.
-- Old v0.1.5 checksums are removed.
-- Remote source and artifact checksums are intentionally `SKIP` during release
-  preparation because the tag and release assets do not yet exist.
+- `wl-clipboard` is a required runtime dependency for both packages.
+- AUR publication uses the dedicated unencrypted deploy key
+  `~/.ssh/id_aur` (comment `shaula-aur-deploy`), registered in the AUR
+  account. It is independent from the personal `id_ed25519` key.
 
-`SKIP` is not a publishable final checksum. After the tag and immutable GitHub
-assets exist, replace each marker with the actual downloaded-file SHA-256,
-regenerate both `.SRCINFO` files, rerun the release contract, and only then
-publish the AUR packages.
+Manual AUR publish is replaced by the release pipeline (see
+`docs/releasing.md`). Checked-in PKGBUILDs intentionally retain `SKIP`; the
+workflow replaces those markers only in writable AUR clones before pushing.
 
 ## Verified release state
 

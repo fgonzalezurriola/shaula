@@ -33,10 +33,9 @@ install='shaula.install'
 source=("LICENSE::${url}/raw/v${pkgver}/LICENSE")
 source_x86_64=("${pkgname}-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/shaula-linux-x86_64.tar.gz")
 source_aarch64=("${pkgname}-${pkgver}-aarch64.tar.gz::${url}/releases/download/v${pkgver}/shaula-linux-aarch64.tar.gz")
-# Release preparation only: replace every SKIP with the matching immutable
-# v0.1.6 asset SHA-256 after the GitHub release assets exist and before AUR
-# publication. SKIP is intentionally non-final and cannot be mistaken for a
-# published checksum.
+# Release automation replaces the checked-in markers with the matching
+# immutable LICENSE and release-archive hashes only inside the temporary AUR
+# clone.
 sha256sums=('SKIP')
 sha256sums_x86_64=('SKIP')
 sha256sums_aarch64=('SKIP')

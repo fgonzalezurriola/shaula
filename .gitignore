@@ -1,7 +1,3 @@
-# Zig (legacy local artifacts; no maintained Zig sources)
-.zig-cache/
-zig-out/
-
 # Meson / Ninja build trees and staged release artifacts
 /build/
 /build-*/
@@ -19,4 +15,3 @@ web/.output/
 .qa/evidence/
 
 .DS_Store
-third_party/niri/

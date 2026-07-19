@@ -43,14 +43,14 @@ Release validation checks:
 - installer architecture selection;
 - regenerated AUR `.SRCINFO` consistency.
 
-## AUR preparation state
+## AUR state
 
-The AUR PKGBUILDs deliberately use `SKIP` while the `v0.1.6` source archive and
-release assets do not yet exist. `SKIP` is a visible release-preparation marker,
-not a publishable final checksum. Before publishing either AUR package, replace
-those markers with the immutable checksums produced after the tag and GitHub
-release assets exist, regenerate both `.SRCINFO` files, and rerun the release
-contract checks described in `docs/releasing.md`.
+Both AUR packages are published as `0.1.6-1` with final immutable checksums and
+regenerated `.SRCINFO` files. `shaula` builds from the `v0.1.6` source archive;
+`shaula-bin` installs the matching x86_64/AArch64 release archive. `wl-clipboard`
+is a required runtime dependency. AUR publication used the dedicated deploy key
+`~/.ssh/id_aur` (`shaula-aur-deploy`), independent from the personal
+`id_ed25519` key. No `SKIP` markers remain.
 
 ## Validation scope
 

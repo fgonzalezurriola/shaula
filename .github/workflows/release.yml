@@ -216,3 +216,90 @@ jobs:
               --notes-file "${notes_file}" \
               "${prerelease_args[@]}"
           fi
+
+      - name: Publish AUR packages
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          publish_root=/tmp/aur-publish
+          rm -rf "${publish_root}"
+          mkdir -p "${publish_root}" "${HOME}/.ssh"
+
+          install -m 600 /dev/null "${HOME}/.ssh/id_aur"
+          printf '%s\n' "${AUR_SSH_KEY}" > "${HOME}/.ssh/id_aur"
+          ssh-keyscan -H -t ed25519 aur.archlinux.org \
+            > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/known_hosts"
+          cat > "${HOME}/.ssh/config" <<'EOF'
+          Host aur.archlinux.org
+            User aur
+            IdentityFile ~/.ssh/id_aur
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "${HOME}/.ssh/config"
+
+          x86_sha256="$(awk '$2 ~ /shaula-linux-x86_64\.tar\.gz$/ { print $1 }' dist/SHA256SUMS)"
+          arm_sha256="$(awk '$2 ~ /shaula-linux-aarch64\.tar\.gz$/ { print $1 }' dist/SHA256SUMS)"
+          [[ ${x86_sha256} =~ ^[0-9a-f]{64}$ ]]
+          [[ ${arm_sha256} =~ ^[0-9a-f]{64}$ ]]
+
+          curl -fsSL \
+            "https://github.com/fgonzalezurriola/shaula/archive/refs/tags/${TAG_NAME}.tar.gz" \
+            -o "${publish_root}/shaula-${version}.tar.gz"
+          curl -fsSL \
+            "https://raw.githubusercontent.com/fgonzalezurriola/shaula/${TAG_NAME}/LICENSE" \
+            -o "${publish_root}/LICENSE"
+          source_sha256="$(sha256sum "${publish_root}/shaula-${version}.tar.gz" | awk '{ print $1 }')"
+          license_sha256="$(sha256sum "${publish_root}/LICENSE" | awk '{ print $1 }')"
+
+          for package in shaula shaula-bin; do
+            git clone "ssh://aur@aur.archlinux.org/${package}.git" \
+              "${publish_root}/${package}"
+            rsync -a --delete --exclude=.git/ \
+              "aur/${package}/" "${publish_root}/${package}/"
+          done
+
+          sed -i \
+            "s/sha256sums=('SKIP')/sha256sums=('${source_sha256}')/" \
+            "${publish_root}/shaula/PKGBUILD"
+          sed -i \
+            -e "s/sha256sums=('SKIP')/sha256sums=('${license_sha256}')/" \
+            -e "s/sha256sums_x86_64=('SKIP')/sha256sums_x86_64=('${x86_sha256}')/" \
+            -e "s/sha256sums_aarch64=('SKIP')/sha256sums_aarch64=('${arm_sha256}')/" \
+            "${publish_root}/shaula-bin/PKGBUILD"
+          ! grep -Rqs SKIP \
+            "${publish_root}/shaula/PKGBUILD" \
+            "${publish_root}/shaula-bin/PKGBUILD"
+
+          docker run --rm \
+            --env BUILDER_UID="$(id -u)" \
+            --volume "${publish_root}:/publish" \
+            archlinux:base-devel \
+            bash -euxo pipefail -c '
+              useradd --uid "${BUILDER_UID}" --create-home builder
+              chown -R builder:builder /publish/shaula /publish/shaula-bin
+              for package in shaula shaula-bin; do
+                su builder -c \
+                  "cd /publish/${package} && makepkg --printsrcinfo > .SRCINFO"
+              done
+            '
+
+          for package in shaula shaula-bin; do
+            package_root="${publish_root}/${package}"
+            grep -Fqx "pkgver=${version}" "${package_root}/PKGBUILD"
+            grep -Fqx 'pkgrel=1' "${package_root}/PKGBUILD"
+            ! grep -Rqs SKIP \
+              "${package_root}/PKGBUILD" "${package_root}/.SRCINFO"
+            git -C "${package_root}" add PKGBUILD .SRCINFO shaula.install
+            if ! git -C "${package_root}" diff --cached --quiet; then
+              git -C "${package_root}" \
+                -c user.name='Shaula release automation' \
+                -c user.email='fgonzalezurriola@gmail.com' \
+                commit -m "${package} ${version}-1"
+            fi
+            git -C "${package_root}" push origin HEAD:master
+          done

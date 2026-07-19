@@ -36,8 +36,8 @@ provides=('shaula')
 conflicts=('shaula-bin')
 install='shaula.install'
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-# Release preparation only: replace SKIP with the v0.1.6 tag archive SHA-256
-# after GitHub has generated the immutable source archive and before AUR publish.
+# Release automation replaces the checked-in marker with the immutable tag
+# archive SHA-256 only inside the temporary AUR clone.
 sha256sums=('SKIP')
 
 build() {

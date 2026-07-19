@@ -44,6 +44,8 @@ version and `docs/release-<tag>.md` exists. The workflow then:
    into fake XDG paths.
 9. Publishes or replaces the release assets through `gh`, using the matching
    checked-in release notes.
+10. Finalizes and pushes `aur/shaula` and `aur/shaula-bin` as `<version>-1` to
+    their AUR `master` branches.
 
 The public repository uses `master` as its default branch. The normal installer
 command is therefore:
@@ -205,21 +207,35 @@ the checked x86_64 or AArch64 release archive selected by makepkg. Both
 The binary package installs the complete archive payload, including
 `shaula-clipboard-provider`, rather than recreating the desktop entry or icons.
 
-### AUR checksum finalization
+### Automated AUR publication
 
-During release preparation, remote `v0.1.6` sources and assets do not exist yet.
-The PKGBUILDs therefore use the explicit non-final marker `SKIP`; no old checksum
-or fabricated future checksum is permitted. After the tag and GitHub release
-assets exist, but before publishing to the AUR:
+The checked-in PKGBUILDs must retain every `SKIP` marker. They are release
+preparation templates because tag sources and release assets do not exist before
+the tag workflow runs. `scripts/qa/assert-release-contract.sh` enforces this
+state, and contributors must not finalize checksums in the source repository.
 
-1. download the immutable tag source archive, LICENSE, and both release archives;
-2. calculate each SHA-256 from those downloaded files;
-3. replace every `SKIP` with the matching checksum;
-4. regenerate both `.SRCINFO` files with `makepkg --printsrcinfo`;
-5. rerun `scripts/qa/assert-release-contract.sh` and package builds on both
-   architectures where available.
+After publishing the GitHub release, `.github/workflows/release.yml` performs the
+only canonical AUR publication flow:
 
-AUR publication is not complete while any `SKIP` remains.
+1. read both binary archive hashes from the already verified `SHA256SUMS` and
+   derive the package version from the validated tag;
+2. download the immutable tag source archive and tagged `LICENSE`, then calculate
+   their SHA-256 hashes;
+3. clone `ssh://aur@aur.archlinux.org/shaula.git` and `shaula-bin.git` into
+   writable temporary directories;
+4. copy each checked-in package template into its clone, replace the markers with
+   the matching hashes, and regenerate `.SRCINFO` there with
+   `makepkg --printsrcinfo` in an Arch container;
+5. commit `<version>-1` metadata when it changed and push `HEAD` to each AUR
+   repository's `master` branch.
+
+The workflow uses the no-passphrase deploy key stored in the `AUR_SSH_KEY`
+Actions secret (the local counterpart is `~/.ssh/id_aur`, comment
+`shaula-aur-deploy`). It records the `aur.archlinux.org` Ed25519 host key and
+requires `StrictHostKeyChecking`. A tag release fails if either AUR package
+cannot be finalized or pushed; there is no manual checksum or publication step.
+The temporary AUR clones must contain no `SKIP` marker when pushed, while the
+source repository must continue to contain them.
 
 ## Icon packaging
 
