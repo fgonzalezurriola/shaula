@@ -107,7 +107,9 @@ jobs:
             bash -euxo pipefail -c '
               useradd --create-home builder
               for package in shaula shaula-bin; do
-                su builder -c "cd /work/aur/${package} && makepkg --printsrcinfo" \
+                cp -a "/work/aur/${package}" "/tmp/${package}"
+                chown -R builder:builder "/tmp/${package}"
+                su builder -c "cd /tmp/${package} && makepkg --printsrcinfo" \
                   > "/tmp/${package}.SRCINFO"
                 diff -u "/work/aur/${package}/.SRCINFO" \
                   "/tmp/${package}.SRCINFO"

@@ -124,6 +124,8 @@ The current source state has passed:
 - `git diff --check`;
 - focused clipboard lifecycle and replacement tests;
 - installer architecture-selection and AUR metadata consistency checks.
+- CI regenerates AUR `.SRCINFO` files from writable temporary package copies;
+  the repository remains mounted read-only inside the Arch validation container.
 
 Live Niri validation:
 
