@@ -128,6 +128,7 @@ The current source state has passed:
   the repository remains mounted read-only inside the Arch validation container.
 - Build and release containers install the required `wl-clipboard` runtime, and
   both workflows use the same writable-copy AUR metadata validation.
+- GitHub workflows use Node.js 24-based v5 checkout and artifact actions.
 
 Live Niri validation:
 
