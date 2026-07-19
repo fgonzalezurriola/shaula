@@ -20,6 +20,7 @@ pkgbase = shaula
 	depends = json-glib
 	depends = pango
 	depends = wayland
+	depends = wl-clipboard
 	depends = xdg-desktop-portal
 	optdepends = grim: native capture on Niri and wlroots compositors
 	optdepends = niri: compositor-specific setup integration

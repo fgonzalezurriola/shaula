@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-Shaula's core experience requires capture, area selection, Preview, saving, and copying on a Wayland session without asking users to choose capture or clipboard tools. The previous implementation exposed compositor-specific assumptions through capability labels, prepared portal area captures with `grim` and the Shaula overlay, and delegated clipboard lifetime to `wl-copy`.
+Shaula's core experience requires capture, area selection, Preview, saving, and copying on a Wayland session without asking users to choose capture or clipboard tools. GTK clipboard ownership from a standalone CLI is not reliable because Wayland selection requests require an input-event serial; Niri correctly rejects that request even when GDK reports local success.
 
 ## Decision
 
@@ -14,11 +14,7 @@ Shaula's core experience requires capture, area selection, Preview, saving, and 
 
 `src/clipboard/` is the single clipboard seam for Capture, CLI commands, and Preview. Callers publish either PNG bytes or UTF-8 text and receive one deterministic status. They do not spawn desktop tools or manage ownership.
 
-Each successful publish starts the bundled `shaula-clipboard-provider` helper. The initiating process sends a versioned, length-delimited payload over stdin and waits for one readiness line on the helper's private stdout pipe. The helper loads the entire payload before claiming the Wayland clipboard, so clipboard validity does not depend on the source file or initiating process.
-
-The provider process owns the clipboard until another client claims it, the Wayland display closes, or the helper receives a termination signal. Replacement uses a private prepare/commit exchange addressed to the previous provider's unique session-bus name and a unique clipboard MIME marker. Provider B prepares provider A, claims the Wayland clipboard with that marker, replaces `dev.shaula.ClipboardProvider`, emits readiness, and only then commits A's exit. A failed or timed-out B leaves A alive and allows it to retain or restore its payload. A clipboard change without the prepared marker is external replacement and still terminates the active provider. A provider from before v0.1.6 does not expose the handoff object; that one-time upgrade case is detected explicitly and replaced through the legacy clipboard/name-loss behavior instead of blocking every future copy. All v0.1.6-to-v0.1.6 replacements use the ordered protocol. This avoids PID files, stale locks, stale providers, upgrade deadlocks, and kill-before-ready races.
-
-Helper diagnostics are stderr-only. Stdout is reserved for the readiness protocol, so nested clipboard work cannot corrupt Shaula's JSON output.
+Each publish pipes the complete PNG or UTF-8 payload to `wl-copy --type <mime>` through the central process-execution module. `wl-copy` uses Wayland data-control, owns the selection after Shaula exits, and returns a nonzero status when publication fails. Callers retain deterministic Shaula status and `ERR_*` mapping without managing the external process directly.
 
 ### Capture backend decision
 
@@ -44,7 +40,7 @@ Meson, release archives, packages, and the public installer own immutable applic
 
 ## Consequences
 
-The installed payload includes one additional GTK helper. Clipboard contents remain available after CLI or Preview exits, at the cost of one small provider process while Shaula owns the current selection.
+`wl-clipboard` is a required runtime dependency. Clipboard contents remain available after CLI or Preview exits through `wl-copy`'s data-control owner.
 
 Generic desktop portal sessions use desktop-provided selection UI rather than Shaula's overlay. Native `grim` sessions retain Shaula's overlay and previous-area behavior.
 

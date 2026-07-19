@@ -52,7 +52,7 @@ int shaula_doctor_command_run(int argc, char **argv) {
       "{\"paths\":{\"binary\":%s,\"config_file\":%s,"
       "\"config_exists\":%s},\"wayland\":{\"wayland_display\":%s},"
       "\"tools\":{\"grim\":{\"found\":%s},"
-      "\"shaula-clipboard-provider\":{\"found\":%s}},\"noctalia\":{"
+       "\"wl-copy\":{\"found\":%s}},\"noctalia\":{"
       "\"dir_exists\":%s,\"plugins_dir_exists\":%s,"
       "\"plugins_json_exists\":%s,\"settings_json_exists\":%s,"
       "\"shaula_plugin_dir_exists\":%s,\"plugin_installed\":%s}}",

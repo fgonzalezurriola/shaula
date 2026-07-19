@@ -32,12 +32,10 @@ exercise the current checkout rather than relying on a previous local install.
 
 ## Clipboard publication and replacement
 
-Clipboard publication uses the central process-execution module. The caller
-starts a short-lived launcher that owns provider startup and readiness. The
-launcher terminates and reaps every failed, malformed, or timed-out provider;
-a failed child cannot become ready later and claim the clipboard. A successful
-provider is detached from the initiating caller and remains alive while it owns
-the Wayland selection.
+Clipboard publication uses `wl-copy` through the central process-execution
+module. `wl-copy` owns the Wayland selection through data-control, avoiding the
+input-event serial that prevents a standalone GTK/GDK CLI helper from reliably
+claiming the clipboard on Niri and other wlroots compositors.
 
 Deterministic clipboard outcomes are:
 

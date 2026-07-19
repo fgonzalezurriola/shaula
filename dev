@@ -135,7 +135,7 @@ doctor() {
   local fail=0
   echo "Shaula doctor"
 
-  for tool in cc meson ninja pkg-config jq; do
+  for tool in cc meson ninja pkg-config jq wl-copy; do
     if have "${tool}"; then
       echo "ok ${tool}=$(command -v "${tool}")"
     else

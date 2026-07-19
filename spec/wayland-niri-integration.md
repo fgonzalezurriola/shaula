@@ -90,14 +90,10 @@ selection-overlay machinery.
 ## Clipboard contract
 
 Capture, CLI clipboard commands, and Preview publish through one deep clipboard
-module. The bundled `shaula-clipboard-provider` receives a private versioned,
-length-delimited PNG or UTF-8 payload, loads it fully, claims the Wayland
-clipboard, and remains alive after the caller exits.
-
-A subsequent Shaula provider claims the selection first and then replaces the
-session-bus lease `dev.shaula.ClipboardProvider`. The prior lease owner exits
-only after the new provider is ready, avoiding PID files, stale owners, and
-kill-before-ready races. Preview paste remains an asynchronous GTK/GDK reader.
+module. The module pipes a complete PNG or UTF-8 payload to the required
+`wl-copy` runtime, which claims the selection through Wayland data-control and
+keeps it alive after the caller exits. Preview paste remains an asynchronous
+GTK/GDK reader.
 
 ## Optional integrations
 

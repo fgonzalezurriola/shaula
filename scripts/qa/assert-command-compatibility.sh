@@ -92,6 +92,7 @@ chmod +x "${TMP_DIR}/bin/niri" \
 
 PATH="${TMP_DIR}/bin:${PATH}"
 export PATH
+export SHAULA_CLIPBOARD_PROVIDER_BIN="${TMP_DIR}/bin/shaula-clipboard-provider"
 
 capture_path="${TMP_DIR}/noninteractive.png"
 capture_json="$(

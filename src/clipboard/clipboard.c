@@ -64,16 +64,9 @@ static gboolean process_status_is_spawn_failure(ShaulaProcessStatus status) {
  * Successful providers are orphaned by the short-lived launcher and therefore
  * remain alive after the initiating CLI or Preview process exits.
  */
-static ShaulaClipboardStatus publish_bytes(const char *mime,
-                                           const guint8 *data, gsize length,
-                                           gsize maximum_length) {
-  if (mime == NULL || data == NULL || length == 0U)
-    return SHAULA_CLIPBOARD_STATUS_INVALID_ARGUMENT;
-  if (length > maximum_length)
-    return SHAULA_CLIPBOARD_STATUS_PAYLOAD_TOO_LARGE;
-  if (env_flag_disabled("SHAULA_CLIPBOARD_AVAILABLE"))
-    return SHAULA_CLIPBOARD_STATUS_UNAVAILABLE;
-
+static ShaulaClipboardStatus publish_with_provider(const char *mime,
+                                                   const guint8 *data,
+                                                   gsize length) {
   g_autofree char *helper = shaula_executable_resolve_helper(
       "SHAULA_CLIPBOARD_PROVIDER_BIN", "shaula-clipboard-provider");
   if (helper == NULL)
@@ -118,6 +111,41 @@ static ShaulaClipboardStatus publish_bytes(const char *mime,
   return SHAULA_CLIPBOARD_STATUS_PROVIDER_FAILED;
 }
 
+/*
+ * wl-copy uses Wayland data-control, so CLI publication does not depend on an
+ * input-event serial. The provider override remains a private test seam.
+ */
+static ShaulaClipboardStatus publish_bytes(const char *mime,
+                                           const guint8 *data, gsize length,
+                                           gsize maximum_length) {
+  if (mime == NULL || data == NULL || length == 0U)
+    return SHAULA_CLIPBOARD_STATUS_INVALID_ARGUMENT;
+  if (length > maximum_length)
+    return SHAULA_CLIPBOARD_STATUS_PAYLOAD_TOO_LARGE;
+  if (env_flag_disabled("SHAULA_CLIPBOARD_AVAILABLE"))
+    return SHAULA_CLIPBOARD_STATUS_UNAVAILABLE;
+
+  if (g_getenv("SHAULA_CLIPBOARD_PROVIDER_BIN") != NULL)
+    return publish_with_provider(mime, data, length);
+
+  g_autofree char *wl_copy = shaula_executable_resolve_helper(
+      "SHAULA_WL_COPY_BIN", "wl-copy");
+  if (wl_copy == NULL)
+    return SHAULA_CLIPBOARD_STATUS_UNAVAILABLE;
+  const char *argv[] = {wl_copy, "--type", mime, NULL};
+  ShaulaProcessTermKind term_kind = SHAULA_PROCESS_TERM_UNKNOWN;
+  uint32_t term_value = 0U;
+  ShaulaProcessStatus status = shaula_process_run_with_input(
+      argv, data, length, &term_kind, &term_value);
+  if (status != SHAULA_PROCESS_STATUS_OK)
+    return process_status_is_spawn_failure(status)
+               ? SHAULA_CLIPBOARD_STATUS_UNAVAILABLE
+               : SHAULA_CLIPBOARD_STATUS_IO_FAILED;
+  return term_kind == SHAULA_PROCESS_TERM_EXITED && term_value == 0U
+             ? SHAULA_CLIPBOARD_STATUS_OK
+             : SHAULA_CLIPBOARD_STATUS_PROVIDER_FAILED;
+}
+
 ShaulaClipboardStatus shaula_clipboard_publish_png_file(const char *path) {
   if (path == NULL || *path == '\0')
     return SHAULA_CLIPBOARD_STATUS_INVALID_ARGUMENT;
@@ -143,8 +171,12 @@ ShaulaClipboardStatus shaula_clipboard_publish_text(const char *text,
 int32_t shaula_clipboard_provider_available(void) {
   if (env_flag_disabled("SHAULA_CLIPBOARD_AVAILABLE"))
     return 0;
+  const gboolean use_provider_override =
+      g_getenv("SHAULA_CLIPBOARD_PROVIDER_BIN") != NULL;
   g_autofree char *helper = shaula_executable_resolve_helper(
-      "SHAULA_CLIPBOARD_PROVIDER_BIN", "shaula-clipboard-provider");
+      use_provider_override ? "SHAULA_CLIPBOARD_PROVIDER_BIN"
+                            : "SHAULA_WL_COPY_BIN",
+      use_provider_override ? "shaula-clipboard-provider" : "wl-copy");
   if (helper == NULL)
     return 0;
   if (strchr(helper, G_DIR_SEPARATOR) != NULL)

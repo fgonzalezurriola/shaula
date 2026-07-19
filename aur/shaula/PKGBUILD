@@ -17,6 +17,7 @@ depends=(
   'json-glib'
   'pango'
   'wayland'
+  'wl-clipboard'
   'xdg-desktop-portal'
 )
 makedepends=(

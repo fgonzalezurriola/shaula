@@ -283,9 +283,8 @@ run_setup() {
 
 validate_installed_core() {
   shaula="${XDG_BIN_HOME}/shaula"
-  provider="${XDG_BIN_HOME}/shaula-clipboard-provider"
   [ -x "$shaula" ] || fail "installed shaula binary is missing"
-  [ -x "$provider" ] || fail "installed clipboard provider is missing"
+  command -v wl-copy >/dev/null 2>&1 || fail "wl-copy is required for clipboard publication"
   [ -f "${XDG_DATA_HOME}/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg" ] ||
     fail "Preview runtime icons are incomplete"
   [ -f "${XDG_DATA_HOME}/shaula/integrations/noctalia/shaula/manifest.json" ] ||
@@ -296,7 +295,7 @@ validate_installed_core() {
     fail "installed Wayland preflight failed"
   PATH="${XDG_BIN_HOME}:${PATH}" "$shaula" doctor --json >/dev/null ||
     fail "installed runtime diagnostics failed"
-  status installed "validated capture route, Preview resources, and clipboard provider"
+  status installed "validated capture route, Preview resources, and wl-copy"
 }
 
 remove_path() {

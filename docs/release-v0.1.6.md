@@ -1,7 +1,7 @@
 # Shaula v0.1.6
 
 Shaula v0.1.6 completes the Meson/C production port and makes the release
-artifact, installer, clipboard provider, and Wayland backend contracts explicit.
+artifact, installer, clipboard publication, and Wayland backend contracts explicit.
 It remains a short-lived CLI/helper application: no resident Shaula daemon is
 introduced.
 
@@ -11,17 +11,11 @@ introduced.
 - Capture route selection supports native `grim` on Niri/wlroots and the
   Screenshot portal on other Wayland desktops, with deterministic no-route
   errors.
-- The bundled clipboard provider publishes PNG and UTF-8 text without external
-  clipboard commands and remains alive after the initiating process exits.
-- Clipboard provider replacement follows ADR-0003: a v0.1.6 provider stays
-  alive until its replacement owns the Wayland clipboard, owns
-  `dev.shaula.ClipboardProvider`, and emits readiness. Pre-v0.1.6 providers are
-  detected as a legacy one-time upgrade case so they cannot deadlock future
-  clipboard publication.
-- Failed, malformed, unavailable, and timed-out clipboard providers are
-  deterministically classified, terminated, and reaped before the caller
-  returns. A failed replacement does not unnecessarily discard the previous
-  valid clipboard selection.
+- Clipboard publication uses the required `wl-copy` runtime so CLI capture can
+  acquire the Wayland selection without an input-event serial and keep PNG or
+  UTF-8 text available after Shaula exits.
+- Missing, failed, and unavailable clipboard publication is deterministically
+  classified through Shaula's existing status and `ERR_*` taxonomy.
 - Release archives are produced for both x86_64 and AArch64:
   - `shaula-linux-x86_64.tar.gz`
   - `shaula-linux-aarch64.tar.gz`

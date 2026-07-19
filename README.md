@@ -11,9 +11,9 @@ It chooses a working capture route automatically:
 - Installation stops with an actionable error rather than installing a broken
   application when neither route is available.
 
-Users do not choose a backend or install a separate clipboard command. Shaula
-ships its own clipboard provider so copied images and text remain available
-after the initiating CLI or Preview process exits.
+Users do not choose a clipboard backend. Shaula publishes copied images and text
+through the required `wl-copy` runtime so selections remain available after the
+initiating CLI or Preview process exits.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
@@ -49,9 +49,9 @@ paru -S shaula      # or: paru -S shaula-bin
 shaula setup
 ```
 
-The packages declare linked application libraries and the desktop portal
-framework. `grim` is optional and enables the native Niri/wlroots route. Niri
-and Noctalia remain optional integrations.
+The packages declare linked application libraries, `wl-clipboard`, and the
+desktop portal framework. `grim` is optional and enables the native
+Niri/wlroots route. Niri and Noctalia remain optional integrations.
 
 Optional fonts:
 
