@@ -88,7 +88,14 @@ Release validation completed for the current checkout:
 - Both AUR `.SRCINFO` files match locally regenerated `makepkg` metadata and
   both package hooks pass Bash syntax validation.
 
-## v0.1.8
+## Released: v0.1.8
+
+v0.1.8 is a focused patch on top of v0.1.7. `shaula setup` now validates and
+reloads the live Niri config after writing or removing managed Niri keybindings
+or the Preview rule. When IPC reload is unavailable, setup prints the manual
+reload command without failing the already-written configuration.
+
+## v0.1.9
 
 Release validation still required:
 

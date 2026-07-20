@@ -1,6 +1,6 @@
 # Maintainer: fgonzalezurriola <fgonzalezurriola@gmail.com>
 pkgname=shaula-bin
-pkgver=0.1.7
+pkgver=0.1.8
 pkgrel=1
 pkgdesc='Capture, annotate, save, and copy screenshots on Wayland (prebuilt)'
 arch=('x86_64' 'aarch64')

@@ -317,6 +317,6 @@ timestamps and a repeatable test establish a Shaula causal path. Do not infer
 causality from a delayed compositor failure alone.
 
 GNOME and KDE interactive portal/graphical validation is not checked for
-v0.1.6. It is explicitly deferred to v0.1.8 and must not be reported as passed.
+v0.1.6. It is explicitly deferred to v0.1.9 and must not be reported as passed.
 Configurable capture shortcuts from the Settings view are also deferred to
-v0.1.8.
+v0.1.9.
