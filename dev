@@ -30,7 +30,8 @@ Core:
 
 App:
   preflight      Build, then run preflight + capabilities
-  dev-install    Build current checkout, install it locally, and reload Noctalia
+  install        Build and install the complete checkout without prompting
+  dev-install    Compatibility alias for install
   menu           Build, then open the universal Shaula menu
   settings       Build, then open native settings
   shortcuts      Build, then show shortcut status (or pass an action)
@@ -56,7 +57,7 @@ Pass-through:
   run <args...>  Build, then run build/shaula <args...>
 
 Examples:
-  ./dev dev-install --yes
+  ./dev install
   ./dev menu
   ./dev shortcuts
   ./dev shortcuts enable --json
@@ -588,8 +589,11 @@ release-arm)
     "${SHAULA_BIN}" preflight --json | jq
     "${SHAULA_BIN}" capabilities list --json | jq
     ;;
+  install)
+    install_local --yes
+    ;;
   dev-install)
-    install_local "$@"
+    install_local --yes "$@"
     ;;
   menu|launch)
     run_shaula launch "$@"

@@ -2,7 +2,7 @@
 pkgname=shaula
 pkgver=0.1.6
 pkgrel=1
-pkgdesc='Capture, preview, save, and copy screenshots on Wayland'
+pkgdesc='Capture, annotate, save, and copy screenshots on Wayland'
 arch=('x86_64' 'aarch64')
 url='https://github.com/fgonzalezurriola/shaula'
 license=('MIT')

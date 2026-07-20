@@ -457,7 +457,7 @@ git diff --check
 UI implementation also requires:
 
 ```bash
-./dev dev-install --yes
+./dev install
 ```
 
 ## 19. Implementation Sequence

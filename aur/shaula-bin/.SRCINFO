@@ -1,5 +1,5 @@
 pkgbase = shaula-bin
-	pkgdesc = Capture, preview, save, and copy screenshots on Wayland (prebuilt)
+	pkgdesc = Capture, annotate, save, and copy screenshots on Wayland (prebuilt)
 	pkgver = 0.1.6
 	pkgrel = 1
 	url = https://github.com/fgonzalezurriola/shaula

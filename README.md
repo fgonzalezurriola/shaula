@@ -1,7 +1,6 @@
 # Shaula
 
-Shaula is a Wayland screenshot application with capture, area selection, Preview,
-saving, and clipboard copy as built-in product features.
+Shaula captures, annotates, saves, and copies screenshots on Wayland.
 
 It chooses a working capture route automatically:
 
@@ -36,8 +35,10 @@ curl -fsSL https://raw.githubusercontent.com/fgonzalezurriola/shaula/master/scri
 
 The installer verifies the complete release before changing user files, installs
 under `~/.local`, validates the current capture route, and runs optional setup
-interactively when a terminal is available. It never invokes `sudo`, installs
-system packages, or chooses a desktop portal implementation.
+interactively when a terminal is available. Required host components are checked
+before installation and important missing components are reported in red. It
+never invokes `sudo`, installs system packages, or chooses a desktop portal
+implementation.
 
 Uninstall:
 
@@ -54,7 +55,9 @@ shaula setup
 
 The packages declare linked application libraries, `wl-clipboard`, and the
 desktop portal framework. `grim` is optional and enables the native
-Niri/wlroots route. Niri and Noctalia remain optional integrations.
+Niri/wlroots route. Pacman installs declared dependencies automatically, and the
+package hook prints an important red warning when no capture route can be
+detected. Niri and Noctalia remain optional integrations.
 
 Optional fonts:
 
@@ -150,7 +153,7 @@ meson compile -C build
 Useful development commands:
 
 ```bash
-./dev dev-install --yes
+./dev install
 ./dev capture
 ./dev all
 ./dev noctalia-load

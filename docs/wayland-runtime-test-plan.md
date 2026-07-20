@@ -73,7 +73,7 @@ timeout mappings.
 Install the current checkout:
 
 ```bash
-./dev dev-install --yes
+./dev install
 ./dev run doctor --json
 ./dev run capabilities list --json
 ./dev run preflight --json

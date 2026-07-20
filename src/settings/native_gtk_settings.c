@@ -56,6 +56,7 @@ typedef struct {
   GtkWidget *shortcuts_detail_label;
   GtkWidget *shortcuts_enable_button;
   GtkWidget *shortcuts_disable_button;
+  GtkWidget *shortcuts_configure_button;
   GtkWidget *shortcuts_repair_button;
   GtkWidget *shortcuts_recheck_button;
   GtkWidget *shortcuts_menu_button;
@@ -294,6 +295,15 @@ static gboolean refresh_shortcuts_status(void) {
     gtk_widget_set_visible(state.shortcuts_disable_button, can_disable);
     gtk_widget_set_sensitive(state.shortcuts_disable_button, can_disable);
   }
+  if (state.shortcuts_configure_button != NULL) {
+    gboolean can_configure =
+        state.shortcuts.backend == SHAULA_SHORTCUT_BACKEND_PORTAL &&
+        state.shortcuts.provider_running &&
+        (state.shortcuts.state == SHAULA_SHORTCUT_STATE_ACTIVE ||
+         state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING);
+    gtk_widget_set_visible(state.shortcuts_configure_button, TRUE);
+    gtk_widget_set_sensitive(state.shortcuts_configure_button, can_configure);
+  }
   if (state.shortcuts_repair_button != NULL) {
     gboolean can_repair = shaula_settings_shortcut_can_repair(&state.shortcuts);
     gtk_widget_set_visible(state.shortcuts_repair_button, can_repair);
@@ -357,6 +367,15 @@ static void on_shortcuts_repair_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
   run_shortcut_operation(SHORTCUT_OPERATION_REPAIR);
+}
+
+static void on_shortcuts_configure_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  run_shortcut_operation(SHORTCUT_OPERATION_REPAIR);
+  if (state.shortcuts.state != SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE &&
+      state.shortcuts.state != SHAULA_SHORTCUT_STATE_CONFIG_INVALID)
+    set_status("Shortcut configuration requested from the desktop.", FALSE);
 }
 
 static void on_shortcuts_recheck_clicked(GtkButton *button, gpointer data) {
@@ -669,8 +688,9 @@ static GtkWidget *build_form(void) {
   gtk_widget_set_margin_start(shortcuts_card, 16);
   gtk_widget_set_margin_end(shortcuts_card, 16);
   GtkWidget *shortcuts_description = gtk_label_new(
-      "Capture from anywhere using Ctrl+Shift+1–4. The Shaula menu always "
-      "works when global shortcuts are unavailable.");
+      "Configure Quick, Area, Fullscreen, and All Screens through your "
+      "desktop's shortcut portal. The Shaula menu always works when global "
+      "shortcuts are unavailable.");
   gtk_label_set_xalign(GTK_LABEL(shortcuts_description), 0.0);
   gtk_label_set_wrap(GTK_LABEL(shortcuts_description), TRUE);
   gtk_widget_add_css_class(shortcuts_description, "description");
@@ -705,18 +725,32 @@ static GtkWidget *build_form(void) {
   gtk_widget_add_css_class(state.shortcuts_detail_label, "description");
   gtk_box_append(GTK_BOX(shortcuts_card), state.shortcuts_detail_label);
 
-  GtkWidget *shortcut_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  GtkWidget *shortcut_buttons = gtk_flow_box_new();
+  gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(shortcut_buttons),
+                                  GTK_SELECTION_NONE);
+  gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(shortcut_buttons), 8);
+  gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(shortcut_buttons), 8);
+  gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(shortcut_buttons), 3);
   state.shortcuts_menu_button = gtk_button_new_with_label("Open Shaula Menu");
   state.shortcuts_enable_button = gtk_button_new_with_label("Enable");
   gtk_widget_add_css_class(state.shortcuts_enable_button, "suggested-action");
   state.shortcuts_disable_button = gtk_button_new_with_label("Disable");
+  state.shortcuts_configure_button =
+      gtk_button_new_with_label("Configure Shortcuts");
   state.shortcuts_repair_button = gtk_button_new_with_label("Repair");
   state.shortcuts_recheck_button = gtk_button_new_with_label("Check Again");
-  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_menu_button);
-  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_enable_button);
-  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_disable_button);
-  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_repair_button);
-  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_recheck_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_menu_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_enable_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_disable_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_configure_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_repair_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_recheck_button);
   gtk_box_append(GTK_BOX(shortcuts_card), shortcut_buttons);
   gtk_box_append(GTK_BOX(box), shortcuts_card);
 
@@ -897,6 +931,8 @@ static GtkWidget *build_form(void) {
                    G_CALLBACK(on_shortcuts_enable_clicked), NULL);
   g_signal_connect(state.shortcuts_disable_button, "clicked",
                    G_CALLBACK(on_shortcuts_disable_clicked), NULL);
+  g_signal_connect(state.shortcuts_configure_button, "clicked",
+                   G_CALLBACK(on_shortcuts_configure_clicked), NULL);
   g_signal_connect(state.shortcuts_repair_button, "clicked",
                    G_CALLBACK(on_shortcuts_repair_clicked), NULL);
   g_signal_connect(state.shortcuts_recheck_button, "clicked",

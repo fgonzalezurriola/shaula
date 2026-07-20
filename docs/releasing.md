@@ -199,18 +199,18 @@ other failure outcomes remain distinct.
 
 ## Local development installation
 
-`./dev dev-install [installer args...]` builds the current checkout, stages the
-Meson install, creates a local release archive and checksums, invokes the public
-installer with `file://` assets, runs setup and validation, and reloads Noctalia
-when applicable.
+`./dev install` builds the current checkout, stages the Meson install, creates a
+local release archive and checksums, invokes the public installer with `file://`
+assets in complete noninteractive mode, runs setup and validation, and reloads
+Noctalia when applicable.
 
 ```bash
-./dev dev-install --yes
+./dev install
 ```
 
-The command displays build, staging, install, setup, and validation phases.
-`--yes` accepts the recommended shortcuts. To exercise an explicit decline in a
-local install, run setup afterward with `shaula setup --no-shortcuts`.
+The command displays build, staging, install, setup, and validation phases. To
+exercise an explicit shortcut decline after installation, run
+`shaula setup --no-shortcuts`.
 
 `./dev noctalia-load` is widget-only: it builds Shaula, runs setup with Niri
 disabled and Noctalia explicitly selected, then reloads Noctalia. It does not run
@@ -290,7 +290,7 @@ scripts/qa/assert-release-archive.sh "$PWD" \
   dist/shaula-linux-x86_64.tar.gz x86_64
 scripts/qa/assert-release-archive.sh "$PWD" \
   dist/shaula-linux-aarch64.tar.gz aarch64
-./dev dev-install --yes
+./dev install
 ```
 
 Wayland capture, shortcut activation, Settings presentation, and clipboard

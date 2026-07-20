@@ -18,6 +18,14 @@ XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
 SHAULA_CONFIG_DIR="${XDG_CONFIG_HOME}/shaula"
 INSTALLED_MANIFEST="${XDG_DATA_HOME}/shaula/release-manifest.txt"
 
+if [ -t 2 ] && [ "${TERM:-dumb}" != "dumb" ]; then
+  RED="$(printf '\033[1;31m')"
+  RESET="$(printf '\033[0m')"
+else
+  RED=""
+  RESET=""
+fi
+
 usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [options]
@@ -54,7 +62,7 @@ status() {
 }
 
 fail() {
-  status failed "$*" >&2
+  printf '%sERROR: %s%s\n' "$RED" "$*" "$RESET" >&2
   exit 1
 }
 
@@ -348,6 +356,7 @@ install_release() {
   for command in uname tar awk sha256sum install mktemp cmp chmod; do
     need_cmd "$command"
   done
+  need_cmd wl-copy
 
   arch="$(detect_arch)"
   tmp_dir="$(mktemp -d)"

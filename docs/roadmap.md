@@ -1,7 +1,7 @@
 # Shaula Roadmap
 
-Shaula is a focused Wayland screenshot workflow with a native capture overlay
-and post-capture Preview/editor.
+Shaula captures, annotates, saves, and copies screenshots on Wayland with a
+native capture overlay and post-capture Preview/editor.
 
 ## Released: v0.1.5
 
@@ -68,14 +68,39 @@ part of the v0.1.6 release. Its design material remains in:
 
 Consolidated pending work, driven by real usage:
 
-- Normalize the project hero/description phrase across PKGBUILD `pkgdesc`, GitHub
-  repo description, README hero, and desktop entry metadata. Canonical candidate:
-  `Capture, Annotate, save, and copy screenshots on Wayland`.
+Release-hardening completed in the current checkout:
+
+- Settings exposes portal-owned configuration for all four capture shortcuts.
+- The universal menu remains available when GlobalShortcuts is unsupported.
+- `./dev install` is the complete local development installation command.
+- Portable and AUR installation paths detect required runtime infrastructure;
+  important failures are prominent and actionable.
+- Active development and release documentation uses the current install flow.
+
+Release validation completed for the current checkout:
+
+- Strict Werror and ASan/UBSan builds pass all 36 tests.
+- Installer and release contracts pass.
+- `./dev install` completes with capture-route, Preview, clipboard, Niri rule,
+  and Noctalia validation on the current CachyOS/Niri session.
+- Both AUR `.SRCINFO` files match locally regenerated `makepkg` metadata and
+  both package hooks pass Bash syntax validation.
+
+Release validation still required:
+
+- Repeat the automated gates after the version bump and final release commit.
+- Build and validate optimized x86_64 and native/QEMU AArch64 archives.
+- Complete GNOME and KDE graphical portal validation, including capture,
+  shortcut approval, shortcut configuration, activation, and persistence.
+
+Product work not required for the portal/install release slice:
+
+- Update the GitHub repo description after release to match the canonical
+  project phrase: `Capture, annotate, save, and copy screenshots on Wayland`.
 - Re-record the demo clip to reflect v0.1.6 (clipboard via `wl-copy`, current
   Preview UI) before using it in the README/landing page.
 - Finish and deploy the static product landing page (consistent hero phrase,
   current clip).
-- GNOME and KDE graphical portal validation (deferred from v0.1.6).
 - Bounded image composition and canvas expansion.
 - Dedicated active eyedropper mode if passive sampling is insufficient.
 - More filename templating and save-path configuration.

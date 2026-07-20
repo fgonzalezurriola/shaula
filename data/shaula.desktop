@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Shaula
-Comment=Capture, preview, save, and copy screenshots on Wayland
+Comment=Capture, annotate, save, and copy screenshots on Wayland
 Exec=shaula launch
 TryExec=shaula
 Icon=shaula

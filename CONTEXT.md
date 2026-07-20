@@ -1,6 +1,6 @@
 # Shaula Context
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Current release candidate
 
@@ -127,6 +127,11 @@ workflow replaces those markers only in writable AUR clones before pushing.
 
 ## Developer workflow
 
+- The canonical short project description is
+  `Capture, annotate, save, and copy screenshots on Wayland`. It is used for
+  desktop metadata, package descriptions, the README opening, and the product
+  landing page; the GitHub repository description still needs the same manual
+  update after release.
 - `./dev` now imports the active graphical session without forcing Niri or a
   hard-coded Wayland display, so runtime compositor detection is exercised.
 - Build-tree runs resolve the shortcut provider and graphical helpers from the
@@ -135,8 +140,26 @@ workflow replaces those markers only in writable AUR clones before pushing.
   current portal status; an explicit shortcut action can be appended.
 - `./dev doctor` reports Niri state as optional because the universal Wayland
   workflow does not require Niri.
+- `./dev install` is the canonical complete local development install. It builds
+  the checkout, installs all application payload and integrations, accepts the
+  installer prompt automatically, and reloads Noctalia when present.
+- Settings exposes **Configure Shortcuts** whenever the portal provider is
+  running. The desktop portal remains responsible for selecting and approving
+  the bindings for Quick, Area, Fullscreen, and All Screens.
+- Both public installation routes detect required runtime support. AUR delegates
+  declared dependency installation to pacman and its hooks emit red warnings for
+  missing capture infrastructure; the portable installer checks requirements
+  before writing user files and renders fatal diagnostics in red on a terminal.
 
 ## Verified release state
+
+Post-v0.1.6 shortcut, Settings, installer, and documentation changes have now
+passed strict Werror and ASan/UBSan builds with all 36 tests in each build. The
+installer and release contracts pass, `./dev install` completes on the current
+CachyOS/Niri session, and locally regenerated `makepkg --printsrcinfo` output
+matches both checked-in AUR `.SRCINFO` files. A container repetition of the AUR
+metadata check was unavailable because the installed Docker client has no active
+daemon; local makepkg validation covered the same generated metadata comparison.
 
 The current source state has passed:
 
@@ -150,7 +173,7 @@ The current source state has passed:
 - optimized x86_64 archive validation remains required before release;
 - QEMU-backed native AArch64 Werror build and archive validation remain required
   for the updated shortcut-provider payload before release;
-- local development install through `./dev dev-install --yes`;
+- local development install through `./dev install`;
 - `git diff --check`;
 - focused clipboard lifecycle and replacement tests;
 - installer architecture-selection and AUR metadata consistency checks.
