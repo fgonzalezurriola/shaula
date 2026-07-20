@@ -32,4 +32,5 @@ experience, clearer Settings behavior, and predictable installation.
 GNOME and KDE graphical portal validation remains unclaimed until those sessions
 have tested capture, shortcut approval, configuration, activation, and
 persistence. Optimized archive and AArch64 artifact validation also remains
-required for v0.1.8.
+required for v0.1.8. Configurable capture shortcuts from the Settings view are
+also deferred to v0.1.8.

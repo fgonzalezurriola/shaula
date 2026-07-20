@@ -95,6 +95,7 @@ Release validation still required:
 - Build and validate optimized x86_64 and native/QEMU AArch64 archives.
 - Complete GNOME and KDE graphical portal validation, including capture,
   shortcut approval, shortcut configuration, activation, and persistence.
+- Add configurable capture shortcuts from the Settings view.
 
 Product work not required for the portal/install release slice:
 

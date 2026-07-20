@@ -239,4 +239,5 @@ passed.
 
 The `v0.1.7` release commit and tag publish the completed work described above.
 GNOME, KDE, optimized archive, and updated AArch64 validation remain scoped to
-v0.1.8 and are not claimed by this release.
+v0.1.8 and are not claimed by this release. v0.1.8 should also add configurable
+capture shortcuts from the Settings view.
