@@ -73,6 +73,8 @@ Release-hardening completed in the current checkout:
 - Settings exposes portal-owned configuration for all four capture shortcuts.
 - The universal menu remains available when GlobalShortcuts is unsupported.
 - `./dev install` is the complete local development installation command.
+- Portal-unavailable Niri installs create a full config backup and add one
+  conflict-checked, marked, symmetrically removable shortcut block.
 - Portable and AUR installation paths detect required runtime infrastructure;
   important failures are prominent and actionable.
 - Active development and release documentation uses the current install flow.

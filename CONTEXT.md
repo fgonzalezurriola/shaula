@@ -33,10 +33,12 @@ The `./dev` live commands export build-tree helper paths explicitly, so they
 exercise the current checkout rather than relying on a previous local install.
 
 The generic shortcut module is shared by Settings, `shaula setup`, and explicit
-`shaula shortcuts` commands. It uses only a verified XDG GlobalShortcuts portal
-session and preserves desktop approval, remapping, and rejection. Shaula never
-modifies compositor keybindings. Unsupported shortcut setup is non-fatal because
-the universal menu and desktop launcher actions invoke capture commands directly.
+`shaula shortcuts` commands. It prefers a verified XDG GlobalShortcuts portal
+session and preserves desktop approval, remapping, and rejection. If the portal
+is not viable and a Niri config exists, Shaula checks for conflicts, creates a
+full backup, and installs only a marked managed keybinding block. Unsupported
+shortcut setup remains non-fatal because the universal menu and desktop launcher
+actions invoke capture commands directly.
 
 Shortcut choice state remains separate from installed shortcut state, but it no
 longer blocks application launch. `shaula launch` always opens the compact GTK
@@ -146,6 +148,9 @@ workflow replaces those markers only in writable AUR clones before pushing.
 - Settings exposes **Configure Shortcuts** whenever the portal provider is
   running. The desktop portal remains responsible for selecting and approving
   the bindings for Quick, Area, Fullscreen, and All Screens.
+- Shortcut actions hide their `GtkFlowBoxChild` containers as a unit, preventing
+  empty cells. Unsupported state exposes **Try Again** and suppresses the
+  redundant status-only **Check Again** action.
 - Both public installation routes detect required runtime support. AUR delegates
   declared dependency installation to pacman and its hooks emit red warnings for
   missing capture infrastructure; the portable installer checks requirements
@@ -185,11 +190,15 @@ The current source state has passed:
 
 Live Niri validation:
 
-- The previous managed Niri shortcut block was removed symmetrically with a
-  backup before the compositor-specific shortcut backend was deleted.
-- A real portal enable attempt on the current Niri session returned
-  `unsupported`, removed provider autostart state, and Settings displayed the
-  visible XDG GlobalShortcuts warning with the universal menu fallback.
+- A real portal enable attempt returned `unsupported`; `./dev install` then
+  selected the Niri fallback and reported `enabled: capture shortcuts (niri)`.
+- Before editing, Shaula created
+  `config.kdl.shaula-backup-1784515129`; its SHA-256 exactly matches the
+  pre-install config hash. The resulting config contains one balanced managed
+  keybinding block and preserves all user-owned content.
+- Public shortcut status reports backend `niri`, state `active`, activation
+  ready, and the four `Ctrl+Shift+1` through `4` triggers. No portal-provider
+  autostart entry remains.
 - `niri validate` accepted the updated config, and `niri msg action
   load-config-file` reloaded it successfully.
 - At 20:01:21, more than 15 minutes after that capture completed, the NVIDIA

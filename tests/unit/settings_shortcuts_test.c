@@ -33,6 +33,10 @@ static void test_backend_and_registration_text(void) {
   status.provider_running = FALSE;
   g_assert_cmpstr(shaula_settings_shortcut_registration_text(&status), ==,
                   "Registered; provider not running");
+  status.backend = SHAULA_SHORTCUT_BACKEND_NIRI;
+  status.state = SHAULA_SHORTCUT_STATE_ACTIVE;
+  g_assert_cmpstr(shaula_settings_shortcut_registration_text(&status), ==,
+                  "Managed keybindings installed");
   shaula_shortcut_status_clear(&status);
 }
 

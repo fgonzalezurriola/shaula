@@ -80,6 +80,11 @@ static void set_status(const char *text, gboolean is_error) {
     gtk_widget_remove_css_class(state.status_label, "error");
 }
 
+static void set_shortcut_action_visible(GtkWidget *button, gboolean visible) {
+  GtkWidget *container = gtk_widget_get_parent(button);
+  gtk_widget_set_visible(container != NULL ? container : button, visible);
+}
+
 static void read_controls(ShaulaSettingsConfig *config) {
   config->region_mode =
       (RegionMode)gtk_drop_down_get_selected(state.region_combo);
@@ -287,12 +292,12 @@ static gboolean refresh_shortcuts_status(void) {
         state.shortcuts.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED
             ? "Try Again"
             : "Enable");
-    gtk_widget_set_visible(state.shortcuts_enable_button, can_enable);
+    set_shortcut_action_visible(state.shortcuts_enable_button, can_enable);
     gtk_widget_set_sensitive(state.shortcuts_enable_button, can_enable);
   }
   if (state.shortcuts_disable_button != NULL) {
     gboolean can_disable = shaula_settings_shortcut_can_disable(&state.shortcuts);
-    gtk_widget_set_visible(state.shortcuts_disable_button, can_disable);
+    set_shortcut_action_visible(state.shortcuts_disable_button, can_disable);
     gtk_widget_set_sensitive(state.shortcuts_disable_button, can_disable);
   }
   if (state.shortcuts_configure_button != NULL) {
@@ -301,13 +306,19 @@ static gboolean refresh_shortcuts_status(void) {
         state.shortcuts.provider_running &&
         (state.shortcuts.state == SHAULA_SHORTCUT_STATE_ACTIVE ||
          state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING);
-    gtk_widget_set_visible(state.shortcuts_configure_button, TRUE);
+    set_shortcut_action_visible(state.shortcuts_configure_button, TRUE);
     gtk_widget_set_sensitive(state.shortcuts_configure_button, can_configure);
   }
   if (state.shortcuts_repair_button != NULL) {
     gboolean can_repair = shaula_settings_shortcut_can_repair(&state.shortcuts);
-    gtk_widget_set_visible(state.shortcuts_repair_button, can_repair);
+    set_shortcut_action_visible(state.shortcuts_repair_button, can_repair);
     gtk_widget_set_sensitive(state.shortcuts_repair_button, can_repair);
+  }
+  if (state.shortcuts_recheck_button != NULL) {
+    gboolean can_recheck =
+        !shaula_settings_shortcut_can_enable(&state.shortcuts);
+    set_shortcut_action_visible(state.shortcuts_recheck_button, can_recheck);
+    gtk_widget_set_sensitive(state.shortcuts_recheck_button, can_recheck);
   }
   if (result != SHAULA_SHORTCUT_RESULT_OK && error != NULL)
     set_status(error, TRUE);

@@ -181,12 +181,12 @@ setup_env=(
 )
 setup_first="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --yes)"
-grep -q 'skipped: capture shortcuts (XDG GlobalShortcuts portal unavailable' <<<"${setup_first}"
+grep -q 'enabled: capture shortcuts (niri)' <<<"${setup_first}"
 grep -q 'installed: Niri preview rule' <<<"${setup_first}"
 grep -q 'installed: Noctalia integration' <<<"${setup_first}"
 setup_second="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --yes)"
-grep -q 'skipped: capture shortcuts (unsupported)' <<<"${setup_second}"
+grep -q 'skipped: capture shortcuts (active)' <<<"${setup_second}"
 grep -q 'unchanged: Niri preview rule' <<<"${setup_second}"
 grep -q 'unchanged: Noctalia integration' <<<"${setup_second}"
 

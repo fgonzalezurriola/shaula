@@ -18,8 +18,15 @@ gboolean install_managed_block(const char *path_override,
                                const char *end_marker,
                                const char *payload, gboolean dry_run,
                                ManagedBlockResult *result, gboolean *invalid);
+GPtrArray *niri_keybind_conflicts(const char *path);
+/* Renders the canonical managed keybinding payload with the current Shaula path. */
+char *shaula_niri_keybinds_render(void);
 gboolean remove_managed_block(const char *path_override,
                               const char *begin_marker,
                               const char *end_marker, gboolean dry_run,
                               ManagedBlockResult *result, gboolean *invalid);
+gboolean remove_managed_keybinds(const char *path_override, gboolean dry_run,
+                                 ManagedBlockResult *result,
+                                 gboolean *invalid);
+
 #endif

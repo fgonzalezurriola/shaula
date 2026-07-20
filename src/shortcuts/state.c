@@ -82,6 +82,8 @@ static ShaulaShortcutChoice choice_from_token(const char *token) {
 static ShaulaShortcutBackend backend_from_token(const char *token) {
   if (g_strcmp0(token, "portal") == 0)
     return SHAULA_SHORTCUT_BACKEND_PORTAL;
+  if (g_strcmp0(token, "niri") == 0)
+    return SHAULA_SHORTCUT_BACKEND_NIRI;
   return SHAULA_SHORTCUT_BACKEND_NONE;
 }
 
@@ -110,6 +112,8 @@ static ShaulaShortcutState shortcut_state_from_token(const char *token) {
     return SHAULA_SHORTCUT_STATE_PERMISSION_PENDING;
   if (g_strcmp0(token, "permission_denied") == 0)
     return SHAULA_SHORTCUT_STATE_PERMISSION_DENIED;
+  if (g_strcmp0(token, "conflict") == 0)
+    return SHAULA_SHORTCUT_STATE_CONFLICT;
   if (g_strcmp0(token, "unsupported") == 0)
     return SHAULA_SHORTCUT_STATE_UNSUPPORTED;
   if (g_strcmp0(token, "provider_unavailable") == 0)
@@ -161,7 +165,7 @@ gboolean shaula_shortcut_setup_state_load(ShaulaShortcutSetupState *state,
   if (backend == NULL)
     return FALSE;
   static const char *const choices[] = {"unset", "enabled", "declined"};
-  static const char *const backends[] = {"none", "portal"};
+  static const char *const backends[] = {"none", "portal", "niri"};
   if (!token_is_one_of(choice, choices, G_N_ELEMENTS(choices)) ||
       !token_is_one_of(backend, backends, G_N_ELEMENTS(backends))) {
     g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE,

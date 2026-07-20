@@ -14,8 +14,10 @@ Users do not choose a clipboard or global-shortcut backend. Shaula publishes
 copied images and text through the required `wl-copy` runtime so selections remain
 available after the initiating CLI or Preview process exits. The Settings app
 can enable the recommended `Ctrl+Shift+1–4` capture shortcuts with one choice.
-Shaula uses the standard XDG GlobalShortcuts portal; when it is unavailable, the
-universal menu remains the graphical fallback.
+Shaula uses the standard XDG GlobalShortcuts portal first. When that portal is
+not viable on Niri, installation adds a managed Niri keybinding block after
+backing up the existing config. The universal menu remains the fallback
+everywhere.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
@@ -127,9 +129,9 @@ shaula setup --remove
 ```
 
 Declining shortcuts is remembered. Shortcut setup and removal are idempotent and
-symmetrical. If the XDG GlobalShortcuts portal is unavailable, setup reports the
-optional limitation without making graphical capture, the Shaula menu, or desktop
-actions fail.
+symmetrical. If the XDG GlobalShortcuts portal is unavailable, setup falls back
+to a backed-up managed Niri block when Niri is detected. Other desktops retain
+the Shaula menu and desktop actions without global shortcuts.
 
 ## Development
 

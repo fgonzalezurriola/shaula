@@ -4,6 +4,7 @@ shaula_shortcuts_c = static_library(
     'shortcuts.c',
     'state.c',
     'portal_adapter.c',
+    'niri_adapter.c',
     'provider_core.c',
   ],
   include_directories: include_directories('..'),

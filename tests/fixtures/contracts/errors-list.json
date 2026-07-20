@@ -30,6 +30,7 @@
       {"code":"ERR_OUTPUT_PATH_INVALID","message":"output path is not writable","retryable":false,"class":"output","action":"fail_fast","exit_code":51},
       {"code":"ERR_CONFIG_UNREADABLE","message":"configuration file is unreadable","retryable":false,"class":"output","action":"fail_fast","exit_code":60},
       {"code":"ERR_CONFIG_INVALID","message":"invalid configuration file","retryable":false,"class":"cli","action":"fail_fast","exit_code":61},
+      {"code":"ERR_NIRI_KEYBIND_CONFLICT","message":"existing Niri keybind conflict detected","retryable":false,"class":"cli","action":"fail_fast","exit_code":62},
       {"code":"ERR_SHORTCUTS_UNSUPPORTED","message":"automatic global shortcuts are unsupported","retryable":false,"class":"backend","action":"degrade_continue","exit_code":63},
       {"code":"ERR_SHORTCUT_PERMISSION_DENIED","message":"desktop shortcut permission was denied","retryable":false,"class":"backend","action":"degrade_continue","exit_code":64},
       {"code":"ERR_SHORTCUT_PROVIDER_UNAVAILABLE","message":"shortcut provider is unavailable","retryable":true,"class":"backend","action":"retry_limited","exit_code":65},

@@ -6,8 +6,9 @@ experience, clearer Settings behavior, and predictable installation.
 ## Included
 
 - The universal GTK menu is the normal graphical application entry point.
-- Global shortcuts use only the XDG GlobalShortcuts portal. Shaula does not
-  modify compositor keybindings.
+- Global shortcuts prefer XDG GlobalShortcuts. When the portal is not viable and
+  Niri is detected, Shaula backs up the Niri config and installs a marked,
+  removable keybinding block.
 - Settings keeps Global Shortcuts first, reports unavailable portal support
   prominently, opens the universal menu, and requests desktop-owned
   configuration for Quick, Area, Fullscreen, and All Screens.
@@ -26,8 +27,8 @@ experience, clearer Settings behavior, and predictable installation.
 - A local `./dev install` completes successfully.
 - GNOME and KDE graphical sessions validate Screenshot and GlobalShortcuts
   portal flows, including shortcut configuration and one real activation.
-- Niri validates the universal-menu fallback when GlobalShortcuts is
-  unsupported and retains a working native capture route.
+- Niri validates managed keybinding installation, backup, activation, symmetric
+  removal, and the universal-menu fallback.
 
 ## Not Yet Claimed
 

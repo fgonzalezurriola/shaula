@@ -1,5 +1,6 @@
 #include "shortcuts.h"
 
+#include "niri_adapter.h"
 #include "portal_adapter.h"
 #include "state.h"
 
@@ -8,6 +9,12 @@ static gboolean portal_state_is_viable(ShaulaShortcutState state) {
          state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING ||
          state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED ||
          state == SHAULA_SHORTCUT_STATE_RECONNECTING;
+}
+
+static gboolean portal_state_needs_fallback(ShaulaShortcutState state) {
+  return state == SHAULA_SHORTCUT_STATE_UNSUPPORTED ||
+         state == SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE ||
+         state == SHAULA_SHORTCUT_STATE_CONFIG_INVALID;
 }
 
 static void set_error(char **error_text, const char *message) {
@@ -40,6 +47,8 @@ const char *shaula_shortcut_backend_token(ShaulaShortcutBackend backend) {
   switch (backend) {
   case SHAULA_SHORTCUT_BACKEND_PORTAL:
     return "portal";
+  case SHAULA_SHORTCUT_BACKEND_NIRI:
+    return "niri";
   default:
     return "none";
   }
@@ -53,6 +62,8 @@ const char *shaula_shortcut_state_token(ShaulaShortcutState state) {
     return "permission_pending";
   case SHAULA_SHORTCUT_STATE_PERMISSION_DENIED:
     return "permission_denied";
+  case SHAULA_SHORTCUT_STATE_CONFLICT:
+    return "conflict";
   case SHAULA_SHORTCUT_STATE_UNSUPPORTED:
     return "unsupported";
   case SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE:
@@ -131,19 +142,24 @@ shaula_shortcuts_query(ShaulaShortcutStatus *status, char **error_text) {
 
   ShaulaShortcutResult result = SHAULA_SHORTCUT_RESULT_OK;
   if (setup.backend == SHAULA_SHORTCUT_BACKEND_PORTAL ||
-      shaula_shortcut_autostart_installed())
+      shaula_shortcut_autostart_installed()) {
     result = shaula_shortcut_portal_query(status, error_text);
-  else if (setup.choice == SHAULA_SHORTCUT_CHOICE_ENABLED) {
-    shaula_shortcut_status_clear(status);
-    status->state = SHAULA_SHORTCUT_STATE_UNSUPPORTED;
-    status->error_code = g_strdup("ERR_SHORTCUTS_UNSUPPORTED");
-    status->detail = g_strdup(
-        "This desktop does not provide a working XDG GlobalShortcuts portal. "
-        "Use the Shaula menu instead.");
+  } else if (setup.backend == SHAULA_SHORTCUT_BACKEND_NIRI) {
+    result = shaula_shortcut_niri_query(status, error_text);
   } else {
-    shaula_shortcut_status_clear(status);
-    status->state = SHAULA_SHORTCUT_STATE_DISABLED;
-    status->detail = g_strdup("Portal shortcuts are disabled.");
+    result = shaula_shortcut_niri_query(status, error_text);
+    if (result == SHAULA_SHORTCUT_RESULT_OK &&
+        status->state != SHAULA_SHORTCUT_STATE_ACTIVE &&
+        status->state != SHAULA_SHORTCUT_STATE_CONFLICT &&
+        status->state != SHAULA_SHORTCUT_STATE_CONFIG_INVALID) {
+      shaula_shortcut_status_clear(status);
+      if (setup.choice == SHAULA_SHORTCUT_CHOICE_ENABLED) {
+        status->state = SHAULA_SHORTCUT_STATE_UNSUPPORTED;
+        status->error_code = g_strdup("ERR_SHORTCUTS_UNSUPPORTED");
+        status->detail = g_strdup(
+            "Automatic global shortcuts are unavailable on this desktop.");
+      }
+    }
   }
   overlay_setup_state(status, &setup);
   return result;
@@ -181,20 +197,27 @@ shaula_shortcuts_enable(const ShaulaShortcutOptions *options,
       shaula_shortcut_portal_enable(options, status, error_text);
   if (portal_state_is_viable(status->state))
     return persist_enable_status(options, status, portal, error_text);
+  if (!portal_state_needs_fallback(status->state) &&
+      portal != SHAULA_SHORTCUT_RESULT_PROVIDER_FAILED &&
+      portal != SHAULA_SHORTCUT_RESULT_CONFIG_INVALID)
+    return persist_enable_status(options, status, portal, error_text);
+
+  ShaulaShortcutOptions cleanup = *options;
+  cleanup.remember_choice = FALSE;
+  (void)shaula_shortcut_portal_disable(&cleanup, status, NULL);
+
+  ShaulaShortcutResult niri =
+      shaula_shortcut_niri_enable(options, status, error_text);
   if (status->state == SHAULA_SHORTCUT_STATE_UNSUPPORTED) {
-    ShaulaShortcutOptions cleanup = *options;
-    cleanup.remember_choice = FALSE;
-    (void)shaula_shortcut_portal_disable(&cleanup, status, NULL);
     shaula_shortcut_status_clear(status);
     status->state = SHAULA_SHORTCUT_STATE_UNSUPPORTED;
     status->backend = SHAULA_SHORTCUT_BACKEND_NONE;
     status->error_code = g_strdup("ERR_SHORTCUTS_UNSUPPORTED");
     status->detail = g_strdup(
-        "This desktop does not provide a working XDG GlobalShortcuts portal. "
-        "Use the Shaula menu instead.");
-    portal = SHAULA_SHORTCUT_RESULT_OK;
+        "Automatic global shortcuts are unavailable. Desktop launcher actions remain available.");
+    niri = SHAULA_SHORTCUT_RESULT_OK;
   }
-  return persist_enable_status(options, status, portal, error_text);
+  return persist_enable_status(options, status, niri, error_text);
 }
 
 ShaulaShortcutResult
@@ -209,16 +232,42 @@ shaula_shortcuts_disable(const ShaulaShortcutOptions *options,
 
   ShaulaShortcutOptions internal = *options;
   internal.remember_choice = FALSE;
+  ShaulaShortcutStatus portal_status;
+  ShaulaShortcutStatus niri_status;
+  shaula_shortcut_status_init(&portal_status);
+  shaula_shortcut_status_init(&niri_status);
+  g_autofree char *portal_error = NULL;
+  g_autofree char *niri_error = NULL;
+  ShaulaShortcutResult portal = shaula_shortcut_portal_disable(
+      &internal, &portal_status, &portal_error);
+  ShaulaShortcutResult niri =
+      shaula_shortcut_niri_disable(&internal, &niri_status, &niri_error);
+
   ShaulaShortcutResult operation =
-      shaula_shortcut_portal_disable(&internal, status, error_text);
-  if (operation != SHAULA_SHORTCUT_RESULT_OK)
+      portal != SHAULA_SHORTCUT_RESULT_OK ? portal : niri;
+  if (operation != SHAULA_SHORTCUT_RESULT_OK) {
+    set_error(error_text, portal_error != NULL ? portal_error : niri_error);
+    shaula_shortcut_status_clear(status);
+    if (portal != SHAULA_SHORTCUT_RESULT_OK) {
+      *status = portal_status;
+      shaula_shortcut_status_init(&portal_status);
+    } else {
+      *status = niri_status;
+      shaula_shortcut_status_init(&niri_status);
+    }
+    shaula_shortcut_status_clear(&portal_status);
+    shaula_shortcut_status_clear(&niri_status);
     return operation;
+  }
 
   shaula_shortcut_status_clear(status);
   status->state = SHAULA_SHORTCUT_STATE_DISABLED;
   status->detail = g_strdup(options->dry_run
                                 ? "Global shortcuts would be disabled."
                                 : "Global shortcuts are disabled.");
+  shaula_shortcut_status_clear(&portal_status);
+  shaula_shortcut_status_clear(&niri_status);
+
   if (options->remember_choice) {
     ShaulaShortcutResult saved = save_setup_state(
         SHAULA_SHORTCUT_CHOICE_DECLINED, SHAULA_SHORTCUT_BACKEND_NONE, TRUE,
@@ -248,6 +297,10 @@ shaula_shortcuts_repair(const ShaulaShortcutOptions *options,
         shaula_shortcut_portal_repair(options, status, error_text);
     if (portal_state_is_viable(status->state))
       return persist_enable_status(options, status, repaired, error_text);
+  } else if (status->backend == SHAULA_SHORTCUT_BACKEND_NIRI) {
+    ShaulaShortcutResult repaired =
+        shaula_shortcut_niri_enable(options, status, error_text);
+    return persist_enable_status(options, status, repaired, error_text);
   }
   return shaula_shortcuts_enable(options, status, error_text);
 }
