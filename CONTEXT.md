@@ -141,6 +141,58 @@ workflow replaces those markers only in writable AUR clones before pushing.
   desktop metadata, package descriptions, the README opening, and the product
   landing page; the GitHub repository description still needs the same manual
   update after release.
+- The Astro landing page now uses a flat, editorial visual system without the
+  previous glow, grid, or gradient treatment. Its v0.1.8 content describes the
+  universal launcher, automatic grim/portal routing, optional shortcut setup,
+  current annotation workflow, and both portable and AUR installation paths.
+  The hero install card uses Linux and AUR tabs. AUR shows both package install
+  and `shaula setup` as explicit command lines; each tab has one icon-only copy
+  control inside the command panel, with no source/footer row or follow-up note.
+- The landing page now reserves its compact product descriptor for the hero,
+  removes non-semantic feature numbering, and uses a full-width post-install
+  row instead of a colored side stripe. Orange remains concentrated in product
+  status and primary actions so the visual identity survives the quieter pass.
+- Landing-page text color now uses explicit ink, muted, and quiet roles instead
+  of white-alpha utilities. The quiet metadata token is brand-tinted and clears
+  WCAG AA at 5.33:1 against the base surface; orange is reserved for primary
+  actions and meaningful automatic/stable states.
+- The landing-page polish pass adds balanced heading and prose wrapping,
+  complete pressed/reduced-motion states, and 44px copy controls. Copy success
+  is announced through a live region; when clipboard access fails, the command
+  is selected for manual copying. The unused duplicate product-media component
+  was removed to prevent content drift.
+- The landing-page demo is delivered as a muted, autoplaying, looping HTML video
+  instead of an animated GIF. The primary VP9 WebM and H.264 MP4 fallback are
+  1280x720 at 30 fps, with a lightweight WebP poster and no audio. The current
+  edit keeps the recording from 11 seconds through one second before its end.
+- The landing page is now intentionally limited to four beats: a plain Wayland
+  screenshot-tool hero, portable/AUR install commands, the product demo, and a
+  GitHub/star call to action. The open-source section includes one concise stack
+  paragraph covering C11, GTK4, GLib/GIO, Cairo/Pango, gtk4-layer-shell, and
+  Meson. Its GitHub action is vertically centered against the complete text
+  block and includes the GitHub mark for faster recognition. The feature inventory, capture-routing table, implementation stats,
+  trust-label list, release-note CTA, and repeated marketing explanations were
+  removed as redundant complexity.
+- The install selector now sits in the hero's right column on desktop and stacks
+  below the headline on narrow screens. Its Linux/AUR switch is a compact
+  segmented control; commands wrap without horizontal scrolling, and the copy
+  action is a small corner control rather than a full-height column. The desktop
+  column is widened enough for the portable command to settle into two lines.
+  The mobile header hides secondary anchor links before they crowd the brand, while the
+  GitHub action keeps a visible star icon and an accessible label at every width.
+- Landing-page typography now mirrors Shaula's two annotation text modes: Geist
+  is the primary interface and command face, while Excalifont is reserved for
+  selective handwritten accents. Both webfont sources are version-pinned and
+  retain local-font fallbacks for installed development environments.
+- The navbar and browser favicon both import the canonical application mark from
+  `src/preview/icons/hicolor/scalable/apps/shaula.svg`; the landing page no longer
+  substitutes a lettermark or simplified favicon for the Shaula brand asset.
+  The canonical SVG is transparent and tightly cropped so desktop shells and
+  web surfaces provide the surrounding background instead of rendering a nested
+  dark tile. Astro emits the imported favicon with a content hash, preventing old
+  cached lettermark assets from surviving icon changes. Meson uses
+  `rsvg-convert` to generate the installed 48, 64, 128, 256, and 512 pixel
+  desktop assets from the same source. The browser title remains `Shaula`.
 - `./dev` now imports the active graphical session without forcing Niri or a
   hard-coded Wayland display, so runtime compositor detection is exercised.
 - Build-tree runs resolve the shortcut provider and graphical helpers from the
@@ -152,6 +204,8 @@ workflow replaces those markers only in writable AUR clones before pushing.
 - `./dev install` is the canonical complete local development install. It builds
   the checkout, installs all application payload and integrations, accepts the
   installer prompt automatically, and reloads Noctalia when present.
+- `./dev uninstall` removes the files and optional integrations installed by
+  `./dev install` or `./dev dev-install`, while preserving the Shaula config file.
 - Settings exposes **Configure Shortcuts** whenever the portal provider is
   running. The desktop portal remains responsible for selecting and approving
   the bindings for Quick, Area, Fullscreen, and All Screens.
@@ -200,6 +254,13 @@ The current source state has passed:
   `CC=clang ./dev sanitize-check` covers this warning-as-error path locally.
 - Release AUR publication requires the `AUR_SSH_KEY` repository secret and now
   fails before SSH setup with an explicit GitHub Actions error when it is absent.
+- The release workflow hardens publication: a tag-scoped `concurrency` group
+  prevents two pipelines from publishing the same tag in parallel, every job
+  has bounded `timeout-minutes`, and `publish-release` runs in the `release`
+  GitHub environment so repository admins can attach required reviewers and
+  environment-scoped secrets. The optional `AUR_AUR_FINGERPRINT` secret pins
+  the `aur.archlinux.org` Ed25519 hostkey so a silent hostkey rotation or
+  MitM fails closed at AUR push time.
 
 Live Niri validation:
 

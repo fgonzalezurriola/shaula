@@ -31,6 +31,7 @@ Core:
 App:
   preflight      Build, then run preflight + capabilities
   install        Build and install the complete checkout without prompting
+  uninstall      Remove files installed by install or dev-install
   dev-install    Compatibility alias for install
   menu           Build, then open the universal Shaula menu
   settings       Build, then open native settings
@@ -58,6 +59,7 @@ Pass-through:
 
 Examples:
   ./dev install
+  ./dev uninstall
   ./dev menu
   ./dev shortcuts
   ./dev shortcuts enable --json
@@ -591,6 +593,9 @@ release-arm)
     ;;
   install)
     install_local --yes
+    ;;
+  uninstall)
+    scripts/uninstall.sh "$@"
     ;;
   dev-install)
     install_local --yes "$@"

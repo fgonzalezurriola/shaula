@@ -1,24 +1,55 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500&display=swap");
-
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Geist";
+  src:
+    local("Geist"),
+    url("https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.3.0/files/geist-latin-wght-normal.woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Excalifont";
+  src:
+    local("Excalifont"),
+    url("https://esm.sh/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-00A3, U+00A5-00A6, U+00A8-00AB, U+00AD-00B1, U+00B4, U+00B6-00B8, U+00BA-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2020, U+2022, U+2024-2026, U+2030, U+2039-203A, U+20AC, U+2122, U+2212;
+}
+
 @theme {
-  --color-shaula-orange: #E8651A;
-  --color-shaula-orange-light: #F28C38;
-  --color-shaula-orange-dim: #C45516;
-  --color-shaula-surface: #0A0A0A;
-  --color-shaula-surface-raised: #141414;
-  --color-shaula-surface-border: #1E1E1E;
-  --color-shaula-muted: #888888;
-  --font-sans: Geist, system-ui, -apple-system, sans-serif;
-  --font-mono: Geist Mono, JetBrains Mono, monospace;
+  --color-shaula-orange: #f1732c;
+  --color-shaula-orange-soft: #ff9b61;
+  --color-shaula-ink: #f5f3ee;
+  --color-shaula-surface: #0d0e0d;
+  --color-shaula-surface-raised: #141613;
+  --color-shaula-surface-soft: #1a1c18;
+  --color-shaula-surface-border: #2a2d27;
+  --color-shaula-muted: #969a90;
+  --color-shaula-quiet: oklch(62% 0.012 120);
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sketch: "Excalifont", "Comic Shanns", cursive;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    background: var(--color-shaula-surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-shaula-surface);
+    color: var(--color-shaula-ink);
+    font-family: var(--font-sans);
   }
 
   *,
@@ -30,76 +61,123 @@
   }
 
   ::selection {
-    background-color: color-mix(in srgb, var(--color-shaula-orange) 30%, transparent);
-    color: white;
+    background: var(--color-shaula-orange);
+    color: var(--color-shaula-surface);
+  }
+
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--color-shaula-orange);
+    outline-offset: 3px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 }
 
 @layer components {
-  .hero-grid {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse 85% 70% at 50% 35%, black 40%, transparent 100%);
-    -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 35%, black 40%, transparent 100%);
+  .page-shell {
+    width: min(100% - 2rem, 72rem);
+    margin-inline: auto;
   }
 
-  .code-block {
-    background-color: #0D0D0D;
-    border: 1px solid var(--color-shaula-surface-border);
-    border-radius: 0.5rem;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-  }
-
-  /* Custom scrollbar for hero command block */
-  #hero-command::-webkit-scrollbar {
-    height: 6px;
-  }
-  #hero-command::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 9999px;
-  }
-  #hero-command::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 9999px;
-  }
-  #hero-command::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.35);
-  }
-
-  .btn-github {
+  .button-primary,
+  .button-secondary {
     display: inline-flex;
+    min-height: 2.75rem;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--color-shaula-surface-border);
-    background-color: var(--color-shaula-surface-raised);
-    color: rgba(255, 255, 255, 0.9);
+    padding: 0.7rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
     font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.2s;
+    font-weight: 650;
+    line-height: 1;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      transform 150ms ease;
   }
 
-  .btn-github:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    background-color: rgba(255, 255, 255, 0.05);
+  .button-primary {
+    background: var(--color-shaula-orange);
+    color: #160d08;
+  }
+
+  .button-primary:hover {
+    background: var(--color-shaula-orange-soft);
+    transform: translateY(-1px);
+  }
+
+  .button-primary:active,
+  .button-secondary:active {
+    transform: translateY(0);
+  }
+
+  .button-secondary {
+    border-color: var(--color-shaula-surface-border);
+    background: var(--color-shaula-surface-raised);
+    color: var(--color-shaula-ink);
+  }
+
+  .button-secondary:hover {
+    border-color: #454a40;
+    background: var(--color-shaula-surface-soft);
+    color: var(--color-shaula-ink);
+    transform: translateY(-1px);
+  }
+
+  .copy-command[data-copied="true"] {
+    color: var(--color-shaula-orange-soft);
+  }
+
+  .copy-command:active {
+    background: var(--color-shaula-surface-soft);
   }
 }
 
-@keyframes fade-up {
+@keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(12px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.animate-fade-up {
-  animation: fade-up 0.5s ease-out forwards;
+.enter {
+  animation: enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .enter {
+    animation: none;
+  }
+
+  .button-primary,
+  .button-secondary,
+  .copy-command {
+    transition: none;
+  }
 }

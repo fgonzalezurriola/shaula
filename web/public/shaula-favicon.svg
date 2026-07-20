@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+  <title id="title">Shaula</title>
+  <g fill="#ff7a00">
+    <path d="M3 12V6l3-3h7l-3 3H7L6 7v3l-3 2Z"/>
+    <path d="M29 12V6l-3-3h-7l3 3h3l1 1v3l3 2Z"/>
+    <path d="M3 20v6l3 3h7l-3-3H7l-1-1v-3l-3-2Z"/>
+    <path d="M29 20v6l-3 3h-7l3-3h3l1-1v-3l3-2Z"/>
+    <polygon points="16,7 17.42,12.58 22.36,9.64 19.42,14.58 25,16 19.42,17.42 22.36,22.36 17.42,19.42 16,25 14.58,19.42 9.64,22.36 12.58,17.42 7,16 12.58,14.58 9.64,9.64 14.58,12.58"/>
+  </g>
+</svg>

@@ -21,6 +21,7 @@ depends=(
   'xdg-desktop-portal'
 )
 makedepends=(
+  'librsvg'
   'meson'
   'ninja'
   'pkgconf'

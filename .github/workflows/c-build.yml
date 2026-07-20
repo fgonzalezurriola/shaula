@@ -36,6 +36,7 @@ jobs:
             clang \
             dbus-daemon \
             git \
+            librsvg2-bin \
             meson \
             ninja-build \
             pkg-config \

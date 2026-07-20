@@ -257,10 +257,22 @@ only canonical AUR publication flow:
 The workflow uses the no-passphrase deploy key stored in the `AUR_SSH_KEY`
 Actions secret (the local counterpart is `~/.ssh/id_aur`, comment
 `shaula-aur-deploy`). It records the `aur.archlinux.org` Ed25519 host key and
-requires `StrictHostKeyChecking`. A tag release fails if either AUR package
-cannot be finalized or pushed; there is no manual checksum or publication step.
-The temporary AUR clones must contain no `SKIP` marker when pushed, while the
-source repository must continue to contain them.
+requires `StrictHostKeyChecking`. The optional `AUR_AUR_FINGERPRINT` repository
+or `release` environment secret pins the expected SHA256 fingerprint captured
+with `ssh-keygen -lf`; when set, the workflow fails closed if `ssh-keyscan`
+returns a hostkey whose fingerprint does not match the pinned value. Leave it
+unset only while rolling out the guard; rotate the pinned value via a tracked
+repo change when the AUR hostkey is intentionally rotated. A tag release fails
+if either AUR package cannot be finalized or pushed; there is no manual
+checksum or publication step. The temporary AUR clones must contain no `SKIP`
+marker when pushed, while the source repository must continue to contain them.
+
+The `publish-release` job runs in the `release` GitHub environment so repository
+admins can attach required reviewers, branch protection, or environment-scoped
+secrets independently of the default branch. The whole workflow carries a
+tag-scoped `concurrency` group so a forced retag or retry cannot run two
+release pipelines in parallel, and each job has a bounded `timeout-minutes`
+to prevent stalled runners from holding publish authority open.
 
 ## Icon packaging
 

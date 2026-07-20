@@ -91,11 +91,11 @@ install_data(
   'data/release-manifest.txt',
   install_dir: get_option('datadir') / 'shaula',
 )
-foreach icon_size : ['48x48', '64x64', '128x128', '256x256', '512x512']
-  install_subdir(
-    'src/preview/icons/hicolor' / icon_size / 'apps',
-    install_dir: get_option('datadir') / 'icons' / 'hicolor' / icon_size,
-  )
+rsvg_convert = find_program('rsvg-convert', required: true)
+shaula_app_icon = files('src/preview/icons/hicolor/scalable/apps/shaula.svg')
+foreach icon_size : ['48', '64', '128', '256', '512']
+  shaula_icon_size = icon_size
+  subdir('src/preview/icons/hicolor/' + icon_size + 'x' + icon_size + '/apps')
 endforeach
 install_subdir(
   'src/preview/icons/hicolor/scalable/apps',

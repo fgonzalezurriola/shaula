@@ -9,10 +9,18 @@ on:
 permissions:
   contents: read
 
+# A tag push must own its release pipeline end-to-end. Concurrent pushes of
+# the same tag (forced retag, race during retries) cancel the superseded run
+# so only one pipeline can publish GitHub release assets and AUR commits.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate-release-identity:
     name: Validate release identity
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout tag
         uses: actions/checkout@v5
@@ -30,6 +38,7 @@ jobs:
     name: Build Linux ${{ matrix.arch }} release
     needs: validate-release-identity
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +83,7 @@ jobs:
                 file \
                 git \
                 jq \
+                librsvg2-bin \
                 meson \
                 ninja-build \
                 pkg-config \
@@ -131,6 +141,14 @@ jobs:
     name: Publish Linux release
     needs: build-release
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Routed through the `release` environment so repository admins can attach
+    # required reviewers, deployment branch protection, or environment secrets
+    # independent of the default branch. All destructive operations (GitHub
+    # release publication, AUR pushes) live in this job only.
+    environment:
+      name: release
+      url: https://github.com/fgonzalezurriola/shaula/releases/tag/${{ github.ref_name }}
     permissions:
       contents: write
 
@@ -220,6 +238,7 @@ jobs:
       - name: Publish AUR packages
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          AUR_AUR_FINGERPRINT: ${{ secrets.AUR_AUR_FINGERPRINT }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -237,6 +256,23 @@ jobs:
           ssh-keyscan -H -t ed25519 aur.archlinux.org \
             > "${HOME}/.ssh/known_hosts"
           chmod 600 "${HOME}/.ssh/known_hosts"
+
+          # Pin the AUR Ed25519 host key fingerprint so the workflow fails
+          # closed if the hostkey ever rotates or is silently replaced. Set
+          # AUR_AUR_FINGERPRINT as a repository or environment secret with the
+          # published SHA256 fingerprint (ssh-keygen -lf format). Leave it
+          # unset only while rolling out this guard; do not unset it for a
+          # real release. Rotate the pinned value via a tracked repo change.
+          if [ -n "${AUR_AUR_FINGERPRINT:-}" ]; then
+            actual_fingerprint="$(
+              ssh-keygen -lf "${HOME}/.ssh/known_hosts" \
+                | awk '/ed25519/ { print $2 }' | head -n 1
+            )"
+            if [ "${actual_fingerprint}" != "${AUR_AUR_FINGERPRINT}" ]; then
+              echo "::error::aur.archlinux.org hostkey fingerprint ${actual_fingerprint} does not match pinned AUR_AUR_FINGERPRINT ${AUR_AUR_FINGERPRINT}"
+              exit 1
+            fi
+          fi
           cat > "${HOME}/.ssh/config" <<'EOF'
           Host aur.archlinux.org
             User aur
