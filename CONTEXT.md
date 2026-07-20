@@ -222,6 +222,11 @@ Live Niri validation:
   seconds, adding load and journal noise during validation.
 - Repeated `shaula setup --shortcuts --no-integrations` left the Niri config hash
   unchanged.
+- `shaula setup` now reloads the live Niri config after writing managed
+  keybindings or the Preview rule. The reload path validates the target config
+  first, treats IPC failures as advisory, and prints the manual
+  `niri validate && niri msg action load-config-file` recovery command when the
+  compositor cannot be reloaded automatically.
 - `shaula launch` opened the universal GTK capture menu independently from the
   persisted shortcut choice.
 - `./dev all` completed a real 1920x1080 `grim-wlroots` all-screens capture with

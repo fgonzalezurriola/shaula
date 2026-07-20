@@ -26,6 +26,39 @@ typedef struct {
   gboolean dry_run;
 } SetupOptions;
 
+static void setup_status(const char *status, const char *subject,
+                         const char *detail);
+
+static gboolean setup_run_command(char **argv) {
+  int exit_status = 0;
+  g_autoptr(GError) error = NULL;
+  return g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL,
+                      NULL, &exit_status, &error) &&
+         exit_status == 0;
+}
+
+/*
+ * Applies file-backed Niri setup changes to the live compositor when IPC is
+ * available. Reload failures are advisory: setup has already written the
+ * managed config block, so the deterministic recovery path is a manual Niri
+ * reload rather than an ERR_* setup failure.
+ */
+static void setup_niri_reload_config(const char *path) {
+  if (path == NULL) {
+    setup_status("reload needed", "Niri config",
+                 "run `niri validate && niri msg action load-config-file`");
+    return;
+  }
+
+  char *validate_argv[] = {"niri", "validate", "-c", (char *)path, NULL};
+  char *reload_argv[] = {"niri", "msg", "action", "load-config-file", NULL};
+  if (setup_run_command(validate_argv) && setup_run_command(reload_argv))
+    setup_status("reloaded", "Niri config", path);
+  else
+    setup_status("reload needed", "Niri config",
+                 "run `niri validate && niri msg action load-config-file`");
+}
+
 static gboolean setup_can_prompt(void) {
   int fd = open("/dev/tty", O_RDWR);
   if (fd < 0)
@@ -111,7 +144,8 @@ static gboolean parse_setup_options(int argc, char **argv,
 
 static gboolean setup_niri_install(const ShaulaConfig *config,
                                    const SetupOptions *options,
-                                   const char *path) {
+                                   const char *path,
+                                   gboolean *niri_reload_needed) {
   g_autofree char *rule = shaula_config_command_preview_rule(config);
   ManagedBlockResult result = {0};
   gboolean invalid = FALSE;
@@ -127,13 +161,16 @@ static gboolean setup_niri_install(const ShaulaConfig *config,
                                                    : "installed")
                               : "unchanged",
                "Niri preview rule", result.path);
+  if (result.changed && !options->dry_run && niri_reload_needed != NULL)
+    *niri_reload_needed = TRUE;
   managed_block_result_clear(&result);
 
   return TRUE;
 }
 
 static gboolean setup_niri_remove(const SetupOptions *options,
-                                  const char *path) {
+                                  const char *path,
+                                  gboolean *niri_reload_needed) {
   ManagedBlockResult result = {0};
   gboolean invalid = FALSE;
   if (!remove_managed_block(path, "// BEGIN SHAULA PREVIEW WINDOW RULE",
@@ -147,6 +184,8 @@ static gboolean setup_niri_remove(const SetupOptions *options,
   setup_status(result.changed ? (options->dry_run ? "would-remove" : "removed")
                               : "unchanged",
                "Niri preview rule", result.path);
+  if (result.changed && !options->dry_run && niri_reload_needed != NULL)
+    *niri_reload_needed = TRUE;
   managed_block_result_clear(&result);
 
   result = (ManagedBlockResult){0};
@@ -160,12 +199,15 @@ static gboolean setup_niri_remove(const SetupOptions *options,
   setup_status(result.changed ? (options->dry_run ? "would-remove" : "removed")
                               : "unchanged",
                "Niri keybindings", result.path);
+  if (result.changed && !options->dry_run && niri_reload_needed != NULL)
+    *niri_reload_needed = TRUE;
   managed_block_result_clear(&result);
   return TRUE;
 }
 
 static gboolean setup_shortcuts(const SetupOptions *options,
-                                gboolean interactive) {
+                                gboolean interactive,
+                                gboolean *niri_reload_needed) {
   ShaulaShortcutOptions shortcut_options = {
       .dry_run = options->dry_run,
       .remember_choice = !options->remove,
@@ -175,6 +217,13 @@ static gboolean setup_shortcuts(const SetupOptions *options,
   g_autofree char *error = NULL;
 
   if (options->remove) {
+    ShaulaShortcutResult before =
+        shaula_shortcuts_query(&status, &error);
+    const gboolean was_niri_active =
+        before == SHAULA_SHORTCUT_RESULT_OK &&
+        status.backend == SHAULA_SHORTCUT_BACKEND_NIRI &&
+        status.state == SHAULA_SHORTCUT_STATE_ACTIVE;
+    g_clear_pointer(&error, g_free);
     ShaulaShortcutResult result =
         shaula_shortcuts_disable(&shortcut_options, &status, &error);
     if (result == SHAULA_SHORTCUT_RESULT_OK && !options->dry_run &&
@@ -183,6 +232,9 @@ static gboolean setup_shortcuts(const SetupOptions *options,
     setup_status(result == SHAULA_SHORTCUT_RESULT_OK ? "removed" : "failed",
                  "capture shortcuts",
                  error != NULL ? error : shaula_shortcut_state_token(status.state));
+    if (result == SHAULA_SHORTCUT_RESULT_OK && was_niri_active &&
+        !options->dry_run && niri_reload_needed != NULL)
+      *niri_reload_needed = TRUE;
     shaula_shortcut_status_clear(&status);
     return result == SHAULA_SHORTCUT_RESULT_OK;
   }
@@ -194,6 +246,9 @@ static gboolean setup_shortcuts(const SetupOptions *options,
     shaula_shortcut_status_clear(&status);
     return FALSE;
   }
+  const gboolean was_niri_active =
+      status.backend == SHAULA_SHORTCUT_BACKEND_NIRI &&
+      status.state == SHAULA_SHORTCUT_STATE_ACTIVE;
 
   gboolean enable = options->shortcuts;
   gboolean make_choice = options->shortcuts_explicit;
@@ -244,6 +299,11 @@ static gboolean setup_shortcuts(const SetupOptions *options,
   else
     setup_status(options->dry_run ? "would-enable" : "enabled",
                  "capture shortcuts", shaula_shortcut_backend_token(status.backend));
+  if (enable && !was_niri_active &&
+      status.backend == SHAULA_SHORTCUT_BACKEND_NIRI &&
+      status.state == SHAULA_SHORTCUT_STATE_ACTIVE && !options->dry_run &&
+      niri_reload_needed != NULL)
+    *niri_reload_needed = TRUE;
   shaula_shortcut_status_clear(&status);
   return TRUE;
 }
@@ -309,9 +369,14 @@ int shaula_setup_command_run(int argc, char **argv) {
                "configuration", path);
 
   const gboolean interactive = setup_can_prompt();
-  gboolean ok = setup_shortcuts(&options, interactive);
+  gboolean niri_reload_needed = FALSE;
+  gboolean ok = setup_shortcuts(&options, interactive, &niri_reload_needed);
   if (!options.integrations) {
     setup_status("skipped", "optional integrations", "disabled");
+    if (niri_reload_needed) {
+      g_autofree char *reload_path = niri_config_path(NULL);
+      setup_niri_reload_config(reload_path);
+    }
     setup_status(ok ? "installed" : "failed", "setup",
                  ok ? "core configuration ready" : "shortcut cleanup incomplete");
     return ok ? 0 : 1;
@@ -332,8 +397,10 @@ int shaula_setup_command_run(int argc, char **argv) {
     setup_status("skipped", "Niri integration",
                  interactive ? "declined" : "noninteractive");
   } else {
-    ok = (options.remove ? setup_niri_remove(&options, niri_path)
-                         : setup_niri_install(&config, &options, niri_path)) &&
+    ok = (options.remove
+              ? setup_niri_remove(&options, niri_path, &niri_reload_needed)
+              : setup_niri_install(&config, &options, niri_path,
+                                   &niri_reload_needed)) &&
          ok;
   }
 
@@ -352,6 +419,9 @@ int shaula_setup_command_run(int argc, char **argv) {
   } else {
     ok = setup_noctalia(&options) && ok;
   }
+
+  if (niri_reload_needed)
+    setup_niri_reload_config(niri_path);
 
   setup_status(ok ? "installed" : "failed", "setup",
                ok ? "complete" : "optional integration incomplete");
