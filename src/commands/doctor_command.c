@@ -3,10 +3,51 @@
 #include "clipboard/clipboard.h"
 #include "config/config.h"
 #include "runtime/helper_resolution.h"
+#include "shortcuts/shortcuts.h"
 #include "support.h"
 
 #include <glib.h>
 #include <string.h>
+
+static char *doctor_shortcut_status_json(void) {
+  ShaulaShortcutStatus status;
+  shaula_shortcut_status_init(&status);
+  g_autofree char *query_error = NULL;
+  ShaulaShortcutResult query = shaula_shortcuts_query(&status, &query_error);
+  g_autofree char *detail = shaula_command_json_string(
+      status.detail != NULL ? status.detail
+                            : (query_error != NULL ? query_error : ""));
+  g_autofree char *error_code = shaula_command_json_string(
+      status.error_code != NULL ? status.error_code : "");
+  GString *triggers = g_string_new("[");
+  for (guint i = 0; i < G_N_ELEMENTS(status.triggers); i++) {
+    g_autofree char *trigger = shaula_command_json_string(
+        status.triggers[i] != NULL ? status.triggers[i] : "");
+    if (i > 0U)
+      g_string_append_c(triggers, ',');
+    g_string_append(triggers, trigger);
+  }
+  g_string_append_c(triggers, ']');
+  g_autofree char *triggers_json = g_string_free(triggers, FALSE);
+  char *result = g_strdup_printf(
+      "{\"query_ok\":%s,\"setup_completed\":%s,\"choice\":\"%s\","
+      "\"enabled_requested\":%s,\"backend\":\"%s\",\"state\":\"%s\","
+      "\"autostart_installed\":%s,\"provider_running\":%s,"
+      "\"activation_ready\":%s,\"portal_version\":%u,\"detail\":%s,"
+      "\"error_code\":%s,\"triggers\":%s}",
+      shaula_command_json_bool(query == SHAULA_SHORTCUT_RESULT_OK),
+      shaula_command_json_bool(status.setup_completed),
+      shaula_shortcut_choice_token(status.choice),
+      shaula_command_json_bool(status.enabled_requested),
+      shaula_shortcut_backend_token(status.backend),
+      shaula_shortcut_state_token(status.state),
+      shaula_command_json_bool(status.autostart_installed),
+      shaula_command_json_bool(status.provider_running),
+      shaula_command_json_bool(status.activation_ready), status.portal_version,
+      detail, error_code, triggers_json);
+  shaula_shortcut_status_clear(&status);
+  return result;
+}
 
 int shaula_doctor_command_run(int argc, char **argv) {
   if (argc != 3 || !g_str_equal(argv[2], "--json"))
@@ -47,6 +88,7 @@ int shaula_doctor_command_run(int argc, char **argv) {
           ? g_build_filename(noctalia_dir, "settings.json", NULL)
           : NULL;
   g_autofree char *grim_path = shaula_executable_find_grim();
+  g_autofree char *shortcuts_json = doctor_shortcut_status_json();
 
   g_autofree char *result = g_strdup_printf(
       "{\"paths\":{\"binary\":%s,\"config_file\":%s,"
@@ -55,7 +97,8 @@ int shaula_doctor_command_run(int argc, char **argv) {
        "\"wl-copy\":{\"found\":%s}},\"noctalia\":{"
       "\"dir_exists\":%s,\"plugins_dir_exists\":%s,"
       "\"plugins_json_exists\":%s,\"settings_json_exists\":%s,"
-      "\"shaula_plugin_dir_exists\":%s,\"plugin_installed\":%s}}",
+      "\"shaula_plugin_dir_exists\":%s,\"plugin_installed\":%s},"
+      "\"shortcuts\":%s}",
       self_json, config_json_value,
       shaula_command_json_bool(config_path != NULL &&
                                g_file_test(config_path, G_FILE_TEST_EXISTS)),
@@ -78,7 +121,8 @@ int shaula_doctor_command_run(int argc, char **argv) {
           g_file_test(noctalia_plugin, G_FILE_TEST_IS_DIR)),
       shaula_command_json_bool(
           noctalia_plugin != NULL &&
-          g_file_test(noctalia_plugin, G_FILE_TEST_IS_DIR)));
+          g_file_test(noctalia_plugin, G_FILE_TEST_IS_DIR)),
+      shortcuts_json);
 
   g_autofree char *timestamp = shaula_command_json_timestamp();
   if (timestamp == NULL)

@@ -7,6 +7,7 @@ ASSUME_YES=0
 INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
 INSTALL_APP_ICONS=1
+INSTALL_SHORTCUTS=""
 INSTALL_NIRI_KEYBINDS=0
 INSTALL_NOCTALIA=0
 UNINSTALL=0
@@ -34,7 +35,9 @@ Options:
   --no-integrations   Skip optional Niri and Noctalia setup.
   --no-desktop        Skip the desktop entry.
   --no-icon           Skip application icons; Preview runtime icons remain required.
-  --niri-keybinds     Explicitly install recommended Niri shortcuts.
+  --shortcuts         Enable recommended Ctrl+Shift+1–4 shortcuts.
+  --no-shortcuts      Remember that automatic shortcuts are declined.
+  --niri-keybinds     Legacy alias to enable shortcuts and Niri integration.
   --noctalia          Explicitly install detected Noctalia integration.
   --uninstall         Remove files installed by this script and integrations.
 
@@ -262,10 +265,16 @@ run_setup() {
   shaula="${XDG_BIN_HOME}/shaula"
   source="${XDG_DATA_HOME}/shaula/integrations/noctalia/shaula"
   args=""
-  if [ "$INSTALL_INTEGRATIONS" -eq 0 ]; then
-    args="--no-integrations"
-  elif [ "$ASSUME_YES" -eq 1 ]; then
+  if [ "$ASSUME_YES" -eq 1 ]; then
     args="--yes"
+  fi
+  if [ "$INSTALL_INTEGRATIONS" -eq 0 ]; then
+    args="${args} --no-integrations"
+  fi
+  if [ "$INSTALL_SHORTCUTS" = "enable" ]; then
+    args="${args} --shortcuts"
+  elif [ "$INSTALL_SHORTCUTS" = "disable" ]; then
+    args="${args} --no-shortcuts"
   fi
   if [ "$INSTALL_NIRI_KEYBINDS" -eq 1 ]; then
     args="${args} --niri --niri-keybinds"
@@ -327,7 +336,8 @@ uninstall_payload() {
     done < "$INSTALLED_MANIFEST"
   else
     for binary in shaula shaula-overlay shaula-preview shaula-settings \
-      shaula-crop-image shaula-portal-screenshot shaula-clipboard-provider; do
+      shaula-shortcut-provider shaula-crop-image shaula-portal-screenshot \
+      shaula-clipboard-provider; do
       remove_path "${XDG_BIN_HOME}/${binary}"
     done
     remove_path "${XDG_DATA_HOME}/applications/shaula.desktop"
@@ -385,7 +395,23 @@ while [ "$#" -gt 0 ]; do
     --no-integrations) INSTALL_INTEGRATIONS=0 ;;
     --no-desktop) INSTALL_DESKTOP=0 ;;
     --no-icon) INSTALL_APP_ICONS=0 ;;
-    --niri-keybinds) INSTALL_NIRI_KEYBINDS=1 ;;
+    --shortcuts)
+      [ "$INSTALL_SHORTCUTS" != "disable" ] ||
+        fail "--shortcuts conflicts with --no-shortcuts"
+      INSTALL_SHORTCUTS=enable
+      ;;
+    --no-shortcuts)
+      [ "$INSTALL_SHORTCUTS" != "enable" ] ||
+        fail "--no-shortcuts conflicts with --shortcuts"
+      [ "$INSTALL_NIRI_KEYBINDS" -eq 0 ] ||
+        fail "--no-shortcuts conflicts with --niri-keybinds"
+      INSTALL_SHORTCUTS=disable
+      ;;
+    --niri-keybinds)
+      [ "$INSTALL_SHORTCUTS" != "disable" ] ||
+        fail "--niri-keybinds conflicts with --no-shortcuts"
+      INSTALL_NIRI_KEYBINDS=1
+      ;;
     --noctalia) INSTALL_NOCTALIA=1 ;;
     --uninstall) UNINSTALL=1 ;;
     v*)

@@ -16,6 +16,8 @@ static const ShaulaCommandFamily COMMAND_FAMILIES[] = {
     {"capabilities", shaula_capabilities_command_run},
     {"errors", shaula_errors_command_run},
     {"settings", shaula_settings_command_run},
+    {"shortcuts", shaula_shortcuts_command_run},
+    {"launch", shaula_launch_command_run},
     {"config", shaula_config_command_run},
     {"preview", shaula_preview_command_run},
     {"directory", shaula_directory_command_run},
@@ -32,8 +34,9 @@ int main(int argc, char **argv) {
   if (argc < 2)
     return shaula_command_write_error(
         "", "ERR_CLI_USAGE",
-        "usage: shaula <capture|preview|notify|config|settings|setup|directory|"
-        "doctor|explore|preflight|capabilities|history|clipboard|errors> ...",
+        "usage: shaula <capture|preview|notify|config|settings|shortcuts|launch|"
+        "setup|directory|doctor|explore|preflight|capabilities|history|clipboard|"
+        "errors> ...",
         "{}");
 
   for (gsize i = 0; i < G_N_ELEMENTS(COMMAND_FAMILIES); i++) {

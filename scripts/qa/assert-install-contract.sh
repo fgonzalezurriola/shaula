@@ -42,15 +42,42 @@ portal_output="$(
   WAYLAND_DISPLAY=wayland-test \
   SHAULA_GRIM_AVAILABLE=0 \
   SHAULA_PORTAL_AVAILABLE=1 \
+  SHAULA_SHORTCUTS_TEST_PORTAL=unsupported \
   run_installer "${portal_root}" --yes --no-integrations --no-icon
 )"
 grep -q 'installed: verified Wayland capture route' <<<"${portal_output}"
 grep -q 'Shaula is ready' <<<"${portal_output}"
 test -x "${portal_root}/bin/shaula-clipboard-provider"
+test -x "${portal_root}/bin/shaula-shortcut-provider"
 test -f "${portal_root}/data/icons/hicolor/scalable/actions/shaula-copy-symbolic.svg"
 test ! -e "${portal_root}/data/icons/hicolor/scalable/apps/shaula.svg"
 test ! -e "${portal_root}/data/icons/hicolor/256x256/apps/shaula.png"
 test ! -e "${portal_root}/data/icons/hicolor/index.theme"
+grep -q '^shortcuts_choice=enabled$' \
+  "${portal_root}/config/shaula/setup-state.ini"
+test ! -e "${portal_root}/config/autostart/dev.shaula.ShortcutProvider.desktop"
+
+decline_root="${TMP_DIR}/decline"
+decline_output="$(
+  SHAULA_COMPOSITOR=gnome \
+  WAYLAND_DISPLAY=wayland-test \
+  SHAULA_GRIM_AVAILABLE=0 \
+  SHAULA_PORTAL_AVAILABLE=1 \
+  SHAULA_SHORTCUTS_TEST_PORTAL=unsupported \
+  run_installer "${decline_root}" --yes --no-integrations --no-shortcuts --no-icon
+)"
+grep -q 'disabled: capture shortcuts (choice remembered)' <<<"${decline_output}"
+grep -q '^shortcuts_choice=declined$' \
+  "${decline_root}/config/shaula/setup-state.ini"
+test ! -e "${decline_root}/config/autostart/dev.shaula.ShortcutProvider.desktop"
+
+set +e
+conflict_output="$(run_installer "${TMP_DIR}/flag-conflict" \
+  --shortcuts --no-shortcuts 2>&1)"
+conflict_status=$?
+set -e
+test "${conflict_status}" -ne 0
+grep -q -- '--no-shortcuts conflicts with --shortcuts' <<<"${conflict_output}"
 
 assert_arch_selection() {
   local machine="$1"
@@ -150,26 +177,28 @@ setup_env=(
   HOME="${setup_root}/home"
   XDG_CONFIG_HOME="${setup_root}/config"
   SHAULA_NOCTALIA_PLUGIN_SOURCE="${SOURCE_ROOT}/integrations/noctalia/shaula"
+  SHAULA_SHORTCUTS_TEST_PORTAL=unsupported
 )
 setup_first="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --yes --niri-keybinds)"
+grep -q 'enabled: capture shortcuts (niri)' <<<"${setup_first}"
 grep -q 'installed: Niri preview rule' <<<"${setup_first}"
 grep -q 'installed: Noctalia integration' <<<"${setup_first}"
 setup_second="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --yes --niri-keybinds)"
+grep -q 'enabled: capture shortcuts (niri)' <<<"${setup_second}"
 grep -q 'unchanged: Niri preview rule' <<<"${setup_second}"
-grep -q 'unchanged: Niri keybindings' <<<"${setup_second}"
 grep -q 'unchanged: Noctalia integration' <<<"${setup_second}"
 
 remove_first="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --remove --yes)"
+grep -q 'removed: capture shortcuts (disabled)' <<<"${remove_first}"
 grep -q 'removed: Niri preview rule' <<<"${remove_first}"
-grep -q 'removed: Niri keybindings' <<<"${remove_first}"
 grep -q 'removed: Noctalia integration' <<<"${remove_first}"
 remove_second="$(env "${setup_env[@]}" "${BUILD_ROOT}/shaula" setup \
   --remove --yes)"
+grep -q 'removed: capture shortcuts (disabled)' <<<"${remove_second}"
 grep -q 'unchanged: Niri preview rule' <<<"${remove_second}"
-grep -q 'unchanged: Niri keybindings' <<<"${remove_second}"
 grep -q 'unchanged: Noctalia integration' <<<"${remove_second}"
 
 if grep -Eq '(^|[^[:alnum:]_])(sudo|pacman)([^[:alnum:]_]|$)' \

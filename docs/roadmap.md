@@ -36,12 +36,14 @@ Detailed notes and release procedure:
 - `docs/release-v0.1.6.md`
 - `docs/releasing.md`
 - `docs/adr/0003-universal-wayland-runtime.md`
+- `docs/adr/0004-global-shortcuts-provider.md`
 
 ## Shipped foundation
 
 - Native Wayland capture overlay and GTK Preview/editor.
 - Quick, Area, Fullscreen, All Screens, Window, and Previous Area capture paths.
-- Direct CLI orchestration with short-lived helpers and no resident daemon.
+- Direct CLI orchestration with short-lived capture helpers and one optional,
+  narrowly scoped resident provider for approved portal shortcuts.
 - Niri/wlroots `grim` capture and generic Screenshot portal capture routes.
 - Noctalia Bar Widget with packaged installer integration.
 - Copy, Save, Save As, Done, Discard, and actionable save notifications.

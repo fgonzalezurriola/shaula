@@ -11,9 +11,12 @@ It chooses a working capture route automatically:
 - Installation stops with an actionable error rather than installing a broken
   application when neither route is available.
 
-Users do not choose a clipboard backend. Shaula publishes copied images and text
-through the required `wl-copy` runtime so selections remain available after the
-initiating CLI or Preview process exits.
+Users do not choose a clipboard or global-shortcut backend. Shaula publishes
+copied images and text through the required `wl-copy` runtime so selections remain
+available after the initiating CLI or Preview process exits. The Settings app
+can enable the recommended `Ctrl+Shift+1–4` capture shortcuts with one choice;
+Shaula prefers the desktop GlobalShortcuts portal and falls back to managed Niri
+keybindings when the portal path is not viable.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
@@ -59,7 +62,24 @@ Optional fonts:
 paru -S ttf-geist ttf-excalifont
 ```
 
-## Usage
+## Graphical use
+
+The normal application-menu entry runs `shaula launch`, which always opens the
+compact capture menu. Global shortcuts are optional and appear first in Settings;
+the menu remains available on desktops where automatic shortcuts are unsupported.
+
+The application menu exposes actions for Quick Capture, Capture Area, Capture
+Fullscreen, Capture All Screens, and Settings. These actions invoke the capture
+commands directly and remain available when automatic global shortcuts are
+disabled, declined, or unsupported.
+
+Open Settings directly with:
+
+```bash
+shaula settings
+```
+
+## Command-line use
 
 ```bash
 shaula capture quick --json
@@ -67,6 +87,7 @@ shaula capture area --json
 shaula capture fullscreen --json --save
 shaula capture all-screens --json --save
 shaula settings --json
+shaula shortcuts status --json
 shaula explore --json --brief
 ```
 
@@ -84,16 +105,29 @@ Inside Shaula's native Quick/Area overlay:
 - `Ctrl+C` captures and copies without opening Preview.
 - `Ctrl+S` captures and saves without opening Preview.
 
-Optional integrations can be configured or removed symmetrically. Interactive
-setup asks separately about the Niri window rule, recommended capture shortcuts,
-and the Noctalia widget:
+`shaula setup` remains available for terminal users and automation. Its normal
+shortcut question is backend-independent:
+
+```text
+Enable Ctrl+Shift+1–4 capture shortcuts? [y/N]
+```
+
+Explicit generic flags are available, and the previous Niri-specific shortcut
+flag remains a compatibility alias:
 
 ```bash
 shaula setup
+shaula setup --shortcuts
+shaula setup --no-shortcuts
 shaula setup --niri --niri-keybinds
 shaula setup --noctalia
 shaula setup --remove
 ```
+
+Declining shortcuts is remembered. Shortcut setup and removal are idempotent and
+symmetrical. If neither the portal nor managed Niri path is viable, setup reports
+that automatic global shortcuts are unavailable without making graphical capture
+or desktop actions fail.
 
 ## Development
 

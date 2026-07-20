@@ -15,11 +15,13 @@ int shaula_settings_command_run(int argc, char **argv) {
         "\"capture_captures_pixels\":true,\"window_titles_may_be_sensitive\":"
         "true,\"screenshots_stay_local_by_default\":true},"
         "\"recommended_flow\":[\"shaula settings --json\",\"shaula doctor "
-        "--json\",\"shaula capabilities list --json\",\"shaula explore "
+        "--json\",\"shaula shortcuts status --json\",\"shaula capabilities "
+        "list --json\",\"shaula explore "
         "--json --brief\",\"shaula capture fullscreen --json "
         "--no-preview\"],\"commands\":{\"discover\":\"shaula settings "
         "--json\",\"health\":\"shaula doctor --json\",\"capabilities\":"
-        "\"shaula capabilities list --json\",\"desktop_inventory\":\"shaula "
+        "\"shaula capabilities list --json\",\"shortcut_status\":\"shaula "
+        "shortcuts status --json\",\"desktop_inventory\":\"shaula "
         "explore --json [--brief]\",\"capture_current_output\":\"shaula "
         "capture fullscreen --json --no-preview\",\"capture_all_outputs\":"
         "\"shaula capture all-screens --json --no-preview\","
@@ -31,10 +33,12 @@ int shaula_settings_command_run(int argc, char **argv) {
         "\".result.recommended_capture\"}}",
         "[]");
   }
-  if (argc != 2)
-    return shaula_command_write_error("settings", "ERR_CLI_USAGE",
-                                      "usage: shaula settings [--json]",
-                                      "{}");
+  const gboolean setup_mode =
+      argc == 3 && g_str_equal(argv[2], "--setup");
+  if (argc != 2 && !setup_mode)
+    return shaula_command_write_error(
+        "settings", "ERR_CLI_USAGE",
+        "usage: shaula settings [--json|--setup]", "{}");
 
   g_autofree char *helper =
       shaula_executable_resolve_helper("SHAULA_SETTINGS_HELPER_BIN",
@@ -43,7 +47,7 @@ int shaula_settings_command_run(int argc, char **argv) {
     return shaula_command_write_error("settings", "ERR_SETTINGS_UNAVAILABLE",
                                       "settings helper is unavailable", "{}");
 
-  const char *helper_argv[] = {helper, NULL};
+  const char *helper_argv[] = {helper, setup_mode ? "--setup" : NULL, NULL};
   int exit_code = 0;
   if (shaula_process_run_sync((const char *const *)helper_argv, NULL, NULL,
                               NULL, &exit_code) != SHAULA_PROCESS_STATUS_OK ||

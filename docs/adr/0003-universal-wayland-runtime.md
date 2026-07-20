@@ -34,7 +34,12 @@ Portal helper cancellation, timeout, unavailability, and malformed/failed outcom
 
 Meson, release archives, packages, and the public installer own immutable application files: executables, helpers, the canonical desktop file, application icons, Preview runtime icons, and distributed integration payloads.
 
-`shaula setup` owns mutable user state: the Shaula config and optional Niri/Noctalia integration. Setup changes are idempotent, validated, backed up, atomic, and symmetrical for install/remove operations.
+`shaula setup` and `shaula settings` own mutable user state: the Shaula config,
+explicit onboarding/shortcut choices, the optional shortcut-provider autostart
+entry, and optional Niri/Noctalia integration. Setup changes are idempotent,
+validated, backed up, atomic, and symmetrical for install/remove operations.
+Global shortcut session ownership and the narrowly scoped resident exception are
+defined separately by ADR-0004.
 
 `./dev` only orchestrates build, staging, installation, setup, validation, and development reloads. The public installer does not install system packages or choose a portal backend.
 

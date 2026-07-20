@@ -2,9 +2,12 @@
 #include <gtk/gtk.h>
 #include <glib/gstdio.h>
 #include <string.h>
+#include "config/noctalia_managed.h"
 #include "settings_config.h"
 #include "settings_niri.h"
 #include "settings_process.h"
+#include "settings_shortcuts.h"
+#include "shortcuts/shortcuts.h"
 
 typedef struct {
   GtkApplication *app;
@@ -45,15 +48,20 @@ typedef struct {
   gboolean config_exists;
   gboolean config_invalid;
   ShaulaSettingsConfig config;
-  ShaulaSettingsNiriStatus niri;
-  GtkWidget *niri_detected_label;
-  GtkWidget *niri_config_path_label;
-  GtkWidget *niri_shortcuts_status_label;
-  GtkWidget *niri_shortcuts_detail_label;
-  GtkWidget *niri_install_button;
-  GtkWidget *niri_remove_button;
-  GtkWidget *niri_open_config_button;
-  GtkWidget *niri_recheck_button;
+  ShaulaShortcutStatus shortcuts;
+  gboolean setup_mode;
+  GtkWidget *shortcuts_state_label;
+  GtkWidget *shortcuts_backend_label;
+  GtkWidget *shortcuts_installation_label;
+  GtkWidget *shortcuts_detail_label;
+  GtkWidget *shortcuts_enable_button;
+  GtkWidget *shortcuts_disable_button;
+  GtkWidget *shortcuts_repair_button;
+  GtkWidget *shortcuts_recheck_button;
+  GtkWidget *shortcuts_menu_button;
+  GtkWidget *noctalia_status_label;
+  GtkWidget *noctalia_install_button;
+  GtkWidget *noctalia_remove_button;
 } AppState;
 
 static AppState state;
@@ -210,216 +218,206 @@ static void on_open_clicked(GtkButton *button, gpointer data) {
   g_free(err);
 }
 
-static gboolean refresh_niri_status(void) {
+static gboolean refresh_shortcuts_status(void) {
   g_autofree char *error = NULL;
-  ShaulaSettingsNiriResult result =
-      shaula_settings_niri_load(state.shaula_bin, &state.niri, &error);
-  if (result != SHAULA_SETTINGS_NIRI_OK) {
-    shaula_settings_niri_status_clear(&state.niri);
-    set_status(error != NULL && error[0] != '\0'
-                   ? error
-                   : "ERR_CONFIG_INVALID: Niri status unavailable",
-               TRUE);
-  }
-
-  if (state.niri_detected_label != NULL) {
-    gtk_label_set_text(GTK_LABEL(state.niri_detected_label),
-                       state.niri.detected ? "Detected" : "Not detected");
-    if (state.niri.detected)
-      gtk_widget_remove_css_class(state.niri_detected_label, "error");
+  ShaulaShortcutResult result =
+      shaula_shortcuts_query(&state.shortcuts, &error);
+  if (state.shortcuts_state_label != NULL) {
+    gtk_label_set_text(GTK_LABEL(state.shortcuts_state_label),
+                       shaula_settings_shortcut_state_text(state.shortcuts.state));
+    if (shaula_settings_shortcut_state_is_warning(state.shortcuts.state))
+      gtk_widget_add_css_class(state.shortcuts_state_label, "error");
     else
-      gtk_widget_add_css_class(state.niri_detected_label, "error");
+      gtk_widget_remove_css_class(state.shortcuts_state_label, "error");
   }
-
-  if (state.niri_config_path_label != NULL) {
-    gtk_label_set_text(GTK_LABEL(state.niri_config_path_label),
-                       state.niri.config_path != NULL ? state.niri.config_path
-                                                      : "unknown");
+  if (state.shortcuts_backend_label != NULL) {
+    g_autofree char *backend = g_strdup_printf(
+        "Status: %s%s%s", shaula_settings_shortcut_state_text(state.shortcuts.state),
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_ACTIVE ? " via " : "",
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_ACTIVE
+            ? shaula_settings_shortcut_backend_text(state.shortcuts.backend)
+            : "");
+    gtk_label_set_text(GTK_LABEL(state.shortcuts_backend_label), backend);
   }
-
-  if (state.niri_shortcuts_status_label != NULL) {
-    if (!state.niri.detected) {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
-                         "Niri not detected");
-      gtk_widget_remove_css_class(state.niri_shortcuts_status_label, "error");
-    } else if (state.niri.shortcuts_conflict) {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
-                         "Conflicts detected");
-      gtk_widget_add_css_class(state.niri_shortcuts_status_label, "error");
-    } else if (state.niri.shortcuts_installed) {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
-                         "Installed");
-      gtk_widget_remove_css_class(state.niri_shortcuts_status_label, "error");
-    } else {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_status_label),
-                         "Not installed");
-      gtk_widget_remove_css_class(state.niri_shortcuts_status_label, "error");
-    }
+  if (state.shortcuts_installation_label != NULL) {
+    gtk_label_set_text(
+        GTK_LABEL(state.shortcuts_installation_label),
+        shaula_settings_shortcut_registration_text(&state.shortcuts));
   }
-
-  if (state.niri_shortcuts_detail_label != NULL) {
-    if (state.niri.shortcuts_installed) {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
-                         "Quick capture: Ctrl+Shift+1\n"
-                         "Area capture: Ctrl+Shift+2\n"
-                         "Fullscreen: Ctrl+Shift+3\n"
-                         "All screens: Ctrl+Shift+4");
-    } else if (state.niri.shortcuts_conflict) {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label),
-                         "Existing CTRL+Shift+1/2/3/4 bindings found outside "
-                         "Shaula block.");
-    } else {
-      gtk_label_set_text(GTK_LABEL(state.niri_shortcuts_detail_label), "");
-    }
+  if (state.shortcuts_detail_label != NULL) {
+    g_autofree char *detail = g_strdup_printf(
+        "Quick capture: %s\nArea capture: %s\nFullscreen capture: %s\n"
+        "All-screens capture: %s",
+        state.shortcuts.triggers[0] != NULL ? state.shortcuts.triggers[0]
+                                            : "Ctrl+Shift+1",
+        state.shortcuts.triggers[1] != NULL ? state.shortcuts.triggers[1]
+                                            : "Ctrl+Shift+2",
+        state.shortcuts.triggers[2] != NULL ? state.shortcuts.triggers[2]
+                                            : "Ctrl+Shift+3",
+        state.shortcuts.triggers[3] != NULL ? state.shortcuts.triggers[3]
+                                            : "Ctrl+Shift+4");
+    gtk_label_set_text(GTK_LABEL(state.shortcuts_detail_label), detail);
   }
-
-  gboolean has_niri = state.niri.detected;
-  if (state.niri_install_button != NULL)
-    gtk_widget_set_sensitive(state.niri_install_button, has_niri);
-  if (state.niri_remove_button != NULL)
-    gtk_widget_set_sensitive(state.niri_remove_button,
-                             has_niri && state.niri.shortcuts_installed);
-  if (state.niri_open_config_button != NULL)
-    gtk_widget_set_sensitive(state.niri_open_config_button,
-                             state.niri.config_path != NULL);
-  return result == SHAULA_SETTINGS_NIRI_OK;
+  if (state.shortcuts_enable_button != NULL) {
+    gboolean can_enable = shaula_settings_shortcut_can_enable(&state.shortcuts);
+    gtk_widget_set_visible(state.shortcuts_enable_button, can_enable);
+    gtk_widget_set_sensitive(state.shortcuts_enable_button, can_enable);
+  }
+  if (state.shortcuts_disable_button != NULL) {
+    gboolean can_disable = shaula_settings_shortcut_can_disable(&state.shortcuts);
+    gtk_widget_set_visible(state.shortcuts_disable_button, can_disable);
+    gtk_widget_set_sensitive(state.shortcuts_disable_button, can_disable);
+  }
+  if (state.shortcuts_repair_button != NULL) {
+    gboolean can_repair = shaula_settings_shortcut_can_repair(&state.shortcuts);
+    gtk_widget_set_visible(state.shortcuts_repair_button, can_repair);
+    gtk_widget_set_sensitive(state.shortcuts_repair_button, can_repair);
+  }
+  if (result != SHAULA_SHORTCUT_RESULT_OK && error != NULL)
+    set_status(error, TRUE);
+  return result == SHAULA_SHORTCUT_RESULT_OK;
 }
 
-static void do_niri_install(gboolean force);
-static void on_niri_install_conflict_response(GtkDialog *dialog, int response,
-                                              gpointer data);
-static void on_niri_remove_response(GtkDialog *dialog, int response,
-                                    gpointer data);
+typedef enum {
+  SHORTCUT_OPERATION_ENABLE,
+  SHORTCUT_OPERATION_DISABLE,
+  SHORTCUT_OPERATION_REPAIR,
+} ShortcutOperation;
 
-static void on_niri_install_clicked(GtkButton *button, gpointer data) {
-  (void)button;
-  (void)data;
-
-  if (state.niri.shortcuts_conflict) {
-    GtkWidget *dialog = gtk_message_dialog_new(
-        GTK_WINDOW(state.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
-        GTK_BUTTONS_NONE,
-        "Existing CTRL+Shift+1/2/3/4 bindings detected outside the Shaula "
-        "block.");
-    gtk_message_dialog_format_secondary_text(
-        GTK_MESSAGE_DIALOG(dialog),
-        "Install anyway? This will add the Shaula managed keybinds block. "
-        "You may need to manually remove conflicting bindings from your "
-        "Niri config.");
-    gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
-    gtk_dialog_add_button(GTK_DIALOG(dialog), "Install", GTK_RESPONSE_ACCEPT);
-    g_signal_connect(dialog, "response",
-                     G_CALLBACK(on_niri_install_conflict_response), NULL);
-    gtk_window_present(GTK_WINDOW(dialog));
-    return;
-  }
-
-  do_niri_install(FALSE);
-}
-
-static void do_niri_install(gboolean force) {
+static void run_shortcut_operation(ShortcutOperation operation) {
+  ShaulaShortcutOptions options = {.remember_choice = TRUE};
   g_autofree char *error = NULL;
-  if (shaula_settings_niri_install(state.shaula_bin, force, &error) !=
-      SHAULA_SETTINGS_NIRI_OK) {
-    set_status(error != NULL && error[0] != '\0'
-                   ? error
-                   : "ERR_CONFIG_UNREADABLE: keybind install failed",
-               TRUE);
+  ShaulaShortcutResult result;
+  if (operation == SHORTCUT_OPERATION_ENABLE)
+    result = shaula_shortcuts_enable(&options, &state.shortcuts, &error);
+  else if (operation == SHORTCUT_OPERATION_DISABLE)
+    result = shaula_shortcuts_disable(&options, &state.shortcuts, &error);
+  else
+    result = shaula_shortcuts_repair(&options, &state.shortcuts, &error);
+  refresh_shortcuts_status();
+  if (result != SHAULA_SHORTCUT_RESULT_OK) {
+    set_status(error != NULL ? error : "Shortcut operation failed.", TRUE);
     return;
   }
-
-  if (!refresh_niri_status())
-    return;
-  if (!state.niri.shortcuts_installed) {
-    set_status("ERR_CONFIG_INVALID: install completed, but Niri status did not "
-               "confirm the shortcuts.",
-               TRUE);
-    return;
-  }
-  set_status("Niri shortcuts installed. Niri should pick up config changes "
-             "automatically; restart/reload Niri if they do not apply.",
-             FALSE);
+  if (state.shortcuts.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED)
+    set_status("Automatic global shortcuts are unavailable on this desktop. "
+               "Desktop launcher actions remain available.", FALSE);
+  else if (state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED)
+    set_status("The desktop declined the shortcut request. You can repair or "
+               "reconfigure it later.", FALSE);
+  else if (state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING)
+    set_status("Waiting for the desktop to approve the shortcut request.", FALSE);
+  else if (operation == SHORTCUT_OPERATION_DISABLE)
+    set_status("Capture shortcuts disabled. Your choice was remembered.", FALSE);
+  else if (operation == SHORTCUT_OPERATION_REPAIR)
+    set_status("Capture shortcuts repaired or reconfigured.", FALSE);
+  else
+    set_status("Capture shortcuts enabled.", FALSE);
 }
 
-static void on_niri_install_conflict_response(GtkDialog *dialog, int response,
-                                              gpointer data) {
-  (void)data;
-  gtk_window_destroy(GTK_WINDOW(dialog));
-  if (response != GTK_RESPONSE_ACCEPT)
-    return;
-  do_niri_install(TRUE);
-}
-
-static void on_niri_remove_clicked(GtkButton *button, gpointer data) {
+static void on_shortcuts_enable_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
-  GtkWidget *dialog = gtk_message_dialog_new(
-      GTK_WINDOW(state.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
-      GTK_BUTTONS_NONE, "Remove Shaula Niri shortcuts?");
-  gtk_message_dialog_format_secondary_text(
-      GTK_MESSAGE_DIALOG(dialog),
-      "The managed keybinds block will be removed from your Niri config. A "
-      "backup will be created.");
-  gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
-  gtk_dialog_add_button(GTK_DIALOG(dialog), "Remove", GTK_RESPONSE_ACCEPT);
-  g_signal_connect(dialog, "response", G_CALLBACK(on_niri_remove_response),
-                   NULL);
-  gtk_window_present(GTK_WINDOW(dialog));
+  run_shortcut_operation(SHORTCUT_OPERATION_ENABLE);
 }
 
-static void on_niri_remove_response(GtkDialog *dialog, int response,
-                                    gpointer data) {
-  (void)data;
-  gtk_window_destroy(GTK_WINDOW(dialog));
-  if (response != GTK_RESPONSE_ACCEPT)
-    return;
-
-  g_autofree char *error = NULL;
-  if (shaula_settings_niri_remove(state.shaula_bin, &error) !=
-      SHAULA_SETTINGS_NIRI_OK) {
-    set_status(error != NULL && error[0] != '\0'
-                   ? error
-                   : "ERR_CONFIG_UNREADABLE: keybind remove failed",
-               TRUE);
-    return;
-  }
-
-  if (!refresh_niri_status())
-    return;
-  if (state.niri.shortcuts_installed) {
-    set_status("ERR_CONFIG_INVALID: remove completed, but Niri status still "
-               "reports installed shortcuts.",
-               TRUE);
-    return;
-  }
-  set_status("Shaula Niri shortcuts removed.", FALSE);
-}
-
-static void on_niri_open_config_clicked(GtkButton *button, gpointer data) {
+static void on_shortcuts_disable_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
-  if (state.niri.config_path == NULL) {
-    set_status("Niri config path not detected.", TRUE);
-    return;
-  }
-  char *argv[] = {"xdg-open", state.niri.config_path, NULL};
-  gchar *err = NULL;
-  int exit_code = 1;
-  shaula_settings_run_command(argv, NULL, &err, &exit_code);
-  if (exit_code != 0) {
-    char *message = g_strdup_printf("Could not open Niri config. %s",
-                                    err != NULL ? err : "");
-    set_status(message, TRUE);
-    g_free(message);
-  }
-  g_free(err);
+  run_shortcut_operation(SHORTCUT_OPERATION_DISABLE);
 }
 
-static void on_niri_recheck_clicked(GtkButton *button, gpointer data) {
+static void on_shortcuts_repair_clicked(GtkButton *button, gpointer data) {
   (void)button;
   (void)data;
-  refresh_niri_status();
-  set_status("Niri shortcuts status rechecked.", FALSE);
+  run_shortcut_operation(SHORTCUT_OPERATION_REPAIR);
+}
+
+static void on_shortcuts_recheck_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  refresh_shortcuts_status();
+  set_status("Shortcut status rechecked.", FALSE);
+}
+
+/* Opens the universal capture menu asynchronously so Settings remains usable
+ * while the independent launcher window is open. */
+static void on_shortcuts_menu_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  char *argv[] = {state.shaula_bin, "launch", NULL};
+  g_autoptr(GError) error = NULL;
+  if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL,
+                     &error)) {
+    set_status(error->message, TRUE);
+    return;
+  }
+  set_status("Shaula menu opened.", FALSE);
+}
+
+static char *noctalia_plugin_marker_path(void) {
+  const char *xdg = g_getenv("XDG_CONFIG_HOME");
+  g_autofree char *root = NULL;
+  if (xdg != NULL && xdg[0] != '\0')
+    root = g_strdup(xdg);
+  else {
+    const char *home = g_getenv("HOME");
+    if (home != NULL && home[0] != '\0')
+      root = g_build_filename(home, ".config", NULL);
+  }
+  return root != NULL
+             ? g_build_filename(root, "noctalia", "plugins", "shaula",
+                                ".shaula-managed", NULL)
+             : NULL;
+}
+
+static void refresh_noctalia_status(void) {
+  const gboolean detected = shaula_noctalia_detected();
+  g_autofree char *marker = noctalia_plugin_marker_path();
+  const gboolean installed =
+      marker != NULL && g_file_test(marker, G_FILE_TEST_IS_REGULAR);
+  if (state.noctalia_status_label != NULL)
+    gtk_label_set_text(GTK_LABEL(state.noctalia_status_label),
+                       installed ? "Installed"
+                                 : (detected ? "Available" : "Not detected"));
+  if (state.noctalia_install_button != NULL)
+    gtk_widget_set_sensitive(state.noctalia_install_button,
+                             detected && !installed);
+  if (state.noctalia_remove_button != NULL)
+    gtk_widget_set_sensitive(state.noctalia_remove_button, installed);
+}
+
+static void on_noctalia_install_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  g_autofree char *source = shaula_noctalia_plugin_source_resolve();
+  ShaulaNoctaliaResult result = {0};
+  ShaulaNoctaliaStatus status =
+      shaula_noctalia_install(source, FALSE, &result);
+  if (status != SHAULA_NOCTALIA_STATUS_OK)
+    set_status(shaula_noctalia_status_token(status), TRUE);
+  else
+    set_status(result.changed ? "Noctalia integration installed."
+                              : "Noctalia integration was already installed.",
+               FALSE);
+  shaula_noctalia_result_clear(&result);
+  refresh_noctalia_status();
+}
+
+static void on_noctalia_remove_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+  ShaulaNoctaliaResult result = {0};
+  ShaulaNoctaliaStatus status = shaula_noctalia_remove(FALSE, &result);
+  if (status != SHAULA_NOCTALIA_STATUS_OK &&
+      status != SHAULA_NOCTALIA_STATUS_NOT_DETECTED)
+    set_status(shaula_noctalia_status_token(status), TRUE);
+  else
+    set_status(result.changed ? "Noctalia integration removed."
+                              : "Noctalia integration was not installed.",
+               FALSE);
+  shaula_noctalia_result_clear(&result);
+  refresh_noctalia_status();
 }
 
 static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
@@ -628,6 +626,59 @@ static GtkWidget *build_form(void) {
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
   gtk_widget_add_css_class(box, "settings-form");
 
+  GtkWidget *shortcuts_heading = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  GtkWidget *shortcuts_title = gtk_label_new("Global Shortcuts");
+  gtk_widget_add_css_class(shortcuts_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(shortcuts_title), 0.0);
+  gtk_widget_set_hexpand(shortcuts_title, TRUE);
+  GtkWidget *optional_label = gtk_label_new("Optional");
+  gtk_widget_add_css_class(optional_label, "description");
+  gtk_widget_set_valign(optional_label, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(shortcuts_heading), shortcuts_title);
+  gtk_box_append(GTK_BOX(shortcuts_heading), optional_label);
+  gtk_box_append(GTK_BOX(box), shortcuts_heading);
+
+  GtkWidget *shortcuts_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  gtk_widget_add_css_class(shortcuts_card, "settings-row");
+  gtk_widget_set_margin_start(shortcuts_card, 16);
+  gtk_widget_set_margin_end(shortcuts_card, 16);
+  GtkWidget *shortcuts_description = gtk_label_new(
+      "Capture from anywhere using Ctrl+Shift+1–4. The Shaula menu always "
+      "works when global shortcuts are unavailable.");
+  gtk_label_set_xalign(GTK_LABEL(shortcuts_description), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(shortcuts_description), TRUE);
+  gtk_widget_add_css_class(shortcuts_description, "description");
+  gtk_box_append(GTK_BOX(shortcuts_card), shortcuts_description);
+
+  state.shortcuts_state_label = gtk_label_new("Checking shortcut status…");
+  gtk_widget_set_visible(state.shortcuts_state_label, FALSE);
+  state.shortcuts_backend_label = gtk_label_new("Status: checking…");
+  gtk_label_set_xalign(GTK_LABEL(state.shortcuts_backend_label), 0.0);
+  gtk_box_append(GTK_BOX(shortcuts_card), state.shortcuts_backend_label);
+  state.shortcuts_installation_label = gtk_label_new("");
+  gtk_widget_set_visible(state.shortcuts_installation_label, FALSE);
+
+  state.shortcuts_detail_label = gtk_label_new("");
+  gtk_label_set_xalign(GTK_LABEL(state.shortcuts_detail_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(state.shortcuts_detail_label), TRUE);
+  gtk_widget_add_css_class(state.shortcuts_detail_label, "description");
+  gtk_box_append(GTK_BOX(shortcuts_card), state.shortcuts_detail_label);
+
+  GtkWidget *shortcut_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state.shortcuts_menu_button = gtk_button_new_with_label("Open Shaula Menu");
+  state.shortcuts_enable_button = gtk_button_new_with_label("Enable");
+  gtk_widget_add_css_class(state.shortcuts_enable_button, "suggested-action");
+  state.shortcuts_disable_button = gtk_button_new_with_label("Disable");
+  state.shortcuts_repair_button = gtk_button_new_with_label("Repair");
+  state.shortcuts_recheck_button = gtk_button_new_with_label("Check Again");
+  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_menu_button);
+  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_enable_button);
+  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_disable_button);
+  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_repair_button);
+  gtk_box_append(GTK_BOX(shortcut_buttons), state.shortcuts_recheck_button);
+  gtk_box_append(GTK_BOX(shortcuts_card), shortcut_buttons);
+  gtk_box_append(GTK_BOX(box), shortcuts_card);
+
   GtkWidget *capture_title = gtk_label_new("Capture behavior");
   gtk_widget_add_css_class(capture_title, "section-title");
   gtk_label_set_xalign(GTK_LABEL(capture_title), 0.0);
@@ -752,44 +803,29 @@ static GtkWidget *build_form(void) {
                  labeled_row("Include thumbnail",
                              GTK_WIDGET(state.notifications_thumbnails_switch)));
 
-  GtkWidget *niri_title = gtk_label_new("Niri integration");
-  gtk_widget_add_css_class(niri_title, "section-title");
-  gtk_label_set_xalign(GTK_LABEL(niri_title), 0.0);
-  gtk_box_append(GTK_BOX(box), niri_title);
+  GtkWidget *integrations_title = gtk_label_new("Integrations");
+  gtk_widget_add_css_class(integrations_title, "section-title");
+  gtk_label_set_xalign(GTK_LABEL(integrations_title), 0.0);
+  gtk_box_append(GTK_BOX(box), integrations_title);
 
-  GtkWidget *niri_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_add_css_class(niri_card, "settings-row");
-  gtk_widget_set_margin_start(niri_card, 16);
-  gtk_widget_set_margin_end(niri_card, 16);
-
-  state.niri_detected_label = gtk_label_new("checking...");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_detected_label), 0.0);
-  gtk_box_append(GTK_BOX(niri_card), GTK_WIDGET(state.niri_detected_label));
-
-  state.niri_shortcuts_status_label = gtk_label_new("checking...");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_status_label), 0.0);
-  gtk_box_append(GTK_BOX(niri_card), GTK_WIDGET(state.niri_shortcuts_status_label));
-
-  state.niri_shortcuts_detail_label = gtk_label_new("");
-  gtk_widget_add_css_class(state.niri_shortcuts_detail_label, "description");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_shortcuts_detail_label), 0.0);
-  gtk_label_set_wrap(GTK_LABEL(state.niri_shortcuts_detail_label), TRUE);
-  gtk_box_append(GTK_BOX(niri_card), state.niri_shortcuts_detail_label);
-
-  GtkWidget *niri_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  state.niri_install_button =
-      gtk_button_new_with_label("Install / Update Shortcuts");
-  state.niri_remove_button = gtk_button_new_with_label("Remove Shortcuts");
-  state.niri_open_config_button =
-      gtk_button_new_with_label("Open Niri Config");
-  state.niri_recheck_button = gtk_button_new_with_label("Recheck");
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_install_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_remove_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_open_config_button);
-  gtk_box_append(GTK_BOX(niri_buttons), state.niri_recheck_button);
-  gtk_box_append(GTK_BOX(niri_card), niri_buttons);
-
-  gtk_box_append(GTK_BOX(box), niri_card);
+  GtkWidget *noctalia_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_add_css_class(noctalia_card, "settings-row");
+  gtk_widget_set_margin_start(noctalia_card, 16);
+  gtk_widget_set_margin_end(noctalia_card, 16);
+  GtkWidget *noctalia_title = gtk_label_new("Noctalia Shell widget");
+  gtk_label_set_xalign(GTK_LABEL(noctalia_title), 0.0);
+  gtk_box_append(GTK_BOX(noctalia_card), noctalia_title);
+  state.noctalia_status_label = gtk_label_new("Checking…");
+  gtk_label_set_xalign(GTK_LABEL(state.noctalia_status_label), 0.0);
+  gtk_widget_add_css_class(state.noctalia_status_label, "description");
+  gtk_box_append(GTK_BOX(noctalia_card), state.noctalia_status_label);
+  GtkWidget *noctalia_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  state.noctalia_install_button = gtk_button_new_with_label("Install widget");
+  state.noctalia_remove_button = gtk_button_new_with_label("Remove widget");
+  gtk_box_append(GTK_BOX(noctalia_buttons), state.noctalia_install_button);
+  gtk_box_append(GTK_BOX(noctalia_buttons), state.noctalia_remove_button);
+  gtk_box_append(GTK_BOX(noctalia_card), noctalia_buttons);
+  gtk_box_append(GTK_BOX(box), noctalia_card);
 
   GtkWidget *advanced_title = gtk_label_new("Advanced");
   gtk_widget_add_css_class(advanced_title, "section-title");
@@ -801,14 +837,6 @@ static GtkWidget *build_form(void) {
   gtk_label_set_xalign(GTK_LABEL(state.path_label), 1.0);
   gtk_label_set_ellipsize(GTK_LABEL(state.path_label), PANGO_ELLIPSIZE_START);
   gtk_box_append(GTK_BOX(box), labeled_row("Config path", state.path_label));
-
-  state.niri_config_path_label = gtk_label_new("unknown");
-  gtk_label_set_xalign(GTK_LABEL(state.niri_config_path_label), 1.0);
-  gtk_label_set_ellipsize(GTK_LABEL(state.niri_config_path_label),
-                          PANGO_ELLIPSIZE_START);
-  gtk_box_append(GTK_BOX(box),
-                 labeled_row("Niri config path",
-                             GTK_WIDGET(state.niri_config_path_label)));
 
   GtkWidget *advanced_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_margin_start(advanced_buttons, 16);
@@ -824,14 +852,20 @@ static GtkWidget *build_form(void) {
                    NULL);
   g_signal_connect(state.reset_button, "clicked", G_CALLBACK(on_reset_clicked),
                    NULL);
-  g_signal_connect(state.niri_install_button, "clicked",
-                   G_CALLBACK(on_niri_install_clicked), NULL);
-  g_signal_connect(state.niri_remove_button, "clicked",
-                   G_CALLBACK(on_niri_remove_clicked), NULL);
-  g_signal_connect(state.niri_open_config_button, "clicked",
-                   G_CALLBACK(on_niri_open_config_clicked), NULL);
-  g_signal_connect(state.niri_recheck_button, "clicked",
-                   G_CALLBACK(on_niri_recheck_clicked), NULL);
+  g_signal_connect(state.shortcuts_enable_button, "clicked",
+                   G_CALLBACK(on_shortcuts_enable_clicked), NULL);
+  g_signal_connect(state.shortcuts_disable_button, "clicked",
+                   G_CALLBACK(on_shortcuts_disable_clicked), NULL);
+  g_signal_connect(state.shortcuts_repair_button, "clicked",
+                   G_CALLBACK(on_shortcuts_repair_clicked), NULL);
+  g_signal_connect(state.shortcuts_recheck_button, "clicked",
+                   G_CALLBACK(on_shortcuts_recheck_clicked), NULL);
+  g_signal_connect(state.shortcuts_menu_button, "clicked",
+                   G_CALLBACK(on_shortcuts_menu_clicked), NULL);
+  g_signal_connect(state.noctalia_install_button, "clicked",
+                   G_CALLBACK(on_noctalia_install_clicked), NULL);
+  g_signal_connect(state.noctalia_remove_button, "clicked",
+                   G_CALLBACK(on_noctalia_remove_clicked), NULL);
 
   g_signal_connect(state.window_combo, "notify::selected",
                    G_CALLBACK(on_control_changed), NULL);
@@ -891,7 +925,8 @@ static void on_activate(GtkApplication *app, gpointer data) {
   load_initial_state(&state);
 
   state.window = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(state.window), "Shaula Settings");
+  gtk_window_set_title(GTK_WINDOW(state.window),
+                       state.setup_mode ? "Shaula Setup" : "Shaula Settings");
   gtk_window_set_default_size(GTK_WINDOW(state.window), 680, 760);
   gtk_window_set_resizable(GTK_WINDOW(state.window), TRUE);
 
@@ -955,7 +990,8 @@ static void on_activate(GtkApplication *app, gpointer data) {
   g_signal_connect_swapped(cancel_button, "clicked", G_CALLBACK(gtk_window_destroy), state.window);
   g_signal_connect(state.apply_button, "clicked", G_CALLBACK(on_save_clicked), NULL);
 
-  refresh_niri_status();
+  refresh_shortcuts_status();
+  refresh_noctalia_status();
 
   gtk_window_present(GTK_WINDOW(state.window));
 }
@@ -983,9 +1019,9 @@ static void install_css(GtkApplication *app, gpointer data) {
 }
 
 int main(int argc, char **argv) {
-  shaula_settings_niri_status_init(&state.niri);
-  state.shaula_bin =
-      g_strdup(argc >= 2 && argv[1][0] != '\0' ? argv[1] : "shaula");
+  shaula_shortcut_status_init(&state.shortcuts);
+  state.setup_mode = argc >= 2 && g_str_equal(argv[1], "--setup");
+  state.shaula_bin = g_strdup("shaula");
   GtkApplication *app =
       gtk_application_new("dev.shaula.settings", G_APPLICATION_DEFAULT_FLAGS);
   if (app == NULL)
@@ -996,7 +1032,7 @@ int main(int argc, char **argv) {
   g_object_unref(app);
   g_free(state.shaula_bin);
   g_free(state.config_path);
-  shaula_settings_niri_status_clear(&state.niri);
+  shaula_shortcut_status_clear(&state.shortcuts);
   shaula_settings_config_clear(&state.config);
   return rc > 255 ? 255 : rc;
 }

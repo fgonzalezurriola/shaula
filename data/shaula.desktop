@@ -2,10 +2,31 @@
 Type=Application
 Name=Shaula
 Comment=Capture, preview, save, and copy screenshots on Wayland
-Exec=shaula capture area --json
+Exec=shaula launch
 TryExec=shaula
 Icon=shaula
 Terminal=false
 Categories=Graphics;Utility;
 Keywords=screenshot;screen capture;wayland;
 StartupNotify=false
+Actions=QuickCapture;CaptureArea;CaptureFullscreen;CaptureAllScreens;Settings;
+
+[Desktop Action QuickCapture]
+Name=Quick Capture
+Exec=shaula capture quick --json
+
+[Desktop Action CaptureArea]
+Name=Capture Area
+Exec=shaula capture area --json
+
+[Desktop Action CaptureFullscreen]
+Name=Capture Fullscreen
+Exec=shaula capture fullscreen --json --save
+
+[Desktop Action CaptureAllScreens]
+Name=Capture All Screens
+Exec=shaula capture all-screens --json --save
+
+[Desktop Action Settings]
+Name=Settings
+Exec=shaula settings

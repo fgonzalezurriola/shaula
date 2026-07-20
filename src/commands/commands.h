@@ -5,6 +5,8 @@ int shaula_preflight_command_run(int argc, char **argv);
 int shaula_capabilities_command_run(int argc, char **argv);
 int shaula_errors_command_run(int argc, char **argv);
 int shaula_settings_command_run(int argc, char **argv);
+int shaula_shortcuts_command_run(int argc, char **argv);
+int shaula_launch_command_run(int argc, char **argv);
 int shaula_config_command_run(int argc, char **argv);
 int shaula_preview_command_run(int argc, char **argv);
 int shaula_directory_command_run(int argc, char **argv);

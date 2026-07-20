@@ -8,15 +8,18 @@ icons, helpers, and user-integration contracts.
 Immutable application files are owned by Meson, packages, release archives, and
 the public installer:
 
-- `shaula` and all bundled helpers, including `shaula-clipboard-provider`;
+- `shaula` and all bundled helpers, including `shaula-clipboard-provider` and
+  `shaula-shortcut-provider`;
 - the canonical `data/shaula.desktop` launcher;
 - application icons and Preview runtime action icons;
 - `data/release-manifest.txt`;
 - distributed Noctalia integration source files.
 
-Mutable user state is owned by `shaula setup`:
+Mutable user state is owned by `shaula setup` and `shaula settings`:
 
 - `${XDG_CONFIG_HOME:-~/.config}/shaula/config.toml`;
+- explicit shortcut-choice state;
+- the optional shortcut-provider XDG autostart entry and provider status state;
 - managed Niri preview and keybinding blocks;
 - the installed Noctalia plugin directory and matching Noctalia JSON state.
 
@@ -66,9 +69,9 @@ binary is not executable.
 
 The payload includes:
 
-- `shaula`, overlay, Preview, Settings, crop, portal, and clipboard-provider
-  executables;
-- the desktop entry;
+- `shaula`, overlay, Preview, Settings, crop, portal screenshot,
+  shortcut-provider, and clipboard-provider executables;
+- the desktop entry with direct capture and Settings actions;
 - fixed-size and scalable application icons;
 - all Preview symbolic action icons;
 - the Noctalia integration source.
@@ -98,16 +101,22 @@ The installer must never:
 The desktop environment owns portal backend selection. `grim` is not universal;
 it is used automatically only on a compatible compositor when present.
 
-`--yes` is an advanced automation flag. It makes setup noninteractive and accepts
-detected optional integrations, but it does not authorize system changes or
+`--yes` is an advanced automation flag. It makes setup noninteractive, enables
+the recommended capture shortcuts through the generic backend selector, and
+accepts detected optional integrations. It does not authorize system changes or
 privilege escalation. Normal installation documentation must not require it.
+The public installer also accepts `--shortcuts` and `--no-shortcuts`; the legacy
+`--niri-keybinds` flag remains an explicit compatibility alias and conflicts with
+`--no-shortcuts`.
 
 `--no-icon` skips application icons only. Preview symbolic icons remain mandatory
 runtime resources. `--no-desktop` skips only the canonical desktop entry.
 
 In a noninteractive installation without explicit acceptance, setup creates or
-keeps the Shaula config and skips optional integrations without failing. With an
-interactive TTY, setup can offer detected Niri and Noctalia integration.
+keeps the Shaula config and skips shortcut and optional-integration changes
+without failing. With an interactive TTY, setup asks one backend-independent
+shortcut question and can separately offer detected Niri window-rule and
+Noctalia integration.
 
 A successful installation ends with a direct command the user can run:
 
@@ -120,9 +129,11 @@ shaula capture area --json
 `shaula setup` owns user configuration and integration state. Supported flags:
 
 - `--yes`
+- `--shortcuts`
+- `--no-shortcuts`
 - `--niri`
 - `--noctalia`
-- `--niri-keybinds`
+- `--niri-keybinds` (compatibility alias for shortcut enablement)
 - `--no-integrations`
 - `--no-niri`
 - `--no-noctalia`
@@ -131,8 +142,29 @@ shaula capture area --json
 
 Setup operations are idempotent. Changed files are validated, backed up, and
 atomically replaced. Removal uses the same managed markers and state model as
-installation. Interactive setup asks separately before installing the Niri
-window rule and the recommended Niri capture shortcuts.
+installation. Interactive setup asks `Enable Ctrl+Shift+1–4 capture shortcuts?
+[y/N]`; backend selection remains internal. Decline is persisted so graphical
+startup remains independent from shortcut choice state.
+
+### Global shortcuts
+
+`src/shortcuts/` owns generic enable, disable, status, and repair operations for
+Settings and CLI setup. The XDG Desktop Portal GlobalShortcuts adapter is
+preferred. It is considered usable only after a live provider completes session
+creation, binds the four actions, lists the approved mappings, and subscribes to
+activation delivery. Desktop remapping and rejection are authoritative.
+
+`shaula-shortcut-provider` exists only to own that live session and dispatch
+approved actions directly to existing capture argv arrays. It uses the per-user
+D-Bus name `dev.shaula.ShortcutProvider` to prevent duplicate instances and a
+bounded reconnect loop after portal restart or session loss. Shaula writes its
+XDG autostart entry only after explicit enablement and removes it on disable or
+uninstall. Package hooks must never create or remove this user state.
+
+Technical portal non-viability falls back to the managed Niri keybinding adapter.
+Desktop rejection does not silently install Niri bindings. If neither path works,
+setup succeeds with an unsupported status because desktop launcher actions remain
+usable.
 
 Niri integration owns two blocks:
 
@@ -183,11 +215,9 @@ when applicable.
 ```
 
 The command displays build, staging, install, setup, and validation phases.
-Keybindings remain opt-in:
-
-```bash
-./dev dev-install --yes --niri-keybinds
-```
+`--yes` accepts the recommended shortcuts. To exercise an explicit decline in a
+local install, run setup afterward with `shaula setup --no-shortcuts`; the legacy
+`--niri-keybinds` option remains available for compatibility testing.
 
 `./dev noctalia-load` is widget-only: it builds Shaula, runs setup with Niri
 disabled and Noctalia explicitly selected, then reloads Noctalia. It does not run
@@ -206,7 +236,8 @@ the checked x86_64 or AArch64 release archive selected by makepkg. Both
 `.SRCINFO` files must be regenerated whenever their PKGBUILD metadata changes.
 
 The binary package installs the complete archive payload, including
-`shaula-clipboard-provider`, rather than recreating the desktop entry or icons.
+`shaula-clipboard-provider` and `shaula-shortcut-provider`, rather than recreating
+the desktop entry or icons.
 
 ### Automated AUR publication
 
@@ -269,13 +300,29 @@ scripts/qa/assert-release-archive.sh "$PWD" \
 ./dev dev-install --yes
 ```
 
-Wayland capture and clipboard lifetime still require a live graphical session.
-For native interactive behavior run:
+Wayland capture, shortcut activation, Settings presentation, and clipboard
+lifetime still require a live graphical session. For native interactive behavior
+run:
 
 ```bash
 ./dev capture
 ./dev all
+shaula shortcuts status --json
+niri validate -c "${XDG_CONFIG_HOME:-$HOME/.config}/niri/config.kdl"
 ```
+
+On Niri, reload the config and verify at least one real managed shortcut event.
+Record whether the event was generated by a physical keyboard or an input
+injector, and record the resulting capture path. Verify that `shaula launch`
+opens the capture menu with an isolated XDG config/state profile, regardless of
+shortcut choice state.
+
+On hybrid NVIDIA systems, also inspect the kernel journal for `NVRM: Xid` after
+manual graphical checks and record which DRM connector belongs to each GPU. If
+an NVIDIA-owned output freezes or `nvidia-smi` loses the device handle, stop
+interactive validation and record it as a GPU/driver environment failure unless
+timestamps and a repeatable test establish a Shaula causal path. Do not infer
+causality from a delayed compositor failure alone.
 
 GNOME and KDE interactive portal/graphical validation is not checked for
 v0.1.6. It is explicitly deferred to v0.1.7 and must not be reported as passed.

@@ -92,7 +92,7 @@ jobs:
       - name: Verify install payload
         run: |
           DESTDIR="${PWD}/build-ci/stage" meson install -C build-ci
-          for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-crop-image shaula-portal-screenshot shaula-clipboard-provider; do
+          for binary in shaula shaula-overlay shaula-preview shaula-settings shaula-shortcut-provider shaula-crop-image shaula-portal-screenshot shaula-clipboard-provider; do
             test -x "build-ci/stage/usr/local/bin/${binary}"
           done
           test -f build-ci/stage/usr/local/share/applications/shaula.desktop

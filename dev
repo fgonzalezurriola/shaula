@@ -81,6 +81,10 @@ shaula_env() {
         -x "${BUILD_DIR}/src/settings/shaula-settings" ]]; then
     export SHAULA_SETTINGS_HELPER_BIN="${BUILD_DIR}/src/settings/shaula-settings"
   fi
+  if [[ -z "${SHAULA_LAUNCHER_HELPER_BIN:-}" &&
+        -x "${BUILD_DIR}/src/settings/shaula-launcher" ]]; then
+    export SHAULA_LAUNCHER_HELPER_BIN="${BUILD_DIR}/src/settings/shaula-launcher"
+  fi
   if [[ -z "${SHAULA_PORTAL_SCREENSHOT_HELPER_BIN:-}" &&
         -x "${BUILD_DIR}/src/capture/shaula-portal-screenshot" ]]; then
     export SHAULA_PORTAL_SCREENSHOT_HELPER_BIN="${BUILD_DIR}/src/capture/shaula-portal-screenshot"

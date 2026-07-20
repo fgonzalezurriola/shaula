@@ -7,6 +7,8 @@ shaula_commands_c = static_library(
     'capabilities_command.c',
     'errors_command.c',
     'settings_command.c',
+    'shortcuts_command.c',
+    'launch_command.c',
     'config_command.c',
     'preview_command.c',
     'directory_command.c',
@@ -31,6 +33,7 @@ shaula_commands_c = static_library(
     shaula_preview_result_dep,
     shaula_runtime_dep,
     shaula_settings_config_dep,
+    shaula_shortcuts_dep,
   ],
   install: false,
 )
@@ -51,5 +54,6 @@ shaula_commands_dep = declare_dependency(
     shaula_preview_result_dep,
     shaula_runtime_dep,
     shaula_settings_config_dep,
+    shaula_shortcuts_dep,
   ],
 )

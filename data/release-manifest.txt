@@ -2,6 +2,8 @@ bin/shaula
 bin/shaula-overlay
 bin/shaula-preview
 bin/shaula-settings
+bin/shaula-launcher
+bin/shaula-shortcut-provider
 bin/shaula-crop-image
 bin/shaula-portal-screenshot
 bin/shaula-clipboard-provider

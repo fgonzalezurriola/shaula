@@ -4,6 +4,7 @@
 #include "config/niri_managed.h"
 #include "config/noctalia_managed.h"
 #include "config_command_support.h"
+#include "shortcuts/shortcuts.h"
 #include "support.h"
 
 #include <fcntl.h>
@@ -19,7 +20,8 @@ typedef struct {
   gboolean noctalia;
   gboolean niri_explicit;
   gboolean noctalia_explicit;
-  gboolean install_keybinds;
+  gboolean shortcuts;
+  gboolean shortcuts_explicit;
   gboolean remove;
   gboolean dry_run;
 } SetupOptions;
@@ -64,9 +66,9 @@ static gboolean parse_setup_options(int argc, char **argv,
   for (int i = 2; i < argc; i++) {
     if (g_str_equal(argv[i], "--help")) {
       g_print(
-          "Usage: shaula setup [--yes] [--niri] [--noctalia] "
-          "[--niri-keybinds] [--no-integrations] [--no-niri] "
-          "[--no-noctalia] [--remove] [--dry-run]\n");
+          "Usage: shaula setup [--yes] [--shortcuts|--no-shortcuts] "
+          "[--niri] [--noctalia] [--niri-keybinds] [--no-integrations] "
+          "[--no-niri] [--no-noctalia] [--remove] [--dry-run]\n");
       return FALSE;
     }
     if (g_str_equal(argv[i], "--yes"))
@@ -81,8 +83,21 @@ static gboolean parse_setup_options(int argc, char **argv,
       options->niri = FALSE;
     else if (g_str_equal(argv[i], "--no-noctalia"))
       options->noctalia = FALSE;
-    else if (g_str_equal(argv[i], "--niri-keybinds")) {
-      options->install_keybinds = TRUE;
+    else if (g_str_equal(argv[i], "--shortcuts")) {
+      if (options->shortcuts_explicit && !options->shortcuts)
+        return FALSE;
+      options->shortcuts = TRUE;
+      options->shortcuts_explicit = TRUE;
+    } else if (g_str_equal(argv[i], "--no-shortcuts")) {
+      if (options->shortcuts_explicit && options->shortcuts)
+        return FALSE;
+      options->shortcuts = FALSE;
+      options->shortcuts_explicit = TRUE;
+    } else if (g_str_equal(argv[i], "--niri-keybinds")) {
+      if (options->shortcuts_explicit && !options->shortcuts)
+        return FALSE;
+      options->shortcuts = TRUE;
+      options->shortcuts_explicit = TRUE;
       options->niri_explicit = TRUE;
     } else if (g_str_equal(argv[i], "--remove"))
       options->remove = TRUE;
@@ -114,33 +129,6 @@ static gboolean setup_niri_install(const ShaulaConfig *config,
                "Niri preview rule", result.path);
   managed_block_result_clear(&result);
 
-  if (!options->install_keybinds) {
-    setup_status("skipped", "Niri keybindings", "not requested");
-    return TRUE;
-  }
-  g_autoptr(GPtrArray) conflicts = niri_keybind_conflicts(path);
-  if (conflicts != NULL && conflicts->len > 0U) {
-    setup_status("failed", "Niri keybindings", "conflicts detected");
-    for (guint i = 0U; i < conflicts->len; i++)
-      g_printerr("  %s\n", (const char *)g_ptr_array_index(conflicts, i));
-    return FALSE;
-  }
-  g_autofree char *keybinds = shaula_config_command_render_keybinds();
-  result = (ManagedBlockResult){0};
-  invalid = FALSE;
-  if (!install_managed_block(path, "// BEGIN SHAULA MANAGED KEYBINDS",
-                             "// END SHAULA MANAGED KEYBINDS", keybinds,
-                             options->dry_run, &result, &invalid)) {
-    setup_status("failed", "Niri keybindings",
-                 invalid ? "invalid managed markers" : "write failed");
-    managed_block_result_clear(&result);
-    return FALSE;
-  }
-  setup_status(result.changed ? (options->dry_run ? "would-install"
-                                                   : "installed")
-                              : "unchanged",
-               "Niri keybindings", result.path);
-  managed_block_result_clear(&result);
   return TRUE;
 }
 
@@ -173,6 +161,84 @@ static gboolean setup_niri_remove(const SetupOptions *options,
                               : "unchanged",
                "Niri keybindings", result.path);
   managed_block_result_clear(&result);
+  return TRUE;
+}
+
+static gboolean setup_shortcuts(const SetupOptions *options,
+                                gboolean interactive) {
+  ShaulaShortcutOptions shortcut_options = {
+      .dry_run = options->dry_run,
+      .remember_choice = !options->remove,
+  };
+  ShaulaShortcutStatus status;
+  shaula_shortcut_status_init(&status);
+  g_autofree char *error = NULL;
+
+  if (options->remove) {
+    ShaulaShortcutResult result =
+        shaula_shortcuts_disable(&shortcut_options, &status, &error);
+    if (result == SHAULA_SHORTCUT_RESULT_OK && !options->dry_run &&
+        !shaula_shortcuts_reset_setup_state(&error))
+      result = SHAULA_SHORTCUT_RESULT_CONFIG_INVALID;
+    setup_status(result == SHAULA_SHORTCUT_RESULT_OK ? "removed" : "failed",
+                 "capture shortcuts",
+                 error != NULL ? error : shaula_shortcut_state_token(status.state));
+    shaula_shortcut_status_clear(&status);
+    return result == SHAULA_SHORTCUT_RESULT_OK;
+  }
+
+  ShaulaShortcutResult queried = shaula_shortcuts_query(&status, &error);
+  if (queried != SHAULA_SHORTCUT_RESULT_OK) {
+    setup_status("failed", "capture shortcuts",
+                 error != NULL ? error : "status unavailable");
+    shaula_shortcut_status_clear(&status);
+    return FALSE;
+  }
+
+  gboolean enable = options->shortcuts;
+  gboolean make_choice = options->shortcuts_explicit;
+  if (!make_choice && !status.setup_completed && options->assume_yes) {
+    enable = TRUE;
+    make_choice = TRUE;
+  }
+  if (!make_choice && !status.setup_completed && interactive &&
+      !options->assume_yes) {
+    enable = setup_prompt("Enable Ctrl+Shift+1–4 capture shortcuts?");
+    make_choice = TRUE;
+  }
+  if (!make_choice) {
+    setup_status("skipped", "capture shortcuts",
+                 status.setup_completed
+                     ? shaula_shortcut_state_token(status.state)
+                     : "no explicit choice in noninteractive setup");
+    shaula_shortcut_status_clear(&status);
+    return TRUE;
+  }
+
+  ShaulaShortcutResult result =
+      enable ? shaula_shortcuts_enable(&shortcut_options, &status, &error)
+             : shaula_shortcuts_disable(&shortcut_options, &status, &error);
+  const char *state = shaula_shortcut_state_token(status.state);
+  if (result != SHAULA_SHORTCUT_RESULT_OK) {
+    setup_status("failed", "capture shortcuts",
+                 error != NULL ? error : state);
+    shaula_shortcut_status_clear(&status);
+    return FALSE;
+  }
+  if (!enable)
+    setup_status(options->dry_run ? "would-disable" : "disabled",
+                 "capture shortcuts", "choice remembered");
+  else if (status.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED)
+    setup_status("skipped", "capture shortcuts",
+                 "automatic global shortcuts unavailable; desktop actions remain available");
+  else if (status.state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED)
+    setup_status("skipped", "capture shortcuts", "desktop permission denied");
+  else if (status.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING)
+    setup_status("pending", "capture shortcuts", "waiting for desktop approval");
+  else
+    setup_status(options->dry_run ? "would-enable" : "enabled",
+                 "capture shortcuts", shaula_shortcut_backend_token(status.backend));
+  shaula_shortcut_status_clear(&status);
   return TRUE;
 }
 
@@ -236,27 +302,22 @@ int shaula_setup_command_run(int argc, char **argv) {
                       : (options.dry_run ? "would-install" : "installed"),
                "configuration", path);
 
+  const gboolean interactive = setup_can_prompt();
+  gboolean ok = setup_shortcuts(&options, interactive);
   if (!options.integrations) {
     setup_status("skipped", "optional integrations", "disabled");
-    setup_status("installed", "setup", "core configuration ready");
-    return 0;
+    setup_status(ok ? "installed" : "failed", "setup",
+                 ok ? "core configuration ready" : "shortcut cleanup incomplete");
+    return ok ? 0 : 1;
   }
 
-  const gboolean interactive = setup_can_prompt();
-  gboolean ok = TRUE;
   g_autofree char *niri_path = niri_config_path(NULL);
   const gboolean niri_detected =
       options.niri && niri_path != NULL &&
       g_file_test(niri_path, G_FILE_TEST_IS_REGULAR);
   gboolean use_niri = options.niri_explicit || options.assume_yes;
-  gboolean niri_accepted_interactively = FALSE;
-  if (niri_detected && !options.remove && !use_niri && interactive) {
+  if (niri_detected && !options.remove && !use_niri && interactive)
     use_niri = setup_prompt("Install Shaula's Niri window rule?");
-    niri_accepted_interactively = use_niri;
-  }
-  if (niri_accepted_interactively && !options.install_keybinds)
-    options.install_keybinds =
-        setup_prompt("Install recommended Niri capture shortcuts?");
   if (options.remove)
     use_niri = niri_detected;
   if (!niri_detected) {

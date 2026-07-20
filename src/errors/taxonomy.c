@@ -118,6 +118,26 @@ static const ShaulaErrorSpec error_specs[] = {
                       "existing Niri keybind conflict detected", 0,
                       SHAULA_FAILURE_CLASS_CLI,
                       SHAULA_RECOVERY_ACTION_FAIL_FAST, 62),
+    SHAULA_ERROR_SPEC("ERR_SHORTCUTS_UNSUPPORTED",
+                      "automatic global shortcuts are unsupported", 0,
+                      SHAULA_FAILURE_CLASS_BACKEND,
+                      SHAULA_RECOVERY_ACTION_DEGRADE_CONTINUE, 63),
+    SHAULA_ERROR_SPEC("ERR_SHORTCUT_PERMISSION_DENIED",
+                      "desktop shortcut permission was denied", 0,
+                      SHAULA_FAILURE_CLASS_BACKEND,
+                      SHAULA_RECOVERY_ACTION_DEGRADE_CONTINUE, 64),
+    SHAULA_ERROR_SPEC("ERR_SHORTCUT_PROVIDER_UNAVAILABLE",
+                      "shortcut provider is unavailable", 1,
+                      SHAULA_FAILURE_CLASS_BACKEND,
+                      SHAULA_RECOVERY_ACTION_RETRY_LIMITED, 65),
+    SHAULA_ERROR_SPEC("ERR_SHORTCUT_SESSION_LOST",
+                      "shortcut portal session was lost", 1,
+                      SHAULA_FAILURE_CLASS_IPC,
+                      SHAULA_RECOVERY_ACTION_RETRY_LIMITED, 66),
+    SHAULA_ERROR_SPEC("ERR_SHORTCUT_CONFIGURATION_INVALID",
+                      "shortcut configuration is invalid", 0,
+                      SHAULA_FAILURE_CLASS_OUTPUT,
+                      SHAULA_RECOVERY_ACTION_FAIL_FAST, 67),
     SHAULA_ERROR_SPEC("ERR_UNKNOWN_UNMAPPED",
                       "unmapped internal failure class", 0,
                       SHAULA_FAILURE_CLASS_UNKNOWN,
@@ -138,7 +158,7 @@ static const ShaulaErrorSpan recovery_action_tokens[] = {
     SHAULA_LITERAL_SPAN("degrade_to_portal"),
 };
 
-_Static_assert(sizeof(error_specs) / sizeof(error_specs[0]) == 28,
+_Static_assert(sizeof(error_specs) / sizeof(error_specs[0]) == 33,
                "canonical public error inventory changed");
 _Static_assert(sizeof(failure_class_tokens) /
                        sizeof(failure_class_tokens[0]) ==

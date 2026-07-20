@@ -330,7 +330,60 @@ test(
   suite: ['unit'],
 )
 
+shortcuts_test = executable(
+  'shortcuts-test',
+  'shortcuts_test.c',
+  dependencies: shaula_shortcuts_dep,
+)
+
+test(
+  'shortcuts',
+  shortcuts_test,
+  suite: ['unit'],
+)
+
+shortcut_provider_core_test = executable(
+  'shortcut-provider-core-test',
+  'shortcut_provider_core_test.c',
+  dependencies: shaula_shortcuts_dep,
+)
+
+test(
+  'shortcut-provider-core',
+  shortcut_provider_core_test,
+  suite: ['unit'],
+)
+
+settings_shortcuts_test = executable(
+  'settings-shortcuts-test',
+  'settings_shortcuts_test.c',
+  dependencies: shaula_settings_shortcuts_dep,
+)
+
+test(
+  'settings-shortcuts',
+  settings_shortcuts_test,
+  suite: ['unit'],
+)
+
 bash_program = find_program('bash')
+test(
+  'desktop-entry-actions',
+  bash_program,
+  args: [
+    files('desktop_entry_test.sh'),
+    join_paths(meson.project_source_root(), 'data/shaula.desktop'),
+  ],
+  suite: ['unit'],
+)
+
+test(
+  'launch-first-run',
+  bash_program,
+  args: [files('launch_first_run_test.sh'), shaula_exe],
+  suite: ['unit'],
+)
+
 test(
   'dev-noctalia-restart',
   bash_program,

@@ -1,9 +1,10 @@
 # Shaula v0.1.6
 
 Shaula v0.1.6 completes the Meson/C production port and makes the release
-artifact, installer, clipboard publication, and Wayland backend contracts explicit.
-It remains a short-lived CLI/helper application: no resident Shaula daemon is
-introduced.
+artifact, installer, clipboard publication, graphical setup, and Wayland backend
+contracts explicit. Capture, Preview, Settings, and CLI commands remain
+short-lived. One narrowly scoped optional resident helper is introduced only to
+own an approved GlobalShortcuts portal session.
 
 ## Highlights
 
@@ -24,8 +25,20 @@ introduced.
   modes.
 - Both AUR package definitions are prepared for `0.1.6`; the binary package
   supports x86_64 and AArch64.
-- Interactive setup asks separately before installing the managed Niri preview
-  rule and recommended capture shortcuts.
+- `shaula settings` places optional **Global Shortcuts** first, with simplified
+  status, enable/disable/repair controls, and access to the universal menu.
+  Noctalia remains in the separate **Integrations** section.
+- Graphical launch always opens the universal capture menu and never waits for
+  shortcut setup or desktop support.
+- One backend-independent shortcut choice requests `Ctrl+Shift+1–4`. Shaula
+  prefers a verified XDG GlobalShortcuts portal session and falls back to managed
+  Niri keybindings only when the portal path is technically not viable.
+- `shaula-shortcut-provider` owns the optional live portal session, prevents
+  duplicate instances and captures, reconnects after session loss, dispatches
+  capture commands without a shell, and is started through user-owned XDG
+  autostart only after explicit enablement.
+- The desktop entry provides direct actions for Quick Capture, Capture Area,
+  Capture Fullscreen, Capture All Screens, and Settings.
 
 ## Release artifact contract
 
@@ -42,6 +55,8 @@ Release validation checks:
 - manifest completeness and absence of unlisted files;
 - executable modes for every `bin/*` entry;
 - absence of `share/icons/hicolor/index.theme`;
+- inclusion and executable mode of `shaula-shortcut-provider`;
+- direct desktop launcher actions and universal `shaula launch` menu entry;
 - installer architecture selection;
 - regenerated AUR `.SRCINFO` consistency.
 
@@ -57,11 +72,33 @@ is a required runtime dependency. AUR publication used the dedicated deploy key
 ## Validation scope
 
 Automated and local release checks cover the C build, unit and contract tests,
-clipboard lifecycle cleanup, multi-process replacement ordering, staged release
-archives, x86_64/AArch64 executable architecture, installer behavior, and AUR
-metadata consistency.
+clipboard lifecycle cleanup, multi-process replacement ordering, generic
+shortcut backend selection, Niri fallback/conflicts, shortcut-choice persistence,
+provider duplicate/reconnect contracts, Settings mapping, desktop actions,
+staged release archives, installer behavior, and AUR payload consistency.
 
-Live Niri checks remain the primary graphical release environment. GNOME and KDE
-interactive portal/graphical validation is **not yet checked for v0.1.6** and is
-explicitly deferred to v0.1.7. This release does not claim that those graphical
-checks passed.
+Live Niri checks remain the primary graphical release environment. The current
+checkout was installed with `./dev dev-install --yes`; portal-first selection
+fell back to managed Niri bindings without leaving provider autostart state.
+`niri validate` and live config reload succeeded, repeated shortcut enablement
+was byte-for-byte idempotent, and `shaula launch` opened the universal capture menu,
+and a compositor-level `Ctrl+Shift+4` event injected through `ydotool` created
+`/home/fgonz/Pictures/shaula/20260719-234615.png` at 19:46:15 local time.
+
+At 20:01:21, over 15 minutes after the capture completed, the NVIDIA driver
+began reporting Xids 56 and 11 against Niri. The sequence progressed through a
+GSP timeout to Xid 79 (`GPU has fallen off the bus`) at 20:03:23. The
+NVIDIA-owned HDMI output froze while the AMD-owned laptop panel and Niri IPC
+remained responsive; `nvidia-smi` could no longer obtain a device handle. Two
+later Shaula scopes started only after the initial Xids, and neither produced a
+capture file. The same Smithay OpenGL texture-bounds error had occurred twice
+earlier in the session, and an unrelated FortiClient tray process was
+crash-looping every three seconds. The evidence is preserved without assigning
+causation in `diagnostics/niri-nvidia-freeze-2026-07-19T2001-0400/`.
+
+GNOME and KDE interactive portal approval, remapping, activation, and graphical
+validation are **not yet checked for v0.1.6** and are explicitly deferred to
+v0.1.7. The updated provider payload was also not rebuilt for AArch64 in this
+checkout because `SHAULA_MESON_CROSS_FILE` was not configured; native/QEMU
+AArch64 release validation remains required. This release does not claim that
+those checks passed.

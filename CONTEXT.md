@@ -1,6 +1,6 @@
 # Shaula Context
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Current release candidate
 
@@ -15,8 +15,10 @@ finalization steps are in `docs/releasing.md`.
 
 ## Runtime architecture
 
-Shaula remains a short-lived CLI/helper application. It does not introduce a
-resident Shaula daemon.
+Shaula's capture, Preview, Settings, and CLI commands remain short-lived. ADR-0004
+introduces one narrowly scoped optional resident process,
+`shaula-shortcut-provider`, only to own an approved GlobalShortcuts portal
+session and dispatch activations to the existing capture commands.
 
 Capture routing follows ADR-0003:
 
@@ -24,14 +26,27 @@ Capture routing follows ADR-0003:
 - Other supported Wayland sessions use the Screenshot portal route.
 - Missing or unavailable routes return deterministic errors.
 - The release and installer payload includes the CLI, overlay, Preview,
-  Settings, portal screenshot helper, crop helper, clipboard provider, desktop
-  entry, icons, Noctalia integration, and release manifest.
+  Settings, shortcut provider, portal screenshot helper, crop helper, clipboard
+  provider, desktop entry, icons, Noctalia integration, and release manifest.
 
 The `./dev` live commands export build-tree helper paths explicitly, so they
 exercise the current checkout rather than relying on a previous local install.
-Interactive `shaula setup` asks separately about the managed Niri preview rule
-and recommended capture shortcuts, so accepting the rule no longer silently
-leaves shortcut configuration undiscovered.
+
+The generic shortcut module is shared by Settings, `shaula setup`, and explicit
+`shaula shortcuts` commands. It prefers a verified XDG GlobalShortcuts portal
+session, preserves desktop approval/remapping/rejection, and falls back to the
+existing managed Niri keybindings only when the portal is technically not viable.
+Unsupported shortcut setup is non-fatal because desktop launcher actions invoke
+capture commands directly.
+
+Shortcut choice state remains separate from installed shortcut state, but it no
+longer blocks application launch. `shaula launch` always opens the compact GTK
+launcher with the four capture modes, Settings, the screenshots folder, and
+problem reporting. Settings presents global shortcuts as an optional first
+section and keeps the launcher available as the universal fallback. Shortcut
+labels appear only while the shortcut backend reports them active.
+The portal provider uses a user-owned XDG autostart entry created only after
+explicit enablement and removed on disable or uninstall.
 
 ## Clipboard publication and replacement
 
@@ -115,15 +130,16 @@ workflow replaces those markers only in writable AUR clones before pushing.
 
 The current source state has passed:
 
-- normal x86_64 build and all 31 Meson tests;
-- strict x86_64 Werror build and all 31 tests;
-- x86_64 ASan/UBSan build and all 31 tests;
-- optimized x86_64 release build, all 31 tests, staged install, and archive
-  validation;
-- QEMU-backed native AArch64 Werror release build, all 31 tests, staged install,
-  ELF architecture validation, and archive validation;
-- combined x86_64/AArch64 `SHA256SUMS` verification and exact v0.1.6 release
-  contract;
+- normal x86_64 build and all 36 Meson tests;
+- focused shortcut backend, provider lifecycle, launch routing, Settings mapping, and
+  desktop-entry action tests;
+- strict x86_64 Werror build and all 36 Meson tests;
+- x86_64 ASan/UBSan build and all 36 Meson tests;
+- the release, installer, manifest, desktop-entry, and AUR metadata contract
+  tests;
+- optimized x86_64 archive validation remains required before release;
+- QEMU-backed native AArch64 Werror build and archive validation remain required
+  for the updated shortcut-provider payload before release;
 - local development install through `./dev dev-install --yes`;
 - `git diff --check`;
 - focused clipboard lifecycle and replacement tests;
@@ -136,6 +152,30 @@ The current source state has passed:
 
 Live Niri validation:
 
+- `./dev dev-install --yes` installed the current payload, selected the managed
+  Niri fallback after the GlobalShortcuts portal path was not viable, and left no
+  provider autostart entry behind.
+- `niri validate` accepted the updated config, and `niri msg action
+  load-config-file` reloaded it successfully.
+- A real compositor-level `Ctrl+Shift+4` event injected through `ydotool` invoked
+  the managed binding and created
+  `/home/fgonz/Pictures/shaula/20260719-234615.png` at 19:46:15 local time.
+- At 20:01:21, more than 15 minutes after that capture completed, the NVIDIA
+  driver began reporting Xids 56 and 11 against Niri. The sequence progressed
+  through a GSP timeout to Xid 79 (`GPU has fallen off the bus`) at 20:03:23.
+  The NVIDIA-owned HDMI output froze while the AMD-owned laptop panel and Niri
+  IPC remained responsive; `nvidia-smi` could no longer obtain a device handle.
+  Two later Shaula scopes started only after the initial Xids, and neither
+  produced a capture file. The same Smithay `glTexSubImage2D` bounds error had
+  also occurred twice earlier in the session. The evidence is preserved without
+  assigning causation in
+  `diagnostics/niri-nvidia-freeze-2026-07-19T2001-0400/`.
+- The user session also had an unrelated FortiClient tray crash loop every three
+  seconds, adding load and journal noise during validation.
+- Repeated `shaula setup --shortcuts --no-integrations` left the Niri config hash
+  unchanged.
+- `shaula launch` opened the universal GTK capture menu independently from the
+  persisted shortcut choice.
 - `./dev all` completed a real 1920x1080 `grim-wlroots` all-screens capture with
   clipboard publication, no partial result, no warnings, and no stderr
   diagnostics.
