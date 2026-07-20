@@ -46,9 +46,7 @@ static int shortcut_result_error(const char *command, ShaulaShortcutResult resul
                                  const char *error_text) {
   const char *code = status->error_code;
   if (code == NULL || code[0] == '\0') {
-    if (result == SHAULA_SHORTCUT_RESULT_CONFLICT)
-      code = "ERR_NIRI_KEYBIND_CONFLICT";
-    else if (result == SHAULA_SHORTCUT_RESULT_PROVIDER_FAILED)
+    if (result == SHAULA_SHORTCUT_RESULT_PROVIDER_FAILED)
       code = "ERR_SHORTCUT_PROVIDER_UNAVAILABLE";
     else if (result == SHAULA_SHORTCUT_RESULT_CONFIG_INVALID)
       code = "ERR_SHORTCUT_CONFIGURATION_INVALID";
@@ -81,8 +79,6 @@ int shaula_shortcuts_command_run(int argc, char **argv) {
   for (int i = 3; i < argc; i++) {
     if (g_str_equal(argv[i], "--json"))
       json = TRUE;
-    else if (g_str_equal(argv[i], "--force"))
-      options.force = TRUE;
     else if (g_str_equal(argv[i], "--dry-run"))
       options.dry_run = TRUE;
     else

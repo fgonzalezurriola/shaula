@@ -33,11 +33,10 @@ The `./dev` live commands export build-tree helper paths explicitly, so they
 exercise the current checkout rather than relying on a previous local install.
 
 The generic shortcut module is shared by Settings, `shaula setup`, and explicit
-`shaula shortcuts` commands. It prefers a verified XDG GlobalShortcuts portal
-session, preserves desktop approval/remapping/rejection, and falls back to the
-existing managed Niri keybindings only when the portal is technically not viable.
-Unsupported shortcut setup is non-fatal because desktop launcher actions invoke
-capture commands directly.
+`shaula shortcuts` commands. It uses only a verified XDG GlobalShortcuts portal
+session and preserves desktop approval, remapping, and rejection. Shaula never
+modifies compositor keybindings. Unsupported shortcut setup is non-fatal because
+the universal menu and desktop launcher actions invoke capture commands directly.
 
 Shortcut choice state remains separate from installed shortcut state, but it no
 longer blocks application launch. `shaula launch` always opens the compact GTK
@@ -126,6 +125,17 @@ Manual AUR publish is replaced by the release pipeline (see
 `docs/releasing.md`). Checked-in PKGBUILDs intentionally retain `SKIP`; the
 workflow replaces those markers only in writable AUR clones before pushing.
 
+## Developer workflow
+
+- `./dev` now imports the active graphical session without forcing Niri or a
+  hard-coded Wayland display, so runtime compositor detection is exercised.
+- Build-tree runs resolve the shortcut provider and graphical helpers from the
+  current checkout instead of accidentally mixing in an older local install.
+- `./dev menu` opens the universal launcher and `./dev shortcuts` reports the
+  current portal status; an explicit shortcut action can be appended.
+- `./dev doctor` reports Niri state as optional because the universal Wayland
+  workflow does not require Niri.
+
 ## Verified release state
 
 The current source state has passed:
@@ -152,14 +162,13 @@ The current source state has passed:
 
 Live Niri validation:
 
-- `./dev dev-install --yes` installed the current payload, selected the managed
-  Niri fallback after the GlobalShortcuts portal path was not viable, and left no
-  provider autostart entry behind.
+- The previous managed Niri shortcut block was removed symmetrically with a
+  backup before the compositor-specific shortcut backend was deleted.
+- A real portal enable attempt on the current Niri session returned
+  `unsupported`, removed provider autostart state, and Settings displayed the
+  visible XDG GlobalShortcuts warning with the universal menu fallback.
 - `niri validate` accepted the updated config, and `niri msg action
   load-config-file` reloaded it successfully.
-- A real compositor-level `Ctrl+Shift+4` event injected through `ydotool` invoked
-  the managed binding and created
-  `/home/fgonz/Pictures/shaula/20260719-234615.png` at 19:46:15 local time.
 - At 20:01:21, more than 15 minutes after that capture completed, the NVIDIA
   driver began reporting Xids 56 and 11 against Niri. The sequence progressed
   through a GSP timeout to Xid 79 (`GPU has fallen off the bus`) at 20:03:23.

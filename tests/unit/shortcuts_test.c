@@ -22,7 +22,7 @@ static gboolean remove_tree(const char *path) {
   return g_rmdir(path) == 0;
 }
 
-static void reset_environment(const char *portal_state, gboolean with_niri) {
+static void reset_environment(const char *portal_state) {
   if (test_root != NULL) {
     g_assert_true(remove_tree(test_root));
     g_clear_pointer(&test_root, g_free);
@@ -37,18 +37,10 @@ static void reset_environment(const char *portal_state, gboolean with_niri) {
   g_setenv("XDG_CONFIG_HOME", config, TRUE);
   g_setenv("XDG_STATE_HOME", state, TRUE);
   g_setenv("SHAULA_SHORTCUTS_TEST_PORTAL", portal_state, TRUE);
-  g_unsetenv("NIRI_CONFIG");
-  if (with_niri) {
-    g_autofree char *niri_dir = g_build_filename(config, "niri", NULL);
-    g_autofree char *niri_config =
-        g_build_filename(niri_dir, "config.kdl", NULL);
-    g_assert_cmpint(g_mkdir_with_parents(niri_dir, 0700), ==, 0);
-    g_assert_true(g_file_set_contents(niri_config, "// test\n", -1, NULL));
-  }
 }
 
 static void test_portal_selection_and_decline(void) {
-  reset_environment("active", FALSE);
+  reset_environment("active");
   ShaulaShortcutStatus status;
   shaula_shortcut_status_init(&status);
   ShaulaShortcutOptions options = {.remember_choice = TRUE};
@@ -74,67 +66,8 @@ static void test_portal_selection_and_decline(void) {
   shaula_shortcut_status_clear(&status);
 }
 
-static void test_niri_fallback_idempotence(void) {
-  reset_environment("unsupported", TRUE);
-  ShaulaShortcutStatus status;
-  shaula_shortcut_status_init(&status);
-  ShaulaShortcutOptions options = {.remember_choice = TRUE};
-  g_assert_cmpint(shaula_shortcuts_enable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_OK);
-  g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_NIRI);
-  g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_ACTIVE);
-
-  g_autofree char *config =
-      g_build_filename(test_root, "config", "niri", "config.kdl", NULL);
-  g_autofree char *first = NULL;
-  g_assert_true(g_file_get_contents(config, &first, NULL, NULL));
-  g_assert_nonnull(g_strstr_len(first, -1, "BEGIN SHAULA MANAGED KEYBINDS"));
-
-  g_assert_cmpint(shaula_shortcuts_enable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_OK);
-  g_autofree char *second = NULL;
-  g_assert_true(g_file_get_contents(config, &second, NULL, NULL));
-  g_assert_cmpstr(first, ==, second);
-
-  g_assert_cmpint(shaula_shortcuts_disable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_OK);
-  g_autofree char *removed = NULL;
-  g_assert_true(g_file_get_contents(config, &removed, NULL, NULL));
-  g_assert_null(g_strstr_len(removed, -1, "BEGIN SHAULA MANAGED KEYBINDS"));
-  g_assert_cmpint(shaula_shortcuts_disable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_OK);
-  shaula_shortcut_status_clear(&status);
-}
-
-static void test_niri_conflict_and_force(void) {
-  reset_environment("unsupported", TRUE);
-  g_autofree char *config =
-      g_build_filename(test_root, "config", "niri", "config.kdl", NULL);
-  g_assert_true(g_file_set_contents(
-      config, "binds {\n CTRL+Shift+1 { spawn \"other\"; }\n}\n", -1,
-      NULL));
-  ShaulaShortcutStatus status;
-  shaula_shortcut_status_init(&status);
-  ShaulaShortcutOptions options = {.remember_choice = TRUE};
-  g_assert_cmpint(shaula_shortcuts_enable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_CONFLICT);
-  g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_CONFLICT);
-  g_assert_cmpint(shaula_shortcuts_repair(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_CONFLICT);
-  g_autofree char *conflicted = NULL;
-  g_assert_true(g_file_get_contents(config, &conflicted, NULL, NULL));
-  g_assert_null(
-      g_strstr_len(conflicted, -1, "BEGIN SHAULA MANAGED KEYBINDS"));
-  options.force = TRUE;
-  g_assert_cmpint(shaula_shortcuts_enable(&options, &status, NULL), ==,
-                  SHAULA_SHORTCUT_RESULT_OK);
-  g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_NIRI);
-  g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_ACTIVE);
-  shaula_shortcut_status_clear(&status);
-}
-
 static void test_invalid_setup_state(void) {
-  reset_environment("unsupported", FALSE);
+  reset_environment("unsupported");
   g_autofree char *directory =
       g_build_filename(test_root, "config", "shaula", NULL);
   g_autofree char *path =
@@ -155,7 +88,7 @@ static void test_invalid_setup_state(void) {
 }
 
 static void test_unsupported_and_first_run(void) {
-  reset_environment("unsupported", FALSE);
+  reset_environment("unsupported");
   ShaulaShortcutStatus status;
   shaula_shortcut_status_init(&status);
   g_assert_cmpint(shaula_shortcuts_query(&status, NULL), ==,
@@ -183,10 +116,6 @@ int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
   g_test_add_func("/shortcuts/portal-selection-decline",
                   test_portal_selection_and_decline);
-  g_test_add_func("/shortcuts/niri-fallback-idempotence",
-                  test_niri_fallback_idempotence);
-  g_test_add_func("/shortcuts/niri-conflict-force",
-                  test_niri_conflict_and_force);
   g_test_add_func("/shortcuts/invalid-setup-state",
                   test_invalid_setup_state);
   g_test_add_func("/shortcuts/unsupported-first-run",

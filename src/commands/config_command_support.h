@@ -4,6 +4,5 @@
 #include "config/config.h"
 
 char *shaula_config_command_preview_rule(const ShaulaConfig *config);
-char *shaula_config_command_render_keybinds(void);
 
 #endif

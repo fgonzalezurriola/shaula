@@ -8,7 +8,6 @@ INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
 INSTALL_APP_ICONS=1
 INSTALL_SHORTCUTS=""
-INSTALL_NIRI_KEYBINDS=0
 INSTALL_NOCTALIA=0
 UNINSTALL=0
 INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
@@ -37,7 +36,6 @@ Options:
   --no-icon           Skip application icons; Preview runtime icons remain required.
   --shortcuts         Enable recommended Ctrl+Shift+1–4 shortcuts.
   --no-shortcuts      Remember that automatic shortcuts are declined.
-  --niri-keybinds     Legacy alias to enable shortcuts and Niri integration.
   --noctalia          Explicitly install detected Noctalia integration.
   --uninstall         Remove files installed by this script and integrations.
 
@@ -276,9 +274,6 @@ run_setup() {
   elif [ "$INSTALL_SHORTCUTS" = "disable" ]; then
     args="${args} --no-shortcuts"
   fi
-  if [ "$INSTALL_NIRI_KEYBINDS" -eq 1 ]; then
-    args="${args} --niri --niri-keybinds"
-  fi
   if [ "$INSTALL_NOCTALIA" -eq 1 ]; then
     args="${args} --noctalia"
   fi
@@ -403,14 +398,7 @@ while [ "$#" -gt 0 ]; do
     --no-shortcuts)
       [ "$INSTALL_SHORTCUTS" != "enable" ] ||
         fail "--no-shortcuts conflicts with --shortcuts"
-      [ "$INSTALL_NIRI_KEYBINDS" -eq 0 ] ||
-        fail "--no-shortcuts conflicts with --niri-keybinds"
       INSTALL_SHORTCUTS=disable
-      ;;
-    --niri-keybinds)
-      [ "$INSTALL_SHORTCUTS" != "disable" ] ||
-        fail "--niri-keybinds conflicts with --no-shortcuts"
-      INSTALL_NIRI_KEYBINDS=1
       ;;
     --noctalia) INSTALL_NOCTALIA=1 ;;
     --uninstall) UNINSTALL=1 ;;

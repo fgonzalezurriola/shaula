@@ -1,6 +1,5 @@
 #include "config_command_support.h"
 
-#include "config/niri_managed.h"
 #include "support.h"
 
 #include <glib.h>
@@ -38,8 +37,4 @@ char *shaula_config_command_preview_rule(const ShaulaConfig *config) {
         config->floating_relative_to);
   g_string_append(rule, "}\n");
   return g_string_free(rule, FALSE);
-}
-
-char *shaula_config_command_render_keybinds(void) {
-  return shaula_niri_keybinds_render();
 }

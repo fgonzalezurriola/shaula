@@ -7,7 +7,7 @@
 
 Shaula's capture, Preview, Settings, and CLI commands are intentionally short-lived. The XDG Desktop Portal GlobalShortcuts API is session-based, however: activations are delivered through `Activated` and `Deactivated` signals to the live process that owns the shortcut session. Merely finding the D-Bus interface does not prove that a desktop can create a session, bind shortcuts, return approved mappings, or deliver activations.
 
-Users also need one graphical and terminal-facing shortcut choice rather than compositor-specific setup knowledge. Niri's managed keybinding implementation already provides conflict detection, managed markers, backups, atomic replacement, and symmetrical removal, so it remains valuable as a fallback when the portal path is technically unavailable.
+Users also need one graphical and terminal-facing shortcut choice rather than compositor-specific setup knowledge. A compositor-specific fallback would make behavior inconsistent across Wayland desktops and create pressure to maintain one adapter per compositor. The universal graphical menu provides a reliable fallback without modifying compositor configuration.
 
 The official API contract is the XDG Desktop Portal GlobalShortcuts documentation: <https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html>.
 
@@ -20,9 +20,9 @@ Backend selection is portal-first:
 1. The portal adapter starts `shaula-shortcut-provider` only after explicit user enablement.
 2. The provider reads the portal version, completes `CreateSession`, subscribes to activation, deactivation, shortcut-change, and session-close signals, calls `BindShortcuts`, and verifies the approved mappings with `ListShortcuts`.
 3. The backend is reported active only when all four logical actions are returned and activation delivery is subscribed. Returned `trigger_description` values are authoritative; preferred triggers are requests, not claims.
-4. Desktop cancellation or rejection is preserved as permission-denied state. It does not silently install Niri bindings.
-5. Technical portal non-viability—unsupported API, unavailable provider, invalid session behavior, or unusable configuration—allows the manager to try the managed Niri adapter.
-6. When neither adapter is viable, setup succeeds with an unsupported shortcut status. Desktop launcher actions remain available.
+4. Desktop cancellation or rejection is preserved as permission-denied state.
+5. Technical portal non-viability produces a visible unsupported status and removes provider autostart state.
+6. The universal Shaula menu and desktop launcher actions remain available without global shortcuts.
 
 The four logical actions are quick capture, area capture, fullscreen capture, and all-screens capture. Their requested preferred triggers are `Ctrl+Shift+1` through `Ctrl+Shift+4`.
 
@@ -51,12 +51,12 @@ The provider executable itself is immutable package payload installed by Meson, 
 
 ## Failure and status contracts
 
-The generic status model distinguishes disabled, active, permission pending, permission denied, conflict, unsupported, provider unavailable, reconnecting/session lost, and invalid configuration. Stable failures map to `ERR_SHORTCUTS_UNSUPPORTED`, `ERR_SHORTCUT_PERMISSION_DENIED`, `ERR_SHORTCUT_PROVIDER_UNAVAILABLE`, `ERR_SHORTCUT_SESSION_LOST`, and `ERR_SHORTCUT_CONFIGURATION_INVALID`; existing Niri conflicts continue to use `ERR_NIRI_KEYBIND_CONFLICT`.
+The generic status model distinguishes disabled, active, permission pending, permission denied, unsupported, provider unavailable, reconnecting/session lost, and invalid configuration. Stable failures map to `ERR_SHORTCUTS_UNSUPPORTED`, `ERR_SHORTCUT_PERMISSION_DENIED`, `ERR_SHORTCUT_PROVIDER_UNAVAILABLE`, `ERR_SHORTCUT_SESSION_LOST`, and `ERR_SHORTCUT_CONFIGURATION_INVALID`.
 
-Enable, disable, repair, and repeated operations are idempotent. Niri removal remains symmetrical and preserves its existing backup and managed-block rules. Explicit decline is persisted separately from installed state so first-run behavior does not repeatedly prompt after a user choice.
+Enable, disable, repair, and repeated operations are idempotent. Explicit decline is persisted separately from installed state.
 
 ## Consequences
 
 Shaula gains one narrowly scoped resident process only for approved portal shortcuts. Graphical capture and desktop actions remain independent of the provider, so provider or portal failure does not prevent ordinary use.
 
-Portal support is claimed only where the complete session, binding, listing, and activation contract works. Automated seams validate protocol state and dispatch behavior, while live Niri validation covers the managed fallback. GNOME and KDE interactive approval and activation remain unverified until tested on those desktops.
+Portal support is claimed only where the complete session, binding, listing, and activation contract works. Automated seams validate protocol state and dispatch behavior. GNOME, KDE Plasma, and other portal implementations still require live approval and activation checks on their respective desktops.

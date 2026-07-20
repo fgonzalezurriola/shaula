@@ -31,8 +31,8 @@ own an approved GlobalShortcuts portal session.
 - Graphical launch always opens the universal capture menu and never waits for
   shortcut setup or desktop support.
 - One backend-independent shortcut choice requests `Ctrl+Shift+1–4`. Shaula
-  prefers a verified XDG GlobalShortcuts portal session and falls back to managed
-  Niri keybindings only when the portal path is technically not viable.
+  uses a verified XDG GlobalShortcuts portal session and reports non-viability
+  without modifying compositor keybindings.
 - `shaula-shortcut-provider` owns the optional live portal session, prevents
   duplicate instances and captures, reconnects after session loss, dispatches
   capture commands without a shell, and is started through user-owned XDG
@@ -73,13 +73,13 @@ is a required runtime dependency. AUR publication used the dedicated deploy key
 
 Automated and local release checks cover the C build, unit and contract tests,
 clipboard lifecycle cleanup, multi-process replacement ordering, generic
-shortcut backend selection, Niri fallback/conflicts, shortcut-choice persistence,
+portal shortcut lifecycle, unsupported fallback, shortcut-choice persistence,
 provider duplicate/reconnect contracts, Settings mapping, desktop actions,
 staged release archives, installer behavior, and AUR payload consistency.
 
 Live Niri checks remain the primary graphical release environment. The current
 checkout was installed with `./dev dev-install --yes`; portal-first selection
-fell back to managed Niri bindings without leaving provider autostart state.
+reported the unavailable portal without leaving provider autostart state.
 `niri validate` and live config reload succeeded, repeated shortcut enablement
 was byte-for-byte idempotent, and `shaula launch` opened the universal capture menu,
 and a compositor-level `Ctrl+Shift+4` event injected through `ydotool` created

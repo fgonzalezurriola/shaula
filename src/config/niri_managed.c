@@ -1,7 +1,5 @@
 #include "niri_managed.h"
 
-#include "runtime/helper_resolution.h"
-
 #include <glib/gstdio.h>
 #include <string.h>
 #include <time.h>
@@ -118,50 +116,6 @@ gboolean install_managed_block(const char *path_override,
   return TRUE;
 }
 
-char *shaula_niri_keybinds_render(void) {
-  g_autofree char *binary = shaula_executable_current_path();
-  const char *path = binary != NULL ? binary : "shaula";
-  return g_strdup_printf(
-      "binds {\n"
-      "    CTRL+Shift+1 repeat=false hotkey-overlay-title=\"Shaula: Quick Capture\" {\n        spawn \"%s\" \"capture\" \"quick\" \"--json\";\n    }\n\n"
-      "    CTRL+Shift+2 repeat=false hotkey-overlay-title=\"Shaula: Capture Area\" {\n        spawn \"%s\" \"capture\" \"area\" \"--json\";\n    }\n\n"
-      "    CTRL+Shift+3 repeat=false hotkey-overlay-title=\"Shaula: Capture Fullscreen\" {\n        spawn \"%s\" \"capture\" \"fullscreen\" \"--json\" \"--save\";\n    }\n\n"
-      "    CTRL+Shift+4 repeat=false hotkey-overlay-title=\"Shaula: Capture All Screens\" {\n        spawn \"%s\" \"capture\" \"all-screens\" \"--json\" \"--save\";\n    }\n"
-      "}\n",
-      path, path, path, path);
-}
-
-GPtrArray *niri_keybind_conflicts(const char *path) {
-  GPtrArray *conflicts = g_ptr_array_new_with_free_func(g_free);
-  g_autofree char *contents = NULL;
-  if (path == NULL || !g_file_get_contents(path, &contents, NULL, NULL))
-    return conflicts;
-  gboolean managed = FALSE;
-  g_auto(GStrv) lines = g_strsplit(contents, "\n", -1);
-  for (guint i = 0; lines[i] != NULL; i++) {
-    char *line = g_strstrip(lines[i]);
-    if (strstr(line, "// BEGIN SHAULA MANAGED KEYBINDS") != NULL) {
-      managed = TRUE;
-      continue;
-    }
-    if (strstr(line, "// END SHAULA MANAGED KEYBINDS") != NULL) {
-      managed = FALSE;
-      continue;
-    }
-    if (managed || g_str_has_prefix(line, "//"))
-      continue;
-    for (guint key = 1; key <= 4; key++) {
-      g_autofree char *token = g_strdup_printf("CTRL+Shift+%u", key);
-      if (strstr(line, token) != NULL) {
-        g_ptr_array_add(conflicts,
-                        g_strdup_printf("line %u: %s", i + 1, line));
-        break;
-      }
-    }
-  }
-  return conflicts;
-}
-
 gboolean remove_managed_block(const char *path_override,
                               const char *begin_marker,
                               const char *end_marker, gboolean dry_run,
@@ -210,14 +164,3 @@ gboolean remove_managed_block(const char *path_override,
   }
   return TRUE;
 }
-
-gboolean remove_managed_keybinds(const char *path_override,
-                                 gboolean dry_run,
-                                 ManagedBlockResult *result,
-                                 gboolean *invalid) {
-  return remove_managed_block(path_override,
-                              "// BEGIN SHAULA MANAGED KEYBINDS",
-                              "// END SHAULA MANAGED KEYBINDS", dry_run,
-                              result, invalid);
-}
-

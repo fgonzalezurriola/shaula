@@ -31,14 +31,16 @@ Core:
 App:
   preflight      Build, then run preflight + capabilities
   dev-install    Build current checkout, install it locally, and reload Noctalia
- capture Build, then run live capture area --json
- frozen Build, then run frozen capture area --json
- fullscreen Build, then run capture fullscreen --json --copy
- all-screens Build, then run capture all-screens --json --copy
- all Build, then run capture all-screens --json --copy
-  overlay        Build, then run shaula-overlay directly
-  stage          Build, create config, set preview mode, and install Niri rule
+  menu           Build, then open the universal Shaula menu
   settings       Build, then open native settings
+  shortcuts      Build, then show shortcut status (or pass an action)
+  capture        Build, then run live capture area --json
+  frozen         Build, then run frozen capture area --json
+  fullscreen     Build, then run capture fullscreen --json --copy
+  all-screens    Build, then run capture all-screens --json --copy
+  all            Alias for all-screens
+  overlay        Build, then run shaula-overlay directly
+  stage          Build, set preview mode, and install the optional Niri rule
   noctalia-load  Build, install local Noctalia widget, and restart Noctalia
   context        Copy context snapshot, capture-mode note, last 3 commits, and diff to clipboard
   config         Build, then show resolved Shaula config
@@ -55,6 +57,9 @@ Pass-through:
 
 Examples:
   ./dev dev-install --yes
+  ./dev menu
+  ./dev shortcuts
+  ./dev shortcuts enable --json
   ./dev capture
   ./dev stage tiling
   ./dev stage floating
@@ -67,8 +72,9 @@ have() {
 }
 
 shaula_env() {
-  export SHAULA_COMPOSITOR="${SHAULA_COMPOSITOR:-niri}"
-  export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+  # Commands launched from a terminal or service must use the active graphical
+  # session; compositor detection remains Shaula's responsibility.
+  import_graphical_session_environment
   if [[ -z "${SHAULA_OVERLAY_HELPER_BIN:-}" &&
         -x "${BUILD_DIR}/src/overlay/shaula-overlay" ]]; then
     export SHAULA_OVERLAY_HELPER_BIN="${BUILD_DIR}/src/overlay/shaula-overlay"
@@ -96,6 +102,10 @@ shaula_env() {
   if [[ -z "${SHAULA_CLIPBOARD_PROVIDER_BIN:-}" &&
         -x "${BUILD_DIR}/src/clipboard/shaula-clipboard-provider" ]]; then
     export SHAULA_CLIPBOARD_PROVIDER_BIN="${BUILD_DIR}/src/clipboard/shaula-clipboard-provider"
+  fi
+  if [[ -z "${SHAULA_SHORTCUT_PROVIDER:-}" &&
+        -x "${BUILD_DIR}/src/shortcuts/shaula-shortcut-provider" ]]; then
+    export SHAULA_SHORTCUT_PROVIDER="${BUILD_DIR}/src/shortcuts/shaula-shortcut-provider"
   fi
   if [[ -z "${NIRI_SOCKET:-}" ]]; then
     local candidate
@@ -165,8 +175,9 @@ doctor() {
   shaula_env
   echo "env SHAULA_COMPOSITOR=${SHAULA_COMPOSITOR:-}"
   echo "env WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}"
-  echo "env NIRI_SOCKET=${NIRI_SOCKET:-missing}"
-  [[ -n "${NIRI_SOCKET:-}" ]] || fail=1
+  echo "env XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-}"
+  echo "optional NIRI_SOCKET=${NIRI_SOCKET:-missing}"
+  echo "dev SHAULA_SHORTCUT_PROVIDER=${SHAULA_SHORTCUT_PROVIDER:-missing}"
 
   return "${fail}"
 }
@@ -580,19 +591,31 @@ release-arm)
   dev-install)
     install_local "$@"
     ;;
-capture)
-	run_shaula capture area --json "$@"
-	;;
-frozen)
-	run_shaula capture area --json --frozen-region "$@"
-	;;
-fullscreen)
-	run_shaula capture fullscreen --json --copy "$@"
-	;;
-all-screens)
+  menu|launch)
+    run_shaula launch "$@"
+    ;;
+  settings)
+    run_shaula settings "$@"
+    ;;
+  shortcuts)
+    if [[ $# -eq 0 ]]; then
+      set -- status --json
+    fi
+    run_shaula shortcuts "$@"
+    ;;
+  capture)
+    run_shaula capture area --json "$@"
+    ;;
+  frozen)
+    run_shaula capture area --json --frozen-region "$@"
+    ;;
+  fullscreen)
+    run_shaula capture fullscreen --json --copy "$@"
+    ;;
+  all-screens)
     run_shaula capture all-screens --json --copy "$@"
     ;;
-all)
+  all)
     run_shaula capture all-screens --json --copy "$@"
     ;;
   overlay)
@@ -602,9 +625,6 @@ all)
     ;;
   stage)
     stage "$@"
-    ;;
-  settings)
-    run_shaula settings "$@"
     ;;
   noctalia-load)
     noctalia_load

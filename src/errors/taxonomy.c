@@ -114,10 +114,6 @@ static const ShaulaErrorSpec error_specs[] = {
     SHAULA_ERROR_SPEC("ERR_CONFIG_INVALID", "invalid configuration file", 0,
                       SHAULA_FAILURE_CLASS_CLI,
                       SHAULA_RECOVERY_ACTION_FAIL_FAST, 61),
-    SHAULA_ERROR_SPEC("ERR_NIRI_KEYBIND_CONFLICT",
-                      "existing Niri keybind conflict detected", 0,
-                      SHAULA_FAILURE_CLASS_CLI,
-                      SHAULA_RECOVERY_ACTION_FAIL_FAST, 62),
     SHAULA_ERROR_SPEC("ERR_SHORTCUTS_UNSUPPORTED",
                       "automatic global shortcuts are unsupported", 0,
                       SHAULA_FAILURE_CLASS_BACKEND,
@@ -158,7 +154,7 @@ static const ShaulaErrorSpan recovery_action_tokens[] = {
     SHAULA_LITERAL_SPAN("degrade_to_portal"),
 };
 
-_Static_assert(sizeof(error_specs) / sizeof(error_specs[0]) == 33,
+_Static_assert(sizeof(error_specs) / sizeof(error_specs[0]) == 32,
                "canonical public error inventory changed");
 _Static_assert(sizeof(failure_class_tokens) /
                        sizeof(failure_class_tokens[0]) ==

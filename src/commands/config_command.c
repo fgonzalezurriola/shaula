@@ -9,22 +9,6 @@
 #include <glib.h>
 #include <string.h>
 
-static char *conflicts_json(const GPtrArray *conflicts) {
-  GString *json = g_string_new("[");
-  for (guint i = 0; i < conflicts->len; i++) {
-    g_autofree char *context =
-        shaula_command_json_string(g_ptr_array_index((GPtrArray *)conflicts, i));
-    if (i > 0)
-      g_string_append_c(json, ',');
-    g_string_append_printf(json,
-                           "{\"key\":\"CTRL+Shift\",\"action\":"
-                           "\"existing binding\",\"context\":%s}",
-                           context);
-  }
-  g_string_append_c(json, ']');
-  return g_string_free(json, FALSE);
-}
-
 static int write_managed_result(const char *command,
                                 const ManagedBlockResult *result,
                                 gboolean dry_run) {
@@ -47,8 +31,8 @@ int shaula_config_command_run(int argc, char **argv) {
   if (argc < 4)
     return shaula_command_write_error(
         "config", "ERR_CLI_USAGE",
-        "usage: shaula config <show|init|save|niri-window-rule|"
-        "niri-install|niri-keybinds|niri-keybinds-install> --json",
+        "usage: shaula config <show|init|save|niri-window-rule|niri-install> "
+        "--json",
         "{}");
 
   const char *subcommand = argv[2];
@@ -192,96 +176,14 @@ int shaula_config_command_run(int argc, char **argv) {
     return shaula_command_write_success(command, result, "[]");
   }
 
-  if (g_str_equal(subcommand, "niri-keybinds")) {
-    g_autofree char *keybinds = shaula_config_command_render_keybinds();
-    g_autofree char *kdl = shaula_command_json_string(keybinds);
-    g_autofree char *result = g_strdup_printf("{\"kdl\":%s}", kdl);
-    return shaula_command_write_success(command, result, "[]");
-  }
-
-  if (g_str_equal(subcommand, "niri-keybinds-status")) {
-    g_autofree char *niri_path = niri_config_path(path_override);
-    gboolean detected =
-        niri_path != NULL && g_file_test(niri_path, G_FILE_TEST_IS_REGULAR);
-    g_autofree char *contents = NULL;
-    if (detected)
-      (void)g_file_get_contents(niri_path, &contents, NULL, NULL);
-    gboolean installed =
-        contents != NULL &&
-        strstr(contents, "// BEGIN SHAULA MANAGED KEYBINDS") != NULL &&
-        strstr(contents, "// END SHAULA MANAGED KEYBINDS") != NULL;
-    g_autoptr(GPtrArray) conflicts = niri_keybind_conflicts(niri_path);
-    g_autofree char *conflict_list = conflicts_json(conflicts);
-    g_autofree char *path_json =
-        detected ? shaula_command_json_string(niri_path) : g_strdup("null");
-    g_autofree char *result = g_strdup_printf(
-        "{\"niri_detected\":%s,\"config_path\":%s,\"installed\":%s,"
-        "\"conflicts\":%s}",
-        shaula_command_json_bool(detected), path_json,
-        shaula_command_json_bool(installed), conflict_list);
-    return shaula_command_write_success(command, result, "[]");
-  }
-
-  if (g_str_equal(subcommand, "niri-keybinds-remove")) {
-    ManagedBlockResult remove_result = {0};
-    gboolean invalid = FALSE;
-    if (!remove_managed_keybinds(path_override, dry_run, &remove_result,
-                                 &invalid)) {
-      managed_block_result_clear(&remove_result);
-      return shaula_command_write_error(
-          command, invalid ? "ERR_CONFIG_INVALID" : "ERR_CONFIG_UNREADABLE",
-          invalid ? "invalid Niri configuration managed block"
-                  : "Niri configuration path could not be resolved",
-          "{}");
-    }
-    g_autofree char *path_json =
-        shaula_command_json_string(remove_result.path);
-    g_autofree char *backup_json =
-        remove_result.backup_path != NULL
-            ? shaula_command_json_string(remove_result.backup_path)
-            : g_strdup("null");
-    g_autofree char *result = g_strdup_printf(
-        "{\"path\":%s,\"backup_path\":%s,\"removed\":%s,"
-        "\"changed\":%s,\"dry_run\":%s}",
-        path_json, backup_json,
-        shaula_command_json_bool(remove_result.changed),
-        shaula_command_json_bool(remove_result.changed),
-        shaula_command_json_bool(dry_run));
-    int status = shaula_command_write_success(command, result, "[]");
-    managed_block_result_clear(&remove_result);
-    return status;
-  }
-
-  if (g_str_equal(subcommand, "niri-install") ||
-      g_str_equal(subcommand, "niri-keybinds-install")) {
-    g_autofree char *payload =
-        g_str_equal(subcommand, "niri-install")
-            ? shaula_config_command_preview_rule(&config)
-            : shaula_config_command_render_keybinds();
-    const char *begin = g_str_equal(subcommand, "niri-install")
-                            ? "// BEGIN SHAULA PREVIEW WINDOW RULE"
-                            : "// BEGIN SHAULA MANAGED KEYBINDS";
-    const char *end = g_str_equal(subcommand, "niri-install")
-                          ? "// END SHAULA PREVIEW WINDOW RULE"
-                          : "// END SHAULA MANAGED KEYBINDS";
-    if (g_str_equal(subcommand, "niri-keybinds-install") && !force) {
-      g_autofree char *niri_path = niri_config_path(path_override);
-      g_autoptr(GPtrArray) conflicts = niri_keybind_conflicts(niri_path);
-      if (conflicts->len > 0) {
-        g_autofree char *list = conflicts_json(conflicts);
-        g_autofree char *details =
-            g_strdup_printf("{\"conflicts\":%s}", list);
-        return shaula_command_write_error(
-            command, "ERR_NIRI_KEYBIND_CONFLICT",
-            "existing keybind conflicts detected; use --force to overwrite",
-            details);
-      }
-    }
-
+  if (g_str_equal(subcommand, "niri-install")) {
+    g_autofree char *payload = shaula_config_command_preview_rule(&config);
     ManagedBlockResult install_result = {0};
     gboolean invalid = FALSE;
-    if (!install_managed_block(path_override, begin, end, payload, dry_run,
-                               &install_result, &invalid)) {
+    if (!install_managed_block(
+            path_override, "// BEGIN SHAULA PREVIEW WINDOW RULE",
+            "// END SHAULA PREVIEW WINDOW RULE", payload, dry_run,
+            &install_result, &invalid)) {
       managed_block_result_clear(&install_result);
       return shaula_command_write_error(
           command, invalid ? "ERR_CONFIG_INVALID" : "ERR_CONFIG_UNREADABLE",

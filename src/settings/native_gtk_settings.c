@@ -59,6 +59,8 @@ typedef struct {
   GtkWidget *shortcuts_repair_button;
   GtkWidget *shortcuts_recheck_button;
   GtkWidget *shortcuts_menu_button;
+  GtkWidget *shortcuts_warning_box;
+  GtkWidget *shortcuts_warning_label;
   GtkWidget *noctalia_status_label;
   GtkWidget *noctalia_install_button;
   GtkWidget *noctalia_remove_button;
@@ -257,9 +259,33 @@ static gboolean refresh_shortcuts_status(void) {
         state.shortcuts.triggers[3] != NULL ? state.shortcuts.triggers[3]
                                             : "Ctrl+Shift+4");
     gtk_label_set_text(GTK_LABEL(state.shortcuts_detail_label), detail);
+    gtk_widget_set_visible(
+        state.shortcuts_detail_label,
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_ACTIVE ||
+            state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING ||
+            state.shortcuts.state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED ||
+            state.shortcuts.state == SHAULA_SHORTCUT_STATE_RECONNECTING);
+  }
+  if (state.shortcuts_warning_box != NULL) {
+    gboolean unavailable =
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED ||
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE;
+    gtk_widget_set_visible(state.shortcuts_warning_box, unavailable);
+    if (unavailable) {
+      gtk_label_set_text(
+          GTK_LABEL(state.shortcuts_warning_label),
+          "Global shortcuts are unavailable\n"
+          "Your desktop does not provide a working XDG GlobalShortcuts "
+          "portal. Captures still work from Open Shaula Menu.");
+    }
   }
   if (state.shortcuts_enable_button != NULL) {
     gboolean can_enable = shaula_settings_shortcut_can_enable(&state.shortcuts);
+    gtk_button_set_label(
+        GTK_BUTTON(state.shortcuts_enable_button),
+        state.shortcuts.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED
+            ? "Try Again"
+            : "Enable");
     gtk_widget_set_visible(state.shortcuts_enable_button, can_enable);
     gtk_widget_set_sensitive(state.shortcuts_enable_button, can_enable);
   }
@@ -650,6 +676,21 @@ static GtkWidget *build_form(void) {
   gtk_widget_add_css_class(shortcuts_description, "description");
   gtk_box_append(GTK_BOX(shortcuts_card), shortcuts_description);
 
+  state.shortcuts_warning_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+  gtk_widget_add_css_class(state.shortcuts_warning_box, "shortcut-warning");
+  GtkWidget *warning_icon =
+      gtk_image_new_from_icon_name("dialog-warning-symbolic");
+  gtk_widget_set_valign(warning_icon, GTK_ALIGN_START);
+  state.shortcuts_warning_label = gtk_label_new("");
+  gtk_label_set_xalign(GTK_LABEL(state.shortcuts_warning_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(state.shortcuts_warning_label), TRUE);
+  gtk_widget_set_hexpand(state.shortcuts_warning_label, TRUE);
+  gtk_box_append(GTK_BOX(state.shortcuts_warning_box), warning_icon);
+  gtk_box_append(GTK_BOX(state.shortcuts_warning_box),
+                 state.shortcuts_warning_label);
+  gtk_widget_set_visible(state.shortcuts_warning_box, FALSE);
+  gtk_box_append(GTK_BOX(shortcuts_card), state.shortcuts_warning_box);
+
   state.shortcuts_state_label = gtk_label_new("Checking shortcut status…");
   gtk_widget_set_visible(state.shortcuts_state_label, FALSE);
   state.shortcuts_backend_label = gtk_label_new("Status: checking…");
@@ -1010,6 +1051,8 @@ static void install_css(GtkApplication *app, gpointer data) {
       "opacity: 0.7; }"
       ".settings-row { min-height: 38px; }"
       ".description { opacity: 0.72; font-size: 12px; }"
+      ".shortcut-warning { background: rgba(245, 158, 11, 0.12); "
+      "color: #f59e0b; border-left: 3px solid #f59e0b; padding: 12px; }"
       "button.suggested-action { font-weight: bold; }"
       ".error { color: @error_color; font-weight: bold; }");
   gtk_style_context_add_provider_for_display(

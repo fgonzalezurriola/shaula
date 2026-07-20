@@ -67,7 +67,7 @@ static gboolean parse_setup_options(int argc, char **argv,
     if (g_str_equal(argv[i], "--help")) {
       g_print(
           "Usage: shaula setup [--yes] [--shortcuts|--no-shortcuts] "
-          "[--niri] [--noctalia] [--niri-keybinds] [--no-integrations] "
+          "[--niri] [--noctalia] [--no-integrations] "
           "[--no-niri] [--no-noctalia] [--remove] [--dry-run]\n");
       return FALSE;
     }
@@ -93,12 +93,6 @@ static gboolean parse_setup_options(int argc, char **argv,
         return FALSE;
       options->shortcuts = FALSE;
       options->shortcuts_explicit = TRUE;
-    } else if (g_str_equal(argv[i], "--niri-keybinds")) {
-      if (options->shortcuts_explicit && !options->shortcuts)
-        return FALSE;
-      options->shortcuts = TRUE;
-      options->shortcuts_explicit = TRUE;
-      options->niri_explicit = TRUE;
     } else if (g_str_equal(argv[i], "--remove"))
       options->remove = TRUE;
     else if (g_str_equal(argv[i], "--dry-run"))
@@ -149,18 +143,6 @@ static gboolean setup_niri_remove(const SetupOptions *options,
                "Niri preview rule", result.path);
   managed_block_result_clear(&result);
 
-  result = (ManagedBlockResult){0};
-  invalid = FALSE;
-  if (!remove_managed_keybinds(path, options->dry_run, &result, &invalid)) {
-    setup_status("failed", "Niri keybindings removal",
-                 invalid ? "invalid managed markers" : "write failed");
-    managed_block_result_clear(&result);
-    return FALSE;
-  }
-  setup_status(result.changed ? (options->dry_run ? "would-remove" : "removed")
-                              : "unchanged",
-               "Niri keybindings", result.path);
-  managed_block_result_clear(&result);
   return TRUE;
 }
 
@@ -230,7 +212,7 @@ static gboolean setup_shortcuts(const SetupOptions *options,
                  "capture shortcuts", "choice remembered");
   else if (status.state == SHAULA_SHORTCUT_STATE_UNSUPPORTED)
     setup_status("skipped", "capture shortcuts",
-                 "automatic global shortcuts unavailable; desktop actions remain available");
+                 "XDG GlobalShortcuts portal unavailable; Shaula menu remains available");
   else if (status.state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED)
     setup_status("skipped", "capture shortcuts", "desktop permission denied");
   else if (status.state == SHAULA_SHORTCUT_STATE_PERMISSION_PENDING)

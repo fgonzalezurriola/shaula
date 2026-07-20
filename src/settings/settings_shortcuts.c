@@ -8,10 +8,8 @@ const char *shaula_settings_shortcut_state_text(ShaulaShortcutState state) {
     return "Waiting for desktop approval";
   case SHAULA_SHORTCUT_STATE_PERMISSION_DENIED:
     return "Desktop permission denied";
-  case SHAULA_SHORTCUT_STATE_CONFLICT:
-    return "Shortcut conflict";
   case SHAULA_SHORTCUT_STATE_UNSUPPORTED:
-    return "Automatic global shortcuts unavailable";
+    return "XDG GlobalShortcuts portal unavailable";
   case SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE:
     return "Shortcut service unavailable";
   case SHAULA_SHORTCUT_STATE_RECONNECTING:
@@ -28,8 +26,6 @@ const char *shaula_settings_shortcut_backend_text(
   switch (backend) {
   case SHAULA_SHORTCUT_BACKEND_PORTAL:
     return "Desktop shortcut service";
-  case SHAULA_SHORTCUT_BACKEND_NIRI:
-    return "Niri managed keybindings";
   default:
     return "None";
   }
@@ -37,7 +33,6 @@ const char *shaula_settings_shortcut_backend_text(
 
 gboolean shaula_settings_shortcut_state_is_warning(ShaulaShortcutState state) {
   return state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED ||
-         state == SHAULA_SHORTCUT_STATE_CONFLICT ||
          state == SHAULA_SHORTCUT_STATE_UNSUPPORTED ||
          state == SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE ||
          state == SHAULA_SHORTCUT_STATE_RECONNECTING ||
@@ -64,8 +59,10 @@ gboolean shaula_settings_shortcut_can_disable(
 gboolean shaula_settings_shortcut_can_repair(
     const ShaulaShortcutStatus *status) {
   g_return_val_if_fail(status != NULL, FALSE);
-  return status->enabled_requested ||
-         shaula_settings_shortcut_state_is_warning(status->state);
+  return status->state == SHAULA_SHORTCUT_STATE_PERMISSION_DENIED ||
+         status->state == SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE ||
+         status->state == SHAULA_SHORTCUT_STATE_RECONNECTING ||
+         status->state == SHAULA_SHORTCUT_STATE_CONFIG_INVALID;
 }
 
 const char *shaula_settings_shortcut_registration_text(
@@ -76,9 +73,5 @@ const char *shaula_settings_shortcut_registration_text(
                ? (status->provider_running ? "Registered and running"
                                            : "Registered; provider not running")
                : "Not registered";
-  if (status->backend == SHAULA_SHORTCUT_BACKEND_NIRI)
-    return status->state == SHAULA_SHORTCUT_STATE_ACTIVE
-               ? "Managed keybindings installed"
-               : "Managed keybindings not installed";
   return "Not installed";
 }

@@ -14,9 +14,9 @@ It chooses a working capture route automatically:
 Users do not choose a clipboard or global-shortcut backend. Shaula publishes
 copied images and text through the required `wl-copy` runtime so selections remain
 available after the initiating CLI or Preview process exits. The Settings app
-can enable the recommended `Ctrl+Shift+1–4` capture shortcuts with one choice;
-Shaula prefers the desktop GlobalShortcuts portal and falls back to managed Niri
-keybindings when the portal path is not viable.
+can enable the recommended `Ctrl+Shift+1–4` capture shortcuts with one choice.
+Shaula uses the standard XDG GlobalShortcuts portal; when it is unavailable, the
+universal menu remains the graphical fallback.
 
 [![Shaula demo](docs/assets/shaula-demo.gif)](docs/assets/demo-readme.mp4)
 
@@ -112,22 +112,21 @@ shortcut question is backend-independent:
 Enable Ctrl+Shift+1–4 capture shortcuts? [y/N]
 ```
 
-Explicit generic flags are available, and the previous Niri-specific shortcut
-flag remains a compatibility alias:
+Explicit generic flags are available:
 
 ```bash
 shaula setup
 shaula setup --shortcuts
 shaula setup --no-shortcuts
-shaula setup --niri --niri-keybinds
+shaula setup --niri
 shaula setup --noctalia
 shaula setup --remove
 ```
 
 Declining shortcuts is remembered. Shortcut setup and removal are idempotent and
-symmetrical. If neither the portal nor managed Niri path is viable, setup reports
-that automatic global shortcuts are unavailable without making graphical capture
-or desktop actions fail.
+symmetrical. If the XDG GlobalShortcuts portal is unavailable, setup reports the
+optional limitation without making graphical capture, the Shaula menu, or desktop
+actions fail.
 
 ## Development
 
