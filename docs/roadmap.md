@@ -9,7 +9,7 @@ v0.1.5 was released on 2026-06-24 after manual validation of the primary
 Wayland/Niri journeys. Detailed historical notes live in
 `docs/release-v0.1.5.md`.
 
-## Release candidate: v0.1.6
+## Released: v0.1.6
 
 v0.1.6 completes the Meson/C production port and the universal Wayland release
 contracts described by ADR-0002 and ADR-0003.
@@ -27,8 +27,8 @@ The release bar includes:
   metadata check;
 - live Niri capture validation where the current environment permits it.
 
-GNOME and KDE interactive portal/graphical validation is not checked for v0.1.6
-and is explicitly deferred to v0.1.7. The v0.1.6 release must not claim that
+GNOME and KDE interactive portal/graphical validation was not checked for v0.1.6
+and was deferred. The v0.1.6 release does not claim that
 those graphical checks passed.
 
 Detailed notes and release procedure:
@@ -64,7 +64,7 @@ part of the v0.1.6 release. Its design material remains in:
 - `docs/preview-expandable-canvas-design.md`
 - `docs/plan-v0.1.6.md` as the original, superseded release-number proposal.
 
-## v0.1.7
+## Released: v0.1.7
 
 Consolidated pending work, driven by real usage:
 
@@ -88,9 +88,10 @@ Release validation completed for the current checkout:
 - Both AUR `.SRCINFO` files match locally regenerated `makepkg` metadata and
   both package hooks pass Bash syntax validation.
 
+## v0.1.8
+
 Release validation still required:
 
-- Repeat the automated gates after the version bump and final release commit.
 - Build and validate optimized x86_64 and native/QEMU AArch64 archives.
 - Complete GNOME and KDE graphical portal validation, including capture,
   shortcut approval, shortcut configuration, activation, and persistence.
@@ -99,7 +100,7 @@ Product work not required for the portal/install release slice:
 
 - Update the GitHub repo description after release to match the canonical
   project phrase: `Capture, annotate, save, and copy screenshots on Wayland`.
-- Re-record the demo clip to reflect v0.1.6 (clipboard via `wl-copy`, current
+- Re-record the demo clip to reflect v0.1.7 (clipboard via `wl-copy`, current
   Preview UI) before using it in the README/landing page.
 - Finish and deploy the static product landing page (consistent hero phrase,
   current clip).

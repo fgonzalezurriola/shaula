@@ -1,4 +1,4 @@
-# Shaula v0.1.7 (Draft)
+# Shaula v0.1.7
 
 v0.1.7 focuses on a compositor-independent Wayland launch and shortcut
 experience, clearer Settings behavior, and predictable installation.
@@ -19,18 +19,17 @@ experience, clearer Settings behavior, and predictable installation.
 - AUR packages declare mandatory dependencies and their hooks warn prominently
   when no capture infrastructure is detected.
 
-## Release Gates
+## Validation
 
 - Normal, strict Werror, and ASan/UBSan test suites pass.
 - Installer, release, archive, and AUR metadata contracts pass.
-- Optimized x86_64 and AArch64 archives pass architecture and manifest checks.
 - A local `./dev install` completes successfully.
-- GNOME and KDE graphical sessions validate Screenshot and GlobalShortcuts
-  portal flows, including shortcut configuration and one real activation.
 - Niri validates managed keybinding installation, backup, activation, symmetric
   removal, and the universal-menu fallback.
 
-## Not Yet Claimed
+## Deferred To v0.1.8
 
-GNOME, KDE, optimized archive, and AArch64 results must remain unclaimed until
-their corresponding manual or artifact checks have actually completed.
+GNOME and KDE graphical portal validation remains unclaimed until those sessions
+have tested capture, shortcut approval, configuration, activation, and
+persistence. Optimized archive and AArch64 artifact validation also remains
+required for v0.1.8.

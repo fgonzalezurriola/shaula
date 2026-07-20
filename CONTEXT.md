@@ -2,15 +2,15 @@
 
 Last updated: 2026-07-20
 
-## Current release candidate
+## Current release
 
-The current release candidate is **v0.1.6**. The production application,
+The current release is **v0.1.7**. The production application,
 helpers, tests, packaging, and release workflows are implemented in C and built
 with Meson. The earlier v0.1.6 image-composition proposal is retained only as
 historical design input in `docs/plan-v0.1.6.md`; image composition and
 expandable-canvas work are not part of this release.
 
-The release notes are in `docs/release-v0.1.6.md`. The release procedure and AUR
+The release notes are in `docs/release-v0.1.7.md`. The release procedure and AUR
 finalization steps are in `docs/releasing.md`.
 
 ## Runtime architecture
@@ -118,10 +118,10 @@ and `docs/release-<tag>.md` exists with the matching heading.
 ## AUR state
 
 Tag release CI publishes both `aur/shaula` and `aur/shaula-bin` to the AUR as
-`0.1.6-1`, with final immutable checksums and regenerated `.SRCINFO` files in
+`0.1.7-1`, with final immutable checksums and regenerated `.SRCINFO` files in
 the temporary AUR clones.
 
-- `shaula` builds the Meson/C source tree from tag `v0.1.6` on x86_64 and
+- `shaula` builds the Meson/C source tree from tag `v0.1.7` on x86_64 and
   AArch64.
 - `shaula-bin` selects the matching x86_64 or AArch64 release archive and
   installs the complete manifest-backed payload.
@@ -165,7 +165,7 @@ workflow replaces those markers only in writable AUR clones before pushing.
 
 ## Verified release state
 
-Post-v0.1.6 shortcut, Settings, installer, and documentation changes have now
+The v0.1.7 shortcut, Settings, installer, and documentation changes have now
 passed strict Werror and ASan/UBSan builds with all 36 tests in each build. The
 installer and release contracts pass, `./dev install` completes on the current
 CachyOS/Niri session, and locally regenerated `makepkg --printsrcinfo` output
@@ -232,10 +232,11 @@ Live Niri validation:
   process termination and capture-lock cleanup were verified.
 
 GNOME and KDE interactive portal/graphical validation is **not yet checked for
-v0.1.6**. It is explicitly deferred to v0.1.7 and must not be reported as
+the current implementation**. It is explicitly deferred to v0.1.8 and must not be reported as
 passed.
 
-## Release boundaries
+## Release boundary
 
-No commit, merge, tag, push, GitHub release, AUR publication, issue, or pull
-request has been created as part of this release-preparation work.
+The `v0.1.7` release commit and tag publish the completed work described above.
+GNOME, KDE, optimized archive, and updated AArch64 validation remain scoped to
+v0.1.8 and are not claimed by this release.
