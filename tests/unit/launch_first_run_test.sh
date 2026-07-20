@@ -31,7 +31,9 @@ env_common=(
 )
 
 env "${env_common[@]}" "${shaula}" launch
+env "${env_common[@]}" "${shaula}" menu
+env "${env_common[@]}" "${shaula}"
 test ! -s "${log}"
-grep -Fxq -- "${shaula}" "${launcher_log}"
+test "$(grep -Fxc -- "${shaula}" "${launcher_log}")" -eq 3
 
-printf 'ok launch menu routing\n'
+printf 'ok default, menu, and launch routing\n'

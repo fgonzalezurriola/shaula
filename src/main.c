@@ -18,6 +18,7 @@ static const ShaulaCommandFamily COMMAND_FAMILIES[] = {
     {"settings", shaula_settings_command_run},
     {"shortcuts", shaula_shortcuts_command_run},
     {"launch", shaula_launch_command_run},
+    {"menu", shaula_launch_command_run},
     {"config", shaula_config_command_run},
     {"preview", shaula_preview_command_run},
     {"directory", shaula_directory_command_run},
@@ -31,13 +32,10 @@ static const ShaulaCommandFamily COMMAND_FAMILIES[] = {
 };
 
 int main(int argc, char **argv) {
-  if (argc < 2)
-    return shaula_command_write_error(
-        "", "ERR_CLI_USAGE",
-        "usage: shaula <capture|preview|notify|config|settings|shortcuts|launch|"
-        "setup|directory|doctor|explore|preflight|capabilities|history|clipboard|"
-        "errors> ...",
-        "{}");
+  if (argc < 2) {
+    char *launch_argv[] = {argv[0], "launch", NULL};
+    return shaula_launch_command_run(2, launch_argv);
+  }
 
   for (gsize i = 0; i < G_N_ELEMENTS(COMMAND_FAMILIES); i++) {
     if (g_str_equal(argv[1], COMMAND_FAMILIES[i].family))
@@ -45,5 +43,7 @@ int main(int argc, char **argv) {
   }
 
   return shaula_command_write_error(argv[1], "ERR_CLI_USAGE",
-                                    "unsupported command family", "{}");
+                                    "unsupported command family; use `shaula` "
+                                    "or `shaula menu` for the graphical menu",
+                                    "{}");
 }

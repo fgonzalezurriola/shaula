@@ -72,6 +72,8 @@ paru -S ttf-geist ttf-excalifont
 The normal application-menu entry runs `shaula launch`, which always opens the
 compact capture menu. Global shortcuts are optional and appear first in Settings;
 the menu remains available on desktops where automatic shortcuts are unsupported.
+From a terminal, `shaula`, `shaula menu`, and `shaula launch` open that same
+menu; `launch` remains the stable desktop-entry command.
 
 The application menu exposes actions for Quick Capture, Capture Area, Capture
 Fullscreen, Capture All Screens, and Settings. These actions invoke the capture

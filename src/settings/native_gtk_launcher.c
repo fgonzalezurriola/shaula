@@ -14,6 +14,7 @@ typedef struct {
   GtkWidget *window;
   GtkWidget *status;
   const char *shaula_bin;
+  const LauncherAction *pending_action;
   ShaulaShortcutStatus shortcuts;
 } LauncherState;
 
@@ -61,16 +62,31 @@ static gboolean spawn_action(const LauncherAction *action, GError **error) {
                        NULL, NULL, NULL, error);
 }
 
-static void on_action_clicked(GtkButton *button, gpointer data) {
-  (void)button;
-  const LauncherAction *action = data;
+/* Launches only after the menu surface has been unmapped so capture backends
+ * cannot include the composited close frame in the resulting screenshot. */
+static gboolean launch_pending_action(gpointer data) {
+  (void)data;
+  const LauncherAction *action = state.pending_action;
+  state.pending_action = NULL;
   g_autoptr(GError) error = NULL;
   if (!spawn_action(action, &error)) {
     gtk_label_set_text(GTK_LABEL(state.status), error->message);
     gtk_widget_set_visible(state.status, TRUE);
-    return;
+    gtk_widget_set_visible(state.window, TRUE);
+    gtk_window_present(GTK_WINDOW(state.window));
+    return G_SOURCE_REMOVE;
   }
   g_application_quit(G_APPLICATION(state.app));
+  return G_SOURCE_REMOVE;
+}
+
+static void on_action_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  if (state.pending_action != NULL)
+    return;
+  state.pending_action = data;
+  gtk_widget_set_visible(state.window, FALSE);
+  g_timeout_add(150U, launch_pending_action, NULL);
 }
 
 static GtkWidget *make_action_row(const LauncherAction *action) {
@@ -165,6 +181,9 @@ static void on_activate(GtkApplication *app, gpointer data) {
 static void install_css(GtkApplication *app, gpointer data) {
   (void)app;
   (void)data;
+  GtkSettings *settings = gtk_settings_get_default();
+  if (settings != NULL)
+    g_object_set(settings, "gtk-enable-animations", FALSE, NULL);
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_string(
       provider,

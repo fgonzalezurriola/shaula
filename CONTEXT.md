@@ -46,8 +46,15 @@ launcher with the four capture modes, Settings, the screenshots folder, and
 problem reporting. Settings presents global shortcuts as an optional first
 section and keeps the launcher available as the universal fallback. Shortcut
 labels appear only while the shortcut backend reports them active.
+The terminal aliases `shaula` and `shaula menu` route to the same stable
+`shaula launch` command used by the desktop entry.
 The portal provider uses a user-owned XDG autostart entry created only after
 explicit enablement and removed on disable or uninstall.
+
+The universal launcher disables GTK animations for its process and unmaps its
+window before dispatching an action. Capture dispatch waits 150 ms, exceeding
+the current Niri 100 ms close animation, so a composited closing menu cannot be
+included in capture output.
 
 ## Clipboard publication and replacement
 
