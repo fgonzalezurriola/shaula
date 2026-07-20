@@ -223,6 +223,10 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          if [ -z "${AUR_SSH_KEY}" ]; then
+            echo "::error::AUR_SSH_KEY repository secret is required to publish AUR packages"
+            exit 1
+          fi
           version="${TAG_NAME#v}"
           publish_root=/tmp/aur-publish
           rm -rf "${publish_root}"

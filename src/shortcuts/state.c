@@ -39,6 +39,10 @@ char *shaula_shortcut_autostart_path(void) {
              : NULL;
 }
 
+static gint io_error_code_from_errno(int saved_errno) {
+  return (gint)g_io_error_from_errno(saved_errno);
+}
+
 static gboolean atomic_write(const char *path, const char *contents, mode_t mode,
                              GError **error) {
   if (path == NULL || contents == NULL) {
@@ -48,7 +52,7 @@ static gboolean atomic_write(const char *path, const char *contents, mode_t mode
   }
   g_autofree char *parent = g_path_get_dirname(path);
   if (g_mkdir_with_parents(parent, 0700) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not create %s", parent);
     return FALSE;
   }
@@ -57,13 +61,13 @@ static gboolean atomic_write(const char *path, const char *contents, mode_t mode
   if (!g_file_set_contents(temporary, contents, -1, error))
     return FALSE;
   if (g_chmod(temporary, mode) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not set permissions on %s", temporary);
     (void)g_unlink(temporary);
     return FALSE;
   }
   if (g_rename(temporary, path) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not replace %s", path);
     (void)g_unlink(temporary);
     return FALSE;
@@ -206,7 +210,7 @@ gboolean shaula_shortcut_setup_state_remove(gboolean dry_run, GError **error) {
   if (dry_run || !g_file_test(path, G_FILE_TEST_EXISTS))
     return TRUE;
   if (g_unlink(path) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not remove %s", path);
     return FALSE;
   }
@@ -352,7 +356,7 @@ gboolean shaula_shortcut_provider_state_remove(gboolean dry_run,
   if (dry_run || !g_file_test(path, G_FILE_TEST_EXISTS))
     return TRUE;
   if (g_unlink(path) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not remove %s", path);
     return FALSE;
   }
@@ -415,7 +419,7 @@ gboolean shaula_shortcut_autostart_remove(gboolean dry_run, gboolean *changed,
   if (!*changed || dry_run)
     return TRUE;
   if (g_unlink(path) != 0) {
-    g_set_error(error, G_IO_ERROR, g_io_error_from_errno(errno),
+    g_set_error(error, G_IO_ERROR, io_error_code_from_errno(errno),
                 "could not remove %s", path);
     return FALSE;
   }

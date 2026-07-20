@@ -195,6 +195,11 @@ The current source state has passed:
 - Build and release containers install the required `wl-clipboard` runtime, and
   both workflows use the same writable-copy AUR metadata validation.
 - GitHub workflows use Node.js 24-based v5 checkout and artifact actions.
+- GitHub Clang ASan/UBSan builds require explicit conversion of
+  `g_io_error_from_errno()` results before passing them to `g_set_error()`;
+  `CC=clang ./dev sanitize-check` covers this warning-as-error path locally.
+- Release AUR publication requires the `AUR_SSH_KEY` repository secret and now
+  fails before SSH setup with an explicit GitHub Actions error when it is absent.
 
 Live Niri validation:
 
