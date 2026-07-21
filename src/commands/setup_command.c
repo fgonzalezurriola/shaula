@@ -67,16 +67,18 @@ static gboolean setup_can_prompt(void) {
   return TRUE;
 }
 
-static gboolean setup_prompt(const char *question) {
+static gboolean setup_prompt(const char *question, gboolean default_yes) {
   FILE *terminal = fopen("/dev/tty", "r+");
   if (terminal == NULL)
     return FALSE;
-  (void)fprintf(terminal, "%s [y/N] ", question);
+  (void)fprintf(terminal, "%s %s ", question, default_yes ? "[Y/n]" : "[y/N]");
   (void)fflush(terminal);
   char answer[32] = {0};
-  gboolean accepted =
-      fgets(answer, sizeof(answer), terminal) != NULL &&
-      (g_ascii_strncasecmp(answer, "y", 1) == 0);
+  gboolean accepted = FALSE;
+  if (fgets(answer, sizeof(answer), terminal) != NULL) {
+    accepted = g_ascii_strncasecmp(answer, "y", 1) == 0 ||
+               (default_yes && (answer[0] == '\n' || answer[0] == '\0'));
+  }
   (void)fclose(terminal);
   return accepted;
 }
@@ -264,7 +266,7 @@ static gboolean setup_shortcuts(const SetupOptions *options,
   }
   if (!make_choice && !status.setup_completed && interactive &&
       !options->assume_yes) {
-    enable = setup_prompt("Enable Ctrl+Shift+1–4 capture shortcuts?");
+    enable = setup_prompt("Enable Ctrl+Shift+1–4 capture shortcuts?", TRUE);
     make_choice = TRUE;
   }
   if (!make_choice) {
@@ -388,7 +390,7 @@ int shaula_setup_command_run(int argc, char **argv) {
       g_file_test(niri_path, G_FILE_TEST_IS_REGULAR);
   gboolean use_niri = options.niri_explicit || options.assume_yes;
   if (niri_detected && !options.remove && !use_niri && interactive)
-    use_niri = setup_prompt("Install Shaula's Niri window rule?");
+    use_niri = setup_prompt("Install Shaula's Niri window rule?", FALSE);
   if (options.remove)
     use_niri = niri_detected;
   if (!niri_detected) {
@@ -408,7 +410,8 @@ int shaula_setup_command_run(int argc, char **argv) {
       options.noctalia && shaula_noctalia_detected();
   gboolean use_noctalia = options.noctalia_explicit || options.assume_yes;
   if (noctalia_detected && !options.remove && !use_noctalia && interactive)
-    use_noctalia = setup_prompt("Install the Shaula Noctalia widget?");
+    use_noctalia =
+        setup_prompt("Install the Shaula Noctalia widget?", FALSE);
   if (options.remove)
     use_noctalia = noctalia_detected;
   if (!noctalia_detected) {

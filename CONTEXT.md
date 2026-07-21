@@ -141,13 +141,19 @@ workflow replaces those markers only in writable AUR clones before pushing.
   desktop metadata, package descriptions, the README opening, and the product
   landing page; the GitHub repository description still needs the same manual
   update after release.
+- The Astro landing page is prepared for a one-time Cloudflare Pages upload as
+  `shaula-screenshotter.pages.dev`. `scripts/deploy-web.sh` rebuilds `web/dist`
+  and performs the manual Wrangler deployment; no Worker or automatic workflow
+  is required for this static site.
 - The Astro landing page now uses a flat, editorial visual system without the
   previous glow, grid, or gradient treatment. Its v0.1.8 content describes the
-  universal launcher, automatic grim/portal routing, optional shortcut setup,
-  current annotation workflow, and both portable and AUR installation paths.
-  The hero install card uses Linux and AUR tabs. AUR shows both package install
-  and `shaula setup` as explicit command lines; each tab has one icon-only copy
-  control inside the command panel, with no source/footer row or follow-up note.
+  universal launcher, automatic grim/portal routing, default recommended
+  shortcuts, current annotation workflow, and both portable and AUR installation
+  paths. The hero install card uses Linux and AUR tabs. AUR shows both package
+  install and `shaula setup` as explicit command lines; each tab has one
+  icon-only copy control inside the command panel. A compact note below the
+  commands lists `Ctrl+Shift+1–4`, their four capture actions, and the possible
+  desktop approval step.
 - The landing page now reserves its compact product descriptor for the hero,
   removes non-semantic feature numbering, and uses a full-width post-install
   row instead of a colored side stripe. Orange remains concentrated in product
@@ -163,8 +169,8 @@ workflow replaces those markers only in writable AUR clones before pushing.
   was removed to prevent content drift.
 - The landing-page demo is delivered as a muted, autoplaying, looping HTML video
   instead of an animated GIF. The primary VP9 WebM and H.264 MP4 fallback are
-  1280x720 at 30 fps, with a lightweight WebP poster and no audio. The current
-  edit keeps the recording from 11 seconds through one second before its end.
+  1280x720 at 30 fps, with a WebP poster and no audio. The current 27.63-second
+  edit removes the first 25 seconds from the previously optimized cut.
 - The landing page is now intentionally limited to four beats: a plain Wayland
   screenshot-tool hero, portable/AUR install commands, the product demo, and a
   GitHub/star call to action. The open-source section includes one concise stack
@@ -201,6 +207,10 @@ workflow replaces those markers only in writable AUR clones before pushing.
   current portal status; an explicit shortcut action can be appended.
 - `./dev doctor` reports Niri state as optional because the universal Wayland
   workflow does not require Niri.
+- Interactive `shaula setup` now presents the recommended capture shortcuts as
+  `[Y/n]`: pressing Enter enables `Ctrl+Shift+1–4`, while `n` and
+  `--no-shortcuts` preserve a clear opt-out. Niri and Noctalia integration
+  questions remain opt-in `[y/N]` prompts.
 - `./dev install` is the canonical complete local development install. It builds
   the checkout, installs all application payload and integrations, accepts the
   installer prompt automatically, and reloads Noctalia when present.

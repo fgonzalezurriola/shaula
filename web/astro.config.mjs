@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import sitemap from "@astrojs/sitemap";
 
 export default defineConfig({
-  site: "https://github.com/fgonzalezurriola/shaula",
+  site: "https://shaula-screenshotter.pages.dev",
   integrations: [sitemap()],
   vite: {
     plugins: [tailwindcss()],

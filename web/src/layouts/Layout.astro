@@ -11,6 +11,7 @@ export interface Props {
 const { title } = Astro.props;
 const description =
   "Shaula captures, annotates, saves, and copies screenshots on Wayland with automatic capture routing and a local GTK4 preview.";
+const socialImage = new URL("/shaula-demo-poster.webp", Astro.site).href;
 ---
 
 <!doctype html>
@@ -24,7 +25,7 @@ const description =
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content="/shaula-demo.gif" />
+    <meta property="og:image" content={socialImage} />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href={shaulaIconUrl} />
     <title>{title}</title>
@@ -33,8 +34,5 @@ const description =
     <Navbar />
     <slot />
     <Footer />
-  <!-- impeccable-live-start -->
-<script is:inline src="http://localhost:8400/live.js"></script>
-<!-- impeccable-live-end -->
-</body>
+  </body>
 </html>

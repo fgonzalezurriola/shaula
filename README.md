@@ -12,10 +12,10 @@ It chooses a working capture route automatically:
 
 Users do not choose a clipboard or global-shortcut backend. Shaula publishes
 copied images and text through the required `wl-copy` runtime so selections remain
-available after the initiating CLI or Preview process exits. The Settings app
-can enable the recommended `Ctrl+Shift+1–4` capture shortcuts with one choice.
-Shaula uses the standard XDG GlobalShortcuts portal first. When that portal is
-not viable on Niri, installation adds a managed Niri keybinding block after
+available after the initiating CLI or Preview process exits. Setup enables the
+recommended `Ctrl+Shift+1–4` capture shortcuts by default unless the user opts
+out. Shaula uses the standard XDG GlobalShortcuts portal first. When that portal
+is not viable on Niri, installation adds a managed Niri keybinding block after
 backing up the existing config. The universal menu remains the fallback
 everywhere.
 
@@ -41,6 +41,23 @@ interactively when a terminal is available. Required host components are checked
 before installation and important missing components are reported in red. It
 never invokes `sudo`, installs system packages, or chooses a desktop portal
 implementation.
+
+### Default capture shortcuts
+
+Interactive setup enables these recommended shortcuts by default. Press Enter at
+the `[Y/n]` prompt to accept them, answer `n`, or pass `--no-shortcuts` to opt out.
+Desktops using the Global Shortcuts portal may display an approval dialog or
+assign different bindings.
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+Shift+1` | Quick capture |
+| `Ctrl+Shift+2` | Capture area |
+| `Ctrl+Shift+3` | Capture fullscreen |
+| `Ctrl+Shift+4` | Capture all screens |
+
+On Niri, Shaula installs these bindings in a backed-up managed configuration
+block when the portal route is unavailable and no conflicting bindings exist.
 
 Uninstall:
 
@@ -116,7 +133,7 @@ Inside Shaula's native Quick/Area overlay:
 shortcut question is backend-independent:
 
 ```text
-Enable Ctrl+Shift+1–4 capture shortcuts? [y/N]
+Enable Ctrl+Shift+1–4 capture shortcuts? [Y/n]
 ```
 
 Explicit generic flags are available:
