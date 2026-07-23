@@ -40,6 +40,15 @@ full backup, and installs only a marked managed keybinding block. Unsupported
 shortcut setup remains non-fatal because the universal menu and desktop launcher
 actions invoke capture commands directly.
 
+Settings now edits four Shaula-owned preferred bindings. The normalized,
+uniqueness-checked preferences are stored separately in
+`$XDG_CONFIG_HOME/shaula/shortcuts.ini`; portal-approved mappings remain
+provider-owned status and continue to be authoritative. Applying preferences
+asks the live portal provider to rebind its session. On Niri, Shaula preflights
+conflicts before persistence, rewrites the managed block, validates and reloads
+the live config when possible, and preserves an advisory manual reload path when
+IPC is unavailable. Defaults remain `Ctrl+Shift+1–4`.
+
 Shortcut choice state remains separate from installed shortcut state, but it no
 longer blocks application launch. `shaula launch` always opens the compact GTK
 launcher with the four capture modes, Settings, the screenshots folder, and
@@ -320,6 +329,6 @@ be reported as passed.
 ## Release boundary
 
 The `v0.1.8` release commit and tag publish the completed work described above.
-GNOME, KDE, optimized archive, and updated AArch64 validation remain scoped to
-v0.1.9 and are not claimed by this release. v0.1.9 should also add configurable
-capture shortcuts from the Settings view.
+The development branch now includes configurable capture shortcuts from the
+Settings view for v0.1.9. GNOME, KDE, optimized archive, and updated AArch64
+validation remain scoped to v0.1.9 and are not claimed by v0.1.8.

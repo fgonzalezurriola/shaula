@@ -24,6 +24,13 @@ char *shaula_shortcut_setup_state_path(void) {
              : NULL;
 }
 
+char *shaula_shortcut_preferences_path(void) {
+  g_autofree char *config = xdg_home("XDG_CONFIG_HOME", ".config");
+  return config != NULL
+             ? g_build_filename(config, "shaula", "shortcuts.ini", NULL)
+             : NULL;
+}
+
 char *shaula_shortcut_provider_state_path(void) {
   g_autofree char *state = xdg_home("XDG_STATE_HOME", ".local/state");
   return state != NULL
@@ -215,6 +222,62 @@ gboolean shaula_shortcut_setup_state_remove(gboolean dry_run, GError **error) {
     return FALSE;
   }
   return TRUE;
+}
+
+gboolean shaula_shortcut_preferences_state_load(
+    ShaulaShortcutPreferences *preferences, gboolean *exists, GError **error) {
+  g_return_val_if_fail(preferences != NULL, FALSE);
+  g_return_val_if_fail(exists != NULL, FALSE);
+  *exists = FALSE;
+  g_autofree char *path = shaula_shortcut_preferences_path();
+  if (path == NULL) {
+    g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                        "shortcut preferences path is unavailable");
+    return FALSE;
+  }
+  if (!g_file_test(path, G_FILE_TEST_EXISTS))
+    return TRUE;
+
+  g_autoptr(GKeyFile) file = g_key_file_new();
+  if (!g_key_file_load_from_file(file, path, G_KEY_FILE_NONE, error))
+    return FALSE;
+  static const char *const names[] = {"quick", "area", "fullscreen",
+                                      "all_screens"};
+  for (guint i = 0; i < G_N_ELEMENTS(names); i++) {
+    if (!require_key(file, "shortcuts", names[i], error))
+      return FALSE;
+  }
+  for (guint i = 0; i < G_N_ELEMENTS(names); i++) {
+    g_autofree char *value =
+        g_key_file_get_string(file, "shortcuts", names[i], error);
+    if (value == NULL)
+      return FALSE;
+    g_set_str(&preferences->triggers[i], value);
+  }
+  *exists = TRUE;
+  return TRUE;
+}
+
+gboolean shaula_shortcut_preferences_state_save(
+    const ShaulaShortcutPreferences *preferences, gboolean dry_run,
+    GError **error) {
+  g_return_val_if_fail(preferences != NULL, FALSE);
+  if (dry_run)
+    return TRUE;
+  g_autoptr(GKeyFile) file = g_key_file_new();
+  static const char *const names[] = {"quick", "area", "fullscreen",
+                                      "all_screens"};
+  for (guint i = 0; i < G_N_ELEMENTS(names); i++)
+    g_key_file_set_string(file, "shortcuts", names[i],
+                          preferences->triggers[i] != NULL
+                              ? preferences->triggers[i]
+                              : "");
+  gsize length = 0;
+  g_autofree char *contents = g_key_file_to_data(file, &length, error);
+  if (contents == NULL)
+    return FALSE;
+  g_autofree char *path = shaula_shortcut_preferences_path();
+  return atomic_write(path, contents, 0600, error);
 }
 
 void shaula_shortcut_provider_state_init(ShaulaShortcutProviderState *state) {

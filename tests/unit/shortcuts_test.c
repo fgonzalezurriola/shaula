@@ -64,6 +64,20 @@ static void test_portal_selection_and_decline(void) {
   g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_PORTAL);
   g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_ACTIVE);
 
+  ShaulaShortcutPreferences preferences;
+  shaula_shortcut_preferences_init_defaults(&preferences);
+  g_set_str(&preferences.triggers[0], "Super+F5");
+  g_set_str(&preferences.triggers[1], "Super+F6");
+  g_set_str(&preferences.triggers[2], "Super+F7");
+  g_set_str(&preferences.triggers[3], "Super+F8");
+  ShaulaShortcutOptions preference_options = {.remember_choice = FALSE};
+  g_assert_cmpint(shaula_shortcuts_preferences_apply(
+                      &preferences, &preference_options, &status, NULL),
+                  ==, SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpstr(status.triggers[0], ==, "Super+F5");
+  g_assert_cmpstr(status.triggers[3], ==, "Super+F8");
+  shaula_shortcut_preferences_clear(&preferences);
+
   g_assert_cmpint(shaula_shortcuts_disable(&options, &status, NULL), ==,
                   SHAULA_SHORTCUT_RESULT_OK);
   g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_DISABLED);
@@ -103,6 +117,23 @@ static void test_niri_fallback_idempotence(void) {
   g_assert_null(g_strstr_len(removed, -1, "BEGIN SHAULA MANAGED KEYBINDS"));
   g_assert_cmpint(shaula_shortcuts_disable(&options, &status, NULL), ==,
                   SHAULA_SHORTCUT_RESULT_OK);
+  shaula_shortcut_status_clear(&status);
+}
+
+static void test_niri_prefix_is_not_conflict(void) {
+  reset_environment("unsupported", TRUE);
+  g_autofree char *config =
+      g_build_filename(test_root, "config", "niri", "config.kdl", NULL);
+  g_assert_true(g_file_set_contents(
+      config, "binds {\n CTRL+Shift+10 { spawn \"other\"; }\n}\n", -1,
+      NULL));
+  ShaulaShortcutStatus status;
+  shaula_shortcut_status_init(&status);
+  ShaulaShortcutOptions options = {.remember_choice = TRUE};
+  g_assert_cmpint(shaula_shortcuts_enable(&options, &status, NULL), ==,
+                  SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_NIRI);
+  g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_ACTIVE);
   shaula_shortcut_status_clear(&status);
 }
 
@@ -154,6 +185,94 @@ static void test_invalid_setup_state(void) {
   shaula_shortcut_status_clear(&status);
 }
 
+static void test_preferences_validation_and_persistence(void) {
+  reset_environment("unsupported", FALSE);
+  ShaulaShortcutPreferences preferences;
+  shaula_shortcut_preferences_init_defaults(&preferences);
+  g_assert_cmpstr(preferences.triggers[0], ==, "Ctrl+Shift+1");
+
+  g_set_str(&preferences.triggers[0], "super+f8");
+  g_set_str(&preferences.triggers[1], "ctrl+alt+a");
+  g_set_str(&preferences.triggers[2], "Shift+Super+Print");
+  g_set_str(&preferences.triggers[3], "control+shift+9");
+  ShaulaShortcutStatus status;
+  shaula_shortcut_status_init(&status);
+  ShaulaShortcutOptions options = {.remember_choice = FALSE};
+  g_autofree char *error = NULL;
+  g_assert_cmpint(shaula_shortcuts_preferences_apply(
+                      &preferences, &options, &status, &error),
+                  ==, SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_null(error);
+
+  ShaulaShortcutPreferences loaded;
+  shaula_shortcut_preferences_init_defaults(&loaded);
+  g_assert_cmpint(shaula_shortcuts_preferences_load(&loaded, &error), ==,
+                  SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpstr(loaded.triggers[0], ==, "Super+F8");
+  g_assert_cmpstr(loaded.triggers[1], ==, "Ctrl+Alt+A");
+  g_assert_cmpstr(loaded.triggers[2], ==, "Shift+Super+Print");
+  g_assert_cmpstr(loaded.triggers[3], ==, "Ctrl+Shift+9");
+
+  g_set_str(&preferences.triggers[1], "SUPER+F8");
+  g_assert_cmpint(shaula_shortcuts_preferences_apply(
+                      &preferences, &options, &status, &error),
+                  ==, SHAULA_SHORTCUT_RESULT_CONFIG_INVALID);
+  g_assert_nonnull(error);
+  g_clear_pointer(&error, g_free);
+  ShaulaShortcutPreferences unchanged;
+  shaula_shortcut_preferences_init_defaults(&unchanged);
+  g_assert_cmpint(shaula_shortcuts_preferences_load(&unchanged, &error), ==,
+                  SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpstr(unchanged.triggers[1], ==, "Ctrl+Alt+A");
+
+  shaula_shortcut_preferences_clear(&unchanged);
+  shaula_shortcut_preferences_clear(&loaded);
+  shaula_shortcut_preferences_clear(&preferences);
+  shaula_shortcut_status_clear(&status);
+}
+
+static void test_niri_custom_preferences_apply(void) {
+  reset_environment("unsupported", TRUE);
+  ShaulaShortcutStatus status;
+  shaula_shortcut_status_init(&status);
+  ShaulaShortcutOptions enable_options = {.remember_choice = TRUE};
+  g_assert_cmpint(shaula_shortcuts_enable(&enable_options, &status, NULL), ==,
+                  SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_NIRI);
+
+  ShaulaShortcutPreferences preferences;
+  shaula_shortcut_preferences_init_defaults(&preferences);
+  g_set_str(&preferences.triggers[0], "Super+F5");
+  g_set_str(&preferences.triggers[1], "Super+F6");
+  g_set_str(&preferences.triggers[2], "Super+F7");
+  g_set_str(&preferences.triggers[3], "Super+F8");
+  ShaulaShortcutOptions apply_options = {.remember_choice = FALSE};
+  g_autofree char *error = NULL;
+  g_assert_cmpint(shaula_shortcuts_preferences_apply(
+                      &preferences, &apply_options, &status, &error),
+                  ==, SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_null(error);
+  g_assert_cmpint(status.backend, ==, SHAULA_SHORTCUT_BACKEND_NIRI);
+  g_assert_cmpint(status.state, ==, SHAULA_SHORTCUT_STATE_ACTIVE);
+  g_assert_cmpstr(status.triggers[0], ==, "Super+F5");
+  g_assert_nonnull(g_strstr_len(status.detail, -1,
+                               "Live Niri config reloaded."));
+
+  g_autofree char *config =
+      g_build_filename(test_root, "config", "niri", "config.kdl", NULL);
+  g_autofree char *contents = NULL;
+  g_assert_true(g_file_get_contents(config, &contents, NULL, NULL));
+  g_assert_nonnull(g_strstr_len(contents, -1, "Super+F5 repeat=false"));
+  g_assert_nonnull(g_strstr_len(contents, -1, "Super+F8 repeat=false"));
+  g_assert_null(g_strstr_len(contents, -1, "Ctrl+Shift+1 repeat=false"));
+
+  g_assert_cmpint(shaula_shortcuts_query(&status, &error), ==,
+                  SHAULA_SHORTCUT_RESULT_OK);
+  g_assert_cmpstr(status.triggers[3], ==, "Super+F8");
+  shaula_shortcut_preferences_clear(&preferences);
+  shaula_shortcut_status_clear(&status);
+}
+
 static void test_unsupported_and_first_run(void) {
   reset_environment("unsupported", FALSE);
   ShaulaShortcutStatus status;
@@ -185,10 +304,16 @@ int main(int argc, char **argv) {
                   test_portal_selection_and_decline);
   g_test_add_func("/shortcuts/niri-fallback-idempotence",
                   test_niri_fallback_idempotence);
+  g_test_add_func("/shortcuts/niri-prefix-not-conflict",
+                  test_niri_prefix_is_not_conflict);
   g_test_add_func("/shortcuts/niri-conflict-force",
                   test_niri_conflict_and_force);
   g_test_add_func("/shortcuts/invalid-setup-state",
                   test_invalid_setup_state);
+  g_test_add_func("/shortcuts/preferences-validation-persistence",
+                  test_preferences_validation_and_persistence);
+  g_test_add_func("/shortcuts/niri-custom-preferences",
+                  test_niri_custom_preferences_apply);
   g_test_add_func("/shortcuts/unsupported-first-run",
                   test_unsupported_and_first_run);
   int result = g_test_run();

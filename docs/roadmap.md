@@ -97,12 +97,21 @@ reload command without failing the already-written configuration.
 
 ## v0.1.9
 
+Implemented on the development branch:
+
+- Settings edits and persists four normalized, unique preferred capture
+  shortcuts.
+- The live portal provider reloads preferences and rebinds its session while
+  preserving desktop-approved mappings as authoritative status.
+- Niri conflict detection, managed-block rendering, and live reload use the
+  configured bindings.
+
 Release validation still required:
 
 - Build and validate optimized x86_64 and native/QEMU AArch64 archives.
 - Complete GNOME and KDE graphical portal validation, including capture,
-  shortcut approval, shortcut configuration, activation, and persistence.
-- Add configurable capture shortcuts from the Settings view.
+  shortcut approval, shortcut configuration, activation, preference rebinding,
+  and persistence.
 
 Product work not required for the portal/install release slice:
 

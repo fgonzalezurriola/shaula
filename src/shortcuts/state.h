@@ -21,6 +21,7 @@ typedef struct {
 } ShaulaShortcutProviderState;
 
 char *shaula_shortcut_setup_state_path(void);
+char *shaula_shortcut_preferences_path(void);
 char *shaula_shortcut_provider_state_path(void);
 char *shaula_shortcut_autostart_path(void);
 
@@ -30,6 +31,12 @@ gboolean shaula_shortcut_setup_state_load(ShaulaShortcutSetupState *state,
 gboolean shaula_shortcut_setup_state_save(
     const ShaulaShortcutSetupState *state, gboolean dry_run, GError **error);
 gboolean shaula_shortcut_setup_state_remove(gboolean dry_run, GError **error);
+
+gboolean shaula_shortcut_preferences_state_load(
+    ShaulaShortcutPreferences *preferences, gboolean *exists, GError **error);
+gboolean shaula_shortcut_preferences_state_save(
+    const ShaulaShortcutPreferences *preferences, gboolean dry_run,
+    GError **error);
 
 void shaula_shortcut_provider_state_init(ShaulaShortcutProviderState *state);
 void shaula_shortcut_provider_state_clear(ShaulaShortcutProviderState *state);

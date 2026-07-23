@@ -14,5 +14,8 @@ shaula_shortcut_portal_disable(const ShaulaShortcutOptions *options,
 ShaulaShortcutResult
 shaula_shortcut_portal_repair(const ShaulaShortcutOptions *options,
                               ShaulaShortcutStatus *status, char **error_text);
+ShaulaShortcutResult shaula_shortcut_portal_apply_preferences(
+    const ShaulaShortcutOptions *options, ShaulaShortcutStatus *status,
+    char **error_text);
 
 #endif

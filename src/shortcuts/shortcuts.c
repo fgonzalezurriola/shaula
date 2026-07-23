@@ -24,6 +24,215 @@ static void set_error(char **error_text, const char *message) {
   *error_text = g_strdup(message);
 }
 
+static const char *const default_triggers[SHAULA_SHORTCUT_COUNT] = {
+    "Ctrl+Shift+1", "Ctrl+Shift+2", "Ctrl+Shift+3", "Ctrl+Shift+4"};
+
+static const char *canonical_named_key(const char *token) {
+  static const struct {
+    const char *input;
+    const char *canonical;
+  } names[] = {{"tab", "Tab"},
+               {"space", "Space"},
+               {"enter", "Enter"},
+               {"return", "Enter"},
+               {"escape", "Escape"},
+               {"esc", "Escape"},
+               {"print", "Print"},
+               {"insert", "Insert"},
+               {"delete", "Delete"},
+               {"backspace", "Backspace"},
+               {"home", "Home"},
+               {"end", "End"},
+               {"pageup", "PageUp"},
+               {"pagedown", "PageDown"},
+               {"up", "Up"},
+               {"down", "Down"},
+               {"left", "Left"},
+               {"right", "Right"}};
+  for (guint i = 0; i < G_N_ELEMENTS(names); i++) {
+    if (g_ascii_strcasecmp(token, names[i].input) == 0)
+      return names[i].canonical;
+  }
+  return NULL;
+}
+
+static char *normalize_key(const char *token) {
+  if (token == NULL || token[0] == '\0')
+    return NULL;
+  if (token[1] == '\0' && g_ascii_isalnum(token[0])) {
+    char key[2] = {(char)g_ascii_toupper(token[0]), '\0'};
+    return g_strdup(key);
+  }
+  if ((token[0] == 'f' || token[0] == 'F') && token[1] != '\0') {
+    char *end = NULL;
+    guint64 value = g_ascii_strtoull(token + 1, &end, 10);
+    if (end != NULL && end[0] == '\0' && value >= 1U && value <= 35U)
+      return g_strdup_printf("F%" G_GUINT64_FORMAT, value);
+  }
+  const char *named = canonical_named_key(token);
+  return named != NULL ? g_strdup(named) : NULL;
+}
+
+static gboolean normalize_trigger(const char *input, char **normalized,
+                                  char **error_text) {
+  g_return_val_if_fail(normalized != NULL, FALSE);
+  g_clear_pointer(normalized, g_free);
+  g_autofree char *trimmed = g_strdup(input != NULL ? input : "");
+  g_strstrip(trimmed);
+  if (trimmed[0] == '\0') {
+    set_error(error_text,
+              "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut cannot be empty");
+    return FALSE;
+  }
+
+  g_auto(GStrv) parts = g_strsplit(trimmed, "+", -1);
+  gboolean ctrl = FALSE;
+  gboolean alt = FALSE;
+  gboolean shift = FALSE;
+  gboolean super = FALSE;
+  g_autofree char *key = NULL;
+  for (guint i = 0; parts[i] != NULL; i++) {
+    char *part = g_strstrip(parts[i]);
+    if (part[0] == '\0') {
+      set_error(error_text,
+                "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut contains an empty component");
+      return FALSE;
+    }
+    if (g_ascii_strcasecmp(part, "ctrl") == 0 ||
+        g_ascii_strcasecmp(part, "control") == 0) {
+      if (ctrl) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut repeats Ctrl");
+        return FALSE;
+      }
+      ctrl = TRUE;
+    } else if (g_ascii_strcasecmp(part, "alt") == 0) {
+      if (alt) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut repeats Alt");
+        return FALSE;
+      }
+      alt = TRUE;
+    } else if (g_ascii_strcasecmp(part, "shift") == 0) {
+      if (shift) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut repeats Shift");
+        return FALSE;
+      }
+      shift = TRUE;
+    } else if (g_ascii_strcasecmp(part, "super") == 0 ||
+               g_ascii_strcasecmp(part, "meta") == 0) {
+      if (super) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut repeats Super");
+        return FALSE;
+      }
+      super = TRUE;
+    } else {
+      if (key != NULL) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut must contain one key");
+        return FALSE;
+      }
+      key = normalize_key(part);
+      if (key == NULL) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: unsupported shortcut key");
+        return FALSE;
+      }
+    }
+  }
+  if (key == NULL || (!ctrl && !alt && !shift && !super)) {
+    set_error(error_text,
+              "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut needs a modifier and one key");
+    return FALSE;
+  }
+
+  GString *result = g_string_new(NULL);
+  if (ctrl)
+    g_string_append(result, "Ctrl+");
+  if (alt)
+    g_string_append(result, "Alt+");
+  if (shift)
+    g_string_append(result, "Shift+");
+  if (super)
+    g_string_append(result, "Super+");
+  g_string_append(result, key);
+  *normalized = g_string_free(result, FALSE);
+  return TRUE;
+}
+
+static gboolean normalize_preferences(
+    const ShaulaShortcutPreferences *input,
+    ShaulaShortcutPreferences *normalized, char **error_text) {
+  shaula_shortcut_preferences_init_defaults(normalized);
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++) {
+    g_clear_pointer(&normalized->triggers[i], g_free);
+    if (!normalize_trigger(input != NULL ? input->triggers[i] : NULL,
+                           &normalized->triggers[i], error_text)) {
+      shaula_shortcut_preferences_clear(normalized);
+      return FALSE;
+    }
+    for (guint previous = 0; previous < i; previous++) {
+      if (g_ascii_strcasecmp(normalized->triggers[previous],
+                             normalized->triggers[i]) == 0) {
+        set_error(error_text,
+                  "ERR_SHORTCUT_CONFIGURATION_INVALID: capture shortcuts must be unique");
+        shaula_shortcut_preferences_clear(normalized);
+        return FALSE;
+      }
+    }
+  }
+  return TRUE;
+}
+
+void shaula_shortcut_preferences_init_defaults(
+    ShaulaShortcutPreferences *preferences) {
+  g_return_if_fail(preferences != NULL);
+  *preferences = (ShaulaShortcutPreferences){0};
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++)
+    preferences->triggers[i] = g_strdup(default_triggers[i]);
+}
+
+void shaula_shortcut_preferences_clear(
+    ShaulaShortcutPreferences *preferences) {
+  if (preferences == NULL)
+    return;
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++)
+    g_clear_pointer(&preferences->triggers[i], g_free);
+  *preferences = (ShaulaShortcutPreferences){0};
+}
+
+ShaulaShortcutResult shaula_shortcuts_preferences_load(
+    ShaulaShortcutPreferences *preferences, char **error_text) {
+  g_return_val_if_fail(preferences != NULL,
+                       SHAULA_SHORTCUT_RESULT_CONFIG_INVALID);
+  if (error_text != NULL)
+    g_clear_pointer(error_text, g_free);
+  ShaulaShortcutPreferences loaded;
+  shaula_shortcut_preferences_init_defaults(&loaded);
+  gboolean exists = FALSE;
+  g_autoptr(GError) error = NULL;
+  if (!shaula_shortcut_preferences_state_load(&loaded, &exists, &error)) {
+    shaula_shortcut_preferences_clear(&loaded);
+    set_error(error_text,
+              error != NULL
+                  ? error->message
+                  : "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut preferences unreadable");
+    return SHAULA_SHORTCUT_RESULT_CONFIG_INVALID;
+  }
+  (void)exists;
+  ShaulaShortcutPreferences normalized = {0};
+  if (!normalize_preferences(&loaded, &normalized, error_text)) {
+    shaula_shortcut_preferences_clear(&loaded);
+    return SHAULA_SHORTCUT_RESULT_CONFIG_INVALID;
+  }
+  shaula_shortcut_preferences_clear(&loaded);
+  shaula_shortcut_preferences_clear(preferences);
+  *preferences = normalized;
+  return SHAULA_SHORTCUT_RESULT_OK;
+}
+
 void shaula_shortcut_status_init(ShaulaShortcutStatus *status) {
   g_return_if_fail(status != NULL);
   *status = (ShaulaShortcutStatus){
@@ -165,6 +374,125 @@ shaula_shortcuts_query(ShaulaShortcutStatus *status, char **error_text) {
   return result;
 }
 
+static ShaulaShortcutResult save_preferences(
+    const ShaulaShortcutPreferences *preferences, gboolean dry_run,
+    ShaulaShortcutStatus *status, char **error_text) {
+  g_autoptr(GError) save_error = NULL;
+  if (shaula_shortcut_preferences_state_save(preferences, dry_run,
+                                             &save_error))
+    return SHAULA_SHORTCUT_RESULT_OK;
+  shaula_shortcut_status_clear(status);
+  status->state = SHAULA_SHORTCUT_STATE_CONFIG_INVALID;
+  status->error_code = g_strdup("ERR_SHORTCUT_CONFIGURATION_INVALID");
+  status->detail = g_strdup(save_error != NULL ? save_error->message
+                                               : "Preference write failed.");
+  set_error(error_text,
+            save_error != NULL
+                ? save_error->message
+                : "ERR_SHORTCUT_CONFIGURATION_INVALID: shortcut preference write failed");
+  return SHAULA_SHORTCUT_RESULT_CONFIG_INVALID;
+}
+
+ShaulaShortcutResult shaula_shortcuts_preferences_apply(
+    const ShaulaShortcutPreferences *preferences,
+    const ShaulaShortcutOptions *options, ShaulaShortcutStatus *status,
+    char **error_text) {
+  g_return_val_if_fail(preferences != NULL,
+                       SHAULA_SHORTCUT_RESULT_CONFIG_INVALID);
+  g_return_val_if_fail(status != NULL, SHAULA_SHORTCUT_RESULT_CONFIG_INVALID);
+  const ShaulaShortcutOptions defaults = {.remember_choice = FALSE};
+  if (options == NULL)
+    options = &defaults;
+  if (error_text != NULL)
+    g_clear_pointer(error_text, g_free);
+
+  ShaulaShortcutPreferences normalized = {0};
+  if (!normalize_preferences(preferences, &normalized, error_text)) {
+    shaula_shortcut_status_clear(status);
+    status->state = SHAULA_SHORTCUT_STATE_CONFIG_INVALID;
+    status->error_code = g_strdup("ERR_SHORTCUT_CONFIGURATION_INVALID");
+    return SHAULA_SHORTCUT_RESULT_CONFIG_INVALID;
+  }
+
+  ShaulaShortcutSetupState setup;
+  ShaulaShortcutResult setup_result = load_setup_state(&setup, error_text);
+  if (setup_result != SHAULA_SHORTCUT_RESULT_OK) {
+    shaula_shortcut_preferences_clear(&normalized);
+    return setup_result;
+  }
+
+  if (setup.backend == SHAULA_SHORTCUT_BACKEND_NIRI) {
+    ShaulaShortcutPreferences previous;
+    shaula_shortcut_preferences_init_defaults(&previous);
+    gboolean previous_valid =
+        shaula_shortcuts_preferences_load(&previous, NULL) ==
+        SHAULA_SHORTCUT_RESULT_OK;
+
+    ShaulaShortcutOptions preflight = *options;
+    preflight.dry_run = TRUE;
+    ShaulaShortcutResult applied = shaula_shortcut_niri_apply_preferences(
+        &preflight, &normalized, status, error_text);
+    if (applied != SHAULA_SHORTCUT_RESULT_OK) {
+      shaula_shortcut_preferences_clear(&previous);
+      shaula_shortcut_preferences_clear(&normalized);
+      overlay_setup_state(status, &setup);
+      return applied;
+    }
+    if (options->dry_run) {
+      shaula_shortcut_preferences_clear(&previous);
+      shaula_shortcut_preferences_clear(&normalized);
+      overlay_setup_state(status, &setup);
+      return applied;
+    }
+
+    applied = shaula_shortcut_niri_apply_preferences(
+        options, &normalized, status, error_text);
+    if (applied != SHAULA_SHORTCUT_RESULT_OK) {
+      shaula_shortcut_preferences_clear(&previous);
+      shaula_shortcut_preferences_clear(&normalized);
+      overlay_setup_state(status, &setup);
+      return applied;
+    }
+
+    ShaulaShortcutResult saved =
+        save_preferences(&normalized, FALSE, status, error_text);
+    if (saved != SHAULA_SHORTCUT_RESULT_OK && previous_valid) {
+      ShaulaShortcutOptions rollback = *options;
+      rollback.remember_choice = FALSE;
+      (void)shaula_shortcut_niri_apply_preferences(
+          &rollback, &previous, status, NULL);
+    }
+    shaula_shortcut_preferences_clear(&previous);
+    shaula_shortcut_preferences_clear(&normalized);
+    overlay_setup_state(status, &setup);
+    return saved == SHAULA_SHORTCUT_RESULT_OK ? applied : saved;
+  }
+
+  ShaulaShortcutResult saved =
+      save_preferences(&normalized, options->dry_run, status, error_text);
+  if (saved != SHAULA_SHORTCUT_RESULT_OK) {
+    shaula_shortcut_preferences_clear(&normalized);
+    return saved;
+  }
+
+  ShaulaShortcutResult queried = shaula_shortcuts_query(status, error_text);
+  if (queried != SHAULA_SHORTCUT_RESULT_OK &&
+      status->state == SHAULA_SHORTCUT_STATE_CONFIG_INVALID) {
+    shaula_shortcut_preferences_clear(&normalized);
+    return queried;
+  }
+
+  ShaulaShortcutResult applied = SHAULA_SHORTCUT_RESULT_OK;
+  if (status->backend == SHAULA_SHORTCUT_BACKEND_PORTAL &&
+      (status->autostart_installed || status->provider_running))
+    applied =
+        shaula_shortcut_portal_apply_preferences(options, status, error_text);
+  shaula_shortcut_preferences_clear(&normalized);
+  if (applied != SHAULA_SHORTCUT_RESULT_OK)
+    return applied;
+  return shaula_shortcuts_query(status, error_text);
+}
+
 static ShaulaShortcutResult persist_enable_status(
     const ShaulaShortcutOptions *options, ShaulaShortcutStatus *status,
     ShaulaShortcutResult operation, char **error_text) {
@@ -298,8 +626,17 @@ shaula_shortcuts_repair(const ShaulaShortcutOptions *options,
     if (portal_state_is_viable(status->state))
       return persist_enable_status(options, status, repaired, error_text);
   } else if (status->backend == SHAULA_SHORTCUT_BACKEND_NIRI) {
-    ShaulaShortcutResult repaired =
-        shaula_shortcut_niri_enable(options, status, error_text);
+    ShaulaShortcutPreferences preferences;
+    shaula_shortcut_preferences_init_defaults(&preferences);
+    ShaulaShortcutResult loaded =
+        shaula_shortcuts_preferences_load(&preferences, error_text);
+    if (loaded != SHAULA_SHORTCUT_RESULT_OK) {
+      shaula_shortcut_preferences_clear(&preferences);
+      return loaded;
+    }
+    ShaulaShortcutResult repaired = shaula_shortcut_niri_apply_preferences(
+        options, &preferences, status, error_text);
+    shaula_shortcut_preferences_clear(&preferences);
     return persist_enable_status(options, status, repaired, error_text);
   }
   return shaula_shortcuts_enable(options, status, error_text);

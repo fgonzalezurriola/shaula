@@ -25,6 +25,7 @@ static const char provider_introspection_xml[] =
     "   <arg name='status' type='a{sv}' direction='out'/>"
     "  </method>"
     "  <method name='Reconfigure'/>"
+    "  <method name='ApplyPreferences'/>"
     "  <method name='Stop'/>"
     " </interface>"
     "</node>";
@@ -32,14 +33,13 @@ static const char provider_introspection_xml[] =
 typedef struct {
   const char *id;
   const char *description;
-  const char *preferred_trigger;
 } ShortcutSpec;
 
 static const ShortcutSpec shortcut_specs[] = {
-    {"quick", "Quick capture", "CTRL+SHIFT+1"},
-    {"area", "Area capture", "CTRL+SHIFT+2"},
-    {"fullscreen", "Fullscreen capture", "CTRL+SHIFT+3"},
-    {"all_screens", "All-screens capture", "CTRL+SHIFT+4"},
+    {"quick", "Quick capture"},
+    {"area", "Area capture"},
+    {"fullscreen", "Fullscreen capture"},
+    {"all_screens", "All-screens capture"},
 };
 
 typedef struct {
@@ -68,6 +68,7 @@ typedef struct {
   GSubprocess *capture_process;
   ShaulaShortcutProviderGate gate;
   ShaulaShortcutProviderState persisted;
+  ShaulaShortcutPreferences preferences;
 } Provider;
 
 static guint request_timeout_ms(void) {
@@ -207,6 +208,24 @@ static gboolean portal_request_call(Provider *provider, const char *method,
   return TRUE;
 }
 
+static gboolean provider_load_preferences(Provider *provider, GError **error) {
+  ShaulaShortcutPreferences loaded;
+  shaula_shortcut_preferences_init_defaults(&loaded);
+  g_autofree char *error_text = NULL;
+  ShaulaShortcutResult result =
+      shaula_shortcuts_preferences_load(&loaded, &error_text);
+  if (result != SHAULA_SHORTCUT_RESULT_OK) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "%s",
+                error_text != NULL ? error_text
+                                   : "shortcut preferences are invalid");
+    shaula_shortcut_preferences_clear(&loaded);
+    return FALSE;
+  }
+  shaula_shortcut_preferences_clear(&provider->preferences);
+  provider->preferences = loaded;
+  return TRUE;
+}
+
 static void provider_write_state(Provider *provider, ShaulaShortcutState state,
                                  const char *error_code, const char *detail) {
   provider->persisted.state = state;
@@ -288,7 +307,7 @@ static gboolean provider_create_session(Provider *provider, guint *response,
   return TRUE;
 }
 
-static GVariant *shortcut_request_array(void) {
+static GVariant *shortcut_request_array(const Provider *provider) {
   GVariantBuilder shortcuts;
   g_variant_builder_init(&shortcuts, G_VARIANT_TYPE("a(sa{sv})"));
   for (guint i = 0; i < G_N_ELEMENTS(shortcut_specs); i++) {
@@ -296,9 +315,10 @@ static GVariant *shortcut_request_array(void) {
     g_variant_builder_init(&properties, G_VARIANT_TYPE_VARDICT);
     g_variant_builder_add(&properties, "{sv}", "description",
                           g_variant_new_string(shortcut_specs[i].description));
-    g_variant_builder_add(
-        &properties, "{sv}", "preferred_trigger",
-        g_variant_new_string(shortcut_specs[i].preferred_trigger));
+    g_autofree char *portal_trigger =
+        g_ascii_strup(provider->preferences.triggers[i], -1);
+    g_variant_builder_add(&properties, "{sv}", "preferred_trigger",
+                          g_variant_new_string(portal_trigger));
     g_variant_builder_add(&shortcuts, "(s@a{sv})", shortcut_specs[i].id,
                           g_variant_builder_end(&properties));
   }
@@ -333,8 +353,9 @@ static guint provider_apply_shortcut_list(Provider *provider,
       GVariant *trigger = g_variant_lookup_value(
           properties, "trigger_description", G_VARIANT_TYPE_STRING);
       provider->persisted.triggers[index] =
-          g_strdup(trigger != NULL ? g_variant_get_string(trigger, NULL)
-                                   : shortcut_specs[index].preferred_trigger);
+          g_strdup(trigger != NULL
+                       ? g_variant_get_string(trigger, NULL)
+                       : provider->preferences.triggers[index]);
       g_clear_pointer(&trigger, g_variant_unref);
     }
     g_variant_unref(properties);
@@ -396,7 +417,7 @@ static gboolean provider_bind_shortcuts(Provider *provider, guint *response,
   gboolean called = portal_request_call(
       provider, "BindShortcuts", handle_token,
       g_variant_new("(o@a(sa{sv})s@a{sv})", provider->session_handle,
-                    shortcut_request_array(), "",
+                    shortcut_request_array(provider), "",
                     g_variant_builder_end(&options)),
       &request, error);
   if (!called) {
@@ -736,10 +757,19 @@ static GVariant *provider_status_variant(Provider *provider) {
   for (guint i = 0; i < G_N_ELEMENTS(shortcut_specs); i++)
     triggers[i] = provider->persisted.triggers[i] != NULL
                       ? provider->persisted.triggers[i]
-                      : shortcut_specs[i].preferred_trigger;
+                      : provider->preferences.triggers[i];
   g_variant_builder_add(&status, "{sv}", "triggers",
                         g_variant_new_strv(triggers, -1));
   return g_variant_builder_end(&status);
+}
+
+static gboolean provider_apply_preferences(Provider *provider,
+                                           GError **error) {
+  if (!provider_load_preferences(provider, error))
+    return FALSE;
+  provider_close_session(provider, TRUE);
+  provider_schedule_reconnect(provider);
+  return TRUE;
 }
 
 static gboolean provider_reconfigure(Provider *provider, GError **error) {
@@ -789,6 +819,15 @@ static void on_provider_method_call(GDBusConnection *connection,
   if (g_str_equal(method_name, "Reconfigure")) {
     g_autoptr(GError) error = NULL;
     if (!provider_reconfigure(provider, &error)) {
+      g_dbus_method_invocation_return_gerror(invocation, error);
+      return;
+    }
+    g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+  if (g_str_equal(method_name, "ApplyPreferences")) {
+    g_autoptr(GError) error = NULL;
+    if (!provider_apply_preferences(provider, &error)) {
       g_dbus_method_invocation_return_gerror(invocation, error);
       return;
     }
@@ -851,17 +890,27 @@ static void provider_clear(Provider *provider) {
   g_clear_pointer(&provider->shaula_binary, g_free);
   shaula_shortcut_provider_gate_clear(&provider->gate);
   shaula_shortcut_provider_state_clear(&provider->persisted);
+  shaula_shortcut_preferences_clear(&provider->preferences);
 }
 
 int main(void) {
   Provider provider = {0};
   shaula_shortcut_provider_gate_init(&provider.gate);
   shaula_shortcut_provider_state_init(&provider.persisted);
+  shaula_shortcut_preferences_init_defaults(&provider.preferences);
   provider.shaula_binary =
       shaula_executable_resolve_helper("SHAULA_BIN", "shaula");
   provider.loop = g_main_loop_new(NULL, FALSE);
 
   g_autoptr(GError) error = NULL;
+  if (!provider_load_preferences(&provider, &error)) {
+    provider_write_state(&provider, SHAULA_SHORTCUT_STATE_CONFIG_INVALID,
+                         "ERR_SHORTCUT_CONFIGURATION_INVALID",
+                         error != NULL ? error->message
+                                       : "Shortcut preferences are invalid.");
+    provider_clear(&provider);
+    return 67;
+  }
   provider.bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
   if (provider.bus == NULL) {
     provider_write_state(&provider, SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE,

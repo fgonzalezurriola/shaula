@@ -317,9 +317,11 @@ niri validate -c "${XDG_CONFIG_HOME:-$HOME/.config}/niri/config.kdl"
 ```
 
 On a desktop with a GlobalShortcuts backend, verify at least one real portal
-shortcut event and record the resulting capture path. On a desktop without one,
-verify the unsupported warning and confirm that `shaula launch` opens the capture
-menu regardless of shortcut choice state.
+shortcut event and record the resulting capture path. Change all four preferred
+bindings in Settings, confirm the provider rebinds, and verify that Settings and
+the launcher report the desktop-approved mappings after approval and a new login
+session. On a desktop without one, verify the unsupported warning and confirm
+that `shaula launch` opens the capture menu regardless of shortcut choice state.
 
 On hybrid NVIDIA systems, also inspect the kernel journal for `NVRM: Xid` after
 manual graphical checks and record which DRM connector belongs to each GPU. If
@@ -328,7 +330,7 @@ interactive validation and record it as a GPU/driver environment failure unless
 timestamps and a repeatable test establish a Shaula causal path. Do not infer
 causality from a delayed compositor failure alone.
 
-GNOME and KDE interactive portal/graphical validation is not checked for
-v0.1.6. It is explicitly deferred to v0.1.9 and must not be reported as passed.
-Configurable capture shortcuts from the Settings view are also deferred to
-v0.1.9.
+GNOME and KDE interactive portal/graphical validation is not checked for the
+current implementation. It is explicitly required for v0.1.9 and must not be
+reported as passed until preference rebinding, activation, and persistence have
+been exercised in both sessions.

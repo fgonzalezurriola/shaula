@@ -10,9 +10,6 @@
 #define PROVIDER_OBJECT "/dev/shaula/ShortcutProvider"
 #define PROVIDER_IFACE "dev.shaula.ShortcutProvider"
 
-static const char *const preferred_triggers[] = {
-    "Ctrl+Shift+1", "Ctrl+Shift+2", "Ctrl+Shift+3", "Ctrl+Shift+4"};
-
 static void set_error(char **error_text, const char *message) {
   if (error_text == NULL)
     return;
@@ -24,8 +21,12 @@ static void initialize_portal_status(ShaulaShortcutStatus *status) {
   shaula_shortcut_status_clear(status);
   status->backend = SHAULA_SHORTCUT_BACKEND_PORTAL;
   status->autostart_installed = shaula_shortcut_autostart_installed();
-  for (guint i = 0; i < G_N_ELEMENTS(preferred_triggers); i++)
-    status->triggers[i] = g_strdup(preferred_triggers[i]);
+  ShaulaShortcutPreferences preferences;
+  shaula_shortcut_preferences_init_defaults(&preferences);
+  (void)shaula_shortcuts_preferences_load(&preferences, NULL);
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++)
+    status->triggers[i] = g_strdup(preferences.triggers[i]);
+  shaula_shortcut_preferences_clear(&preferences);
 }
 
 static ShaulaShortcutState test_state(void) {
@@ -166,6 +167,19 @@ shaula_shortcut_portal_query(ShaulaShortcutStatus *status, char **error_text) {
   initialize_portal_status(status);
   if (error_text != NULL)
     g_clear_pointer(error_text, g_free);
+  ShaulaShortcutPreferences preferences;
+  shaula_shortcut_preferences_init_defaults(&preferences);
+  ShaulaShortcutResult preferences_result =
+      shaula_shortcuts_preferences_load(&preferences, error_text);
+  shaula_shortcut_preferences_clear(&preferences);
+  if (preferences_result != SHAULA_SHORTCUT_RESULT_OK) {
+    status->state = SHAULA_SHORTCUT_STATE_CONFIG_INVALID;
+    status->error_code = g_strdup("ERR_SHORTCUT_CONFIGURATION_INVALID");
+    status->detail = g_strdup(error_text != NULL && *error_text != NULL
+                                  ? *error_text
+                                  : "Shortcut preferences are invalid.");
+    return preferences_result;
+  }
 
   if (test_mode_enabled()) {
     status->state = test_state();
@@ -414,6 +428,33 @@ shaula_shortcut_portal_repair(const ShaulaShortcutOptions *options,
     set_error(error_text,
               error != NULL ? error->message
                             : "ERR_SHORTCUT_PROVIDER_UNAVAILABLE: repair failed");
+    status->state = SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE;
+    g_set_str(&status->error_code, "ERR_SHORTCUT_PROVIDER_UNAVAILABLE");
+    return SHAULA_SHORTCUT_RESULT_PROVIDER_FAILED;
+  }
+  return queried == SHAULA_SHORTCUT_RESULT_CONFIG_INVALID
+             ? queried
+             : shaula_shortcut_portal_query(status, error_text);
+}
+
+ShaulaShortcutResult shaula_shortcut_portal_apply_preferences(
+    const ShaulaShortcutOptions *options, ShaulaShortcutStatus *status,
+    char **error_text) {
+  g_return_val_if_fail(status != NULL, SHAULA_SHORTCUT_RESULT_CONFIG_INVALID);
+  if (test_mode_enabled())
+    return shaula_shortcut_portal_query(status, error_text);
+
+  ShaulaShortcutResult queried =
+      shaula_shortcut_portal_query(status, error_text);
+  if (!status->provider_running)
+    return shaula_shortcut_portal_enable(options, status, error_text);
+
+  g_autoptr(GError) error = NULL;
+  if (!provider_call("ApplyPreferences", &error)) {
+    set_error(error_text,
+              error != NULL
+                  ? error->message
+                  : "ERR_SHORTCUT_PROVIDER_UNAVAILABLE: preference apply failed");
     status->state = SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE;
     g_set_str(&status->error_code, "ERR_SHORTCUT_PROVIDER_UNAVAILABLE");
     return SHAULA_SHORTCUT_RESULT_PROVIDER_FAILED;

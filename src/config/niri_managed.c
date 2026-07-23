@@ -118,23 +118,29 @@ gboolean install_managed_block(const char *path_override,
   return TRUE;
 }
 
-char *shaula_niri_keybinds_render(void) {
+char *shaula_niri_keybinds_render(const char *const *triggers,
+                                  gsize trigger_count) {
+  g_return_val_if_fail(triggers != NULL && trigger_count == 4U, NULL);
   g_autofree char *binary = shaula_executable_current_path();
   const char *path = binary != NULL ? binary : "shaula";
   return g_strdup_printf(
       "binds {\n"
-      "    CTRL+Shift+1 repeat=false hotkey-overlay-title=\"Shaula: Quick Capture\" {\n        spawn \"%s\" \"capture\" \"quick\" \"--json\";\n    }\n\n"
-      "    CTRL+Shift+2 repeat=false hotkey-overlay-title=\"Shaula: Capture Area\" {\n        spawn \"%s\" \"capture\" \"area\" \"--json\";\n    }\n\n"
-      "    CTRL+Shift+3 repeat=false hotkey-overlay-title=\"Shaula: Capture Fullscreen\" {\n        spawn \"%s\" \"capture\" \"fullscreen\" \"--json\" \"--save\";\n    }\n\n"
-      "    CTRL+Shift+4 repeat=false hotkey-overlay-title=\"Shaula: Capture All Screens\" {\n        spawn \"%s\" \"capture\" \"all-screens\" \"--json\" \"--save\";\n    }\n"
+      "    %s repeat=false hotkey-overlay-title=\"Shaula: Quick Capture\" {\n        spawn \"%s\" \"capture\" \"quick\" \"--json\";\n    }\n\n"
+      "    %s repeat=false hotkey-overlay-title=\"Shaula: Capture Area\" {\n        spawn \"%s\" \"capture\" \"area\" \"--json\";\n    }\n\n"
+      "    %s repeat=false hotkey-overlay-title=\"Shaula: Capture Fullscreen\" {\n        spawn \"%s\" \"capture\" \"fullscreen\" \"--json\" \"--save\";\n    }\n\n"
+      "    %s repeat=false hotkey-overlay-title=\"Shaula: Capture All Screens\" {\n        spawn \"%s\" \"capture\" \"all-screens\" \"--json\" \"--save\";\n    }\n"
       "}\n",
-      path, path, path, path);
+      triggers[0], path, triggers[1], path, triggers[2], path, triggers[3],
+      path);
 }
 
-GPtrArray *niri_keybind_conflicts(const char *path) {
+GPtrArray *niri_keybind_conflicts(const char *path,
+                                  const char *const *triggers,
+                                  gsize trigger_count) {
   GPtrArray *conflicts = g_ptr_array_new_with_free_func(g_free);
   g_autofree char *contents = NULL;
-  if (path == NULL || !g_file_get_contents(path, &contents, NULL, NULL))
+  if (path == NULL || triggers == NULL ||
+      !g_file_get_contents(path, &contents, NULL, NULL))
     return conflicts;
   gboolean managed = FALSE;
   g_auto(GStrv) lines = g_strsplit(contents, "\n", -1);
@@ -150,9 +156,12 @@ GPtrArray *niri_keybind_conflicts(const char *path) {
     }
     if (managed || g_str_has_prefix(line, "//"))
       continue;
-    for (guint key = 1; key <= 4; key++) {
-      g_autofree char *token = g_strdup_printf("CTRL+Shift+%u", key);
-      if (strstr(line, token) != NULL) {
+    const char *separator = strpbrk(line, " \t{");
+    g_autofree char *binding =
+        separator != NULL ? g_strndup(line, (gsize)(separator - line))
+                          : g_strdup(line);
+    for (gsize key = 0; key < trigger_count; key++) {
+      if (g_ascii_strcasecmp(binding, triggers[key]) == 0) {
         g_ptr_array_add(conflicts,
                         g_strdup_printf("line %u: %s", i + 1, line));
         break;

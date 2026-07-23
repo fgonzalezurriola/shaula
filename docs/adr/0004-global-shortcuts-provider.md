@@ -22,22 +22,23 @@ Backend selection is portal-first:
 3. The backend is reported active only when all four logical actions are returned and activation delivery is subscribed. Returned `trigger_description` values are authoritative; preferred triggers are requests, not claims.
 4. Desktop cancellation or rejection is preserved as permission-denied state.
 5. Technical portal non-viability removes provider autostart state and probes for a real Niri configuration.
-6. When Niri is detected, Shaula checks `Ctrl+Shift+1` through `4` for conflicts, backs up the complete config, and installs only its marked managed block.
+6. When Niri is detected, Shaula checks the configured preferred triggers for conflicts, backs up the complete config, and installs only its marked managed block.
 7. Without a viable portal or Niri configuration, Shaula reports unsupported and keeps the universal menu and desktop launcher actions available.
 
-The four logical actions are quick capture, area capture, fullscreen capture, and all-screens capture. Their requested preferred triggers are `Ctrl+Shift+1` through `Ctrl+Shift+4`.
+The four logical actions are quick capture, area capture, fullscreen capture, and all-screens capture. Their default preferred triggers are `Ctrl+Shift+1` through `Ctrl+Shift+4`. Settings stores normalized, unique preferred triggers in `$XDG_CONFIG_HOME/shaula/shortcuts.ini`. These preferences are distinct from portal-approved mappings, which remain authoritative runtime status.
 
 ## Resident provider responsibilities
 
 `shaula-shortcut-provider` is the only resident Shaula process and is deliberately narrow. It:
 
 - owns one `org.freedesktop.portal.GlobalShortcuts` session;
-- exposes a small private D-Bus control surface for status, reconfiguration, and clean shutdown;
+- exposes a small private D-Bus control surface for status, desktop reconfiguration, preference rebinding, and clean shutdown;
 - maps approved activation IDs to existing Shaula capture argv arrays;
 - launches commands directly with `GSubprocess`, never through a shell;
 - suppresses duplicate provider instances with the well-known per-user D-Bus name `dev.shaula.ShortcutProvider`;
 - suppresses repeated or concurrent capture dispatch through a deterministic activation gate;
 - records deterministic provider state for Settings and CLI status;
+- closes and rebinds its session after preferred-trigger changes;
 - closes its session on disable and reconnects with bounded backoff after portal restart or session loss.
 
 It does not capture pixels, implement capture modes, own Preview state, or become a general Shaula daemon. Niri configuration is handled separately by the non-resident managed-config adapter. The normal `shaula capture ...` commands therefore remain short-lived and retain all existing capture locks and error behavior.
@@ -54,7 +55,7 @@ The provider executable itself is immutable package payload installed by Meson, 
 
 The generic status model distinguishes disabled, active, permission pending, permission denied, Niri conflict, unsupported, provider unavailable, reconnecting/session lost, and invalid configuration. Stable failures include `ERR_NIRI_KEYBIND_CONFLICT` in addition to the portal and configuration taxonomy.
 
-Enable, disable, repair, and repeated operations are idempotent. Explicit decline is persisted separately from installed state.
+Enable, disable, repair, preference apply, and repeated operations are idempotent. Explicit decline, preferred triggers, and installed or desktop-approved state are persisted separately.
 
 ## Consequences
 

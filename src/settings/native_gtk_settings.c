@@ -49,6 +49,7 @@ typedef struct {
   gboolean config_invalid;
   ShaulaSettingsConfig config;
   ShaulaShortcutStatus shortcuts;
+  ShaulaShortcutPreferences shortcut_preferences;
   gboolean setup_mode;
   GtkWidget *shortcuts_state_label;
   GtkWidget *shortcuts_backend_label;
@@ -57,6 +58,9 @@ typedef struct {
   GtkWidget *shortcuts_enable_button;
   GtkWidget *shortcuts_disable_button;
   GtkWidget *shortcuts_configure_button;
+  GtkWidget *shortcuts_preferences_save_button;
+  GtkWidget *shortcuts_preferences_reset_button;
+  GtkEntry *shortcuts_preference_entries[SHAULA_SHORTCUT_COUNT];
   GtkWidget *shortcuts_repair_button;
   GtkWidget *shortcuts_recheck_button;
   GtkWidget *shortcuts_menu_button;
@@ -386,7 +390,75 @@ static void on_shortcuts_configure_clicked(GtkButton *button, gpointer data) {
   run_shortcut_operation(SHORTCUT_OPERATION_REPAIR);
   if (state.shortcuts.state != SHAULA_SHORTCUT_STATE_PROVIDER_UNAVAILABLE &&
       state.shortcuts.state != SHAULA_SHORTCUT_STATE_CONFIG_INVALID)
-    set_status("Shortcut configuration requested from the desktop.", FALSE);
+    set_status("Desktop shortcut configuration requested.", FALSE);
+}
+
+static void update_shortcut_preference_entries(
+    const ShaulaShortcutPreferences *preferences) {
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++) {
+    if (state.shortcuts_preference_entries[i] != NULL)
+      gtk_editable_set_text(
+          GTK_EDITABLE(state.shortcuts_preference_entries[i]),
+          preferences->triggers[i] != NULL ? preferences->triggers[i] : "");
+  }
+}
+
+static void on_shortcuts_preferences_save_clicked(GtkButton *button,
+                                                  gpointer data) {
+  (void)button;
+  (void)data;
+  ShaulaShortcutPreferences requested = {0};
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++) {
+    requested.triggers[i] = g_strdup(gtk_editable_get_text(
+        GTK_EDITABLE(state.shortcuts_preference_entries[i])));
+  }
+  ShaulaShortcutOptions options = {.remember_choice = FALSE};
+  g_autofree char *error = NULL;
+  ShaulaShortcutResult result = shaula_shortcuts_preferences_apply(
+      &requested, &options, &state.shortcuts, &error);
+  shaula_shortcut_preferences_clear(&requested);
+  if (result != SHAULA_SHORTCUT_RESULT_OK) {
+    refresh_shortcuts_status();
+    set_status(error != NULL ? error : "Shortcut preferences could not be saved.",
+               TRUE);
+    return;
+  }
+
+  ShaulaShortcutPreferences normalized;
+  shaula_shortcut_preferences_init_defaults(&normalized);
+  if (shaula_shortcuts_preferences_load(&normalized, &error) !=
+      SHAULA_SHORTCUT_RESULT_OK) {
+    shaula_shortcut_preferences_clear(&normalized);
+    set_status(error != NULL ? error
+                             : "Shortcut preferences could not be reloaded.",
+               TRUE);
+    return;
+  }
+  shaula_shortcut_preferences_clear(&state.shortcut_preferences);
+  state.shortcut_preferences = normalized;
+  update_shortcut_preference_entries(&state.shortcut_preferences);
+  refresh_shortcuts_status();
+  if (state.shortcuts.backend == SHAULA_SHORTCUT_BACKEND_PORTAL)
+    set_status("Preferred shortcuts saved and sent to the desktop portal.",
+               FALSE);
+  else if (state.shortcuts.backend == SHAULA_SHORTCUT_BACKEND_NIRI)
+    set_status("Preferred shortcuts saved and applied to the managed Niri block.",
+               FALSE);
+  else
+    set_status("Preferred shortcuts saved for the next supported desktop.",
+               FALSE);
+}
+
+static void on_shortcuts_preferences_reset_clicked(GtkButton *button,
+                                                   gpointer data) {
+  (void)button;
+  (void)data;
+  ShaulaShortcutPreferences defaults;
+  shaula_shortcut_preferences_init_defaults(&defaults);
+  update_shortcut_preference_entries(&defaults);
+  shaula_shortcut_preferences_clear(&defaults);
+  set_status("Default shortcuts loaded. Select Save Bindings to apply them.",
+             FALSE);
 }
 
 static void on_shortcuts_recheck_clicked(GtkButton *button, gpointer data) {
@@ -699,9 +771,10 @@ static GtkWidget *build_form(void) {
   gtk_widget_set_margin_start(shortcuts_card, 16);
   gtk_widget_set_margin_end(shortcuts_card, 16);
   GtkWidget *shortcuts_description = gtk_label_new(
-      "Configure Quick, Area, Fullscreen, and All Screens through your "
-      "desktop's shortcut portal. The Shaula menu always works when global "
-      "shortcuts are unavailable.");
+      "Choose preferred bindings for Quick, Area, Fullscreen, and All Screens. "
+      "Use forms such as Ctrl+Alt+P, Super+F8, or Ctrl+Shift+1. The desktop "
+      "portal may present an approval step or replace a preference with its "
+      "approved mapping. The Shaula menu always remains available.");
   gtk_label_set_xalign(GTK_LABEL(shortcuts_description), 0.0);
   gtk_label_set_wrap(GTK_LABEL(shortcuts_description), TRUE);
   gtk_widget_add_css_class(shortcuts_description, "description");
@@ -736,6 +809,37 @@ static GtkWidget *build_form(void) {
   gtk_widget_add_css_class(state.shortcuts_detail_label, "description");
   gtk_box_append(GTK_BOX(shortcuts_card), state.shortcuts_detail_label);
 
+  GtkWidget *preferences_label = gtk_label_new("Preferred bindings");
+  gtk_label_set_xalign(GTK_LABEL(preferences_label), 0.0);
+  gtk_widget_add_css_class(preferences_label, "shortcut-preferences-title");
+  gtk_box_append(GTK_BOX(shortcuts_card), preferences_label);
+
+  GtkWidget *preferences_grid = gtk_grid_new();
+  gtk_grid_set_column_spacing(GTK_GRID(preferences_grid), 16);
+  gtk_grid_set_row_spacing(GTK_GRID(preferences_grid), 8);
+  const char *preference_names[SHAULA_SHORTCUT_COUNT] = {
+      "Quick capture", "Area capture", "Fullscreen capture", "All screens"};
+  for (guint i = 0; i < SHAULA_SHORTCUT_COUNT; i++) {
+    GtkWidget *label = gtk_label_new(preference_names[i]);
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+    gtk_widget_set_hexpand(label, TRUE);
+    state.shortcuts_preference_entries[i] = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_placeholder_text(state.shortcuts_preference_entries[i],
+                                   "Ctrl+Shift+1");
+    gtk_widget_set_size_request(
+        GTK_WIDGET(state.shortcuts_preference_entries[i]), 220, -1);
+    gtk_editable_set_text(
+        GTK_EDITABLE(state.shortcuts_preference_entries[i]),
+        state.shortcut_preferences.triggers[i] != NULL
+            ? state.shortcut_preferences.triggers[i]
+            : "");
+    gtk_grid_attach(GTK_GRID(preferences_grid), label, 0, (int)i, 1, 1);
+    gtk_grid_attach(GTK_GRID(preferences_grid),
+                    GTK_WIDGET(state.shortcuts_preference_entries[i]), 1,
+                    (int)i, 1, 1);
+  }
+  gtk_box_append(GTK_BOX(shortcuts_card), preferences_grid);
+
   GtkWidget *shortcut_buttons = gtk_flow_box_new();
   gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(shortcut_buttons),
                                   GTK_SELECTION_NONE);
@@ -747,7 +851,13 @@ static GtkWidget *build_form(void) {
   gtk_widget_add_css_class(state.shortcuts_enable_button, "suggested-action");
   state.shortcuts_disable_button = gtk_button_new_with_label("Disable");
   state.shortcuts_configure_button =
-      gtk_button_new_with_label("Configure Shortcuts");
+      gtk_button_new_with_label("Desktop Configuration");
+  state.shortcuts_preferences_save_button =
+      gtk_button_new_with_label("Save Bindings");
+  gtk_widget_add_css_class(state.shortcuts_preferences_save_button,
+                           "suggested-action");
+  state.shortcuts_preferences_reset_button =
+      gtk_button_new_with_label("Use Defaults");
   state.shortcuts_repair_button = gtk_button_new_with_label("Repair");
   state.shortcuts_recheck_button = gtk_button_new_with_label("Check Again");
   gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
@@ -758,6 +868,10 @@ static GtkWidget *build_form(void) {
                       state.shortcuts_disable_button);
   gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
                       state.shortcuts_configure_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_preferences_save_button);
+  gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
+                      state.shortcuts_preferences_reset_button);
   gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
                       state.shortcuts_repair_button);
   gtk_flow_box_append(GTK_FLOW_BOX(shortcut_buttons),
@@ -944,6 +1058,10 @@ static GtkWidget *build_form(void) {
                    G_CALLBACK(on_shortcuts_disable_clicked), NULL);
   g_signal_connect(state.shortcuts_configure_button, "clicked",
                    G_CALLBACK(on_shortcuts_configure_clicked), NULL);
+  g_signal_connect(state.shortcuts_preferences_save_button, "clicked",
+                   G_CALLBACK(on_shortcuts_preferences_save_clicked), NULL);
+  g_signal_connect(state.shortcuts_preferences_reset_button, "clicked",
+                   G_CALLBACK(on_shortcuts_preferences_reset_clicked), NULL);
   g_signal_connect(state.shortcuts_repair_button, "clicked",
                    G_CALLBACK(on_shortcuts_repair_clicked), NULL);
   g_signal_connect(state.shortcuts_recheck_button, "clicked",
@@ -979,6 +1097,7 @@ static GtkWidget *build_error_box(void) {
 }
 
 static void load_initial_state(AppState *app) {
+  (void)shaula_shortcuts_preferences_load(&app->shortcut_preferences, NULL);
   app->config_path = shaula_settings_resolve_config_path();
   shaula_settings_config_init_defaults(&app->config);
   if (app->config_path == NULL) {
@@ -1098,6 +1217,7 @@ static void install_css(GtkApplication *app, gpointer data) {
       "opacity: 0.7; }"
       ".settings-row { min-height: 38px; }"
       ".description { opacity: 0.72; font-size: 12px; }"
+      ".shortcut-preferences-title { font-weight: 700; margin-top: 6px; }"
       ".shortcut-warning { background: rgba(245, 158, 11, 0.12); "
       "color: #f59e0b; border-left: 3px solid #f59e0b; padding: 12px; }"
       "button.suggested-action { font-weight: bold; }"
@@ -1110,6 +1230,7 @@ static void install_css(GtkApplication *app, gpointer data) {
 
 int main(int argc, char **argv) {
   shaula_shortcut_status_init(&state.shortcuts);
+  shaula_shortcut_preferences_init_defaults(&state.shortcut_preferences);
   state.setup_mode = argc >= 2 && g_str_equal(argv[1], "--setup");
   state.shaula_bin = g_strdup("shaula");
   GtkApplication *app =
@@ -1123,6 +1244,7 @@ int main(int argc, char **argv) {
   g_free(state.shaula_bin);
   g_free(state.config_path);
   shaula_shortcut_status_clear(&state.shortcuts);
+  shaula_shortcut_preferences_clear(&state.shortcut_preferences);
   shaula_settings_config_clear(&state.config);
   return rc > 255 ? 255 : rc;
 }

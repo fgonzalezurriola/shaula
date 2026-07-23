@@ -56,8 +56,11 @@ assign different bindings.
 | `Ctrl+Shift+3` | Capture fullscreen |
 | `Ctrl+Shift+4` | Capture all screens |
 
-On Niri, Shaula installs these bindings in a backed-up managed configuration
-block when the portal route is unavailable and no conflicting bindings exist.
+Settings can replace each preferred binding with a unique combination such as
+`Ctrl+Alt+P`, `Super+F8`, or `Ctrl+Shift+1`. Portal desktops may approve a
+different mapping, which remains authoritative in status labels. On Niri,
+Shaula conflict-checks the configured bindings, rewrites the backed-up managed
+configuration block, and reloads the live config when IPC is available.
 
 Uninstall:
 

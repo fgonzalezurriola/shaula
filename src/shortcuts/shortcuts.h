@@ -4,6 +4,8 @@
 #include <glib.h>
 #include <stdint.h>
 
+#define SHAULA_SHORTCUT_COUNT 4U
+
 typedef int32_t ShaulaShortcutBackend;
 enum {
   SHAULA_SHORTCUT_BACKEND_NONE = 0,
@@ -52,8 +54,12 @@ typedef struct {
   gboolean activation_ready;
   char *detail;
   char *error_code;
-  char *triggers[4];
+  char *triggers[SHAULA_SHORTCUT_COUNT];
 } ShaulaShortcutStatus;
+
+typedef struct {
+  char *triggers[SHAULA_SHORTCUT_COUNT];
+} ShaulaShortcutPreferences;
 
 typedef struct {
   gboolean dry_run;
@@ -63,6 +69,21 @@ typedef struct {
 
 void shaula_shortcut_status_init(ShaulaShortcutStatus *status);
 void shaula_shortcut_status_clear(ShaulaShortcutStatus *status);
+void shaula_shortcut_preferences_init_defaults(
+    ShaulaShortcutPreferences *preferences);
+void shaula_shortcut_preferences_clear(
+    ShaulaShortcutPreferences *preferences);
+
+/*
+ * Preferred triggers are Shaula-owned configuration. Portal-approved/live
+ * mappings remain separate in ShaulaShortcutStatus.triggers.
+ */
+ShaulaShortcutResult shaula_shortcuts_preferences_load(
+    ShaulaShortcutPreferences *preferences, char **error_text);
+ShaulaShortcutResult shaula_shortcuts_preferences_apply(
+    const ShaulaShortcutPreferences *preferences,
+    const ShaulaShortcutOptions *options, ShaulaShortcutStatus *status,
+    char **error_text);
 
 /*
  * The shortcut module is the sole external seam for Settings and CLI setup.
