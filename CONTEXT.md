@@ -211,6 +211,11 @@ workflow replaces those markers only in writable AUR clones before pushing.
   desktop assets from the same source. The browser title remains `Shaula`.
 - `./dev` now imports the active graphical session without forcing Niri or a
   hard-coded Wayland display, so runtime compositor detection is exercised.
+- Preview toolbar and properties icons preserve their stroke-based SVG shapes
+  while resolving `currentColor` from each mapped widget's computed GTK
+  foreground. This supports custom light/dark CSS and suggested-action colors
+  without guessing theme polarity or invoking GTK's fill-based traditional
+  symbolic renderer.
 - Build-tree runs resolve the shortcut provider and graphical helpers from the
   current checkout instead of accidentally mixing in an older local install.
 - `./dev menu` opens the universal launcher and `./dev shortcuts` reports the
