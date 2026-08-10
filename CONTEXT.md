@@ -150,7 +150,10 @@ workflow replaces those markers only in writable AUR clones before pushing.
   desktop metadata, package descriptions, the README opening, and the product
   landing page; the GitHub repository description matches it.
 - Issues and PRDs are tracked as scratch files under `.scratch/<feature>/`
-  following `docs/agents/issue-tracker.md`; there are no GitHub issues.
+  following `docs/agents/issue-tracker.md`; there are no GitHub issues. The
+  active roadmap backlog is migrated into `release-validation`,
+  `image-composition`, `save-and-history`, and `quickshell-integration` ticket
+  packages under `.scratch/`.
 - The Astro landing page is deployed at
   `https://shaula-screenshotter.pages.dev/`. `scripts/deploy-web.sh` rebuilds
   `web/dist` and performs the manual Wrangler deployment; no Worker or automatic

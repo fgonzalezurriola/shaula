@@ -108,17 +108,14 @@ Implemented on the development branch:
 
 Release validation still required:
 
-- Build and validate optimized x86_64 and native/QEMU AArch64 archives.
-- Complete GNOME and KDE graphical portal validation, including capture,
-  shortcut approval, shortcut configuration, activation, preference rebinding,
-  and persistence.
+Tracked in `.scratch/release-validation/` as four architecture and desktop
+environment validation tickets.
 
 Product work not required for the portal/install release slice:
 
-- Bounded image composition and canvas expansion.
-- More filename templating and save-path configuration.
-- Additional Preview history affordances.
-- Broader QuickShell integration after architecture and user-value review.
+- `.scratch/image-composition/`
+- `.scratch/save-and-history/`
+- `.scratch/quickshell-integration/`
 
 ## Current non-goals
 
