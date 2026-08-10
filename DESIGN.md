@@ -4,29 +4,32 @@ description: Screenshots for Wayland.
 colors:
   signal-orange: "#f1732c"
   signal-orange-soft: "#ff9b61"
-  chalk-ink: "#f5f3ee"
-  night-surface: "#0d0e0d"
-  night-raised: "#141613"
-  night-soft: "#1a1c18"
-  rule: "#2a2d27"
-  muted-ink: "#969a90"
+  ink: "#f5f3ee"
+  surface: "#0d0e0d"
+  surface-raised: "#141613"
+  surface-soft: "#1a1c18"
+  surface-border: "#2a2d27"
+  muted: "#969a90"
+  quiet: "oklch(62% 0.012 120)"
 typography:
   display:
-    fontFamily: "Inter, Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
     fontSize: "clamp(3rem, 8vw, 6rem)"
     fontWeight: 600
     lineHeight: 0.98
     letterSpacing: "-0.04em"
   body:
-    fontFamily: "Inter, Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.75
   label:
-    fontFamily: "SFMono-Regular, Consolas, Liberation Mono, monospace"
+    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: 1.5
+  sketch:
+    fontFamily: "Excalifont, Comic Shanns, cursive"
 rounded:
   control: "6px"
 spacing:
@@ -39,12 +42,12 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.signal-orange}"
-    textColor: "{colors.night-surface}"
+    textColor: "{colors.surface}"
     rounded: "{rounded.control}"
     padding: "12px 16px"
   button-secondary:
-    backgroundColor: "{colors.night-raised}"
-    textColor: "{colors.chalk-ink}"
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.control}"
     padding: "12px 16px"
 ---
@@ -74,22 +77,27 @@ The palette is restrained: orange signals action or state; tinted near-blacks an
 - **Soft Signal Orange** (`#ff9b61`): hover and successful state feedback.
 
 ### Neutral
-- **Night Surface** (`#0d0e0d`): page background.
-- **Night Raised** (`#141613`): command and media surfaces.
-- **Night Soft** (`#1a1c18`): pressed and hover surfaces.
-- **Rule** (`#2a2d27`): one-pixel boundaries.
-- **Chalk Ink** (`#f5f3ee`): primary text.
-- **Muted Ink** (`#969a90`): explanatory text.
+- **Surface** (`#0d0e0d`): page background.
+- **Surface Raised** (`#141613`): command and media surfaces.
+- **Surface Soft** (`#1a1c18`): pressed and hover surfaces.
+- **Surface Border** (`#2a2d27`): one-pixel boundaries.
+- **Ink** (`#f5f3ee`): primary text.
+- **Muted** (`#969a90`): explanatory text.
+- **Quiet** (`oklch(62% 0.012 120)`): brand-tinted quiet metadata, clearing WCAG AA at
+  at least 5.33:1 against the base surface.
 
 **The Signal Rule.** Orange is reserved for action, focus, and meaningful state. It is not decoration.
 
 ## Typography
 
-**Display Font:** Inter with Geist and system sans fallbacks
-**Body Font:** Inter with Geist and system sans fallbacks
-**Label/Mono Font:** SFMono-Regular with Consolas and Liberation Mono fallbacks
+**Display Font:** Geist with system sans fallbacks
+**Body Font:** Geist with system sans fallbacks
+**Label/Mono Font:** Geist (mono treatment only for executed or machine-shaped content)
+**Sketch Font:** Excalifont, reserved for selective handwritten accents
 
-**Character:** One sans family keeps the voice plain and contemporary. Mono appears only where the content is executable or machine-shaped.
+**Character:** One sans family keeps the voice plain and contemporary. Excalifont
+appears sparingly as a handwritten accent and never carries interface or command
+text.
 
 ### Hierarchy
 - **Display** (600, `clamp(3rem, 8vw, 6rem)`, 0.98): homepage statement only.
@@ -115,7 +123,7 @@ The system uses no shadows. Depth comes from slightly lighter surfaces and one-p
 
 ### Cards / Containers
 - **Corner Style:** square for command and media surfaces.
-- **Background:** Night Raised.
+- **Background:** Surface Raised.
 - **Shadow Strategy:** none.
 - **Border:** one-pixel Rule boundary.
 - **Internal Padding:** 16px-20px.

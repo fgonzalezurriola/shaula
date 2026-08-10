@@ -1,3 +1,5 @@
+The purpose of this project was to see if I could vibe code an app in a language that I don't know, but eventually I deleted all the Zig code because Zig sucks. Now it's too late to read the code, this app now accomplishes everything I need. 
+
 # Shaula
 
 Shaula captures, annotates, saves, and copies screenshots on Wayland.

@@ -1,6 +1,6 @@
 # Shaula Context
 
-Last updated: 2026-07-20
+Last updated: 2026-08-09
 
 ## Current release
 
@@ -148,12 +148,13 @@ workflow replaces those markers only in writable AUR clones before pushing.
 - The canonical short project description is
   `Capture, annotate, save, and copy screenshots on Wayland`. It is used for
   desktop metadata, package descriptions, the README opening, and the product
-  landing page; the GitHub repository description still needs the same manual
-  update after release.
-- The Astro landing page is prepared for a one-time Cloudflare Pages upload as
-  `shaula-screenshotter.pages.dev`. `scripts/deploy-web.sh` rebuilds `web/dist`
-  and performs the manual Wrangler deployment; no Worker or automatic workflow
-  is required for this static site.
+  landing page; the GitHub repository description matches it.
+- Issues and PRDs are tracked as scratch files under `.scratch/<feature>/`
+  following `docs/agents/issue-tracker.md`; there are no GitHub issues.
+- The Astro landing page is deployed at
+  `https://shaula-screenshotter.pages.dev/`. `scripts/deploy-web.sh` rebuilds
+  `web/dist` and performs the manual Wrangler deployment; no Worker or automatic
+  workflow is required for this static site.
 - The Astro landing page now uses a flat, editorial visual system without the
   previous glow, grid, or gradient treatment. Its v0.1.8 content describes the
   universal launcher, automatic grim/portal routing, default recommended

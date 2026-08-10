@@ -26,7 +26,7 @@ A native, local screenshot workflow for Wayland that chooses a supported capture
 - Secondary CTA: inspect or star the project on GitHub.
 - The line a visitor remembers after 10 seconds: Screenshots for Wayland.
 - Belief ladder: Shaula is for Wayland; installation is straightforward; the real workflow works; the project is open source.
-- Proof on hand: the real capture and annotation demo at `web/public/shaula-demo.gif`, public source, and release artifacts.
+- Proof on hand: the real capture and annotation demo video at `web/public/shaula-demo.webm` (H.264 `shaula-demo.mp4` fallback, WebP poster), public source, and release artifacts.
 
 ## Brand Personality
 

@@ -115,14 +115,7 @@ Release validation still required:
 
 Product work not required for the portal/install release slice:
 
-- Update the GitHub repo description after release to match the canonical
-  project phrase: `Capture, annotate, save, and copy screenshots on Wayland`.
-- Re-record the demo clip to reflect v0.1.7 (clipboard via `wl-copy`, current
-  Preview UI) before using it in the README/landing page.
-- Finish and deploy the static product landing page (consistent hero phrase,
-  current clip).
 - Bounded image composition and canvas expansion.
-- Dedicated active eyedropper mode if passive sampling is insufficient.
 - More filename templating and save-path configuration.
 - Additional Preview history affordances.
 - Broader QuickShell integration after architecture and user-value review.

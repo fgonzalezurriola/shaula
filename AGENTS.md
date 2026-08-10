@@ -40,11 +40,11 @@ After making changes, update CONTEXT.md.
 
 ### Issue tracker
 
-Issues and PRDs are tracked in GitHub Issues for `fgonzalezurriola/shaula` using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and PRDs are tracked as scratch files under `.scratch/<feature>/` in this repo. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Use the default canonical triage label vocabulary for agent workflows. See `docs/agents/triage-labels.md`.
+Use the default canonical triage roles, recorded as `Status:` values in each issue file. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
