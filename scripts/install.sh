@@ -7,7 +7,8 @@ ASSUME_YES=0
 INSTALL_INTEGRATIONS=1
 INSTALL_DESKTOP=1
 INSTALL_APP_ICONS=1
-INSTALL_SHORTCUTS=""
+INSTALL_SHORTCUTS="enable"
+INSTALL_SHORTCUTS_EXPLICIT=0
 INSTALL_NOCTALIA=0
 UNINSTALL=0
 INSTALL_CONTEXT="${SHAULA_INSTALL_CONTEXT:-release}"
@@ -400,14 +401,16 @@ while [ "$#" -gt 0 ]; do
     --no-desktop) INSTALL_DESKTOP=0 ;;
     --no-icon) INSTALL_APP_ICONS=0 ;;
     --shortcuts)
-      [ "$INSTALL_SHORTCUTS" != "disable" ] ||
+      [ "$INSTALL_SHORTCUTS_EXPLICIT" -eq 0 ] ||
         fail "--shortcuts conflicts with --no-shortcuts"
       INSTALL_SHORTCUTS=enable
+      INSTALL_SHORTCUTS_EXPLICIT=1
       ;;
     --no-shortcuts)
-      [ "$INSTALL_SHORTCUTS" != "enable" ] ||
+      [ "$INSTALL_SHORTCUTS_EXPLICIT" -eq 0 ] ||
         fail "--no-shortcuts conflicts with --shortcuts"
       INSTALL_SHORTCUTS=disable
+      INSTALL_SHORTCUTS_EXPLICIT=1
       ;;
     --noctalia) INSTALL_NOCTALIA=1 ;;
     --uninstall) UNINSTALL=1 ;;

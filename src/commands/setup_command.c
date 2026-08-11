@@ -102,7 +102,7 @@ static gboolean parse_setup_options(int argc, char **argv,
     if (g_str_equal(argv[i], "--help")) {
       g_print(
           "Usage: shaula setup [--yes] [--shortcuts|--no-shortcuts] "
-          "[--niri] [--noctalia] [--niri-keybinds] [--no-integrations] "
+          "[--niri] [--noctalia] [--no-integrations] "
           "[--no-niri] [--no-noctalia] [--remove] [--dry-run]\n");
       return FALSE;
     }
@@ -128,12 +128,6 @@ static gboolean parse_setup_options(int argc, char **argv,
         return FALSE;
       options->shortcuts = FALSE;
       options->shortcuts_explicit = TRUE;
-    } else if (g_str_equal(argv[i], "--niri-keybinds")) {
-      if (options->shortcuts_explicit && !options->shortcuts)
-        return FALSE;
-      options->shortcuts = TRUE;
-      options->shortcuts_explicit = TRUE;
-      options->niri_explicit = TRUE;
     } else if (g_str_equal(argv[i], "--remove"))
       options->remove = TRUE;
     else if (g_str_equal(argv[i], "--dry-run"))

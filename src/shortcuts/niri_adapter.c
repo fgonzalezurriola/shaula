@@ -235,8 +235,9 @@ shaula_shortcut_niri_enable(const ShaulaShortcutOptions *options,
   if (queried != SHAULA_SHORTCUT_RESULT_OK &&
       status->state != SHAULA_SHORTCUT_STATE_CONFLICT)
     return queried;
-  if (status->state == SHAULA_SHORTCUT_STATE_UNSUPPORTED ||
-      status->state == SHAULA_SHORTCUT_STATE_ACTIVE)
+  /* Reapply active blocks so installs repair stale executable paths after a
+   * package move (for example, /usr/bin/shaula to ~/.local/bin/shaula). */
+  if (status->state == SHAULA_SHORTCUT_STATE_UNSUPPORTED)
     return SHAULA_SHORTCUT_RESULT_OK;
   if (status->state == SHAULA_SHORTCUT_STATE_CONFLICT && !options->force) {
     set_error(error_text,

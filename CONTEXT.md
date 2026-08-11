@@ -231,7 +231,11 @@ workflow replaces those markers only in writable AUR clones before pushing.
   questions remain opt-in `[y/N]` prompts.
 - `./dev install` is the canonical complete local development install. It builds
   the checkout, installs all application payload and integrations, accepts the
-  installer prompt automatically, and reloads Noctalia when present.
+  installer prompt automatically, enables the recommended `Ctrl+Shift+1–4`
+  shortcuts by default, and reloads Noctalia when present. `--no-shortcuts` is
+  the explicit opt-out; the removed `--niri-keybinds` alias is not supported.
+  Re-enabling shortcuts also repairs managed Niri blocks that reference an old
+  executable location.
 - `./dev uninstall` removes the files and optional integrations installed by
   `./dev install` or `./dev dev-install`, while preserving the Shaula config file.
 - Settings exposes **Configure Shortcuts** whenever the portal provider is
