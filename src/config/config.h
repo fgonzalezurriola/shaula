@@ -20,6 +20,7 @@ typedef struct {
 typedef struct {
   char region_capture_mode[16];
   char save_folder[4096];
+  char filename_template[128];
   ShaulaAfterModeConfig quick;
   ShaulaAfterModeConfig area;
   ShaulaAfterModeConfig fullscreen;

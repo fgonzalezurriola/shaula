@@ -308,7 +308,9 @@ gboolean shaula_annotation_editor_insert_external(
   }
 
   shaula_preview_cancel_operation(state);
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(
+      state, annotation->type == SHAULA_ANNOTATION_IMAGE ? "paste image"
+                                                        : "paste text");
   state->has_region_selection = FALSE;
   g_array_set_size(state->annotation_editor.selected_ids, 0);
   shaula_preview_document_add_annotation(&state->document, annotation);
@@ -391,7 +393,8 @@ static GPtrArray *last_pasted_annotations_payload(ShaulaPreviewState *state) {
 
 static gboolean paste_annotation_payload(ShaulaPreviewState *state,
                                          GPtrArray *payload,
-                                         gboolean remember_last_paste) {
+                                         gboolean remember_last_paste,
+                                         const char *action) {
   if (state == NULL || payload == NULL || payload->len == 0)
     return FALSE;
 
@@ -399,7 +402,7 @@ static gboolean paste_annotation_payload(ShaulaPreviewState *state,
   if (pasted == NULL)
     return FALSE;
 
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(state, action);
   state->has_region_selection = FALSE;
   g_array_set_size(state->annotation_editor.selected_ids, 0);
   if (remember_last_paste &&
@@ -463,7 +466,8 @@ gboolean shaula_annotation_editor_duplicate_selected(ShaulaPreviewState *state) 
   GPtrArray *payload = selected_annotations_payload(state);
   if (payload == NULL)
     return FALSE;
-  gboolean pasted = paste_annotation_payload(state, payload, FALSE);
+  gboolean pasted =
+      paste_annotation_payload(state, payload, FALSE, "duplicate annotations");
   g_ptr_array_unref(payload);
   return pasted;
 }
@@ -478,7 +482,8 @@ gboolean shaula_annotation_editor_paste(ShaulaPreviewState *state) {
     base = state->document.annotation_clipboard.annotations;
     owns_base = FALSE;
   }
-  gboolean pasted = paste_annotation_payload(state, base, TRUE);
+  gboolean pasted =
+      paste_annotation_payload(state, base, TRUE, "paste annotations");
   if (owns_base)
     g_ptr_array_unref(base);
   return pasted;
@@ -489,7 +494,7 @@ void shaula_annotation_editor_delete_selected(ShaulaPreviewState *state) {
       state->document.annotations == NULL)
     return;
 
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(state, "delete annotations");
   state->has_region_selection = FALSE;
   for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
     ShaulaAnnotation *annotation =
@@ -509,7 +514,7 @@ void shaula_annotation_editor_reset_annotations(ShaulaPreviewState *state) {
     return;
 
   shaula_preview_cancel_operation(state);
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(state, "reset annotations");
   g_array_set_size(state->annotation_editor.selected_ids, 0);
   shaula_preview_clear_eraser_pending(state);
   shaula_preview_document_clear_annotations(&state->document);

@@ -22,6 +22,14 @@ non-Noctalia journey currently justifies it. GNOME and KDE release validation
 remain pending. The selected first Preview history affordance is action-aware
 Undo and Redo text.
 
+Save configuration now includes a validated default directory and filename
+template. `{date}`, `{time}`, and `{datetime}` are the supported template
+fields; `.png` and deterministic collision suffixes are added centrally by the
+runtime save-destination module. Capture, Preview quick save, Save As
+suggestions, notifications, and screenshots-folder actions share that module.
+Preview Undo and Redo now expose the next operation in tooltips and accessible
+labels while preserving the existing shortcuts and 24-entry history bound.
+
 ## Runtime architecture
 
 Shaula's capture, Preview, Settings, and CLI commands remain short-lived. ADR-0004

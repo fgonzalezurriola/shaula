@@ -65,6 +65,11 @@ shaula_preview_document_clear_annotations(ShaulaPreviewDocument *document);
 
 ShaulaPreviewSnapshot *
 shaula_preview_document_snapshot_new(ShaulaPreviewDocument *document);
+ShaulaPreviewSnapshot *shaula_preview_document_snapshot_new_action(
+    ShaulaPreviewDocument *document, const char *action);
+void shaula_preview_snapshot_set_action(ShaulaPreviewSnapshot *snapshot,
+                                        const char *action);
+const char *shaula_preview_snapshot_action(ShaulaPreviewSnapshot *snapshot);
 void shaula_preview_snapshot_free(gpointer data);
 void shaula_preview_document_restore_snapshot(
     ShaulaPreviewDocument *document, ShaulaPreviewSnapshot *snapshot);
@@ -81,6 +86,8 @@ void shaula_preview_history_push_redo(ShaulaHistoryStack *history,
 void shaula_preview_history_clear_redo(ShaulaHistoryStack *history);
 gboolean shaula_preview_history_can_undo(ShaulaHistoryStack *history);
 gboolean shaula_preview_history_can_redo(ShaulaHistoryStack *history);
+const char *shaula_preview_history_undo_action(ShaulaHistoryStack *history);
+const char *shaula_preview_history_redo_action(ShaulaHistoryStack *history);
 
 void shaula_preview_annotation_clipboard_clear(
     ShaulaAnnotationClipboard *clipboard);

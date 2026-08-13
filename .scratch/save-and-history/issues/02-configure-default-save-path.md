@@ -1,7 +1,7 @@
 # Configure the default save path
 
 Type: AFK
-Status: ready-for-agent
+Status: resolved
 
 ## Parent
 
@@ -15,10 +15,15 @@ folder actions, notifications, and recovery from unavailable locations.
 
 ## Acceptance criteria
 
-- [ ] Settings can choose, validate, persist, and display the default directory.
-- [ ] Save flows and open-folder actions resolve the same configured location.
-- [ ] Missing or unwritable locations produce actionable behavior without data loss.
-- [ ] Explicit Save As destinations continue to override the default safely.
+- [x] Settings can choose, validate, persist, and display the default directory.
+- [x] Save flows and open-folder actions resolve the same configured location.
+- [x] Missing or unwritable locations produce actionable behavior without data loss.
+- [x] Explicit Save As destinations continue to override the default safely.
+
+## Resolution
+
+Resolved on 2026-08-12. Capture, Preview, Save As, and the screenshots-folder
+command share one validated runtime resolver.
 
 ## Blocked by
 

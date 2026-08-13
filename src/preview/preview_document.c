@@ -8,6 +8,7 @@ struct ShaulaPreviewSnapshot {
   GArray *spotlight_regions;
   int next_annotation_id;
   gboolean modified;
+  char *action;
 };
 
 static GArray *spotlight_regions_clone(GArray *regions) {
@@ -19,6 +20,11 @@ static GArray *spotlight_regions_clone(GArray *regions) {
 
 ShaulaPreviewSnapshot *
 shaula_preview_document_snapshot_new(ShaulaPreviewDocument *document) {
+  return shaula_preview_document_snapshot_new_action(document, NULL);
+}
+
+ShaulaPreviewSnapshot *shaula_preview_document_snapshot_new_action(
+    ShaulaPreviewDocument *document, const char *action) {
   ShaulaPreviewSnapshot *snapshot = g_new0(ShaulaPreviewSnapshot, 1);
   snapshot->image = document->image != NULL
                         ? GDK_PIXBUF(g_object_ref(document->image))
@@ -29,7 +35,20 @@ shaula_preview_document_snapshot_new(ShaulaPreviewDocument *document) {
       spotlight_regions_clone(document->spotlight_regions);
   snapshot->next_annotation_id = document->next_annotation_id;
   snapshot->modified = document->modified;
+  snapshot->action = g_strdup(action);
   return snapshot;
+}
+
+void shaula_preview_snapshot_set_action(ShaulaPreviewSnapshot *snapshot,
+                                        const char *action) {
+  if (snapshot == NULL)
+    return;
+  g_free(snapshot->action);
+  snapshot->action = g_strdup(action);
+}
+
+const char *shaula_preview_snapshot_action(ShaulaPreviewSnapshot *snapshot) {
+  return snapshot != NULL ? snapshot->action : NULL;
 }
 
 void shaula_preview_snapshot_free(gpointer data) {
@@ -42,6 +61,7 @@ void shaula_preview_snapshot_free(gpointer data) {
     g_ptr_array_unref(snapshot->annotations);
   if (snapshot->spotlight_regions != NULL)
     g_array_unref(snapshot->spotlight_regions);
+  g_free(snapshot->action);
   g_free(snapshot);
 }
 
@@ -66,6 +86,21 @@ gboolean shaula_preview_history_can_undo(ShaulaHistoryStack *history) {
 
 gboolean shaula_preview_history_can_redo(ShaulaHistoryStack *history) {
   return history != NULL && history->redo != NULL && history->redo->len > 0;
+}
+
+static const char *history_top_action(GPtrArray *stack) {
+  if (stack == NULL || stack->len == 0)
+    return NULL;
+  return shaula_preview_snapshot_action(
+      g_ptr_array_index(stack, stack->len - 1));
+}
+
+const char *shaula_preview_history_undo_action(ShaulaHistoryStack *history) {
+  return history != NULL ? history_top_action(history->undo) : NULL;
+}
+
+const char *shaula_preview_history_redo_action(ShaulaHistoryStack *history) {
+  return history != NULL ? history_top_action(history->redo) : NULL;
 }
 
 void shaula_preview_history_clear_redo(ShaulaHistoryStack *history) {

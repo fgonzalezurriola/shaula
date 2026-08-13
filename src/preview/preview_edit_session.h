@@ -40,18 +40,24 @@ gboolean shaula_preview_edit_matches(const ShaulaAnnotation *annotation,
 
 /* Owns the output-affecting edit and history lifecycle used by GTK adapters. */
 void shaula_preview_edit_begin(ShaulaPreviewState *state);
+void shaula_preview_edit_begin_action(ShaulaPreviewState *state,
+                                      const char *action);
 void shaula_preview_edit_replace_image(ShaulaPreviewState *state,
                                        GdkPixbuf *replacement);
 void shaula_preview_edit_finish(ShaulaPreviewState *state,
                                 ShaulaPreviewEditFinish finish);
 void shaula_preview_clear_region_selection(ShaulaPreviewState *state);
 void shaula_preview_push_undo(ShaulaPreviewState *state);
+void shaula_preview_push_undo_action(ShaulaPreviewState *state,
+                                     const char *action);
 void shaula_preview_begin_history_gesture(ShaulaPreviewState *state);
 void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
                                            gboolean changed);
 void shaula_preview_cancel_history_gesture(ShaulaPreviewState *state);
 gboolean shaula_preview_can_undo(ShaulaPreviewState *state);
 gboolean shaula_preview_can_redo(ShaulaPreviewState *state);
+const char *shaula_preview_next_undo_action(ShaulaPreviewState *state);
+const char *shaula_preview_next_redo_action(ShaulaPreviewState *state);
 gboolean shaula_preview_undo(ShaulaPreviewState *state);
 gboolean shaula_preview_redo(ShaulaPreviewState *state);
 void shaula_preview_cancel_operation(ShaulaPreviewState *state);

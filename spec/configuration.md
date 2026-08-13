@@ -30,6 +30,7 @@ region_capture_mode = "frozen"
 
 [capture.after]
 save_folder = "~/Pictures/shaula"
+filename_template = "{date}-{time}"
 
 [capture.after.quick]
 skip_preview = false
@@ -78,6 +79,7 @@ region_capture_mode = "frozen"
 
 [capture.after]
 save_folder = "~/Pictures/shaula"
+filename_template = "{date}-{time}"
 
 [capture.after.quick]
 skip_preview = false

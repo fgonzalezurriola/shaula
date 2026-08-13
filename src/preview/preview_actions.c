@@ -1,6 +1,5 @@
 #include "preview_actions.h"
 
-#include <errno.h>
 #include <glib/gstdio.h>
 #include <stdio.h>
 
@@ -11,6 +10,7 @@
 #include "preview_system_clipboard.h"
 #include "preview_toolbar.h"
 #include "process_exec.h"
+#include "save_destination.h"
 
 extern gboolean shaula_preview_notify(const char *summary, const char *body,
                                       const char *image_path, gboolean transient,
@@ -144,78 +144,13 @@ static gboolean shaula_preview_notify_saved(const char *path,
   return TRUE;
 }
 
-static gboolean ensure_writable_dir(const char *dir, GError **error) {
-  if (dir == NULL || dir[0] == '\0')
-    return FALSE;
-  if (g_mkdir_with_parents(dir, 0700) != 0) {
-    if (error != NULL)
-      g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(errno),
-                  "Could not create %s: %s", dir, g_strerror(errno));
-    return FALSE;
-  }
-
-  char *probe =
-      g_strdup_printf("%s%c.shaula-write-probe-%" G_GINT64_FORMAT ".tmp", dir,
-                      G_DIR_SEPARATOR, g_get_real_time());
-  gboolean ok = g_file_set_contents(probe, "", 0, error);
-  if (ok)
-    g_unlink(probe);
-  g_free(probe);
-  return ok;
-}
-
 static char *quick_save_directory(GError **error) {
   const char *configured = g_getenv("SHAULA_SAVE_FOLDER");
-  if (configured != NULL && configured[0] != '\0') {
-    char *expanded = NULL;
-    if (g_strcmp0(configured, "~") == 0) {
-      const char *home = g_get_home_dir();
-      if (home != NULL && home[0] != '\0')
-        expanded = g_strdup(home);
-    } else if (g_str_has_prefix(configured, "~/")) {
-      const char *home = g_get_home_dir();
-      if (home != NULL && home[0] != '\0')
-        expanded = g_build_filename(home, configured + 2, NULL);
-    } else if (g_path_is_absolute(configured)) {
-      expanded = g_strdup(configured);
-    }
-    if (expanded != NULL) {
-      if (ensure_writable_dir(expanded, error))
-        return expanded;
-      g_free(expanded);
-      return NULL;
-    }
-  }
-
-  const char *home = g_get_home_dir();
-  if (home == NULL || home[0] == '\0') {
-    g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_INVAL,
-                "Home directory is not available");
-    return NULL;
-  }
-
-  char *preferred = g_build_filename(home, "Pictures", "shaula", NULL);
-  if (ensure_writable_dir(preferred, NULL))
-    return preferred;
-  g_free(preferred);
-
-  char *fallback = g_build_filename(home, "shaula", NULL);
-  if (ensure_writable_dir(fallback, error))
-    return fallback;
-  g_free(fallback);
-  return NULL;
+  return shaula_save_directory_resolve(configured, TRUE, error);
 }
 
 static char *timestamped_screenshot_basename(void) {
-  GDateTime *now = g_date_time_new_now_local();
-  char *stamp =
-      now != NULL ? g_date_time_format(now, "%Y%m%d-%H%M%S")
-                  : g_strdup_printf("%" G_GINT64_FORMAT, g_get_real_time());
-  if (now != NULL)
-    g_date_time_unref(now);
-  char *name = g_strdup_printf("%s.png", stamp);
-  g_free(stamp);
-  return name;
+  return shaula_save_basename_new(g_getenv("SHAULA_FILENAME_TEMPLATE"), NULL);
 }
 
 static char *timestamped_quick_save_path(GError **error) {
@@ -223,26 +158,9 @@ static char *timestamped_quick_save_path(GError **error) {
   if (dir == NULL)
     return NULL;
 
-  char *basename = timestamped_screenshot_basename();
-  char *stem = g_strndup(basename, strlen(basename) - strlen(".png"));
-  char *path = NULL;
-  for (int attempt = 0; attempt < 1000; attempt += 1) {
-    char *filename = attempt == 0
-                         ? g_strdup(basename)
-                         : g_strdup_printf("%s-%d.png", stem, attempt + 1);
-    path = g_build_filename(dir, filename, NULL);
-    g_free(filename);
-    if (!g_file_test(path, G_FILE_TEST_EXISTS))
-      break;
-    g_free(path);
-    path = NULL;
-  }
-  g_free(stem);
-  g_free(basename);
+  char *path = shaula_save_unique_path_new(
+      dir, g_getenv("SHAULA_FILENAME_TEMPLATE"), NULL, error);
   g_free(dir);
-  if (path == NULL)
-    g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_EXIST,
-                "Could not allocate a unique screenshot filename");
   return path;
 }
 
@@ -577,6 +495,12 @@ void shaula_preview_action_save_as(ShaulaPreviewState *state) {
   GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
       "Save Shaula Preview", GTK_WINDOW(state->window),
       GTK_FILE_CHOOSER_ACTION_SAVE, "Save", "Cancel");
+  g_autofree char *default_directory = quick_save_directory(NULL);
+  if (default_directory != NULL) {
+    g_autoptr(GFile) folder = g_file_new_for_path(default_directory);
+    (void)gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), folder,
+                                              NULL);
+  }
   if (state->document.path != NULL) {
     char *basename = shaula_preview_path_is_temporary_capture(state->document.path)
                          ? timestamped_screenshot_basename()

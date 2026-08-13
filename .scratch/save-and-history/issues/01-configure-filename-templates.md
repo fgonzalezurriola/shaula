@@ -1,7 +1,7 @@
 # Configure screenshot filename templates
 
 Type: AFK
-Status: ready-for-agent
+Status: resolved
 
 ## Parent
 
@@ -15,10 +15,15 @@ choices or producing unsafe paths.
 
 ## Acceptance criteria
 
-- [ ] Settings explains and persists the supported template fields.
-- [ ] Generated names are deterministic, filesystem-safe, and collision-aware.
-- [ ] Invalid templates are rejected without replacing the last valid preference.
-- [ ] Capture, Save, Save As, and notifications agree on the resulting filename.
+- [x] Settings explains and persists the supported template fields.
+- [x] Generated names are deterministic, filesystem-safe, and collision-aware.
+- [x] Invalid templates are rejected without replacing the last valid preference.
+- [x] Capture, Save, Save As, and notifications agree on the resulting filename.
+
+## Resolution
+
+Resolved on 2026-08-12. `{date}`, `{time}`, and `{datetime}` are supported;
+`.png` and collision suffixes are owned by the shared save-destination runtime.
 
 ## Blocked by
 

@@ -9,6 +9,7 @@ shaula_runtime_c = static_library(
     'capture_session_lock.c',
     'capture_state.c',
     'process_exec.c',
+    'save_destination.c',
   ],
   include_directories: shaula_runtime_include,
   dependencies: glib_dep,

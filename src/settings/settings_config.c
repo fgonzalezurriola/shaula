@@ -1,6 +1,7 @@
 #include "settings_config.h"
 
 #include "cli/json.h"
+#include "runtime/save_destination.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -29,7 +30,7 @@ G_STATIC_ASSERT(sizeof(SizePreset) == sizeof(gint));
 G_STATIC_ASSERT(sizeof(PositionPreset) == sizeof(gint));
 
 #if GLIB_SIZEOF_VOID_P == 8
-G_STATIC_ASSERT(sizeof(ShaulaSettingsConfig) == 136);
+G_STATIC_ASSERT(sizeof(ShaulaSettingsConfig) == 144);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, region_mode) == 0);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, window_mode) == 4);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, focused) == 8);
@@ -61,12 +62,14 @@ G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig,
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, all_screens_copy) == 100);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, all_screens_save) == 104);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, save_folder) == 112);
-G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, notifications_success) ==
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, filename_template) ==
                 120);
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, notifications_success) ==
+                128);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig, notifications_errors) ==
-                124);
+                132);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ShaulaSettingsConfig,
-                                notifications_thumbnails) == 128);
+                                notifications_thumbnails) == 136);
 #endif
 
 static char *json_string_after(const char *json, const char *needle) {
@@ -239,6 +242,7 @@ void shaula_settings_config_init_defaults(ShaulaSettingsConfig *config) {
       .all_screens_copy = defaults.all_screens.copy_to_clipboard,
       .all_screens_save = defaults.all_screens.save_to_folder,
       .save_folder = g_strdup(defaults.save_folder),
+      .filename_template = g_strdup(defaults.filename_template),
       .notifications_success = defaults.notifications_success,
       .notifications_errors = defaults.notifications_errors,
       .notifications_thumbnails = defaults.notifications_thumbnails,
@@ -250,6 +254,7 @@ void shaula_settings_config_clear(ShaulaSettingsConfig *config) {
   g_clear_pointer(&config->column_display, g_free);
   g_clear_pointer(&config->floating_relative_to, g_free);
   g_clear_pointer(&config->save_folder, g_free);
+  g_clear_pointer(&config->filename_template, g_free);
 }
 
 const char *shaula_settings_region_mode_text(RegionMode mode) {
@@ -423,6 +428,12 @@ gboolean shaula_settings_config_from_show_json(const char *json,
     g_free(config->save_folder);
     config->save_folder = save_folder;
   }
+  char *filename_template =
+      json_string_after(json, "\"filename_template\":\"");
+  if (filename_template != NULL) {
+    g_free(config->filename_template);
+    config->filename_template = filename_template;
+  }
 
   config->notifications_success =
       json_bool_after(json, "\"success\":", config->notifications_success);
@@ -457,6 +468,8 @@ char *shaula_settings_config_public_json_new(const ShaulaConfig *config) {
   g_return_val_if_fail(config != NULL, NULL);
 
   g_autofree char *save_folder = settings_json_string(config->save_folder);
+  g_autofree char *filename_template =
+      settings_json_string(config->filename_template);
   g_autofree char *floating_x =
       config->floating_x_set ? g_strdup_printf("%d", config->floating_x)
                              : g_strdup("null");
@@ -465,7 +478,8 @@ char *shaula_settings_config_public_json_new(const ShaulaConfig *config) {
                              : g_strdup("null");
   return g_strdup_printf(
       "{\"capture\":{\"region_capture_mode\":\"%s\",\"after\":{"
-      "\"save_folder\":%s,\"quick\":{\"skip_preview\":%s,"
+      "\"save_folder\":%s,\"filename_template\":%s,\"quick\":{"
+      "\"skip_preview\":%s,"
       "\"copy_to_clipboard\":%s,\"save_to_folder\":%s},\"area\":{"
       "\"skip_preview\":%s,\"copy_to_clipboard\":%s,\"save_to_folder\":"
       "%s},\"fullscreen\":{\"skip_preview\":%s,\"copy_to_clipboard\":%s,"
@@ -477,7 +491,8 @@ char *shaula_settings_config_public_json_new(const ShaulaConfig *config) {
       "\"close_preview_on_save\":%s,\"width\":%u,\"height\":%u,"
       "\"default_column_display\":\"%s\",\"floating_position\":{\"x\":%s,"
       "\"y\":%s,\"relative_to\":\"%s\"}}}}",
-      config->region_capture_mode, save_folder, bool_text(config->quick.skip_preview),
+      config->region_capture_mode, save_folder, filename_template,
+      bool_text(config->quick.skip_preview),
       bool_text(config->quick.copy_to_clipboard),
       bool_text(config->quick.save_to_folder), bool_text(config->area.skip_preview),
       bool_text(config->area.copy_to_clipboard),
@@ -598,7 +613,18 @@ gboolean shaula_settings_config_apply_cli_flag(ShaulaConfig *config,
     return TRUE;
   }
   if (g_str_equal(flag, "--save-folder")) {
+    if (strlen(value) >= sizeof(config->save_folder) ||
+        !shaula_save_folder_validate(value))
+      return FALSE;
     g_strlcpy(config->save_folder, value, sizeof(config->save_folder));
+    return TRUE;
+  }
+  if (g_str_equal(flag, "--filename-template")) {
+    if (strlen(value) >= sizeof(config->filename_template) ||
+        !shaula_save_template_validate(value))
+      return FALSE;
+    g_strlcpy(config->filename_template, value,
+              sizeof(config->filename_template));
     return TRUE;
   }
 
@@ -698,6 +724,9 @@ char **shaula_settings_build_save_argv(const char *shaula_bin,
               bool_text(config->all_screens_save));
   append_pair(argv, "--save-folder",
               config->save_folder != NULL ? config->save_folder : "");
+  append_pair(argv, "--filename-template",
+              config->filename_template != NULL ? config->filename_template
+                                                : "");
   append_pair(argv, "--notifications-success",
               bool_text(config->notifications_success));
   append_pair(argv, "--notifications-errors",

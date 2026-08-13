@@ -436,6 +436,17 @@ void shaula_preview_gesture_begin_operation(ShaulaPreviewState *state,
   state->drag_start_image = point;
   state->drag_current_image = point;
   state->drag_last_image = point;
+  if (state->document.pending_history_snapshot != NULL) {
+    const char *action = "edit annotations";
+    if (operation == SHAULA_OPERATION_MOVE)
+      action = "move annotations";
+    else if (operation == SHAULA_OPERATION_BEND_ARROW)
+      action = "bend arrow";
+    else if (operation == SHAULA_OPERATION_RESIZE_ANNOTATION)
+      action = "resize annotation";
+    shaula_preview_snapshot_set_action(
+        state->document.pending_history_snapshot, action);
+  }
   if (operation == SHAULA_OPERATION_CROP) {
     state->has_crop_draft = TRUE;
     state->crop_draft = (ShaulaRect){point.x, point.y, 0.0, 0.0};

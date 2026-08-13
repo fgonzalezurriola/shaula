@@ -45,6 +45,8 @@ int shaula_preview_command_run(int argc, char **argv) {
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_WINDOW_WIDTH", width, TRUE);
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_WINDOW_HEIGHT", height, TRUE);
   envp = g_environ_setenv(envp, "SHAULA_SAVE_FOLDER", config.save_folder, TRUE);
+  envp = g_environ_setenv(envp, "SHAULA_FILENAME_TEMPLATE",
+                          config.filename_template, TRUE);
 
   const char *helper_argv[] = {helper, path, NULL};
   g_autofree char *stdout_text = NULL;

@@ -995,7 +995,7 @@ static void finish_text_entry(ShaulaPreviewState *state) {
       gboolean content_changed = g_strcmp0(previous, text) != 0;
       gboolean style_changed = !text_style_equals_defaults(editing, state);
       if (content_changed || style_changed) {
-        shaula_preview_push_undo(state);
+        shaula_preview_push_undo_action(state, "edit text");
         g_free(editing->data.text.text);
         editing->data.text.text = g_strdup(text != NULL ? text : "");
         editing->color = state->tool_defaults.text.color;

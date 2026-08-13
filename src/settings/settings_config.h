@@ -37,7 +37,7 @@ typedef enum {
 
 /*
  * C ABI model consumed directly by native_gtk_settings.c. Field order and
- * enum values are stable. The three string fields are GLib-owned and are
+ * enum values are stable. The four string fields are GLib-owned and are
  * released by shaula_settings_config_clear(). All other fields are values.
  */
 typedef struct {
@@ -67,6 +67,7 @@ typedef struct {
   gboolean all_screens_copy;
   gboolean all_screens_save;
   char *save_folder;
+  char *filename_template;
   gboolean notifications_success;
   gboolean notifications_errors;
   gboolean notifications_thumbnails;
@@ -74,7 +75,7 @@ typedef struct {
 
 /*
  * Initializes required caller-provided storage with integrated defaults and
- * three newly allocated GLib strings. The object must not currently own live
+ * four newly allocated GLib strings. The object must not currently own live
  * fields: it may be uninitialized, zeroed, or previously cleared. Calling this
  * on an initialized but uncleared object leaks its existing owned strings.
  */

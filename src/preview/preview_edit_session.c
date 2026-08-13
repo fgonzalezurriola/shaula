@@ -24,10 +24,47 @@ gboolean shaula_preview_edit_matches(const ShaulaAnnotation *annotation,
   return FALSE;
 }
 
+static const char *default_history_action(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return "edit annotations";
+  switch (state->active_tool) {
+  case SHAULA_TOOL_CROP:
+    return "crop";
+  case SHAULA_TOOL_ERASER:
+    return "erase annotations";
+  case SHAULA_TOOL_ARROW:
+    return "arrow";
+  case SHAULA_TOOL_LINE:
+    return "line";
+  case SHAULA_TOOL_TEXT:
+    return "text";
+  case SHAULA_TOOL_MEASURE:
+    return "measurement";
+  case SHAULA_TOOL_RECTANGLE:
+    return "rectangle";
+  case SHAULA_TOOL_HIGHLIGHT:
+    return "highlight";
+  case SHAULA_TOOL_PEN:
+    return "pen stroke";
+  case SHAULA_TOOL_SPOTLIGHT:
+    return "spotlight";
+  case SHAULA_TOOL_SELECT:
+  case SHAULA_TOOL_HAND:
+  case SHAULA_TOOL_COUNT:
+    return "edit annotations";
+  }
+  return "edit annotations";
+}
+
 void shaula_preview_edit_begin(ShaulaPreviewState *state) {
+  shaula_preview_edit_begin_action(state, "edit image");
+}
+
+void shaula_preview_edit_begin_action(ShaulaPreviewState *state,
+                                      const char *action) {
   if (state == NULL)
     return;
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(state, action);
   state->document.modified = TRUE;
 }
 
@@ -74,11 +111,17 @@ void shaula_preview_clear_region_selection(ShaulaPreviewState *state) {
 }
 
 void shaula_preview_push_undo(ShaulaPreviewState *state) {
+  shaula_preview_push_undo_action(state, default_history_action(state));
+}
+
+void shaula_preview_push_undo_action(ShaulaPreviewState *state,
+                                     const char *action) {
   if (state == NULL)
     return;
   shaula_preview_history_push_undo(
       &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document), TRUE);
+      shaula_preview_document_snapshot_new_action(&state->document, action),
+      TRUE);
   shaula_preview_toolbar_update_history_state(state);
 }
 
@@ -86,7 +129,8 @@ void shaula_preview_begin_history_gesture(ShaulaPreviewState *state) {
   if (state == NULL || state->document.pending_history_snapshot != NULL)
     return;
   state->document.pending_history_snapshot =
-      shaula_preview_document_snapshot_new(&state->document);
+      shaula_preview_document_snapshot_new_action(&state->document,
+                                                  default_history_action(state));
 }
 
 void shaula_preview_commit_history_gesture(ShaulaPreviewState *state,
@@ -123,6 +167,21 @@ gboolean shaula_preview_can_redo(ShaulaPreviewState *state) {
          shaula_preview_history_can_redo(&state->document.history);
 }
 
+const char *shaula_preview_next_undo_action(ShaulaPreviewState *state) {
+  if (state == NULL)
+    return NULL;
+  if (state->document.pending_history_snapshot != NULL)
+    return shaula_preview_snapshot_action(
+        state->document.pending_history_snapshot);
+  return shaula_preview_history_undo_action(&state->document.history);
+}
+
+const char *shaula_preview_next_redo_action(ShaulaPreviewState *state) {
+  return state != NULL
+             ? shaula_preview_history_redo_action(&state->document.history)
+             : NULL;
+}
+
 static void restore_snapshot(ShaulaPreviewState *state,
                              ShaulaPreviewSnapshot *snapshot) {
   shaula_preview_document_restore_snapshot(&state->document, snapshot);
@@ -157,9 +216,11 @@ gboolean shaula_preview_undo(ShaulaPreviewState *state) {
     return FALSE;
   ShaulaPreviewSnapshot *snapshot =
       shaula_preview_history_pop_undo(&state->document.history);
+  g_autofree char *action =
+      g_strdup(shaula_preview_snapshot_action(snapshot));
   shaula_preview_history_push_redo(
       &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document));
+      shaula_preview_document_snapshot_new_action(&state->document, action));
   restore_snapshot(state, snapshot);
   shaula_preview_snapshot_free(snapshot);
   shaula_preview_toolbar_update_history_state(state);
@@ -174,9 +235,12 @@ gboolean shaula_preview_redo(ShaulaPreviewState *state) {
     return FALSE;
   ShaulaPreviewSnapshot *snapshot =
       shaula_preview_history_pop_redo(&state->document.history);
+  g_autofree char *action =
+      g_strdup(shaula_preview_snapshot_action(snapshot));
   shaula_preview_history_push_undo(
       &state->document.history,
-      shaula_preview_document_snapshot_new(&state->document), FALSE);
+      shaula_preview_document_snapshot_new_action(&state->document, action),
+      FALSE);
   restore_snapshot(state, snapshot);
   shaula_preview_snapshot_free(snapshot);
   shaula_preview_toolbar_update_history_state(state);

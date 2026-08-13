@@ -731,14 +731,31 @@ void shaula_preview_toolbar_update_tool_state(ShaulaPreviewState *state) {
 void shaula_preview_toolbar_update_history_state(ShaulaPreviewState *state) {
   if (state == NULL)
     return;
-  if (state->undo_button != NULL)
+  if (state->undo_button != NULL) {
+    const char *action = shaula_preview_next_undo_action(state);
+    g_autofree char *label = action != NULL && action[0] != '\0'
+                                 ? g_strdup_printf("Undo %s (Ctrl+Z)", action)
+                                 : g_strdup("Undo (Ctrl+Z)");
     gtk_widget_set_sensitive(
         state->undo_button,
         shaula_preview_command_available(state, SHAULA_PREVIEW_COMMAND_UNDO));
-  if (state->redo_button != NULL)
+    gtk_widget_set_tooltip_text(state->undo_button, label);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(state->undo_button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
+  }
+  if (state->redo_button != NULL) {
+    const char *action = shaula_preview_next_redo_action(state);
+    g_autofree char *label =
+        action != NULL && action[0] != '\0'
+            ? g_strdup_printf("Redo %s (Ctrl+Shift+Z)", action)
+            : g_strdup("Redo (Ctrl+Shift+Z)");
     gtk_widget_set_sensitive(
         state->redo_button,
         shaula_preview_command_available(state, SHAULA_PREVIEW_COMMAND_REDO));
+    gtk_widget_set_tooltip_text(state->redo_button, label);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(state->redo_button),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
+  }
 }
 
 void shaula_preview_toolbar_update_system_paste_state(

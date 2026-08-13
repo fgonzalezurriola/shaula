@@ -10,18 +10,27 @@ This document owns the implemented preview action and tool contracts.
 
 ### Save
 
-`shaula-save-symbolic` and `Ctrl+S` save a new timestamped PNG under `~/Pictures/shaula/YYYYMMDD-HHMMSS.png`, adding a numeric suffix on collisions and falling back to `~/shaula` when the Pictures directory cannot be created or written.
+`shaula-save-symbolic` and `Ctrl+S` save a new PNG under the configured default
+folder. The filename template supports `{date}`, `{time}`, and `{datetime}`;
+Shaula appends `.png` and a numeric suffix on collisions. An unavailable or
+unwritable configured folder reports an error without discarding the Preview.
 
 Quick Save updates preview save metadata but does not create undo history. After a successful save, it closes the preview only when the close-on-save setting is enabled.
 
 ### Save As
 
-Save As is available from the responsive utility/More menu and through `Ctrl+Shift+S`. It opens a file chooser, writes a PNG, and updates preview save metadata. A later `Ctrl+S` still creates a new timestamped version.
+Save As is available from the responsive utility/More menu and through
+`Ctrl+Shift+S`. It opens in the configured folder and uses the configured name
+for temporary captures, while preserving an existing real source basename.
+The user can freely replace that explicit destination. A later `Ctrl+S` creates
+a new template-generated version.
 
 ### Undo and Redo
 
 - `shaula-undo-symbolic`: `Ctrl+Z`; disabled without an undo entry.
 - `shaula-redo-symbolic`: `Ctrl+Shift+Z` or `Ctrl+Y`; disabled without a redo entry.
+- Each enabled control identifies its next operation in its tooltip and
+  accessible label, such as `Undo crop` or `Redo arrow`.
 
 ### Discard
 

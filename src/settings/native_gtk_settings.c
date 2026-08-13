@@ -37,6 +37,7 @@ typedef struct {
   GtkSwitch *all_screens_copy_switch;
   GtkSwitch *all_screens_save_switch;
   GtkEntry *save_folder_entry;
+  GtkEntry *filename_template_entry;
   GtkSwitch *notifications_success_switch;
   GtkSwitch *notifications_errors_switch;
   GtkSwitch *notifications_thumbnails_switch;
@@ -119,6 +120,9 @@ static void read_controls(ShaulaSettingsConfig *config) {
   g_free(config->save_folder);
   config->save_folder =
       g_strdup(gtk_editable_get_text(GTK_EDITABLE(state.save_folder_entry)));
+  g_free(config->filename_template);
+  config->filename_template = g_strdup(
+      gtk_editable_get_text(GTK_EDITABLE(state.filename_template_entry)));
   config->notifications_success =
       gtk_switch_get_active(state.notifications_success_switch);
   config->notifications_errors =
@@ -160,6 +164,7 @@ static void on_save_clicked(GtkButton *button, gpointer data) {
   next.column_display = g_strdup(state.config.column_display);
   next.floating_relative_to = g_strdup(state.config.floating_relative_to);
   next.save_folder = g_strdup(state.config.save_folder);
+  next.filename_template = g_strdup(state.config.filename_template);
   read_controls(&next);
 
   g_auto(GStrv) argv =
@@ -579,6 +584,8 @@ static void on_reset_response(GtkDialog *dialog, int response, gpointer data) {
       "centered",
       "--save-folder",
       "~/Pictures/shaula",
+      "--filename-template",
+      "{date}-{time}",
       NULL,
   };
   gchar *out = NULL;
@@ -732,7 +739,7 @@ static void on_select_folder_clicked(GtkButton *button, gpointer data) {
 static GtkWidget *folder_row(void) {
   GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_add_css_class(row, "settings-row");
-  GtkWidget *label = gtk_label_new("Shaula Directory");
+  GtkWidget *label = gtk_label_new("Default save folder");
   gtk_label_set_xalign(GTK_LABEL(label), 0.0);
   gtk_widget_set_hexpand(label, TRUE);
   state.save_folder_entry = GTK_ENTRY(gtk_entry_new());
@@ -747,6 +754,30 @@ static GtkWidget *folder_row(void) {
   gtk_box_append(GTK_BOX(row), label);
   gtk_box_append(GTK_BOX(row), GTK_WIDGET(state.save_folder_entry));
   gtk_box_append(GTK_BOX(row), button);
+  return row;
+}
+
+static GtkWidget *filename_template_row(void) {
+  GtkWidget *row = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_widget_add_css_class(row, "settings-row");
+  GtkWidget *heading = gtk_label_new("Filename template");
+  gtk_label_set_xalign(GTK_LABEL(heading), 0.0);
+  GtkWidget *description = gtk_label_new(
+      "Use {date}, {time}, or {datetime}. Shaula appends .png and adds a "
+      "number when the generated name already exists.");
+  gtk_label_set_xalign(GTK_LABEL(description), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(description), TRUE);
+  gtk_widget_add_css_class(description, "description");
+  state.filename_template_entry = GTK_ENTRY(gtk_entry_new());
+  gtk_editable_set_text(
+      GTK_EDITABLE(state.filename_template_entry),
+      state.config.filename_template != NULL ? state.config.filename_template
+                                             : "{date}-{time}");
+  gtk_entry_set_placeholder_text(state.filename_template_entry,
+                                 "{date}-{time}");
+  gtk_box_append(GTK_BOX(row), heading);
+  gtk_box_append(GTK_BOX(row), description);
+  gtk_box_append(GTK_BOX(row), GTK_WIDGET(state.filename_template_entry));
   return row;
 }
 
@@ -982,6 +1013,7 @@ static GtkWidget *build_form(void) {
   gtk_box_append(GTK_BOX(box), saving_title);
 
   gtk_box_append(GTK_BOX(box), folder_row());
+  gtk_box_append(GTK_BOX(box), filename_template_row());
 
   GtkWidget *notifications_title = gtk_label_new("Notifications");
   gtk_widget_add_css_class(notifications_title, "section-title");

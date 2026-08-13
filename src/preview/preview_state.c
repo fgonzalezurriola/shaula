@@ -295,7 +295,7 @@ gboolean shaula_preview_commit_eraser_pending(ShaulaPreviewState *state) {
       state->eraser_pending_annotation_ids->len == 0)
     return FALSE;
 
-  shaula_preview_push_undo(state);
+  shaula_preview_push_undo_action(state, "erase annotations");
   for (gint i = (gint)state->document.annotations->len - 1; i >= 0; i--) {
     ShaulaAnnotation *annotation =
         g_ptr_array_index(state->document.annotations, (guint)i);
@@ -569,7 +569,8 @@ static gboolean apply_region_edit(ShaulaPreviewState *state,
     break;
   }
 
-  shaula_preview_edit_begin(state);
+  shaula_preview_edit_begin_action(
+      state, edit == SHAULA_REGION_EDIT_BLUR ? "blur region" : "erase region");
   shaula_preview_edit_replace_image(state, copy);
   shaula_preview_edit_finish(
       state, (ShaulaPreviewEditFinish){.queue_draw = TRUE});
@@ -638,7 +639,7 @@ static gboolean apply_crop_to_rect(ShaulaPreviewState *state, ShaulaRect rect,
   if (copy == NULL)
     return FALSE;
 
-  shaula_preview_edit_begin(state);
+  shaula_preview_edit_begin_action(state, "crop");
   shaula_preview_edit_replace_image(state, copy);
   remap_annotations_after_crop(state, (ShaulaRect){x, y, w, h},
                                remove_annotation);
@@ -731,7 +732,7 @@ gboolean shaula_preview_spotlight_rect(ShaulaPreviewState *state,
       .border_color = state->tool_defaults.spotlight.border_color,
       .border_width = MAX(0.0, state->tool_defaults.spotlight.border_width),
   };
-  shaula_preview_edit_begin(state);
+  shaula_preview_edit_begin_action(state, "spotlight");
   g_array_append_val(state->document.spotlight_regions, region);
   int spotlight_index = (int)state->document.spotlight_regions->len - 1;
   shaula_properties_hud_target_spotlight(&state->properties_hud,

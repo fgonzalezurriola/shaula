@@ -47,6 +47,8 @@ static void test_build_save_argv_exact(void) {
   config.all_screens_save = FALSE;
   g_free(config.save_folder);
   config.save_folder = g_strdup("~/Pictures/Screen shots/á;$(touch nope)");
+  g_free(config.filename_template);
+  config.filename_template = g_strdup("Screenshot {datetime}");
   config.notifications_success = FALSE;
   config.notifications_errors = TRUE;
   config.notifications_thumbnails = FALSE;
@@ -104,6 +106,8 @@ static void test_build_save_argv_exact(void) {
       "false",
       "--save-folder",
       "~/Pictures/Screen shots/á;$(touch nope)",
+      "--filename-template",
+      "Screenshot {datetime}",
       "--notifications-success",
       "false",
       "--notifications-errors",
@@ -123,11 +127,13 @@ static void test_build_save_argv_null_string_fallbacks(void) {
   g_clear_pointer(&config.column_display, g_free);
   g_clear_pointer(&config.floating_relative_to, g_free);
   g_clear_pointer(&config.save_folder, g_free);
+  g_clear_pointer(&config.filename_template, g_free);
 
   g_auto(GStrv) argv = shaula_settings_build_save_argv("shaula", &config);
   gboolean saw_display = FALSE;
   gboolean saw_relative = FALSE;
   gboolean saw_folder = FALSE;
+  gboolean saw_template = FALSE;
   for (gsize index = 0; argv[index] != NULL; index++) {
     if (g_strcmp0(argv[index], "--default-column-display") == 0) {
       g_assert_cmpstr(argv[index + 1], ==, "normal");
@@ -138,11 +144,15 @@ static void test_build_save_argv_null_string_fallbacks(void) {
     } else if (g_strcmp0(argv[index], "--save-folder") == 0) {
       g_assert_cmpstr(argv[index + 1], ==, "");
       saw_folder = TRUE;
+    } else if (g_strcmp0(argv[index], "--filename-template") == 0) {
+      g_assert_cmpstr(argv[index + 1], ==, "");
+      saw_template = TRUE;
     }
   }
   g_assert_true(saw_display);
   g_assert_true(saw_relative);
   g_assert_true(saw_folder);
+  g_assert_true(saw_template);
   shaula_settings_config_clear(&config);
 }
 

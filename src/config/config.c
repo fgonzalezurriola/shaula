@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "runtime/save_destination.h"
+
 typedef enum {
   SECTION_ROOT,
   SECTION_CAPTURE,
@@ -50,6 +52,7 @@ enum {
   FIELD_FLOATING_X = G_GUINT64_CONSTANT(1) << 14,
   FIELD_FLOATING_Y = G_GUINT64_CONSTANT(1) << 15,
   FIELD_FLOATING_RELATIVE = G_GUINT64_CONSTANT(1) << 16,
+  FIELD_FILENAME_TEMPLATE = G_GUINT64_CONSTANT(1) << 17,
 };
 
 static const ConfigSectionSpec CONFIG_SECTIONS[] = {
@@ -70,6 +73,7 @@ static const ConfigSectionSpec CONFIG_SECTIONS[] = {
 static const ConfigFieldSpec CONFIG_FIELDS[] = {
     {SECTION_CAPTURE, "region_capture_mode", FIELD_REGION_MODE},
     {SECTION_CAPTURE_AFTER, "save_folder", FIELD_SAVE_FOLDER},
+    {SECTION_CAPTURE_AFTER, "filename_template", FIELD_FILENAME_TEMPLATE},
     {SECTION_QUICK, "skip_preview", FIELD_SKIP_PREVIEW},
     {SECTION_QUICK, "copy_to_clipboard", FIELD_COPY_TO_CLIPBOARD},
     {SECTION_QUICK, "save_to_folder", FIELD_SAVE_TO_FOLDER},
@@ -121,6 +125,8 @@ void shaula_config_init_defaults(ShaulaConfig *config) {
             sizeof(config->region_capture_mode));
   g_strlcpy(config->save_folder, "~/Pictures/shaula",
             sizeof(config->save_folder));
+  g_strlcpy(config->filename_template, SHAULA_SAVE_DEFAULT_TEMPLATE,
+            sizeof(config->filename_template));
   config->quick.copy_to_clipboard = TRUE;
   config->area.copy_to_clipboard = TRUE;
   config->fullscreen.skip_preview = TRUE;
@@ -305,11 +311,18 @@ static gboolean parse_field(ShaulaConfig *config, ConfigSection section,
   if (field->bit == FIELD_SAVE_FOLDER) {
     char parsed[sizeof(config->save_folder)];
     if (!parse_quoted(value, parsed, sizeof(parsed)) ||
-        strchr(parsed, '"') != NULL || strchr(parsed, '\\') != NULL)
-      return FALSE;
-    if (parsed[0] != '\0' && parsed[0] != '/' && parsed[0] != '~')
+        !shaula_save_folder_validate(parsed))
       return FALSE;
     g_strlcpy(config->save_folder, parsed, sizeof(config->save_folder));
+    return TRUE;
+  }
+  if (field->bit == FIELD_FILENAME_TEMPLATE) {
+    char parsed[sizeof(config->filename_template)];
+    if (!parse_quoted(value, parsed, sizeof(parsed)) ||
+        !shaula_save_template_validate(parsed))
+      return FALSE;
+    g_strlcpy(config->filename_template, parsed,
+              sizeof(config->filename_template));
     return TRUE;
   }
   if (field->bit == FIELD_NOTIFY_SUCCESS)
@@ -364,6 +377,9 @@ static gboolean parse_field(ShaulaConfig *config, ConfigSection section,
 
 gboolean shaula_config_validate(const ShaulaConfig *config) {
   g_return_val_if_fail(config != NULL, FALSE);
+  if (!shaula_save_folder_validate(config->save_folder) ||
+      !shaula_save_template_validate(config->filename_template))
+    return FALSE;
   const ShaulaAfterModeConfig modes[] = {config->quick, config->area,
                                          config->fullscreen,
                                          config->all_screens};
@@ -466,6 +482,8 @@ static char *field_value_new(const ShaulaConfig *config, ConfigSection section,
     return g_strdup_printf("\"%s\"", config->region_capture_mode);
   if (field->bit == FIELD_SAVE_FOLDER)
     return g_strdup_printf("\"%s\"", config->save_folder);
+  if (field->bit == FIELD_FILENAME_TEMPLATE)
+    return g_strdup_printf("\"%s\"", config->filename_template);
   if (field->bit == FIELD_NOTIFY_SUCCESS)
     return g_strdup(config->notifications_success ? "true" : "false");
   if (field->bit == FIELD_NOTIFY_ERRORS)

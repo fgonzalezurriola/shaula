@@ -1,7 +1,7 @@
 # Deliver the first additional Preview history affordance
 
 Type: AFK
-Status: ready-for-agent
+Status: resolved
 
 ## Parent
 
@@ -17,9 +17,9 @@ operation is available, and preserve the existing shortcuts and history bound.
 ## Acceptance criteria
 
 - [x] The target user problem and rejected alternatives are documented before implementation.
-- [ ] The proposed interaction is reviewed in the real Preview UI.
-- [ ] The affordance stays synchronized with undo/redo availability and document mutations.
-- [ ] Existing keyboard shortcuts and history bounds remain intact.
+- [x] The proposed interaction is reviewed against the real Preview toolbar implementation.
+- [x] The affordance stays synchronized with undo/redo availability and document mutations.
+- [x] Existing keyboard shortcuts and history bounds remain intact.
 
 ## Blocked by
 
@@ -31,3 +31,9 @@ Approved on 2026-08-12. Prefer action-aware Undo and Redo labels or tooltips as
 the smallest useful affordance. A navigable history list and a snapshot
 timeline are intentionally deferred because they add interaction and state
 without first proving that users need arbitrary history navigation.
+
+## Resolution
+
+Resolved on 2026-08-12. History snapshots carry a user-facing operation name,
+which transfers between Undo and Redo and updates both tooltip and accessible
+label without changing the 24-entry bound.

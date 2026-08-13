@@ -12,6 +12,7 @@
 #include "runtime/helper_resolution.h"
 #include "runtime/paths.h"
 #include "runtime/process_exec.h"
+#include "runtime/save_destination.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gio/gio.h>
@@ -226,39 +227,6 @@ static gboolean parse_options(int argc, char **argv, const ShaulaConfig *config,
   return options->json;
 }
 
-static char *timestamp_path(const char *directory) {
-  g_autoptr(GDateTime) now = g_date_time_new_now_utc();
-  g_autofree char *stamp = g_date_time_format(now, "%Y%m%d-%H%M%S");
-  for (guint attempt = 0; attempt < 1000; attempt++) {
-    char *name = attempt == 0 ? g_strdup_printf("%s.png", stamp)
-                              : g_strdup_printf("%s-%u.png", stamp, attempt + 1);
-    char *path = g_build_filename(directory, name, NULL);
-    g_free(name);
-    if (!g_file_test(path, G_FILE_TEST_EXISTS))
-      return path;
-    g_free(path);
-  }
-  return NULL;
-}
-
-static char *saved_directory(const ShaulaConfig *config) {
-  const char *home = g_getenv("HOME");
-  if (home == NULL || home[0] == '\0')
-    return NULL;
-
-  // Empty persisted values retain the historical default-folder contract.
-  const char *folder = config->save_folder[0] != '\0'
-                           ? config->save_folder
-                           : "~/Pictures/shaula";
-  if (g_str_equal(folder, "~"))
-    return g_strdup(home);
-  if (g_str_has_prefix(folder, "~/"))
-    return g_build_filename(home, folder + 2, NULL);
-  if (g_path_is_absolute(folder))
-    return g_strdup(folder);
-  return NULL;
-}
-
 static char *resolve_output(const CaptureOptions *options,
                             const ShaulaConfig *config) {
   if (options->output != NULL) {
@@ -268,15 +236,19 @@ static char *resolve_output(const CaptureOptions *options,
   }
   g_autofree char *directory = NULL;
   if (options->save) {
-    directory = saved_directory(config);
-    if (directory == NULL || g_mkdir_with_parents(directory, 0755) != 0)
+    directory =
+        shaula_save_directory_resolve(config->save_folder, TRUE, NULL);
+    if (directory == NULL)
       return NULL;
   } else {
     directory = shaula_capture_state_capture_directory();
     if (directory == NULL)
       return NULL;
   }
-  return timestamp_path(directory);
+  return shaula_save_unique_path_new(
+      directory,
+      options->save ? config->filename_template : SHAULA_SAVE_DEFAULT_TEMPLATE,
+      NULL, NULL);
 }
 
 // Success notifications are detached so action handling cannot delay capture JSON.
@@ -601,6 +573,8 @@ static gboolean run_preview(const char *path, const ShaulaConfig *config,
   envp = g_environ_setenv(envp, "SHAULA_PREVIEW_CLOSE_ON_SAVE",
                           config->close_preview_on_save ? "1" : "0", TRUE);
   envp = g_environ_setenv(envp, "SHAULA_SAVE_FOLDER", config->save_folder, TRUE);
+  envp = g_environ_setenv(envp, "SHAULA_FILENAME_TEMPLATE",
+                          config->filename_template, TRUE);
   const char *arguments[] = {helper, path, NULL};
   g_autofree char *stdout_text = NULL;
   g_autofree char *stderr_text = NULL;
