@@ -284,7 +284,11 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
   switch (command) {
   case SHAULA_PREVIEW_COMMAND_COPY:
     if (shaula_annotation_editor_has_selection(state))
-      return shaula_annotation_editor_copy_selected(state);
+      shaula_annotation_editor_copy_selected(state);
+    /* Ctrl+C publishes the full composed image even while annotations are
+     * selected. Keep the local selection clipboard above so Ctrl+V remains
+     * available without making the system image lose its annotations.
+     */
     shaula_preview_action_copy(state);
     return TRUE;
   case SHAULA_PREVIEW_COMMAND_COPY_SELECTED_ANNOTATION:

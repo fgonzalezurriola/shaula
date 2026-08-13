@@ -129,8 +129,10 @@ The selection HUD uses the copy glyph (`shaula-copy-symbolic`) for its Duplicate
 
 The annotation clipboard is scoped to the current preview window:
 
-- `Ctrl+C` with selected objects copies those objects without changing the system clipboard.
-- `Ctrl+C` without object selection copies the rendered image.
+- `Ctrl+C` and the toolbar Copy action always publish the rendered image to the
+  system clipboard, including when annotations are selected. With a selection,
+  `Ctrl+C` also stores those objects in the preview-local clipboard for
+  `Ctrl+V`.
 - `Ctrl+X` copies and deletes the selected set as one edit.
 - `Ctrl+V` clones the internal set with new IDs and selects the clones.
 - Repeated paste cascades from the previous pasted set by a small deterministic

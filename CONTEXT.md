@@ -1,6 +1,6 @@
 # Shaula Context
 
-Last updated: 2026-08-09
+Last updated: 2026-08-12
 
 ## Current release
 
@@ -71,6 +71,12 @@ Clipboard publication uses `wl-copy` through the central process-execution
 module. `wl-copy` owns the Wayland selection through data-control, avoiding the
 input-event serial that prevents a standalone GTK/GDK CLI helper from reliably
 claiming the clipboard on Niri and other wlroots compositors.
+
+Preview `Ctrl+C` and the toolbar Copy action always publish the current
+composited image, including annotations even when an annotation is selected.
+When annotations are selected, `Ctrl+C` also preserves them in the
+preview-local clipboard for `Ctrl+V`; `Ctrl+X` continues to provide editable
+annotation cut/paste.
 
 Deterministic clipboard outcomes are:
 
