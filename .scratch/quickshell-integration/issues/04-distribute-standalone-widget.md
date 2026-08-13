@@ -1,7 +1,7 @@
 # Distribute the standalone QuickShell widget
 
 Type: AFK
-Status: ready-for-agent
+Status: wontfix
 
 ## Parent
 

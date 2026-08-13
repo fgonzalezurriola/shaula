@@ -13,3 +13,5 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 When a skill mentions a role, write the corresponding `Status:` value from this table near the top of the issue file (see `issue-tracker.md`).
 
 Issues open after a triage pass default to `Status: needs-triage` unless the workflow says otherwise.
+Completed tickets use the terminal `Status: resolved` defined by the local
+issue tracker; it is not an open triage role.

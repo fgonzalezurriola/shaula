@@ -1,7 +1,7 @@
 # Add QuickShell IPC handshake and capture state
 
 Type: AFK
-Status: ready-for-agent
+Status: wontfix
 
 ## Parent
 

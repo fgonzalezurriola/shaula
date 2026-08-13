@@ -476,18 +476,25 @@ Recommended order:
 10. Evaluate `Capture and add…` only after the base composition workflow is
     stable.
 
-## 20. Decisions Required Before Coding
+## 20. Approved Initial Contracts
 
-- Canvas background: opaque by default or transparent-capable?
-- Base image: permanently non-selectable or selectable in a dedicated mode?
-- Expansion directions in the first release: right/bottom only or all four?
-- Asset implementation: custom ref-counted type or `GObject` wrapper?
-- Recent capture lifetime and persistence policy.
-- Total canvas pixel and memory budgets.
-- Whether crop clips partially intersecting Image annotations or rasterizes them.
-- Whether imported images always render above Spotlight.
+ADR-0005 approves the first implementation contracts:
 
-These decisions are durable enough to warrant an ADR when implementation begins.
-This file guides post-v0.1.6 implementation, but unresolved alternatives must not be
-treated as shipped architecture until code, tests, and the relevant ADR settle
-them.
+- the canvas is opaque with a neutral background;
+- the base image remains permanently non-selectable;
+- the first release expands only right and down;
+- immutable image assets use a `GObject` wrapper and shared references;
+- recent captures persist in a Shaula-owned cache with at most 12 items and
+  256 MiB of encoded data, pruned oldest-first;
+- one operation accepts at most four imported images, each at most 16,384 px
+  per side and 32 megapixels;
+- the expanded canvas and the aggregate newly decoded assets are each limited
+  to 64 megapixels;
+- crop clips partially intersecting Image annotations while preserving their
+  immutable source assets and editability;
+- imported images continue to render above Spotlight;
+- preflight precedes mutation, and any failure after mutation begins restores
+  the single pending history snapshot.
+
+Implementations may lower memory limits when measurements require it, but must
+not raise them without revisiting the bounded-canvas contract.

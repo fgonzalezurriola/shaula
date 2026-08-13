@@ -1,8 +1,18 @@
 # QuickShell Integration Plan
 
-> Status: **Draft** — Planning phase, not yet approved for implementation  
+> Status: **Deferred** — Rejected for the current roadmap
 > Date: 2026-05-29  
 > Owner: Shaula project  
+
+---
+
+## 0. Roadmap Decision
+
+The proposal was deferred on 2026-08-12 because there is no concrete
+non-Noctalia consumer to justify a portable service, broader IPC contract, or
+standalone widget. Shaula preserves its existing Noctalia integration but does
+not implement the phases below. Reconsider this plan only when a real generic
+QuickShell journey can define and validate the compatibility target.
 
 ---
 

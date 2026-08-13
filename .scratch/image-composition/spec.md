@@ -11,3 +11,6 @@ Authoritative product and technical sources:
 The tickets intentionally start with the unresolved durable document decisions,
 then deliver narrow end-to-end composition paths. Existing capture, annotation,
 history, clipboard, rendering, and export contracts remain in force.
+
+The document decisions are approved in ADR-0005. Vertical file composition is
+the first unblocked implementation slice.

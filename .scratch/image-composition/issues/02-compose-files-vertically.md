@@ -23,4 +23,4 @@ cancel leaves the document unchanged.
 
 ## Blocked by
 
-- `.scratch/image-composition/issues/01-resolve-canvas-contracts.md`
+None - canvas contracts are approved in ADR-0005.

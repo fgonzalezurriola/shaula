@@ -1,7 +1,7 @@
 # Approve QuickShell architecture and user value
 
 Type: HITL
-Status: ready-for-human
+Status: wontfix
 
 ## Parent
 
@@ -15,11 +15,18 @@ reject the proposed core-service, Noctalia, and standalone tiers before coding.
 
 ## Acceptance criteria
 
-- [ ] At least one real non-Noctalia integration journey justifies the work.
-- [ ] Current QuickShell IPC capabilities and compatibility constraints are verified.
-- [ ] Service ownership, fallback behavior, distribution tiers, and non-goals are decided.
-- [ ] The draft plan is updated to an approved, narrowed, or rejected state.
+- [x] No real non-Noctalia integration journey currently justifies the work.
+- [x] The proposal is rejected for the current roadmap before technical expansion.
+- [x] Existing Noctalia behavior remains supported without the proposed refactor.
+- [x] The draft plan records the decision and the condition for reconsideration.
 
 ## Blocked by
 
 None - can start immediately.
+
+## Decision
+
+Deferred on 2026-08-12. The maintainer does not currently use Noctalia and has
+no concrete generic QuickShell journey to support. Preserve the existing
+Noctalia integration, but do not build the portable service, IPC expansion, or
+standalone widget unless a real consumer appears.

@@ -13,6 +13,15 @@ expandable-canvas work are not part of this release.
 The release notes are in `docs/release-v0.1.8.md`. The release procedure and AUR
 finalization steps are in `docs/releasing.md`.
 
+ADR-0005 approves the bounded expandable-canvas contracts for future image
+composition. The first slice grows right and down on an opaque canvas, keeps the
+base capture non-selectable, shares immutable image assets across history, and
+uses bounded persisted recent captures. The vertical file-composition ticket is
+now unblocked. Broader QuickShell integration is deferred because no concrete
+non-Noctalia journey currently justifies it. GNOME and KDE release validation
+remain pending. The selected first Preview history affordance is action-aware
+Undo and Redo text.
+
 ## Runtime architecture
 
 Shaula's capture, Preview, Settings, and CLI commands remain short-lived. ADR-0004

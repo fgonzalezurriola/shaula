@@ -249,17 +249,21 @@ A first release is usable when:
 - unsupported or oversized inputs produce actionable feedback;
 - the feature does not inspect or retain unrelated clipboard history.
 
-## 12. Open Product Questions
+## 12. Approved Initial Product Decisions
 
-- Should recent captures be session-only or persisted across launches?
-- Should imported images default to original pixels or normalize to the base
-  screenshot scale?
-- Should transparent PNG export be supported, or should canvas background always
-  be opaque?
-- Should the original screenshot remain visually distinguished from imported
-  Image annotations?
-- Is four images the correct initial limit after real memory measurements?
-- Does `Capture and add…` belong in More, the composition sheet, or both?
+- Recent Shaula captures persist across launches in a bounded Shaula-owned
+  cache. The oldest entries are pruned automatically.
+- Imported images default to their original pixel size. Layout-aware
+  match-width or match-height remains an explicit choice.
+- The first canvas background is opaque and neutral. Transparent export is
+  deferred.
+- The original screenshot remains a non-selectable base image. Imported images
+  remain selectable Image annotations.
+- One composition operation accepts at most four imported images.
+- The first composition slice expands only right and down. Direct four-way
+  expansion remains a later canvas-control feature.
+- `Capture and add…` remains deferred until its return-channel contract is
+  designed; its final entry point is not part of the first slice.
 
 Technical implications and ownership boundaries are recorded in
 `docs/preview-expandable-canvas-design.md`.

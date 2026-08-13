@@ -1,7 +1,7 @@
 # Extract the portable service and migrate Noctalia
 
 Type: AFK
-Status: ready-for-agent
+Status: wontfix
 
 ## Parent
 
