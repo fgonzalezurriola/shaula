@@ -79,6 +79,7 @@ shaula_preview_sources = files(
   'preview_annotations.c',
   'preview_canvas.c',
   'preview_commands.c',
+  'preview_composition.c',
   'preview_document.c',
   'preview_edit_session.c',
   'preview_gesture.c',

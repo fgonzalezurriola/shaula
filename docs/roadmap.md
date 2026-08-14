@@ -57,8 +57,8 @@ Detailed notes and release procedure:
 
 ## After v0.1.6
 
-The image-composition and expandable-canvas work remains planned rather than
-part of the v0.1.6 release. Its design material remains in:
+The image-composition and expandable-canvas work was intentionally not part of
+the v0.1.6 release. Its design material remains in:
 
 - `docs/plan-image-composition.md`
 - `docs/preview-expandable-canvas-design.md`
@@ -106,16 +106,15 @@ Implemented on the development branch:
 - Niri conflict detection, managed-block rendering, and live reload use the
   configured bindings.
 
-Release validation still required:
+Release validation status:
 
-Tracked in `.scratch/release-validation/` as four architecture and desktop
-environment validation tickets.
+- optimized x86_64 archive and installer validation are resolved;
+- AArch64 archive validation remains pending for an ARM-capable/QEMU runner;
+- GNOME and KDE portal journeys remain human validation gates by decision.
 
-Product work not required for the portal/install release slice:
-
-- `.scratch/image-composition/`
-- `.scratch/save-and-history/`
-- `.scratch/quickshell-integration/`
+The bounded image-composition and save/history ticket packages are implemented
+on the development branch. QuickShell remains explicitly deferred because no
+concrete non-Noctalia journey currently justifies it.
 
 ## Current non-goals
 

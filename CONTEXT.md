@@ -1,6 +1,6 @@
 # Shaula Context
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 ## Current release
 
@@ -13,14 +13,23 @@ expandable-canvas work are not part of this release.
 The release notes are in `docs/release-v0.1.8.md`. The release procedure and AUR
 finalization steps are in `docs/releasing.md`.
 
-ADR-0005 approves the bounded expandable-canvas contracts for future image
-composition. The first slice grows right and down on an opaque canvas, keeps the
+ADR-0005 records the bounded expandable-canvas contracts for image composition.
+The first slice grows right and down on an opaque canvas, keeps the
 base capture non-selectable, shares immutable image assets across history, and
 uses bounded persisted recent captures. The vertical file-composition ticket is
-now unblocked. Broader QuickShell integration is deferred because no concrete
+implemented on the development branch, including clipboard and recent-capture
+sources plus direct bounded canvas controls. Broader QuickShell integration is
+deferred because no concrete
 non-Noctalia journey currently justifies it. GNOME and KDE release validation
 remain pending. The selected first Preview history affordance is action-aware
 Undo and Redo text.
+
+The composition sheet accepts up to four sources and supports vertical or
+horizontal placement, approved gaps/alignment/sizing, editable image
+annotations, one-step undo/redo, and Fit-to-screen. Recent Shaula captures use
+`$XDG_CACHE_HOME/shaula/recent-captures`, retaining at most 12 PNGs and 256 MiB.
+Direct canvas expansion is right/down only in this slice and uses an opaque
+background palette for the added area.
 
 Save configuration now includes a validated default directory and filename
 template. `{date}`, `{time}`, and `{datetime}` are the supported template
@@ -143,6 +152,14 @@ The installer maps `x86_64` and `amd64` to the x86_64 archive, and `aarch64` and
 `arm64` to the AArch64 archive. Installer contract tests exercise all four
 machine strings, checksum verification, payload installation, and the missing
 payload failure path.
+
+On 2026-08-13 the optimized current-checkout x86_64 archive and installer
+contract were revalidated locally. The archive is 443956 bytes with SHA-256
+`ed2f3ed333a744537da871a812c6d454514d150082ed717fb9a74d1cfb3a4b36`.
+AArch64 remains pending because this environment has no configured cross file,
+AArch64 sysroot/compiler, QEMU user emulator, or running Docker daemon; the
+existing AArch64 artifact validates as an archive but is not current-checkout
+evidence.
 
 Release CI rejects a tag unless it is exactly `v` plus the Meson project version
 and `docs/release-<tag>.md` exists with the matching heading.
@@ -292,7 +309,7 @@ The current source state has passed:
 - x86_64 ASan/UBSan build and all 36 Meson tests;
 - the release, installer, manifest, desktop-entry, and AUR metadata contract
   tests;
-- optimized x86_64 archive validation remains required before release;
+- optimized x86_64 archive validation passed for the current checkout;
 - QEMU-backed native AArch64 Werror build and archive validation remain required
   for the updated shortcut-provider payload before release;
 - local development install through `./dev install`;

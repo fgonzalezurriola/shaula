@@ -22,3 +22,13 @@ manifest, and installer selection contract.
 ## Blocked by
 
 None - can start immediately.
+
+## Comments
+
+The current environment has no configured `SHAULA_MESON_CROSS_FILE`, AArch64
+compiler/sysroot, QEMU user emulator, or running Docker daemon. `./dev
+release-arm` therefore cannot build a current-checkout artifact here. The
+previous checked-out artifact at `dist/aarch64/shaula-linux-aarch64.tar.gz`
+passes `assert-release-archive.sh`, but it predates this checkout and is not
+claimed as current release evidence. This ticket remains ready for an
+ARM-capable/QEMU release runner.

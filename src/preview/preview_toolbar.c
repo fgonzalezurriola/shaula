@@ -370,6 +370,12 @@ static void rebuild_more_menu(ShaulaPreviewState *state, int visible_count) {
   shaula_preview_toolbar_update_system_paste_state(state);
 
   const MenuActionSpec actions[] = {
+      {"shaula-more-symbolic", "Add images…",
+       "Add images and expand canvas",
+       G_CALLBACK(shaula_preview_on_add_images_clicked)},
+      {"shaula-more-symbolic", "Expand canvas…",
+       "Add space to the right or bottom",
+       G_CALLBACK(shaula_preview_on_expand_canvas_clicked)},
       {"shaula-save-symbolic", "Save As", "Save As (Ctrl+Shift+S)",
        G_CALLBACK(shaula_preview_on_save_as_clicked)},
       {"shaula-more-symbolic", "Open preview directory",

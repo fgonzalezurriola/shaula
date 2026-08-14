@@ -34,9 +34,9 @@ bounds, base placement, annotations, Spotlight regions, selection-relevant
 document state, IDs, and modified state.
 
 Crop operates in canvas coordinates. Partially intersecting Image annotations
-remain editable and retain their immutable source asset while output outside
-the cropped canvas is clipped. Imported images render above Spotlight, matching
-the existing annotation render order.
+remain editable; the live annotation receives a derived visible subimage while
+history snapshots retain the prior immutable payload. Imported images render
+above Spotlight, matching the existing annotation render order.
 
 Recent captures persist across launches in a Shaula-owned cache. The cache
 contains only Shaula-created captures, retains at most 12 items and 256 MiB of

@@ -1,6 +1,7 @@
 # Preview Expandable Canvas Design
 
-> Status: **Active technical design** — Implementation details remain subject to ADRs
+> Status: **Implemented first slice** — four-way expansion and independent base
+> placement remain future work
 >
 > Product plan: `docs/plan-image-composition.md`
 >
@@ -333,8 +334,10 @@ Recommended behavior:
   semantics;
 - the operation remains one undo entry.
 
-This requires tests for base-image partial intersection and imported Image
-annotations crossing crop edges.
+The first slice keeps the existing raster document representation for the base
+capture and preserves the original imported Image payload in history snapshots
+when crop derives a visible subimage. A future independent base-layer model can
+move the base without changing this coordinate contract.
 
 ## 13. Spotlight Semantics
 
@@ -464,17 +467,15 @@ UI implementation also requires:
 
 Recommended order:
 
-1. Introduce explicit canvas dimensions without changing visible behavior.
-2. Rename dimension helpers so canvas and asset bounds cannot be confused.
-3. Add base-image placement and preserve current `(0, 0)` behavior.
-4. Move history snapshots to shared immutable image assets.
-5. Add atomic canvas resize and translation.
-6. Update rendering, export, crop, Spotlight, input, and metadata contracts.
-7. Add pure vertical/horizontal composition planning.
-8. Add the composition sheet and explicit image sources.
-9. Add recent Shaula captures after cleanup and privacy contracts are resolved.
-10. Evaluate `Capture and add…` only after the base composition workflow is
-    stable.
+1. Keep the first canvas origin at `(0, 0)` and enforce bounded dimensions.
+2. Share immutable GdkPixbuf image payloads across annotations and history.
+3. Apply canvas expansion and composition atomically through the Preview edit
+   session.
+4. Add deterministic vertical/horizontal composition planning.
+5. Add the composition sheet and explicit image sources.
+6. Add recent Shaula captures with bounded cleanup and privacy ownership.
+7. Evaluate `Capture and add…` only after the base composition workflow is
+   stable.
 
 ## 20. Approved Initial Contracts
 

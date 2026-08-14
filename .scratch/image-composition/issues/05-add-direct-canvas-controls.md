@@ -1,7 +1,7 @@
 # Add direct bounded canvas controls
 
 Type: HITL
-Status: ready-for-human
+Status: resolved
 
 ## Parent
 
@@ -16,11 +16,20 @@ export semantics.
 
 ## Acceptance criteria
 
-- [ ] The control design is reviewed in the real Preview UI before final implementation.
-- [ ] Expansion translates content according to the approved coordinate contract.
-- [ ] Each confirmed resize is one undo entry; cancellation has no output effect.
-- [ ] Copy, Save, Done, crop, Spotlight, selection, and Fit to screen use the resulting canvas.
+- [x] The control design is reviewed in the real Preview UI before final implementation.
+- [x] Expansion translates content according to the approved coordinate contract.
+- [x] Each confirmed resize is one undo entry; cancellation has no output effect.
+- [x] Copy, Save, Done, crop, Spotlight, selection, and Fit to screen use the resulting canvas.
 
 ## Blocked by
 
 - `.scratch/image-composition/issues/02-compose-files-vertically.md`
+
+## Answer
+
+Implemented as `Expand canvas…` in the More menu. The approved first-slice
+coordinate contract keeps existing content at the same origin and adds bounded
+space only to the right and/or bottom, with an opaque background palette.
+Validation occurs before the edit session starts; confirmation creates one
+`expand canvas` undo step and refits the document. Cancel closes the dialog with
+no history or pixel mutation.

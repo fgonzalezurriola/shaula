@@ -12,6 +12,7 @@
 #include "runtime/helper_resolution.h"
 #include "runtime/paths.h"
 #include "runtime/process_exec.h"
+#include "runtime/recent_captures.h"
 #include "runtime/save_destination.h"
 
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -829,6 +830,7 @@ int shaula_capture_command_run(int argc, char **argv) {
   g_autofree char *capture_timestamp = json_timestamp();
   gboolean history_ok = append_history(output, width, height, backend,
                                        capture_timestamp);
+  gboolean recent_ok = shaula_recent_captures_register(output, NULL);
 
   g_clear_pointer(&session, shaula_capture_state_session_release);
 
@@ -853,7 +855,8 @@ int shaula_capture_command_run(int argc, char **argv) {
                                                  ? json_string(preview_saved_path)
                                                  : g_strdup("null");
   gboolean partial = (options.copy && !clipboard_ok) ||
-                     (preview_attempted && !preview_ok) || !history_ok;
+                     (preview_attempted && !preview_ok) || !history_ok ||
+                     !recent_ok;
   GString *warnings = g_string_new("[");
   gboolean warning = FALSE;
   if (options.copy && !clipboard_ok) {
@@ -864,6 +867,12 @@ int shaula_capture_command_run(int argc, char **argv) {
     if (warning)
       g_string_append_c(warnings, ',');
     g_string_append(warnings, "\"history_unavailable\"");
+    warning = TRUE;
+  }
+  if (!recent_ok) {
+    if (warning)
+      g_string_append_c(warnings, ',');
+    g_string_append(warnings, "\"recent_captures_unavailable\"");
     warning = TRUE;
   }
   if (shaula_capabilities_uses_portal_backend(runtime) == 1) {

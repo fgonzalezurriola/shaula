@@ -1,6 +1,6 @@
 # Image Composition Plan
 
-> Status: **Approved future product direction** — Planned for phased implementation
+> Status: **Implemented on the development branch** — bounded first slice shipped
 >
 > Release scope: **Post-v0.1.6; no version assigned**
 >
@@ -32,9 +32,9 @@ Image composition and bounded canvas expansion are a post-v0.1.6 product
 direction. Implementation should proceed in phases and preserve the stable
 v0.1.6 capture and Preview behavior throughout the work.
 
-The release has no fixed calendar deadline. Correct document ownership,
-predictable history, bounded memory use, and a usable composition flow take
-priority over speed.
+The development-branch first slice is implemented with the approved bounded
+contracts. Correct document ownership, predictable history, bounded memory use,
+and a usable composition flow take priority over speed.
 
 This plan does not authorize placeholders in the public UI. Entry points should
 appear only when the underlying document, history, export, cancellation, and
@@ -203,7 +203,7 @@ The first image-composition release does not include:
 
 ## 10. Delivery Phases
 
-### Phase 1: Structured stitch
+### Phase 1: Structured stitch — implemented
 
 - Add images from current clipboard, recent Shaula captures, and files.
 - Select and reorder up to four images.
@@ -213,11 +213,11 @@ The first image-composition release does not include:
 - Editable Image annotations.
 - One undo entry and automatic Fit to screen.
 
-### Phase 2: Direct canvas controls
+### Phase 2: Direct canvas controls — bounded first slice implemented
 
-- Expand canvas in four directions.
-- Set canvas background.
-- Reposition the original capture inside the document.
+- Expand canvas to the right and bottom.
+- Set the opaque background for newly added canvas area.
+- Preserve the original capture at `(0, 0)`; four-way translation remains later.
 - Improve free placement and alignment guides.
 
 ### Phase 3: Capture and add

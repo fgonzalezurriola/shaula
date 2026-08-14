@@ -95,6 +95,9 @@ typedef struct ShaulaAnnotation {
     ShaulaPenPath highlight;
     ShaulaPenPath pen;
     struct {
+      /* Pixel payloads are immutable and shared across clipboard/history
+       * clones. Edits replace the reference instead of mutating the pixbuf.
+       */
       GdkPixbuf *pixbuf;
       ShaulaRect rect;
     } image;

@@ -409,13 +409,9 @@ ShaulaAnnotation *shaula_annotation_clone(const ShaulaAnnotation *annotation) {
   case SHAULA_ANNOTATION_IMAGE:
     clone->data.image.rect = annotation->data.image.rect;
     clone->data.image.pixbuf = annotation->data.image.pixbuf != NULL
-                                   ? gdk_pixbuf_copy(annotation->data.image.pixbuf)
+                                   ? GDK_PIXBUF(
+                                         g_object_ref(annotation->data.image.pixbuf))
                                    : NULL;
-    if (annotation->data.image.pixbuf != NULL &&
-        clone->data.image.pixbuf == NULL) {
-      g_free(clone);
-      return NULL;
-    }
     break;
   }
   return clone;

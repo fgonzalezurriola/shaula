@@ -1,6 +1,7 @@
 #include "preview_action_callbacks.h"
 
 #include "preview_commands.h"
+#include "preview_composition.h"
 #include "preview_properties_hud.h"
 #include "preview_state.h"
 
@@ -17,6 +18,16 @@ void shaula_preview_on_save_clicked(GtkButton *button, gpointer data) {
 void shaula_preview_on_save_as_clicked(GtkButton *button, gpointer data) {
   (void)button;
   shaula_preview_execute_command(data, SHAULA_PREVIEW_COMMAND_SAVE_AS);
+}
+
+void shaula_preview_on_add_images_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_show_composition_dialog(data);
+}
+
+void shaula_preview_on_expand_canvas_clicked(GtkButton *button, gpointer data) {
+  (void)button;
+  shaula_preview_show_canvas_dialog(data);
 }
 
 void shaula_preview_on_paste_system_clipboard_clicked(GtkButton *button,

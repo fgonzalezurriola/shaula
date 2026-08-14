@@ -106,6 +106,28 @@ Selection-box movement applies to Pen, Highlight, Arrow/Line, Text, Measure, Rec
 - Holding Space temporarily switches to Hand/Pan unless an editable widget is focused.
 - Releasing Space restores the previous tool after any active pan finishes.
 
+## Image Composition and Canvas Expansion
+
+The More menu exposes `Add images…` and `Expand canvas…` for bounded document
+composition. `Add images…` accepts up to four decoded image files, the current
+clipboard image, or a Shaula-created recent capture. It never reads clipboard
+history. Recent captures are retained in a Shaula-owned cache with a maximum
+of 12 entries and 256 MiB of encoded data; missing entries are reported without
+changing the document.
+
+The composition sheet supports vertical and horizontal order, gaps of 0/8/16/32
+pixels, start/center/end alignment, original sizing, and layout-aware
+cross-axis sizing. Its preview is transient. Confirming inserts editable Image
+annotations, selects only the inserted set, expands the canvas to the planned
+bounds, refits the view, and records one `compose images` undo step. Cancel and
+invalid or oversized inputs leave history and document pixels unchanged.
+
+The first bounded canvas controls add space only to the right and/or bottom and
+offer light, neutral, dark, and black opaque backgrounds. Existing content
+keeps its coordinates. Each confirmed resize is one `expand canvas` undo step;
+the resulting dimensions are used by rendering, selection, crop, Copy, Save,
+Save As, and Done.
+
 ## Spotlight
 
 `shaula-spotlight-symbolic` is an independent primary tool and a contextual region action.
@@ -368,6 +390,7 @@ share one default profile because they use the same HUD and stroke model.
 `shaula-more-symbolic` exposes:
 
 - Paste text/image (`Ctrl+Shift+V`), using `shaula-paste-symbolic` and the same icon-label row as the other actions, inserting clipboard text or an image near the visible canvas center;
+- Add images… and Expand canvas… for the bounded composition workflows above;
 - Save As;
 - Fit to screen;
 - Actual size;
