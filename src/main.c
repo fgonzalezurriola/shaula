@@ -19,6 +19,7 @@ static const ShaulaCommandFamily COMMAND_FAMILIES[] = {
     {"shortcuts", shaula_shortcuts_command_run},
     {"launch", shaula_launch_command_run},
     {"menu", shaula_launch_command_run},
+    {"run", shaula_launch_command_run},
     {"config", shaula_config_command_run},
     {"preview", shaula_preview_command_run},
     {"directory", shaula_directory_command_run},

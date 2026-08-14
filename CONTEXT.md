@@ -38,6 +38,8 @@ runtime save-destination module. Capture, Preview quick save, Save As
 suggestions, notifications, and screenshots-folder actions share that module.
 Preview Undo and Redo now expose the next operation in tooltips and accessible
 labels while preserving the existing shortcuts and 24-entry history bound.
+The CLI also accepts `shaula run` as a compatibility alias for `shaula launch`;
+the desktop entry continues to use `launch`.
 
 ## Runtime architecture
 
