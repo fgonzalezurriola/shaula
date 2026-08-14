@@ -87,7 +87,8 @@ char *shaula_save_directory_resolve(const char *folder, gboolean create,
     return NULL;
   }
   if (create && g_mkdir_with_parents(directory, 0755) != 0) {
-    g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(errno),
+    g_set_error(error, G_FILE_ERROR,
+                (gint)g_file_error_from_errno(errno),
                 "Could not create screenshot folder %s: %s", directory,
                 g_strerror(errno));
     return NULL;
