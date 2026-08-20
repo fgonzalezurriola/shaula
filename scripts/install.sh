@@ -30,7 +30,7 @@ fi
 usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [options]
-       scripts/install.sh v0.1.8
+       scripts/install.sh v0.1.9
 
 Install Shaula for the current user. The installer verifies the complete release
 payload and a working Wayland capture route before changing user files. It never

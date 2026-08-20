@@ -331,6 +331,6 @@ timestamps and a repeatable test establish a Shaula causal path. Do not infer
 causality from a delayed compositor failure alone.
 
 GNOME and KDE interactive portal/graphical validation is not checked for the
-current implementation. It is explicitly required for v0.1.9 and must not be
-reported as passed until preference rebinding, activation, and persistence have
+v0.1.9 implementation. The release notes must state that gap. Do not report the
+journeys as passed until preference rebinding, activation, and persistence have
 been exercised in both sessions.

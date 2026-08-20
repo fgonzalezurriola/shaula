@@ -95,9 +95,9 @@ reloads the live Niri config after writing or removing managed Niri keybindings
 or the Preview rule. When IPC reload is unavailable, setup prints the manual
 reload command without failing the already-written configuration.
 
-## v0.1.9
+## Released: v0.1.9
 
-Implemented on the development branch:
+Released with:
 
 - Settings edits and persists four normalized, unique preferred capture
   shortcuts.
@@ -106,14 +106,15 @@ Implemented on the development branch:
 - Niri conflict detection, managed-block rendering, and live reload use the
   configured bindings.
 
-Release validation status:
+Release validation status at tagging:
 
 - optimized x86_64 archive and installer validation are resolved;
-- AArch64 archive validation remains pending for an ARM-capable/QEMU runner;
-- GNOME and KDE portal journeys remain human validation gates by decision.
+- the release workflow gates publication on its QEMU-backed AArch64 build;
+- GNOME and KDE portal journeys remain unvalidated and are not claimed as
+  passing for this release.
 
-The bounded image-composition and save/history ticket packages are implemented
-on the development branch. QuickShell remains explicitly deferred because no
+The bounded image-composition and save/history ticket packages are included.
+QuickShell remains explicitly deferred because no
 concrete non-Noctalia journey currently justifies it.
 
 ## Current non-goals

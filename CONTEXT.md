@@ -1,16 +1,16 @@
 # Shaula Context
 
-Last updated: 2026-08-13
+Last updated: 2026-08-19
 
 ## Current release
 
-The current release is **v0.1.8**. The production application,
+The current release is **v0.1.9**. The production application,
 helpers, tests, packaging, and release workflows are implemented in C and built
 with Meson. The earlier v0.1.6 image-composition proposal is retained only as
-historical design input in `docs/plan-v0.1.6.md`; image composition and
-expandable-canvas work are not part of this release.
+historical design input in `docs/plan-v0.1.6.md`; the bounded composition and
+expandable-canvas implementation is part of this release.
 
-The release notes are in `docs/release-v0.1.8.md`. The release procedure and AUR
+The release notes are in `docs/release-v0.1.9.md`. The release procedure and AUR
 finalization steps are in `docs/releasing.md`.
 
 ADR-0005 records the bounded expandable-canvas contracts for image composition.
@@ -169,10 +169,10 @@ and `docs/release-<tag>.md` exists with the matching heading.
 ## AUR state
 
 Tag release CI publishes both `aur/shaula` and `aur/shaula-bin` to the AUR as
-`0.1.8-1`, with final immutable checksums and regenerated `.SRCINFO` files in
+`0.1.9-1`, with final immutable checksums and regenerated `.SRCINFO` files in
 the temporary AUR clones.
 
-- `shaula` builds the Meson/C source tree from tag `v0.1.8` on x86_64 and
+- `shaula` builds the Meson/C source tree from tag `v0.1.9` on x86_64 and
   AArch64.
 - `shaula-bin` selects the matching x86_64 or AArch64 release archive and
   installs the complete manifest-backed payload.
@@ -201,7 +201,7 @@ workflow replaces those markers only in writable AUR clones before pushing.
   `web/dist` and performs the manual Wrangler deployment; no Worker or automatic
   workflow is required for this static site.
 - The Astro landing page now uses a flat, editorial visual system without the
-  previous glow, grid, or gradient treatment. Its v0.1.8 content describes the
+  previous glow, grid, or gradient treatment. Its v0.1.9 content describes the
   universal launcher, automatic grim/portal routing, default recommended
   shortcuts, current annotation workflow, and both portable and AUR installation
   paths. The hero install card uses Linux and AUR tabs. AUR shows both package
@@ -293,9 +293,9 @@ workflow replaces those markers only in writable AUR clones before pushing.
 
 ## Verified release state
 
-The v0.1.8 setup UX patch and the v0.1.7 shortcut, Settings, installer, and
-documentation changes have now
-passed strict Werror and ASan/UBSan builds with all 36 tests in each build. The
+The v0.1.9 composition, save, shortcut, setup, installer, and documentation
+changes have passed strict Werror and ASan/UBSan builds with all 36 tests in
+each build. The
 installer and release contracts pass, `./dev install` completes on the current
 CachyOS/Niri session, and locally regenerated `makepkg --printsrcinfo` output
 matches both checked-in AUR `.SRCINFO` files. A container repetition of the AUR
@@ -312,8 +312,8 @@ The current source state has passed:
 - the release, installer, manifest, desktop-entry, and AUR metadata contract
   tests;
 - optimized x86_64 archive validation passed for the current checkout;
-- QEMU-backed native AArch64 Werror build and archive validation remain required
-  for the updated shortcut-provider payload before release;
+- the tag workflow must pass its QEMU-backed native AArch64 Werror build and
+  archive validation before publishing the release;
 - local development install through `./dev install`;
 - `git diff --check`;
 - focused clipboard lifecycle and replacement tests;
@@ -377,13 +377,12 @@ Live Niri validation:
   channel could not draw a region, so the test-owned overlay was cancelled;
   process termination and capture-lock cleanup were verified.
 
-GNOME and KDE interactive portal/graphical validation is **not yet checked for
-the current implementation**. It is explicitly deferred to v0.1.9 and must not
-be reported as passed.
+GNOME and KDE interactive portal/graphical validation is **not checked for the
+current implementation**. v0.1.9 ships without claiming those journeys passed.
 
 ## Release boundary
 
-The `v0.1.8` release commit and tag publish the completed work described above.
-The development branch now includes configurable capture shortcuts from the
-Settings view for v0.1.9. GNOME, KDE, optimized archive, and updated AArch64
-validation remain scoped to v0.1.9 and are not claimed by v0.1.8.
+The `v0.1.9` release commit and tag publish the completed work described above.
+The release workflow gates publication on optimized x86_64 and QEMU-backed
+AArch64 archives. GNOME and KDE portal journeys remain unvalidated, and v0.1.9
+does not claim that they passed.
