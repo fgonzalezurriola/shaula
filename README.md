@@ -25,8 +25,8 @@ everywhere.
 
 ## Current release
 
-The latest stable release is **v0.1.9**. See
-[`docs/release-v0.1.9.md`](docs/release-v0.1.9.md) for that release's highlights
+The latest stable release is **v0.1.10**. See
+[`docs/release-v0.1.10.md`](docs/release-v0.1.10.md) for that release's highlights
 and validation notes.
 
 ## Installation

@@ -1,7 +1,7 @@
 project(
   'shaula',
   'c',
-  version: '0.1.9',
+  version: '0.1.10',
   meson_version: '>=1.3.0',
   default_options: [
     'c_std=c11',

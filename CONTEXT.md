@@ -1,10 +1,10 @@
 # Shaula Context
 
-Last updated: 2026-08-19
+Last updated: 2026-11-06
 
 ## Current release
 
-The current release is **v0.1.9**. The production application,
+The current development release is **v0.1.10**. The production application,
 helpers, tests, packaging, and release workflows are implemented in C and built
 with Meson. The earlier v0.1.6 image-composition proposal is retained only as
 historical design input in `docs/plan-v0.1.6.md`; the bounded composition and
@@ -105,6 +105,27 @@ composited image, including annotations even when an annotation is selected.
 When annotations are selected, `Ctrl+C` also preserves them in the
 preview-local clipboard for `Ctrl+V`; `Ctrl+X` continues to provide editable
 annotation cut/paste.
+
+Preview exports commit any active text draft before choosing the original PNG
+or rendering the document. This includes re-edits, new text, and empty-text
+deletion, using the normal undo and selection behavior. Ctrl+C, Ctrl+S, and
+Ctrl+Shift+S remain image export actions while the text editor is active;
+Ctrl+C also refreshes the preview-local annotation clipboard after committing.
+A temporary GTK reproduction confirmed stale copy/save PNGs during a text
+re-edit before the fix; committed selection alone exported correctly.
+The dev launcher no longer forces the legacy GTK clipboard provider override:
+that private test seam bypasses `wl-copy` and can report readiness without
+replacing the system clipboard on Niri. Normal dev runs use the production
+`wl-copy` publication route; explicit provider overrides remain available.
+Validation for this fix passed all 36 `./dev check` checks, `git diff --check`,
+and `./dev dev-install --yes` from the imported graphical session. The temporary
+GTK/Xvfb reproduction passed copy/save pixel comparisons, repeated Ctrl+C
+re-edits, empty/new drafts, the first edit on an unchanged PNG, and undo/redo.
+A real `./dev run clipboard copy-image` followed by `wl-paste --type image/png`
+returned identical PNG bytes after removing the dev override; before removal,
+publication reported success while the clipboard retained unrelated MIME types.
+The temporary reproduction was removed without adding regression tests.
+Interactive editor and Save As dialog validation remain pending.
 
 Deterministic clipboard outcomes are:
 

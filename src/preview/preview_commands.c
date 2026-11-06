@@ -1,6 +1,7 @@
 #include "preview_commands.h"
 
 #include "preview_actions.h"
+#include "preview_canvas.h"
 #include "preview_system_clipboard.h"
 
 static const GdkModifierType shortcut_modifiers =
@@ -283,6 +284,7 @@ gboolean shaula_preview_execute_command(ShaulaPreviewState *state,
 
   switch (command) {
   case SHAULA_PREVIEW_COMMAND_COPY:
+    shaula_preview_commit_text_pending(state);
     if (shaula_annotation_editor_has_selection(state))
       shaula_annotation_editor_copy_selected(state);
     /* Ctrl+C publishes the full composed image even while annotations are

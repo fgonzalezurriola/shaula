@@ -973,7 +973,7 @@ static void select_text_after_commit(ShaulaPreviewState *state,
   shaula_preview_toolbar_update_selection_state(state);
 }
 
-static void finish_text_entry(ShaulaPreviewState *state) {
+void shaula_preview_commit_text_pending(ShaulaPreviewState *state) {
   if (state == NULL || state->text_entry == NULL)
     return;
   char *text = text_view_contents(GTK_TEXT_VIEW(state->text_entry));
@@ -1035,12 +1035,12 @@ static gboolean on_text_entry_key(GtkEventControllerKey *controller,
   (void)keycode;
   ShaulaPreviewState *state = data;
   if (keyval == GDK_KEY_Escape) {
-    finish_text_entry(state);
+    shaula_preview_commit_text_pending(state);
     return TRUE;
   }
   if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) {
     if ((modifiers & GDK_CONTROL_MASK) != 0) {
-      finish_text_entry(state);
+      shaula_preview_commit_text_pending(state);
       return TRUE;
     }
     return FALSE;
@@ -1179,7 +1179,7 @@ static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,
   update_hover_color(state, x, y);
 
   if (state->operation == SHAULA_OPERATION_TEXT && state->text_entry != NULL) {
-    finish_text_entry(state);
+    shaula_preview_commit_text_pending(state);
     return;
   }
 
@@ -1608,12 +1608,21 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
    * HUD/toolbar clicks do not strand typing on the canvas shortcut path.
    */
   if (state->operation == SHAULA_OPERATION_TEXT && state->text_entry != NULL) {
+    /* Export shortcuts must commit the visible draft before reading the
+     * document, even while the hidden text input owns keyboard focus.
+     */
+    ShaulaPreviewCommand command;
+    if (shaula_preview_shortcut_command(keyval, modifiers, &command) &&
+        (command == SHAULA_PREVIEW_COMMAND_COPY ||
+         command == SHAULA_PREVIEW_COMMAND_SAVE ||
+         command == SHAULA_PREVIEW_COMMAND_SAVE_AS))
+      return shaula_preview_execute_command(state, command);
     if (keyval == GDK_KEY_Escape) {
-      finish_text_entry(state);
+      shaula_preview_commit_text_pending(state);
       return TRUE;
     }
     if ((keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) && ctrl) {
-      finish_text_entry(state);
+      shaula_preview_commit_text_pending(state);
       return TRUE;
     }
     if (!focus_is_editable_text(state, focus))
@@ -1622,7 +1631,7 @@ static gboolean on_key(GtkEventControllerKey *controller, guint keyval,
   }
   if (focus_is_editable_text(state, focus)) {
     if (keyval == GDK_KEY_Escape && focus == state->text_entry) {
-      finish_text_entry(state);
+      shaula_preview_commit_text_pending(state);
       return TRUE;
     }
     return FALSE;

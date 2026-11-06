@@ -102,10 +102,6 @@ shaula_env() {
         -x "${BUILD_DIR}/src/capture/shaula-crop-image" ]]; then
     export SHAULA_CROP_HELPER_BIN="${BUILD_DIR}/src/capture/shaula-crop-image"
   fi
-  if [[ -z "${SHAULA_CLIPBOARD_PROVIDER_BIN:-}" &&
-        -x "${BUILD_DIR}/src/clipboard/shaula-clipboard-provider" ]]; then
-    export SHAULA_CLIPBOARD_PROVIDER_BIN="${BUILD_DIR}/src/clipboard/shaula-clipboard-provider"
-  fi
   if [[ -z "${SHAULA_SHORTCUT_PROVIDER:-}" &&
         -x "${BUILD_DIR}/src/shortcuts/shaula-shortcut-provider" ]]; then
     export SHAULA_SHORTCUT_PROVIDER="${BUILD_DIR}/src/shortcuts/shaula-shortcut-provider"

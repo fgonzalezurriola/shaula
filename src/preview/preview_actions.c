@@ -3,6 +3,7 @@
 #include <glib/gstdio.h>
 #include <stdio.h>
 
+#include "preview_canvas.h"
 #include "preview_clipboard.h"
 #include "preview_image_io.h"
 #include "preview_paths.h"
@@ -60,6 +61,7 @@ static void notify_save_failure(ShaulaPreviewState *state, const char *context,
 
 static char *render_or_original_png(ShaulaPreviewState *state,
                                     gboolean *is_temp, GError **error) {
+  shaula_preview_commit_text_pending(state);
   *is_temp = FALSE;
   if (shaula_preview_state_has_modifications(state) ||
       !shaula_image_io_path_has_png_extension(state->document.path)) {
@@ -491,6 +493,7 @@ static void on_save_response(GtkNativeDialog *dialog, int response,
 }
 
 void shaula_preview_action_save_as(ShaulaPreviewState *state) {
+  shaula_preview_commit_text_pending(state);
   shaula_preview_commit_eraser_pending(state);
   GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
       "Save Shaula Preview", GTK_WINDOW(state->window),
